@@ -451,9 +451,11 @@ def _init_store():
     if backend == "redis":
         if not url:
             raise ValueError("memory_store_url is required when memory_store_backend=redis")
+        from redis import Redis
         from langgraph.store.redis import RedisStore
 
-        store_obj = RedisStore.from_conn_string(url)
+        conn = Redis.from_url(url)
+        store_obj = RedisStore(conn)
         store_obj.setup()
         logger.info("Initialized RedisStore for long-term memory")
         return store_obj
