@@ -46,7 +46,9 @@ def _sanitize_error_message(error: str) -> str:
         sanitized,
         flags=re.IGNORECASE,
     )
-    sanitized = re.sub(r"bearer\s+[\w\-\.]+", "Bearer [REDACTED]", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(
+        r"bearer\s+[\w\-\.]+", "Bearer [REDACTED]", sanitized, flags=re.IGNORECASE
+    )
     if len(sanitized) > 300:
         sanitized = sanitized[:300] + "..."
     return sanitized
@@ -57,6 +59,85 @@ def _safe_json(resp: requests.Response) -> Any:
         return resp.json()
     except Exception:
         return None
+
+
+def bocha_search(query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    api_key = (getattr(settings, "bocha_api_key", "") or "").strip()
+    if not _is_valid_api_key(api_key):
+        return []
+
+    url = "https://api.bochaai.com/v1/web-search"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "query": query,
+        "summary": True,
+        "count": max(1, min(int(max_results or 10), 50)),
+    }
+
+    resp = requests.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT_S)
+    if resp.status_code != 200:
+        msg = _sanitize_error_message(resp.text)
+        raise RuntimeError(f"Bocha API error ({resp.status_code}): {msg}")
+
+    data = _safe_json(resp) or {}
+    payload_data = data.get("data") if isinstance(data, dict) else {}
+    raw_items: Any = []
+    web_pages = (
+        (payload_data.get("webPages") if isinstance(payload_data, dict) else None)
+        or data.get("webPages")
+        or data.get("web_pages")
+        or payload_data
+    )
+    if isinstance(web_pages, dict):
+        for key in ("value", "items", "results", "webPages"):
+            if isinstance(web_pages.get(key), list):
+                raw_items = web_pages.get(key) or []
+                break
+    elif isinstance(web_pages, list):
+        raw_items = web_pages
+    elif isinstance(payload_data, dict) and isinstance(
+        payload_data.get("results"), list
+    ):
+        raw_items = payload_data.get("results") or []
+    elif isinstance(payload_data, dict) and isinstance(payload_data.get("items"), list):
+        raw_items = payload_data.get("items") or []
+    elif isinstance(data.get("results"), list):
+        raw_items = data.get("results") or []
+    elif isinstance(data.get("items"), list):
+        raw_items = data.get("items") or []
+
+    results: List[Dict[str, Any]] = []
+    for idx, item in enumerate(raw_items, 1):
+        if not isinstance(item, dict):
+            continue
+        snippet = (
+            item.get("summary")
+            or item.get("snippet")
+            or item.get("description")
+            or item.get("content")
+            or ""
+        )
+        results.append(
+            {
+                "title": item.get("title", "") or item.get("name", "") or "",
+                "snippet": snippet,
+                "summary": snippet,
+                "url": item.get("url", "") or item.get("link", "") or "",
+                "source": "bocha",
+                "position": int(item.get("position") or item.get("rank") or idx),
+                "published_date": item.get("published_date")
+                or item.get("publishedTime")
+                or item.get("date")
+                or item.get("datePublished"),
+                "site_name": item.get("site_name")
+                or item.get("siteName")
+                or item.get("site"),
+                "icon": item.get("icon") or item.get("siteIcon"),
+                "image": item.get("image") or item.get("imageUrl"),
+            }
+        )
+
+    return results[: int(max_results or 10)]
 
 
 def serper_search(query: str, max_results: int = 10) -> List[Dict[str, Any]]:
@@ -77,7 +158,9 @@ def serper_search(query: str, max_results: int = 10) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
 
     kg = data.get("knowledgeGraph")
-    if isinstance(kg, dict) and (kg.get("title") or kg.get("description") or kg.get("website")):
+    if isinstance(kg, dict) and (
+        kg.get("title") or kg.get("description") or kg.get("website")
+    ):
         results.append(
             {
                 "title": kg.get("title", "") or "",
@@ -243,9 +326,15 @@ def google_cse_search(query: str, max_results: int = 10) -> List[Dict[str, Any]]
             page_map = item.get("pagemap") or {}
             if isinstance(page_map, dict):
                 metatags = page_map.get("metatags")
-                if isinstance(metatags, list) and metatags and isinstance(metatags[0], dict):
+                if (
+                    isinstance(metatags, list)
+                    and metatags
+                    and isinstance(metatags[0], dict)
+                ):
                     mt = metatags[0]
-                    content = (mt.get("og:description") or mt.get("description") or content) or ""
+                    content = (
+                        mt.get("og:description") or mt.get("description") or content
+                    ) or ""
                     content = content[:500]
 
             results.append(
@@ -311,7 +400,9 @@ def exa_search(
             highlights = item.get("highlights") or []
             snippet = ""
             if isinstance(highlights, list):
-                parts = [h.strip() for h in highlights if isinstance(h, str) and h.strip()]
+                parts = [
+                    h.strip() for h in highlights if isinstance(h, str) and h.strip()
+                ]
                 snippet = " ... ".join(parts)[:500]
             if not snippet:
                 snippet = (item.get("text", "") or "")[:500]

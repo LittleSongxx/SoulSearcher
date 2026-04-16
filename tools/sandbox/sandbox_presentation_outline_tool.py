@@ -23,7 +23,8 @@ import logging
 import time
 from typing import Any, Dict, List, Literal, Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from agent.core.llm_factory import create_chat_model
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -34,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 # Presentation styles
-PresentationStyle = Literal["business", "educational", "technical", "creative", "minimal"]
+PresentationStyle = Literal[
+    "business", "educational", "technical", "creative", "minimal"
+]
 
 
 class SlideOutline(BaseModel):
@@ -45,7 +48,9 @@ class SlideOutline(BaseModel):
     layout: str = Field(description="Slide layout type")
     content: List[str] = Field(description="Bullet points or content items")
     speaker_notes: str = Field(default="", description="Speaker notes for this slide")
-    has_image: bool = Field(default=False, description="Whether this slide should have an image")
+    has_image: bool = Field(
+        default=False, description="Whether this slide should have an image"
+    )
     image_suggestion: str = Field(
         default="", description="Suggested image description if has_image is True"
     )
@@ -58,7 +63,9 @@ class PresentationOutline(BaseModel):
     subtitle: str = Field(default="", description="Presentation subtitle")
     author: str = Field(default="", description="Author name")
     total_slides: int = Field(description="Total number of slides")
-    estimated_duration_minutes: int = Field(description="Estimated presentation duration")
+    estimated_duration_minutes: int = Field(
+        description="Estimated presentation duration"
+    )
     target_audience: str = Field(description="Target audience description")
     key_takeaways: List[str] = Field(description="Key takeaways from the presentation")
     slides: List[SlideOutline] = Field(description="List of slide outlines")
@@ -163,15 +170,7 @@ class _PresentationOutlineBaseTool(BaseTool):
     def _get_llm(self) -> ChatOpenAI:
         """Get LLM for outline generation."""
         model = settings.reasoning_model or "gpt-4o-mini"
-        params = {
-            "model": model,
-            "temperature": 0.7,
-            "api_key": settings.openai_api_key,
-            "timeout": settings.openai_timeout or 60,
-        }
-        if settings.openai_base_url:
-            params["base_url"] = settings.openai_base_url
-        return ChatOpenAI(**params)
+        return create_chat_model(model, temperature=0.7)
 
 
 class GenerateOutlineInput(BaseModel):
@@ -185,10 +184,18 @@ class GenerateOutlineInput(BaseModel):
         default="business",
         description="Presentation style: business, educational, technical, creative, minimal",
     )
-    target_audience: str = Field(default="general", description="Target audience description")
-    duration_minutes: int = Field(default=15, description="Target presentation duration in minutes")
-    include_images: bool = Field(default=True, description="Whether to suggest images for slides")
-    additional_context: str = Field(default="", description="Additional context or requirements")
+    target_audience: str = Field(
+        default="general", description="Target audience description"
+    )
+    duration_minutes: int = Field(
+        default=15, description="Target presentation duration in minutes"
+    )
+    include_images: bool = Field(
+        default=True, description="Whether to suggest images for slides"
+    )
+    additional_context: str = Field(
+        default="", description="Additional context or requirements"
+    )
 
 
 class GenerateOutlineTool(_PresentationOutlineBaseTool):
@@ -259,14 +266,18 @@ Generate a complete JSON outline following the PresentationOutline schema.
             return result
 
         except Exception as e:
-            self._emit_tool_result("generate_outline", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "generate_outline", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
 class OutlineToSlidesInput(BaseModel):
     """Input for outline_to_slides."""
 
-    outline: Dict[str, Any] = Field(description="The presentation outline (from generate_outline)")
+    outline: Dict[str, Any] = Field(
+        description="The presentation outline (from generate_outline)"
+    )
     file_path: str = Field(description="Output path for the PPTX file")
 
 
@@ -308,7 +319,9 @@ class OutlineToSlidesTool(_PresentationOutlineBaseTool):
         try:
             sandbox = self._get_sandbox()
             if not sandbox:
-                raise RuntimeError("Sandbox not initialized. Start sandbox browser first.")
+                raise RuntimeError(
+                    "Sandbox not initialized. Start sandbox browser first."
+                )
 
             # Ensure python-pptx is installed
             sandbox.commands.run("pip install python-pptx", timeout=60)
@@ -412,7 +425,9 @@ print(f"SUCCESS: Created {{len(prs.slides)}} slides")
             return result
 
         except Exception as e:
-            self._emit_tool_result("outline_to_slides", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "outline_to_slides", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
@@ -478,7 +493,9 @@ Please modify the outline according to the feedback and return the complete upda
             return result
 
         except Exception as e:
-            self._emit_tool_result("refine_outline", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "refine_outline", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
@@ -487,7 +504,9 @@ class ExpandSlideInput(BaseModel):
 
     topic: str = Field(description="The slide topic to expand")
     context: str = Field(default="", description="Context from surrounding slides")
-    style: PresentationStyle = Field(default="business", description="Presentation style")
+    style: PresentationStyle = Field(
+        default="business", description="Presentation style"
+    )
 
 
 class ExpandSlideTool(_PresentationOutlineBaseTool):

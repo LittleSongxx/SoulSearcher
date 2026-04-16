@@ -1,11 +1,10 @@
-import json
 import logging
 import textwrap
 from typing import Any, Dict, List, Optional
 
+from agent.core.llm_factory import create_chat_model
 from langchain.tools import tool
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
 from common.config import settings
 
@@ -28,38 +27,9 @@ def _summarize_content(raw_content: str) -> Optional[str]:
     """
     if not raw_content:
         return None
-    if not settings.openai_api_key:
-        return None
 
     try:
-        params: Dict[str, Any] = {
-            "model": settings.primary_model,
-            "temperature": 0.3,
-            "api_key": settings.openai_api_key,
-            "timeout": settings.openai_timeout or None,
-        }
-        if settings.use_azure:
-            params.update(
-                {
-                    "azure_endpoint": settings.azure_endpoint or None,
-                    "azure_deployment": settings.primary_model,
-                    "api_version": settings.azure_api_version or None,
-                    "api_key": settings.azure_api_key or settings.openai_api_key,
-                }
-            )
-        elif settings.openai_base_url:
-            params["base_url"] = settings.openai_base_url
-
-        merged_extra: Dict[str, Any] = {}
-        if settings.openai_extra_body:
-            try:
-                merged_extra.update(json.loads(settings.openai_extra_body))
-            except json.JSONDecodeError:
-                logger.warning("Invalid JSON in openai_extra_body; ignoring.")
-        if merged_extra:
-            params["extra_body"] = merged_extra
-
-        llm = ChatOpenAI(**params)
+        llm = create_chat_model(settings.primary_model, temperature=0.3)
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -70,7 +40,9 @@ def _summarize_content(raw_content: str) -> Optional[str]:
                 ("human", "{content}"),
             ]
         )
-        response = llm.invoke(prompt.format_messages(content=_trim_text(raw_content, 3500)))
+        response = llm.invoke(
+            prompt.format_messages(content=_trim_text(raw_content, 3500))
+        )
         content = getattr(response, "content", None) or ""
         return textwrap.dedent(content).strip() or None
     except Exception as e:
@@ -129,7 +101,11 @@ def tavily_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
             seen_urls.add(url)
 
             raw_content = result.get("raw_content", "") or result.get("content", "")
-            summary = _summarize_content(raw_content) if len(results) < _SUMMARY_TOP_RESULTS else None
+            summary = (
+                _summarize_content(raw_content)
+                if len(results) < _SUMMARY_TOP_RESULTS
+                else None
+            )
 
             results.append(
                 {

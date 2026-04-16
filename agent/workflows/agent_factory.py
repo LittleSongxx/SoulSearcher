@@ -17,6 +17,7 @@ from langchain.agents.middleware import (
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 
+from agent.core.llm_factory import create_chat_model
 from common.config import settings
 from agent.workflows.provider_safe_middleware import ProviderSafeToolSelectorMiddleware
 from tools.code.code_executor import execute_python_code
@@ -26,36 +27,33 @@ logger = logging.getLogger(__name__)
 
 
 def _build_llm(model: str, temperature: float = 0.7) -> ChatOpenAI:
-    params = {
-        "model": model,
-        "temperature": temperature,
-        "api_key": settings.openai_api_key,
-        "timeout": settings.openai_timeout or None,
-    }
-    if settings.use_azure:
-        params.update(
-            {
-                "azure_endpoint": settings.azure_endpoint or None,
-                "azure_deployment": model,
-                "api_version": settings.azure_api_version or None,
-                "api_key": settings.azure_api_key or settings.openai_api_key,
-            }
-        )
-    elif settings.openai_base_url:
-        params["base_url"] = settings.openai_base_url
-
-    return ChatOpenAI(**params)
+    return create_chat_model(model, temperature=temperature)
 
 
 def _selector_llm() -> ChatOpenAI:
-    return _build_llm(settings.tool_selector_model or settings.primary_model, temperature=0)
+    return _build_llm(
+        settings.tool_selector_model or settings.primary_model, temperature=0
+    )
 
 
 def _tool_selector_methods() -> tuple[str, ...]:
     """Choose structured-output methods in provider-preferred order."""
     if settings.use_azure:
         return ("json_schema", "function_calling", "json_mode")
-    base_url = (settings.openai_base_url or "").strip().lower()
+    selector_model = settings.tool_selector_model or settings.primary_model
+    selector_cfg = settings.llm_config_for_model(selector_model)
+    base_url = (
+        (
+            (
+                selector_cfg.base_url
+                if selector_cfg and selector_cfg.base_url
+                else settings.openai_base_url
+            )
+            or ""
+        )
+        .strip()
+        .lower()
+    )
     if not base_url:
         return ("json_schema", "function_calling", "json_mode")
     if "api.openai.com" in base_url:
@@ -194,7 +192,9 @@ def build_writer_agent(model: str | None = None) -> tuple[object, List[BaseTool]
     return agent, tools
 
 
-def build_tool_agent(*, model: str, tools: List[BaseTool], temperature: float = 0.7) -> object:
+def build_tool_agent(
+    *, model: str, tools: List[BaseTool], temperature: float = 0.7
+) -> object:
     """
     Create a generic tool-calling agent using the shared middleware stack.
     """

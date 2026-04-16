@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from agent.core.llm_factory import create_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -54,9 +55,7 @@ _FAST_REPLY_SUFFIX_ZH_RE = re.compile(
 _FAST_COMPARE_PREFIX_RE = re.compile(
     r"""(?is)^\s*(?:please\s+)?(?:use|using)\s+(?:current\s+)?web\s+search\s+to\s+compare\b[\s:：,-]*"""
 )
-_FAST_COMPARE_INLINE_RE = re.compile(
-    r"""(?is)^\s*(?:please\s+)?compare\b[\s:：,-]*"""
-)
+_FAST_COMPARE_INLINE_RE = re.compile(r"""(?is)^\s*(?:please\s+)?compare\b[\s:：,-]*""")
 _FAST_COMPARE_PREFIX_ZH_RE = re.compile(
     r"""(?is)^\s*(?:请)?(?:使用|用)(?:当前)?(?:网络|网页|web)?搜索(?:来)?(?:比较|对比)[\s:：,-]*"""
 )
@@ -184,7 +183,9 @@ def handle_cancellation(state: AgentState, error: Exception) -> Dict[str, Any]:
 
 
 def _event_results_limit() -> int:
-    return max(1, min(20, int(getattr(settings, "deepsearch_event_results_limit", 5) or 5)))
+    return max(
+        1, min(20, int(getattr(settings, "deepsearch_event_results_limit", 5) or 5))
+    )
 
 
 def _build_compact_unique_source_preview(
@@ -285,7 +286,10 @@ def _should_use_fast_agent_path(state: AgentState, config: RunnableConfig) -> bo
     user_input = str(state.get("input", "") or "").strip()
     if not user_input or state.get("images"):
         return False
-    if not (_auto_mode_prefers_linear(user_input) or _is_narrow_comparison_prompt(user_input)):
+    if not (
+        _auto_mode_prefers_linear(user_input)
+        or _is_narrow_comparison_prompt(user_input)
+    ):
         return False
 
     profile = _configurable(config).get("agent_profile") or {}
@@ -324,10 +328,7 @@ def _format_fast_search_results(results: List[Dict[str, Any]], limit: int = 3) -
         title = str(item.get("title", "") or "Untitled result").strip()
         url = str(item.get("url", "") or "").strip()
         snippet = (
-            item.get("summary")
-            or item.get("snippet")
-            or item.get("raw_excerpt")
-            or ""
+            item.get("summary") or item.get("snippet") or item.get("raw_excerpt") or ""
         )
         snippet = re.sub(r"\s+", " ", str(snippet or "")).strip()
         if len(snippet) > 700:
@@ -350,7 +351,7 @@ def _run_fast_agent_search(
 
     call_kwargs = {"query": query, "max_results": 3}
 
-    if len(settings.search_engines_list) > 1:
+    if settings.use_fallback_search_tool:
         from tools.search.fallback_search import run_fallback_search
 
         if settings.tool_retry:
@@ -387,11 +388,15 @@ def _answer_simple_agent_query(
     try:
         provider, results = _run_fast_agent_search(search_query, config)
     except Exception as e:
-        logger.warning(f"[agent_node] Fast search path failed for '{search_query[:80]}': {e}")
+        logger.warning(
+            f"[agent_node] Fast search path failed for '{search_query[:80]}': {e}"
+        )
         return None
 
     if not results:
-        logger.info("[agent_node] Fast search path found no results; falling back to full agent")
+        logger.info(
+            "[agent_node] Fast search path found no results; falling back to full agent"
+        )
         return None
 
     evidence = _format_fast_search_results(results)
@@ -460,39 +465,7 @@ def _chat_model(
     """
     Build a ChatOpenAI instance honoring custom base URL / Azure / timeout / extra body.
     """
-    params: Dict[str, Any] = {
-        "temperature": temperature,
-        "model": model,
-        "api_key": settings.openai_api_key,
-        "timeout": settings.openai_timeout or None,
-    }
-
-    if settings.use_azure:
-        # azure_deployment maps to deployment name; reuse model name by default
-        params.update(
-            {
-                "azure_endpoint": settings.azure_endpoint or None,
-                "azure_deployment": model,
-                "api_version": settings.azure_api_version or None,
-                "api_key": settings.azure_api_key or settings.openai_api_key,
-            }
-        )
-    elif settings.openai_base_url:
-        params["base_url"] = settings.openai_base_url
-
-    # Merge extra body if provided in settings
-    merged_extra: Dict[str, Any] = {}
-    if settings.openai_extra_body:
-        try:
-            merged_extra.update(json.loads(settings.openai_extra_body))
-        except json.JSONDecodeError:
-            logger.warning("Invalid JSON in openai_extra_body; ignoring.")
-    if extra_body:
-        merged_extra.update(extra_body)
-    if merged_extra:
-        params["extra_body"] = merged_extra
-
-    return ChatOpenAI(**params)
+    return create_chat_model(model, temperature=temperature, extra_body=extra_body)
 
 
 def _log_usage(response: Any, node: str) -> None:
@@ -543,7 +516,9 @@ def initialize_enhanced_tools() -> None:
 
         # Phase 2 (optional): recursive discovery across tools/* for full introspection.
         if bool(getattr(settings, "enhanced_tool_discovery_recursive", False)):
-            exclude_dirs = set(getattr(settings, "enhanced_tool_discovery_exclude_list", []) or [])
+            exclude_dirs = set(
+                getattr(settings, "enhanced_tool_discovery_exclude_list", []) or []
+            )
             logger.info("Discovering tools from 'tools' directory (recursive)...")
             discovered.extend(
                 registry.discover_from_directory(
@@ -617,7 +592,14 @@ def _model_for_task(task_type: str, config: RunnableConfig) -> str:
         return router.get_model_name(tt, config)
     except Exception:
         # Fallback to legacy behavior
-        if task_type in ("planning", "evaluation", "critique", "routing", "reflection", "gap_analysis"):
+        if task_type in (
+            "planning",
+            "evaluation",
+            "critique",
+            "routing",
+            "reflection",
+            "gap_analysis",
+        ):
             return _selected_reasoning_model(config, settings.reasoning_model)
         return _selected_model(config, settings.primary_model)
 
@@ -635,8 +617,12 @@ def _extract_tool_call_fields(
         tool_call_id = tool_call.get("id") or tool_call.get("tool_call_id")
     else:
         name = getattr(tool_call, "name", None)
-        raw_args = getattr(tool_call, "args", None) or getattr(tool_call, "arguments", None)
-        tool_call_id = getattr(tool_call, "id", None) or getattr(tool_call, "tool_call_id", None)
+        raw_args = getattr(tool_call, "args", None) or getattr(
+            tool_call, "arguments", None
+        )
+        tool_call_id = getattr(tool_call, "id", None) or getattr(
+            tool_call, "tool_call_id", None
+        )
 
     if isinstance(raw_args, str):
         try:
@@ -710,7 +696,9 @@ def _build_user_content(
         parts.append({"type": "text", "text": text})
     elif normalized_images:
         # Ensure the model gets some textual anchor when only images are provided
-        parts.append({"type": "text", "text": "See attached images and respond accordingly."})
+        parts.append(
+            {"type": "text", "text": "See attached images and respond accordingly."}
+        )
 
     for img in normalized_images:
         parts.append({"type": "image_url", "image_url": {"url": img["url"]}})
@@ -722,7 +710,9 @@ def _build_user_content(
     return parts
 
 
-def perform_parallel_search(state: QueryState, config: RunnableConfig) -> Dict[str, Any]:
+def perform_parallel_search(
+    state: QueryState, config: RunnableConfig
+) -> Dict[str, Any]:
     """
     Executes a single search query in parallel.
 
@@ -768,7 +758,9 @@ def perform_parallel_search(state: QueryState, config: RunnableConfig) -> Dict[s
             try:
                 import threading
 
-                from agent.workflows.browser_visualizer import visualize_urls_from_results
+                from agent.workflows.browser_visualizer import (
+                    visualize_urls_from_results,
+                )
 
                 threading.Thread(
                     target=lambda rs=cached_results: visualize_urls_from_results(
@@ -796,7 +788,7 @@ def perform_parallel_search(state: QueryState, config: RunnableConfig) -> Dict[s
         enforce_tool_call_limit(state, settings.tool_call_limit)
 
         call_kwargs = {"query": query, "max_results": 5}
-        if len(settings.search_engines_list) > 1:
+        if settings.use_fallback_search_tool:
             from tools.search.fallback_search import run_fallback_search
 
             _, results = run_fallback_search(**call_kwargs)
@@ -820,7 +812,9 @@ def perform_parallel_search(state: QueryState, config: RunnableConfig) -> Dict[s
             try:
                 import threading
 
-                from agent.workflows.browser_visualizer import visualize_urls_from_results
+                from agent.workflows.browser_visualizer import (
+                    visualize_urls_from_results,
+                )
 
                 threading.Thread(
                     target=lambda rs=results: visualize_urls_from_results(
@@ -878,7 +872,11 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         max_revisions = state.get("max_revisions", 2)
         eval_dimensions = state.get("eval_dimensions", {}) or {}
         quality_overall_score = state.get("quality_overall_score")
-        if quality_overall_score is None and isinstance(eval_dimensions, dict) and eval_dimensions:
+        if (
+            quality_overall_score is None
+            and isinstance(eval_dimensions, dict)
+            and eval_dimensions
+        ):
             numeric_values = [
                 float(v)
                 for v in eval_dimensions.values()
@@ -927,7 +925,11 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         return {
             "coordinator_action": decision.action.value,
             "coordinator_reasoning": decision.reasoning,
-            "missing_topics": decision.priority_topics if decision.priority_topics else state.get("missing_topics", []),
+            "missing_topics": (
+                decision.priority_topics
+                if decision.priority_topics
+                else state.get("missing_topics", [])
+            ),
             "coordinator_quality_snapshot": {
                 "overall": quality_overall_score,
                 "gap_count": int(quality_gap_count or 0),
@@ -948,11 +950,7 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
     """Deep search pipeline that iterates query → search → summarize."""
     logger.info("Executing deepsearch node")
     cfg = _configurable(config)
-    thread_id = str(
-        cfg.get("thread_id")
-        or state.get("cancel_token_id")
-        or ""
-    ).strip()
+    thread_id = str(cfg.get("thread_id") or state.get("cancel_token_id") or "").strip()
     emitter = None
 
     if thread_id:
@@ -973,7 +971,9 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
     try:
         input_text = str(state.get("input", "") or "").strip()
         if input_text and _auto_mode_prefers_linear(input_text):
-            logger.info("[deepsearch_node] Delegating simple factual deep query to direct answer node")
+            logger.info(
+                "[deepsearch_node] Delegating simple factual deep query to direct answer node"
+            )
             return direct_answer_node(state, config)
 
         token_id = state.get("cancel_token_id")
@@ -983,9 +983,9 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
 
         if emitter and isinstance(result, dict):
             try:
-                runner_events_emitted = bool(result.get("_deepsearch_events_emitted")) and not bool(
-                    result.get("is_cancelled")
-                )
+                runner_events_emitted = bool(
+                    result.get("_deepsearch_events_emitted")
+                ) and not bool(result.get("is_cancelled"))
                 if not runner_events_emitted:
                     quality_summary = result.get("quality_summary", {})
                     if isinstance(quality_summary, dict) and quality_summary:
@@ -1003,14 +1003,16 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
                             ToolEventType.RESEARCH_TREE_UPDATE,
                             {
                                 "tree": research_tree,
-                                "quality": quality_summary if isinstance(quality_summary, dict) else {},
+                                "quality": (
+                                    quality_summary
+                                    if isinstance(quality_summary, dict)
+                                    else {}
+                                ),
                             },
                         )
 
                     report_text = (
-                        result.get("final_report")
-                        or result.get("draft_report")
-                        or ""
+                        result.get("final_report") or result.get("draft_report") or ""
                     )
                     report_preview = str(report_text).strip()
                     if len(report_preview) > 1200:
@@ -1031,7 +1033,11 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
                             "node_id": "deepsearch",
                             "summary": report_preview,
                             "sources": source_preview,
-                            "quality": quality_summary if isinstance(quality_summary, dict) else {},
+                            "quality": (
+                                quality_summary
+                                if isinstance(quality_summary, dict)
+                                else {}
+                            ),
                         },
                     )
             except Exception as e:
@@ -1101,7 +1107,9 @@ def route_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         result["route"] = "clarify"
         result["needs_clarification"] = True
 
-    logger.info(f"[route_node] Routing decision: {route} (confidence: {confidence:.2f})")
+    logger.info(
+        f"[route_node] Routing decision: {route} (confidence: {confidence:.2f})"
+    )
     logger.info(f"[route_node] search_mode from config: {mode_info}")
     logger.info(f"[route_node] override_mode: {override_mode}")
     logger.info(f"[route_node] Returning result with route='{route}'")
@@ -1114,7 +1122,9 @@ def route_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         try:
             from agent.workflows.domain_router import DomainClassifier
 
-            domain_llm = _chat_model(_model_for_task("routing", config), temperature=0.3)
+            domain_llm = _chat_model(
+                _model_for_task("routing", config), temperature=0.3
+            )
             classifier = DomainClassifier(domain_llm, config)
 
             classification = classifier.classify(state.get("input", ""))
@@ -1197,7 +1207,9 @@ def direct_answer_node(state: AgentState, config: RunnableConfig) -> Dict[str, A
     t0 = time.time()
     llm = _chat_model(_model_for_task("writing", config), temperature=0.7)
     messages = [
-        SystemMessage(content="You are a helpful assistant. Answer succinctly and accurately."),
+        SystemMessage(
+            content="You are a helpful assistant. Answer succinctly and accurately."
+        ),
         HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
     ]
     response = llm.invoke(messages, config=config)
@@ -1251,19 +1263,21 @@ def planner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         check_cancellation(state)
 
         # Use reasoning model for planning
-        llm = _chat_model(
-            _model_for_task("planning", config), temperature=1
-        )
+        llm = _chat_model(_model_for_task("planning", config), temperature=1)
         t0 = time.time()
 
         class PlanResponse(BaseModel):
             queries: List[str] = Field(description="3-7 targeted search queries")
-            reasoning: str = Field(description="Brief explanation of the research strategy")
+            reasoning: str = Field(
+                description="Brief explanation of the research strategy"
+            )
 
         system_msg = SystemMessage(
             content="You are an expert research planner. Return JSON with 3-7 targeted search queries and a brief reasoning."
         )
-        human_msg = HumanMessage(content=_build_user_content(state["input"], state.get("images")))
+        human_msg = HumanMessage(
+            content=_build_user_content(state["input"], state.get("images"))
+        )
 
         response = (
             llm.with_structured_output(PlanResponse)
@@ -1319,7 +1333,9 @@ def planner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
             "current_step": 0,
             "errors": [f"Planning error: {str(e)}"],
             "messages": [
-                AIMessage(content=f"Using fallback plan: direct search for '{state['input']}'")
+                AIMessage(
+                    content=f"Using fallback plan: direct search for '{state['input']}'"
+                )
             ],
         }
 
@@ -1412,8 +1428,8 @@ def hitl_plan_review_node(state: AgentState, config: RunnableConfig) -> Dict[str
         "instruction": (
             "Review the research plan. You can edit the query list.\n\n"
             "Return one of:\n"
-            "- {\"content\": \"<JSON array of strings>\"}\n"
-            "- {\"research_plan\": [\"q1\", ...]}\n"
+            '- {"content": "<JSON array of strings>"}\n'
+            '- {"research_plan": ["q1", ...]}\n'
             "- or a plain string (JSON array or newline-separated queries)."
         ),
         "content": json.dumps(plan, indent=2, ensure_ascii=False),
@@ -1450,7 +1466,7 @@ def hitl_draft_review_node(state: AgentState, config: RunnableConfig) -> Dict[st
         "checkpoint": "draft",
         "instruction": (
             "Review and optionally edit the draft report. Return:\n"
-            "- {\"content\": \"<updated report>\"}\n"
+            '- {"content": "<updated report>"}\n'
             "- or a plain string."
         ),
         "content": draft,
@@ -1528,7 +1544,9 @@ def _format_sources_snapshot_for_instruction(state: AgentState) -> str:
                 entities_list.append(e.strip())
 
     lines: List[str] = []
-    lines.append(f"- Sources collected: {sum(len((i or {}).get('results', []) or []) for i in scraped_content if isinstance(i, dict))}")
+    lines.append(
+        f"- Sources collected: {sum(len((i or {}).get('results', []) or []) for i in scraped_content if isinstance(i, dict))}"
+    )
     if summary.strip():
         lines.append(f"- Compressed summary: {summary.strip()}")
     if facts_preview:
@@ -1546,7 +1564,9 @@ def _format_sources_snapshot_for_instruction(state: AgentState) -> str:
     return snapshot
 
 
-def hitl_sources_review_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def hitl_sources_review_node(
+    state: AgentState, config: RunnableConfig
+) -> Dict[str, Any]:
     """
     Optional HITL checkpoint: review sources/compressed knowledge, add guidance.
 
@@ -1569,7 +1589,7 @@ def hitl_sources_review_node(state: AgentState, config: RunnableConfig) -> Dict[
             f"{snapshot}\n\n"
             "Optionally add guidance for the writer in `content`, then approve to continue.\n"
             "Return:\n"
-            "- {\"content\": \"<guidance>\"}\n"
+            '- {"content": "<guidance>"}\n'
             "- or a plain string."
         ),
         "content": (state.get("human_guidance") or "").strip(),
@@ -1636,9 +1656,7 @@ def refine_plan_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
     # Priority 2: Fall back to LLM generation if no queries from evaluator
     if not new_queries:
         logger.info("No evaluator suggestions, generating via LLM")
-        llm = _chat_model(
-            _model_for_task("planning", config), temperature=0.8
-        )
+        llm = _chat_model(_model_for_task("planning", config), temperature=0.8)
         t0 = time.time()
 
         prompt = ChatPromptTemplate.from_messages(
@@ -1673,7 +1691,9 @@ Return ONLY a JSON object:
             )
             _log_usage(response, "refine_plan")
             logger.info(f"[timing] refine_plan LLM {(time.time() - t0):.3f}s")
-            content = response.content if hasattr(response, "content") else str(response)
+            content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
             start = content.find("{")
             end = content.rfind("}") + 1
             if start >= 0 and end > start:
@@ -1702,13 +1722,16 @@ Return ONLY a JSON object:
     merged_plan = existing_plan + new_queries
     revision_count = int(state.get("revision_count", 0)) + 1
 
-    logger.info(f"Refine plan added {len(new_queries)} queries; total plan size {len(merged_plan)}")
+    logger.info(
+        f"Refine plan added {len(new_queries)} queries; total plan size {len(merged_plan)}"
+    )
     return {
         "research_plan": merged_plan,
         "revision_count": revision_count,
         "messages": [
             AIMessage(
-                content="Added follow-up queries:\n" + "\n".join(f"- {q}" for q in new_queries)
+                content="Added follow-up queries:\n"
+                + "\n".join(f"- {q}" for q in new_queries)
             )
         ],
     }
@@ -1720,7 +1743,9 @@ def web_search_plan_node(state: AgentState, config: RunnableConfig) -> Dict[str,
     return {
         "research_plan": [state["input"]],
         "current_step": 0,
-        "messages": [AIMessage(content=f"Web search plan: direct search for '{state['input']}'")],
+        "messages": [
+            AIMessage(content=f"Web search plan: direct search for '{state['input']}'")
+        ],
     }
 
 
@@ -1744,7 +1769,9 @@ def agent_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         if _should_use_fast_agent_path(state, config):
             fast_result = _answer_simple_agent_query(state, config)
             if fast_result is not None:
-                logger.info("[agent_node] Served simple verification query via fast search path")
+                logger.info(
+                    "[agent_node] Served simple verification query via fast search path"
+                )
                 return fast_result
 
         cfg = _configurable(config)
@@ -1760,7 +1787,9 @@ def agent_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         tool_names = [getattr(t, "name", t.__class__.__name__) for t in tools]
         logger.info(f"Agent loaded {len(tools)} tools: {tool_names}")
 
-        if ENHANCED_TOOLS_AVAILABLE and hasattr(settings, "agent_use_enhanced_registry"):
+        if ENHANCED_TOOLS_AVAILABLE and hasattr(
+            settings, "agent_use_enhanced_registry"
+        ):
             try:
                 registry = get_global_registry()
                 if registry.list_names():
@@ -1784,17 +1813,23 @@ def agent_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
             mode="agent",
             context={
                 "current_time": datetime.now(),
-                "enabled_tools": [tool.__class__.__name__ for tool in tools] if tools else [],
+                "enabled_tools": (
+                    [tool.__class__.__name__ for tool in tools] if tools else []
+                ),
                 "prompt_pack": profile_prompt_pack,
                 "prompt_variant": profile_prompt_variant,
             },
         )
         browser_hint = None
-        if profile.get("browser_context_helper", settings.enable_browser_context_helper):
+        if profile.get(
+            "browser_context_helper", settings.enable_browser_context_helper
+        ):
             browser_hint = build_browser_context_hint(thread_id)
 
         # Add XML tool calling instruction if enabled
-        if ENHANCED_TOOLS_AVAILABLE and getattr(settings, "agent_xml_tool_calling", False):
+        if ENHANCED_TOOLS_AVAILABLE and getattr(
+            settings, "agent_xml_tool_calling", False
+        ):
             xml_instruction = """\n\nXML Tool Calling Format (optional):
 You can also use XML format for tool calls:
 <function_calls>
@@ -1826,7 +1861,9 @@ You can also use XML format for tool calls:
             messages.append(SystemMessage(content=browser_hint))
 
         messages.append(
-            HumanMessage(content=_build_user_content(state.get("input", ""), state.get("images")))
+            HumanMessage(
+                content=_build_user_content(state.get("input", ""), state.get("images"))
+            )
         )
 
         response = agent.invoke({"messages": messages}, config=config)
@@ -1835,22 +1872,29 @@ You can also use XML format for tool calls:
         text = ""
         if isinstance(response, dict) and response.get("messages"):
             last = response["messages"][-1]
-            text = getattr(last, "content", "") if hasattr(last, "content") else str(last)
+            text = (
+                getattr(last, "content", "") if hasattr(last, "content") else str(last)
+            )
         else:
             text = getattr(response, "content", None) or str(response)
 
         # Stuck detection: if last two AI messages repeat, inject hint
         if detect_stuck(
-            response.get("messages", []) if isinstance(response, dict) else [], threshold=1
+            response.get("messages", []) if isinstance(response, dict) else [],
+            threshold=1,
         ):
-            result_messages = response.get("messages", []) if isinstance(response, dict) else []
+            result_messages = (
+                response.get("messages", []) if isinstance(response, dict) else []
+            )
             result_messages = inject_stuck_hint(result_messages)
             response = {"messages": result_messages}
             text = getattr(result_messages[-1], "content", text)
 
         # Enhanced: Detect XML tool calls in response if enabled
         continuation_needed = False
-        if ENHANCED_TOOLS_AVAILABLE and getattr(settings, "agent_xml_tool_calling", False):
+        if ENHANCED_TOOLS_AVAILABLE and getattr(
+            settings, "agent_xml_tool_calling", False
+        ):
             try:
                 from agent.parsers.xml_parser import XMLToolParser
 
@@ -1932,9 +1976,7 @@ def compressor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
 
             existing = CompressedKnowledge(
                 topic=existing_knowledge.get("topic", topic),
-                facts=[
-                    ExtractedFact(**f) for f in existing_knowledge.get("facts", [])
-                ],
+                facts=[ExtractedFact(**f) for f in existing_knowledge.get("facts", [])],
                 statistics=existing_knowledge.get("statistics", []),
                 key_entities=existing_knowledge.get("key_entities", []),
                 summary=existing_knowledge.get("summary", ""),
@@ -2015,7 +2057,9 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
 
         messages: List[Any] = [
             SystemMessage(content=writer_system_prompt),
-            HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
+            HumanMessage(
+                content=_build_user_content(state["input"], state.get("images"))
+            ),
         ]
 
         human_guidance = state.get("human_guidance")
@@ -2040,7 +2084,9 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         report = ""
         if isinstance(response, dict) and response.get("messages"):
             last = response["messages"][-1]
-            report = getattr(last, "content", "") if hasattr(last, "content") else str(last)
+            report = (
+                getattr(last, "content", "") if hasattr(last, "content") else str(last)
+            )
         else:
             report = getattr(response, "content", None) or str(response)
 
@@ -2048,9 +2094,14 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         compressed_knowledge = state.get("compressed_knowledge", {})
         if compressed_knowledge and getattr(settings, "enable_report_charts", True):
             try:
-                from agent.workflows.viz_planner import VizPlanner, embed_charts_in_report
+                from agent.workflows.viz_planner import (
+                    VizPlanner,
+                    embed_charts_in_report,
+                )
 
-                viz_llm = _chat_model(_model_for_task("writing", config), temperature=0.3)
+                viz_llm = _chat_model(
+                    _model_for_task("writing", config), temperature=0.3
+                )
                 viz_planner = VizPlanner(viz_llm, config)
 
                 charts = viz_planner.generate_all_charts(
@@ -2126,19 +2177,31 @@ def evaluator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
             description="How well the report addresses all aspects of the question (0-1)",
         )
         accuracy: float = Field(
-            ge=0.0, le=1.0, description="How well claims are supported by cited sources (0-1)"
+            ge=0.0,
+            le=1.0,
+            description="How well claims are supported by cited sources (0-1)",
         )
         freshness: float = Field(
-            ge=0.0, le=1.0, description="How current and up-to-date the information is (0-1)"
+            ge=0.0,
+            le=1.0,
+            description="How current and up-to-date the information is (0-1)",
         )
         coherence: float = Field(
-            ge=0.0, le=1.0, description="How well-structured and logical the report is (0-1)"
+            ge=0.0,
+            le=1.0,
+            description="How well-structured and logical the report is (0-1)",
         )
 
     class EvalResponse(BaseModel):
-        verdict: str = Field(description='Evaluation verdict: "pass", "revise", or "incomplete"')
-        dimensions: EvalDimensions = Field(description="Scores for each evaluation dimension")
-        feedback: str = Field(description="Concise, actionable feedback for improvement")
+        verdict: str = Field(
+            description='Evaluation verdict: "pass", "revise", or "incomplete"'
+        )
+        dimensions: EvalDimensions = Field(
+            description="Scores for each evaluation dimension"
+        )
+        feedback: str = Field(
+            description="Concise, actionable feedback for improvement"
+        )
         missing_topics: List[str] = Field(
             default_factory=list,
             description="Topics or aspects that should be covered but are missing",
@@ -2194,7 +2257,8 @@ Provide specific, actionable feedback and search queries to address gaps.""",
 
     try:
         response = llm.with_structured_output(EvalResponse).invoke(
-            prompt.format_messages(report=report, question=state["input"]), config=config
+            prompt.format_messages(report=report, question=state["input"]),
+            config=config,
         )
         _log_usage(response, "evaluator")
         logger.info(f"[timing] evaluator {(time.time() - t0):.3f}s")
@@ -2214,7 +2278,12 @@ Provide specific, actionable feedback and search queries to address gaps.""",
                 "coherence": getattr(dims, "coherence", 0.7),
             }
         else:
-            dimensions = {"coverage": 0.7, "accuracy": 0.7, "freshness": 0.7, "coherence": 0.7}
+            dimensions = {
+                "coverage": 0.7,
+                "accuracy": 0.7,
+                "freshness": 0.7,
+                "coherence": 0.7,
+            }
 
         feedback = getattr(response, "feedback", "") or ""
         missing_topics = list(getattr(response, "missing_topics", []) or [])
@@ -2226,10 +2295,14 @@ Provide specific, actionable feedback and search queries to address gaps.""",
 
         if verdict == "pass" and min_score < 0.6:
             verdict = "revise"
-            logger.info(f"Adjusted verdict to 'revise' due to low dimension score: {min_score:.2f}")
+            logger.info(
+                f"Adjusted verdict to 'revise' due to low dimension score: {min_score:.2f}"
+            )
         elif verdict == "pass" and missing_topics:
             verdict = "revise"
-            logger.info(f"Adjusted verdict to 'revise' due to missing topics: {missing_topics}")
+            logger.info(
+                f"Adjusted verdict to 'revise' due to missing topics: {missing_topics}"
+            )
 
         # Build evaluation summary
         eval_summary = f"Dimensions: {dimensions}\n"
@@ -2238,7 +2311,9 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         if feedback:
             eval_summary += f"Feedback: {feedback}"
 
-        logger.info(f"Evaluator verdict: {verdict} (avg={avg_score:.2f}, min={min_score:.2f})")
+        logger.info(
+            f"Evaluator verdict: {verdict} (avg={avg_score:.2f}, min={min_score:.2f})"
+        )
         quality_overall_score = avg_score
         quality_gap_count = len(missing_topics)
         citation_coverage_score = float(dimensions.get("accuracy", 0.0))
@@ -2247,7 +2322,9 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         try:
             from agent.workflows.quality_assessor import QualityAssessor
 
-            quality_llm = _chat_model(_model_for_task("evaluation", config), temperature=0)
+            quality_llm = _chat_model(
+                _model_for_task("evaluation", config), temperature=0
+            )
             assessor = QualityAssessor(quality_llm, config)
 
             scraped_content = state.get("scraped_content", [])
@@ -2262,12 +2339,16 @@ Provide specific, actionable feedback and search queries to address gaps.""",
             dimensions["contradiction_free"] = quality_report.contradiction_free_score
             dimensions["citation_coverage"] = quality_report.citation_coverage_score
             citation_coverage_score = quality_report.citation_coverage_score
-            quality_gap_count = len(missing_topics) + len(quality_report.missing_citations)
+            quality_gap_count = len(missing_topics) + len(
+                quality_report.missing_citations
+            )
 
             # Adjust verdict if quality issues found
             if quality_report.overall_score < 0.5 and verdict == "pass":
                 verdict = "revise"
-                logger.info(f"Adjusted verdict due to quality issues: {quality_report.overall_score:.2f}")
+                logger.info(
+                    f"Adjusted verdict due to quality issues: {quality_report.overall_score:.2f}"
+                )
 
             citation_gate_threshold = float(
                 getattr(settings, "citation_gate_min_coverage", 0.6)
@@ -2308,9 +2389,15 @@ Provide specific, actionable feedback and search queries to address gaps.""",
             if not isinstance(deepsearch_artifacts, dict):
                 deepsearch_artifacts = {}
             passages_payload = deepsearch_artifacts.get("passages")
-            passages_list = passages_payload if isinstance(passages_payload, list) else None
+            passages_list = (
+                passages_payload if isinstance(passages_payload, list) else None
+            )
 
-            if (scraped_list or passages_list) and isinstance(report, str) and report.strip():
+            if (
+                (scraped_list or passages_list)
+                and isinstance(report, str)
+                and report.strip()
+            ):
                 verifier = ClaimVerifier()
                 checks = verifier.verify_report(
                     report,
@@ -2318,7 +2405,9 @@ Provide specific, actionable feedback and search queries to address gaps.""",
                     passages=passages_list,
                 )
 
-                contradicted = [c for c in checks if c.status == ClaimStatus.CONTRADICTED]
+                contradicted = [
+                    c for c in checks if c.status == ClaimStatus.CONTRADICTED
+                ]
                 unsupported = [c for c in checks if c.status == ClaimStatus.UNSUPPORTED]
                 verified = [c for c in checks if c.status == ClaimStatus.VERIFIED]
 
@@ -2329,11 +2418,16 @@ Provide specific, actionable feedback and search queries to address gaps.""",
                     "claim_verifier_contradicted": len(contradicted),
                 }
 
-                max_contradicted = int(getattr(settings, "claim_verifier_gate_max_contradicted", 0) or 0)
-                max_unsupported = int(getattr(settings, "claim_verifier_gate_max_unsupported", 0) or 0)
+                max_contradicted = int(
+                    getattr(settings, "claim_verifier_gate_max_contradicted", 0) or 0
+                )
+                max_unsupported = int(
+                    getattr(settings, "claim_verifier_gate_max_unsupported", 0) or 0
+                )
 
                 if verdict == "pass" and (
-                    len(contradicted) > max_contradicted or len(unsupported) > max_unsupported
+                    len(contradicted) > max_contradicted
+                    or len(unsupported) > max_unsupported
                 ):
                     verdict = "revise"
                     logger.info(
@@ -2351,9 +2445,7 @@ Provide specific, actionable feedback and search queries to address gaps.""",
             logger.warning(f"Claim verifier gate skipped: {e}")
 
         thread_id = str(
-            _configurable(config).get("thread_id")
-            or state.get("cancel_token_id")
-            or ""
+            _configurable(config).get("thread_id") or state.get("cancel_token_id") or ""
         ).strip()
         if thread_id:
             try:
@@ -2378,13 +2470,19 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         }
 
         quality_summary_state = state.get("quality_summary")
-        quality_summary: Dict[str, Any] = quality_summary_state if isinstance(quality_summary_state, dict) else {}
+        quality_summary: Dict[str, Any] = (
+            quality_summary_state if isinstance(quality_summary_state, dict) else {}
+        )
 
         state_deepsearch_artifacts = state.get("deepsearch_artifacts")
         deepsearch_artifacts: Optional[Dict[str, Any]] = None
         if isinstance(state_deepsearch_artifacts, dict):
             artifact_quality_state = state_deepsearch_artifacts.get("quality_summary")
-            artifact_quality = artifact_quality_state if isinstance(artifact_quality_state, dict) else {}
+            artifact_quality = (
+                artifact_quality_state
+                if isinstance(artifact_quality_state, dict)
+                else {}
+            )
             deepsearch_artifacts = {
                 **state_deepsearch_artifacts,
                 "quality_summary": {
@@ -2439,7 +2537,9 @@ Keep the structure clear and improve factual accuracy and clarity.""",
     report = state.get("draft_report") or state.get("final_report", "")
     feedback = state.get("evaluation", "")
     response = llm.invoke(
-        prompt.format_messages(question=state["input"], feedback=feedback, report=report),
+        prompt.format_messages(
+            question=state["input"], feedback=feedback, report=report
+        ),
         config=config,
     )
     content = response.content if hasattr(response, "content") else str(response)
@@ -2488,4 +2588,8 @@ def human_review_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
 
     report = _apply_output_contract(state.get("input", ""), report)
 
-    return {"final_report": report, "is_complete": True, "messages": [AIMessage(content=report)]}
+    return {
+        "final_report": report,
+        "is_complete": True,
+        "messages": [AIMessage(content=report)],
+    }

@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from agent.core.llm_factory import create_chat_model_params
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
@@ -29,34 +30,16 @@ def _build_llm(
     Some LangChain clients fall back to process env vars if `api_key` is omitted;
     we always pass an explicit key to avoid accidental env leakage.
     """
-    resolved_base_url = api_base_url or settings.openai_base_url or None
-    resolved_api_key = api_key or settings.openai_api_key or None
+    params: Dict[str, Any] = create_chat_model_params(model, temperature)
+    params["timeout"] = settings.openai_timeout or None
 
-    params: Dict[str, Any] = {
-        "model": model,
-        "temperature": temperature,
-        "timeout": settings.openai_timeout or None,
-    }
-
-    if settings.use_azure and not resolved_base_url:
-        params.update(
-            {
-                "azure_endpoint": settings.azure_endpoint or None,
-                "azure_deployment": model,
-                "api_version": settings.azure_api_version or None,
-                "api_key": settings.azure_api_key or resolved_api_key,
-            }
-        )
-    else:
-        if resolved_base_url:
-            params["base_url"] = resolved_base_url
-        params["api_key"] = resolved_api_key
-
-    if settings.openai_extra_body:
-        try:
-            params["extra_body"] = json.loads(settings.openai_extra_body)
-        except Exception:
-            pass
+    if api_base_url is not None:
+        if api_base_url:
+            params["base_url"] = api_base_url
+        else:
+            params.pop("base_url", None)
+    if api_key is not None:
+        params["api_key"] = api_key
 
     return ChatOpenAI(**params)
 
@@ -173,7 +156,9 @@ Prompt: {current_prompt}
 
         # 格式化样本
         correct_text = self._format_samples(correct_samples[:max_samples], "correct")
-        incorrect_text = self._format_samples(incorrect_samples[:max_samples], "incorrect")
+        incorrect_text = self._format_samples(
+            incorrect_samples[:max_samples], "incorrect"
+        )
         score_details = self._format_score_details(incorrect_samples[:max_samples])
 
         try:
@@ -258,7 +243,9 @@ Prompt: {current_prompt}
             asyncio.set_event_loop(loop)
 
         return loop.run_until_complete(
-            self.analyze(current_prompt, correct_samples, incorrect_samples, max_samples)
+            self.analyze(
+                current_prompt, correct_samples, incorrect_samples, max_samples
+            )
         )
 
     def _format_samples(self, samples: List[Dict], sample_type: str = "sample") -> str:
@@ -310,7 +297,9 @@ Prompt: {current_prompt}
             # 查找 ```json ... ```
             import re
 
-            json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+            json_match = re.search(
+                r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL
+            )
             if json_match:
                 return json.loads(json_match.group(1))
 
@@ -355,17 +344,25 @@ class ComparativeAnalyzer:
         """
         # 计算统计数据
         accuracy_a = (
-            sum(1 for r in results_a if r.get("is_correct")) / len(results_a) if results_a else 0
+            sum(1 for r in results_a if r.get("is_correct")) / len(results_a)
+            if results_a
+            else 0
         )
         accuracy_b = (
-            sum(1 for r in results_b if r.get("is_correct")) / len(results_b) if results_b else 0
+            sum(1 for r in results_b if r.get("is_correct")) / len(results_b)
+            if results_b
+            else 0
         )
 
         avg_score_a = (
-            sum(r.get("total_score", 0) for r in results_a) / len(results_a) if results_a else 0
+            sum(r.get("total_score", 0) for r in results_a) / len(results_a)
+            if results_a
+            else 0
         )
         avg_score_b = (
-            sum(r.get("total_score", 0) for r in results_b) / len(results_b) if results_b else 0
+            sum(r.get("total_score", 0) for r in results_b) / len(results_b)
+            if results_b
+            else 0
         )
 
         return {

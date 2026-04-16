@@ -77,7 +77,9 @@ class DaytonaSettings(BaseModel):
     daytona_server_url: str = "https://app.daytona.io/api"
     daytona_target: str = "us"
     sandbox_image_name: str = "whitezxj/sandbox:0.1.0"
-    sandbox_entrypoint: str = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
+    sandbox_entrypoint: str = (
+        "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
+    )
     VNC_password: str = ""  # Must be set via environment variable
 
 
@@ -173,6 +175,7 @@ class Settings(BaseSettings):
     openai_timeout: int = 60
     openai_extra_body: str = ""  # JSON string for extra OpenAI-compatible params
     tavily_api_key: str = ""
+    bocha_api_key: str = ""
     # Web search providers (optional; used when SEARCH_ENGINES includes them)
     serper_api_key: str = ""
     serpapi_api_key: str = ""
@@ -217,7 +220,9 @@ class Settings(BaseSettings):
         validation_alias="WEAVER_RELOAD",
         description="Enable uvicorn hot reload when running `python main.py` (only in DEBUG).",
     )
-    internal_api_key: str = Field(default="", validation_alias="WEAVER_INTERNAL_API_KEY")
+    internal_api_key: str = Field(
+        default="", validation_alias="WEAVER_INTERNAL_API_KEY"
+    )
     auth_user_header: str = Field(
         default="X-Weaver-User",
         validation_alias="WEAVER_AUTH_USER_HEADER",
@@ -228,12 +233,18 @@ class Settings(BaseSettings):
     # RATE_LIMIT_ENABLED:
     # - unset (default): enabled only when APP_ENV=prod|production
     # - true/false: force on/off regardless of APP_ENV
-    rate_limit_enabled: Optional[bool] = Field(default=None, validation_alias="RATE_LIMIT_ENABLED")
+    rate_limit_enabled: Optional[bool] = Field(
+        default=None, validation_alias="RATE_LIMIT_ENABLED"
+    )
     rate_limit_general_per_minute: int = Field(
         default=60, ge=1, validation_alias="RATE_LIMIT_GENERAL_PER_MINUTE"
     )
-    rate_limit_chat_per_minute: int = Field(default=20, ge=1, validation_alias="RATE_LIMIT_CHAT_PER_MINUTE")
-    rate_limit_window_seconds: int = Field(default=60, ge=1, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
+    rate_limit_chat_per_minute: int = Field(
+        default=20, ge=1, validation_alias="RATE_LIMIT_CHAT_PER_MINUTE"
+    )
+    rate_limit_window_seconds: int = Field(
+        default=60, ge=1, validation_alias="RATE_LIMIT_WINDOW_SECONDS"
+    )
     rate_limit_max_buckets: int = Field(
         default=10_000,
         ge=1,
@@ -247,10 +258,16 @@ class Settings(BaseSettings):
     # App Config
     debug: bool = False
     cors_origins: str = "http://localhost:3000,http://localhost:3100"
-    interrupt_before_nodes: str = ""  # comma-separated node names for LangGraph interrupts
-    app_config_path: str = "config/config.toml"  # Optional TOML config (OpenManus style)
+    interrupt_before_nodes: str = (
+        ""  # comma-separated node names for LangGraph interrupts
+    )
+    app_config_path: str = (
+        "config/config.toml"  # Optional TOML config (OpenManus style)
+    )
     mcp_config_path: str = "config/mcp.json"  # MCP servers definition (JSON)
-    app_config_object: Optional[AppConfig] = None  # populated at runtime if TOML is present
+    app_config_object: Optional[AppConfig] = (
+        None  # populated at runtime if TOML is present
+    )
 
     # Logging Config
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -274,13 +291,21 @@ class Settings(BaseSettings):
 
     # Multi-Model Research Config (Task-specific models)
     planner_model: str = ""  # Model for research planning (defaults to reasoning_model)
-    researcher_model: str = ""  # Model for research analysis (defaults to primary_model)
+    researcher_model: str = (
+        ""  # Model for research analysis (defaults to primary_model)
+    )
     writer_model: str = ""  # Model for report writing (defaults to primary_model)
-    evaluator_model: str = ""  # Model for quality evaluation (defaults to reasoning_model)
-    critic_model: str = ""  # Model for URL selection/critique (defaults to reasoning_model)
+    evaluator_model: str = (
+        ""  # Model for quality evaluation (defaults to reasoning_model)
+    )
+    critic_model: str = (
+        ""  # Model for URL selection/critique (defaults to reasoning_model)
+    )
 
     # Hierarchical Agent Config
-    use_hierarchical_agents: bool = False  # Enable coordinator→planner→researcher→reporter flow
+    use_hierarchical_agents: bool = (
+        False  # Enable coordinator→planner→researcher→reporter flow
+    )
 
     # Domain Routing Config
     domain_routing_enabled: bool = False  # Enable domain-specific routing and prompts
@@ -298,14 +323,20 @@ class Settings(BaseSettings):
     tree_max_depth: int = 2  # Maximum tree depth (0 = root only)
     tree_max_branches: int = 4  # Maximum children per node
     tree_queries_per_branch: int = 3  # Number of queries per branch
-    tree_parallel_branches: int = 3  # Max concurrent branch exploration (0 = sequential)
-    deepsearch_tree_max_searches: int = 30  # 0 = disabled (hard cap on search calls in tree mode)
+    tree_parallel_branches: int = (
+        3  # Max concurrent branch exploration (0 = sequential)
+    )
+    deepsearch_tree_max_searches: int = (
+        30  # 0 = disabled (hard cap on search calls in tree mode)
+    )
 
     # Report Visualization Config
     enable_report_charts: bool = True  # Generate charts from data in reports
 
     # Human-in-the-Loop (HITL) Config
-    hitl_checkpoints: str = ""  # Comma-separated interrupt points: plan,sources,draft,final
+    hitl_checkpoints: str = (
+        ""  # Comma-separated interrupt points: plan,sources,draft,final
+    )
     hitl_timeout_seconds: int = 3600  # Max wait time for human review (1 hour)
 
     # Prompt Config (选择提示词风格)
@@ -332,7 +363,9 @@ class Settings(BaseSettings):
     trim_messages_keep_first: int = 2
     trim_messages_keep_last: int = 8
     summary_messages: bool = False
-    summary_messages_trigger: int = 12  # when messages count exceeds this, summarize middle
+    summary_messages_trigger: int = (
+        12  # when messages count exceeds this, summarize middle
+    )
     summary_messages_keep_last: int = 4
     summary_messages_model: str = "gpt-4o-mini"
     summary_messages_word_limit: int = 200
@@ -347,21 +380,41 @@ class Settings(BaseSettings):
     deepsearch_query_num: int = 5
     deepsearch_results_per_query: int = 5
     deepsearch_enable_crawler: bool = False  # enable simple fallback crawler
-    deepsearch_enable_research_fetcher: bool = False  # fetch page bodies for evidence passages
+    deepsearch_enable_research_fetcher: bool = (
+        False  # fetch page bodies for evidence passages
+    )
     deepsearch_save_data: bool = False  # save deepsearch run data to disk
     deepsearch_save_dir: str = "eval/deepsearch_data"
-    deepsearch_use_gap_analysis: bool = True  # use knowledge gap analysis for targeted queries
+    deepsearch_use_gap_analysis: bool = (
+        True  # use knowledge gap analysis for targeted queries
+    )
     deepsearch_mode: str = "auto"  # auto | tree | linear
     deepsearch_max_seconds: float = 0.0  # 0 = disabled
     deepsearch_max_tokens: int = 0  # 0 = disabled
-    deepsearch_freshness_warning_min_known: int = 3  # minimum dated results before warning checks
-    deepsearch_freshness_warning_min_ratio: float = 0.4  # warn if fresh_30_ratio drops below this
-    deepsearch_event_results_limit: int = 5  # max search results included in SSE event payloads
-    deepsearch_report_sources_limit: int = 20  # max sources exposed to writer + appended to report
-    deepsearch_visualize_browser: bool = True  # drive sandbox browser so Live view isn't blank
-    deepsearch_claim_verifier_use_passages: bool = True  # use fetched passages for claim evidence
-    deepsearch_claim_verifier_min_overlap_tokens: int = 2  # token overlap threshold for claim evidence
-    deepsearch_claim_verifier_max_evidence_per_claim: int = 3  # max evidence passages/urls stored per claim
+    deepsearch_freshness_warning_min_known: int = (
+        3  # minimum dated results before warning checks
+    )
+    deepsearch_freshness_warning_min_ratio: float = (
+        0.4  # warn if fresh_30_ratio drops below this
+    )
+    deepsearch_event_results_limit: int = (
+        5  # max search results included in SSE event payloads
+    )
+    deepsearch_report_sources_limit: int = (
+        20  # max sources exposed to writer + appended to report
+    )
+    deepsearch_visualize_browser: bool = (
+        True  # drive sandbox browser so Live view isn't blank
+    )
+    deepsearch_claim_verifier_use_passages: bool = (
+        True  # use fetched passages for claim evidence
+    )
+    deepsearch_claim_verifier_min_overlap_tokens: int = (
+        2  # token overlap threshold for claim evidence
+    )
+    deepsearch_claim_verifier_max_evidence_per_claim: int = (
+        3  # max evidence passages/urls stored per claim
+    )
 
     # Research Fetcher / Reader Settings
     reader_fallback_mode: str = "both"
@@ -380,18 +433,32 @@ class Settings(BaseSettings):
 
     # Multi-Search Engine Config
     search_strategy: str = "fallback"  # fallback | parallel | round_robin | best_first
-    search_enable_freshness_ranking: bool = True  # Apply freshness boost for time-sensitive queries
+    search_enable_freshness_ranking: bool = (
+        True  # Apply freshness boost for time-sensitive queries
+    )
     search_freshness_half_life_days: float = 30.0  # Decay half-life for recency score
-    search_freshness_weight: float = 0.35  # Blend weight between relevance and freshness
+    search_freshness_weight: float = (
+        0.35  # Blend weight between relevance and freshness
+    )
     search_cache_max_size: int = 200  # session-level search cache capacity
     search_cache_ttl_seconds: float = 1800.0  # search cache TTL in seconds
     search_cache_similarity_threshold: float = 0.9  # fuzzy query match threshold
-    search_reliability_max_retries: int = 2  # retries per provider call (in addition to first attempt)
-    search_reliability_retry_backoff_seconds: float = 0.5  # exponential backoff base seconds
-    search_reliability_circuit_breaker_failures: int = 3  # open circuit after N consecutive failures
-    search_reliability_circuit_breaker_reset_seconds: float = 60.0  # reset circuit after N seconds
+    search_reliability_max_retries: int = (
+        2  # retries per provider call (in addition to first attempt)
+    )
+    search_reliability_retry_backoff_seconds: float = (
+        0.5  # exponential backoff base seconds
+    )
+    search_reliability_circuit_breaker_failures: int = (
+        3  # open circuit after N consecutive failures
+    )
+    search_reliability_circuit_breaker_reset_seconds: float = (
+        60.0  # reset circuit after N seconds
+    )
     search_parallel_max_workers: int = 8  # cap threads for parallel provider fan-out
-    search_parallel_timeout_seconds: float = 30.0  # best-effort timeout for parallel fan-out
+    search_parallel_timeout_seconds: float = (
+        30.0  # best-effort timeout for parallel fan-out
+    )
     brave_api_key: str = ""  # Brave Search API key
     serper_api_key: str = ""  # Serper.dev API key
     exa_api_key: str = ""  # Exa.ai API key
@@ -408,25 +475,33 @@ class Settings(BaseSettings):
     # Academic Search Settings
     arxiv_enabled: bool = True  # arXiv search (no API key needed)
     scholar_enabled: bool = True  # Google Scholar (no API key, rate limited)
-    semantic_scholar_api_key: str = ""  # Semantic Scholar API key (optional, higher rate)
+    semantic_scholar_api_key: str = (
+        ""  # Semantic Scholar API key (optional, higher rate)
+    )
     pubmed_email: str = ""  # NCBI Entrez email (required for PubMed)
     pubmed_api_key: str = ""  # NCBI API key (optional, higher rate)
 
     # Crawler
     crawler_headless: bool = True  # True=无头(默认不弹窗)，False=可视化调试
-    use_optimized_crawler: bool = False  # 是否启用Playwright优化爬虫，Windows建议默认False
+    use_optimized_crawler: bool = (
+        False  # 是否启用Playwright优化爬虫，Windows建议默认False
+    )
 
     # Daytona sandbox
     daytona_api_key: str = ""
     daytona_server_url: str = "https://app.daytona.io/api"
     daytona_target: str = "us"
     daytona_image_name: str = "whitezxj/sandbox:0.1.0"
-    daytona_entrypoint: str = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
+    daytona_entrypoint: str = (
+        "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
+    )
     daytona_vnc_password: str = ""  # Must be set via environment variable
 
     # Sandbox mode: local (E2B), daytona (remote), none (disabled)
     sandbox_mode: str = "local"
-    sandbox_template_browser: str = ""  # e2b sandbox browser template ID (e.g., chrome-stable)
+    sandbox_template_browser: str = (
+        ""  # e2b sandbox browser template ID (e.g., chrome-stable)
+    )
     sandbox_allow_internet: bool = True  # allow internet access inside sandbox
 
     # Tool / middleware controls
@@ -439,16 +514,22 @@ class Settings(BaseSettings):
     strip_tool_messages: bool = False  # drop ToolMessage from history to save tokens
     context_edit_trigger_tokens: int = 1000
     context_edit_keep_tools: int = 3
-    tool_selector: bool = True  # provider-safe selector retries across structured-output methods
+    tool_selector: bool = (
+        True  # provider-safe selector retries across structured-output methods
+    )
     tool_selector_model: str = ""  # defaults to primary_model when unset
     tool_selector_max_tools: int = 3
     tool_selector_always_include: str = ""  # comma-separated tool names
     tool_selector_prompt: str = ""
-    enable_todo_middleware: bool = True  # provider-safe: preserves LangChain defaults when unset
+    enable_todo_middleware: bool = (
+        True  # provider-safe: preserves LangChain defaults when unset
+    )
     todo_system_prompt: str = ""  # custom system prompt for todo middleware
     todo_tool_description: str = ""  # custom tool description for todo middleware
     enable_browser_use: bool = False  # enable browser_use tool (Playwright-based)
-    enable_browser_context_helper: bool = False  # inject browser context prompt if available
+    enable_browser_context_helper: bool = (
+        False  # inject browser context prompt if available
+    )
 
     # Enhanced tool registry auto-discovery (dev ergonomics)
     # Note: keep this lightweight by default. Recursive discovery can be enabled
@@ -456,7 +537,9 @@ class Settings(BaseSettings):
     enhanced_tool_discovery_enabled: bool = True
     enhanced_tool_discovery_recursive: bool = False
     enhanced_tool_discovery_exclude_dirs: str = "__pycache__,node_modules,web"
-    agent_use_enhanced_registry: bool = False  # reserved for future: build agent tools from ToolRegistry
+    agent_use_enhanced_registry: bool = (
+        False  # reserved for future: build agent tools from ToolRegistry
+    )
 
     # Tool visibility / events
     emit_tool_events: bool = True  # wrap tools with event emitters for front-end
@@ -474,7 +557,9 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string into list."""
-        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins = [
+            origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
 
         # Dev ergonomics: allow common local frontend ports by default.
         # This keeps the UI working even when CORS_ORIGINS in `.env` is outdated.
@@ -513,12 +598,18 @@ class Settings(BaseSettings):
     @property
     def interrupt_nodes_list(self) -> List[str]:
         """Parse interrupt_before_nodes into list for LangGraph compile."""
-        return [node.strip() for node in self.interrupt_before_nodes.split(",") if node.strip()]
+        return [
+            node.strip()
+            for node in self.interrupt_before_nodes.split(",")
+            if node.strip()
+        ]
 
     @property
     def tool_selector_always_include_list(self) -> List[str]:
         """Comma separated tool names that must always be kept when selector is on."""
-        return [t.strip() for t in self.tool_selector_always_include.split(",") if t.strip()]
+        return [
+            t.strip() for t in self.tool_selector_always_include.split(",") if t.strip()
+        ]
 
     @property
     def tool_whitelist_list(self) -> List[str]:
@@ -549,6 +640,33 @@ class Settings(BaseSettings):
                 engines = [cfg.engine] + list(cfg.fallback_engines or [])
         return engines or ["tavily"]
 
+    @property
+    def use_fallback_search_tool(self) -> bool:
+        """Use the multi-engine fallback search tool whenever non-Tavily routing is configured."""
+        engines = [e.strip().lower() for e in self.search_engines_list if e.strip()]
+        return len(engines) != 1 or (engines[0] if engines else "tavily") != "tavily"
+
+    def llm_config_for_model(self, model_name: str) -> Optional[LLMSettingsModel]:
+        """Return app-configured credentials/base URL for a specific model when available."""
+        app_cfg = getattr(self, "app_config_object", None)
+        llm_map = getattr(app_cfg, "llm", None)
+        if not llm_map:
+            return None
+
+        requested = str(model_name or "").strip()
+        if not requested:
+            return llm_map.get("default")
+
+        direct = llm_map.get(requested)
+        if direct:
+            return direct
+
+        for cfg in llm_map.values():
+            if (cfg.model or "").strip() == requested:
+                return cfg
+
+        return None
+
     @field_validator("deepsearch_mode", mode="before")
     @classmethod
     def normalize_deepsearch_mode(cls, value: str) -> str:
@@ -576,7 +694,9 @@ def _load_mcp_servers(mcp_path: str) -> Dict[str, MCPServerConfig]:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 servers = {}
-                for sid, scfg in data.get("mcpServers", data.get("servers", {})).items():
+                for sid, scfg in data.get(
+                    "mcpServers", data.get("servers", {})
+                ).items():
                     servers[sid] = MCPServerConfig(
                         type=scfg.get("type", ""),
                         url=scfg.get("url"),
@@ -715,11 +835,19 @@ def apply_app_config_overrides(settings: Settings) -> None:
         cfg = app_cfg.daytona_config
         if not settings.daytona_api_key and cfg.daytona_api_key:
             settings.daytona_api_key = cfg.daytona_api_key
-        settings.daytona_server_url = settings.daytona_server_url or cfg.daytona_server_url
+        settings.daytona_server_url = (
+            settings.daytona_server_url or cfg.daytona_server_url
+        )
         settings.daytona_target = settings.daytona_target or cfg.daytona_target
-        settings.daytona_image_name = settings.daytona_image_name or cfg.sandbox_image_name
-        settings.daytona_entrypoint = settings.daytona_entrypoint or cfg.sandbox_entrypoint
-        settings.daytona_vnc_password = settings.daytona_vnc_password or cfg.VNC_password
+        settings.daytona_image_name = (
+            settings.daytona_image_name or cfg.sandbox_image_name
+        )
+        settings.daytona_entrypoint = (
+            settings.daytona_entrypoint or cfg.sandbox_entrypoint
+        )
+        settings.daytona_vnc_password = (
+            settings.daytona_vnc_password or cfg.VNC_password
+        )
 
     # MCP servers
     if not settings.mcp_servers and app_cfg.mcp_config and app_cfg.mcp_config.servers:

@@ -115,14 +115,16 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
         # When API web search is available, omit the specialized sandbox search tools to
         # steer the agent away from anti-bot-prone search pages.
         # Use fallback search if multiple engines configured
-        if len(settings.search_engines_list) > 1:
+        if settings.use_fallback_search_tool:
             from tools import fallback_search
 
             tools.append(fallback_search)
         else:
             tools.append(tavily_search)
 
-    if _enabled(profile, "rag", default=False) and bool(getattr(settings, "rag_enabled", False)):
+    if _enabled(profile, "rag", default=False) and bool(
+        getattr(settings, "rag_enabled", False)
+    ):
         try:
             from tools.rag.rag_tool import rag_search
 
@@ -233,7 +235,9 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
         tools.extend(get_registered_tools())
 
     # Daytona remote sandbox tools (only when mode=daytona)
-    if settings.sandbox_mode == "daytona" and _enabled(profile, "sandbox_daytona", default=True):
+    if settings.sandbox_mode == "daytona" and _enabled(
+        profile, "sandbox_daytona", default=True
+    ):
         from tools.sandbox import daytona_create, daytona_stop
 
         tools.append(daytona_create)

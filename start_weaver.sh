@@ -228,10 +228,12 @@ sync_insightvault_env() {
     fi
   fi
 
-  if ! dotenv_has_value "$ENV_FILE" "TAVILY_API_KEY"; then
-    local engines
-    engines="$(dotenv_get "$ENV_FILE" "SEARCH_ENGINES" || true)"
-    if [[ "${engines,,}" != *"duckduckgo"* ]]; then
+  local engines
+  engines="$(dotenv_get "$ENV_FILE" "SEARCH_ENGINES" || true)"
+  if ! dotenv_value_is_set "$engines"; then
+    if dotenv_has_value "$ENV_FILE" "TAVILY_API_KEY"; then
+      upsert_env "$ENV_FILE" "SEARCH_ENGINES" "tavily"
+    else
       upsert_env "$ENV_FILE" "SEARCH_ENGINES" "duckduckgo,tavily"
     fi
   fi
@@ -249,16 +251,40 @@ port_in_use() {
   timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" >/dev/null 2>&1
 }
 
+docker_port_bindings() {
+  command -v docker >/dev/null 2>&1 || return 1
+ 
+  local ids=()
+  mapfile -t ids < <(docker ps -aq 2>/dev/null)
+  [[ ${#ids[@]} -gt 0 ]] || return 1
+ 
+  docker inspect \
+    -f '{{ $name := .Name }}{{ range $containerPort, $bindings := .HostConfig.PortBindings }}{{ range $bindings }}{{ printf "%s %s\n" $name .HostPort }}{{ end }}{{ end }}' \
+    "${ids[@]}" 2>/dev/null
+}
+
+docker_port_reserved() {
+  local port="$1"
+  docker_port_bindings | awk -v port="$port" '$2 == port { found = 1 } END { exit(found ? 0 : 1) }'
+}
+
 port_owned_by_weaver() {
   local port="$1"
-  command -v docker >/dev/null 2>&1 || return 1
-  docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
-    | awk -v port="$port" '$1 ~ /^weaver_/ && index($0, ":" port "->") { found = 1 } END { exit(found ? 0 : 1) }'
+  docker_port_bindings \
+    | awk -v port="$port" '
+        $2 == port {
+          found = 1
+          if ($1 !~ /^\/weaver_/) {
+            non_weaver = 1
+          }
+        }
+        END { exit(found && !non_weaver ? 0 : 1) }
+      '
 }
 
 port_available_or_weaver() {
   local port="$1"
-  if ! port_in_use "$port"; then
+  if ! port_in_use "$port" && ! docker_port_reserved "$port"; then
     return 0
   fi
   port_owned_by_weaver "$port"

@@ -19,6 +19,7 @@ from langchain.tools import tool
 from common.config import settings
 from tools.search.providers import (
     bing_search,
+    bocha_search,
     exa_search,
     firecrawl_search,
     google_cse_search,
@@ -54,7 +55,9 @@ def _duckduckgo(query: str, max_results: int) -> List[Dict[str, Any]]:
     ]
 
 
-def _normalize_multi_search_results(query: str, max_results: int) -> List[Dict[str, Any]]:
+def _normalize_multi_search_results(
+    query: str, max_results: int
+) -> List[Dict[str, Any]]:
     from tools.search.multi_search import get_search_orchestrator
 
     results = get_search_orchestrator().search(query=query, max_results=max_results)
@@ -76,19 +79,31 @@ def _normalize_multi_search_results(query: str, max_results: int) -> List[Dict[s
 # Map engine key -> handler
 _ENGINE_HANDLERS = {
     "tavily": _tavily,
+    "bocha": lambda query, max_results: bocha_search(
+        query=query, max_results=max_results
+    ),
     "duckduckgo": _duckduckgo,
-    "serper": lambda query, max_results: serper_search(query=query, max_results=max_results),
-    "serpapi": lambda query, max_results: serpapi_search(query=query, max_results=max_results),
-    "bing": lambda query, max_results: bing_search(query=query, max_results=max_results),
+    "serper": lambda query, max_results: serper_search(
+        query=query, max_results=max_results
+    ),
+    "serpapi": lambda query, max_results: serpapi_search(
+        query=query, max_results=max_results
+    ),
+    "bing": lambda query, max_results: bing_search(
+        query=query, max_results=max_results
+    ),
     "google_cse": lambda query, max_results: google_cse_search(
         query=query, max_results=max_results
     ),
     "exa": lambda query, max_results: exa_search(query=query, max_results=max_results),
-    "firecrawl": lambda query, max_results: firecrawl_search(query=query, max_results=max_results),
+    "firecrawl": lambda query, max_results: firecrawl_search(
+        query=query, max_results=max_results
+    ),
 }
 
 # Friendly aliases (align with Shannon/OpenManus naming)
 _ENGINE_ALIASES = {
+    "bochaai": "bocha",
     "google": "google_cse",
     "googlecse": "google_cse",
     "google_custom_search": "google_cse",
@@ -107,7 +122,9 @@ def run_fallback_search(
     This helper is used by visual sandbox tools to render results while also
     reporting which engine actually produced the results.
     """
-    engine_list = engines or getattr(settings, "search_engines_list", None) or ["tavily"]
+    engine_list = (
+        engines or getattr(settings, "search_engines_list", None) or ["tavily"]
+    )
     for eng in engine_list:
         key = (eng or "").strip().lower()
         if not key:
@@ -150,5 +167,7 @@ def fallback_search(
     Returns:
         List of search result dicts from the first successful engine.
     """
-    _, results = run_fallback_search(query=query, max_results=max_results, engines=engines)
+    _, results = run_fallback_search(
+        query=query, max_results=max_results, engines=engines
+    )
     return results

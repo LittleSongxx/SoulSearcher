@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from agent.core.llm_factory import create_chat_model_params
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
@@ -97,23 +98,17 @@ class PromptOptimizer:
         )
 
         # 优化器 LLM
-        optimizer_params = {
-            "model": config.optimizer_model,
-            "temperature": config.optimizer_temperature,
-            "timeout": resolved_timeout,
-        }
-        if settings.use_azure and not resolved_base_url:
-            optimizer_params.update(
-                {
-                    "azure_endpoint": settings.azure_endpoint or None,
-                    "azure_deployment": config.optimizer_model,
-                    "api_version": settings.azure_api_version or None,
-                    "api_key": settings.azure_api_key or resolved_api_key,
-                }
-            )
-        else:
+        optimizer_params = create_chat_model_params(
+            config.optimizer_model,
+            config.optimizer_temperature,
+        )
+        optimizer_params["timeout"] = resolved_timeout
+        if resolved_base_url is not None:
             if resolved_base_url:
                 optimizer_params["base_url"] = resolved_base_url
+            else:
+                optimizer_params.pop("base_url", None)
+        if resolved_api_key is not None:
             optimizer_params["api_key"] = resolved_api_key
         if resolved_extra_body:
             optimizer_params["extra_body"] = resolved_extra_body
@@ -121,23 +116,16 @@ class PromptOptimizer:
         self.optimizer_llm = ChatOpenAI(**optimizer_params)
 
         # 目标 LLM（被优化的模型）
-        target_params = {
-            "model": config.target_model,
-            "temperature": config.temperature,
-            "timeout": resolved_timeout,
-        }
-        if settings.use_azure and not resolved_base_url:
-            target_params.update(
-                {
-                    "azure_endpoint": settings.azure_endpoint or None,
-                    "azure_deployment": config.target_model,
-                    "api_version": settings.azure_api_version or None,
-                    "api_key": settings.azure_api_key or resolved_api_key,
-                }
-            )
-        else:
+        target_params = create_chat_model_params(
+            config.target_model, config.temperature
+        )
+        target_params["timeout"] = resolved_timeout
+        if resolved_base_url is not None:
             if resolved_base_url:
                 target_params["base_url"] = resolved_base_url
+            else:
+                target_params.pop("base_url", None)
+        if resolved_api_key is not None:
             target_params["api_key"] = resolved_api_key
         if resolved_extra_body:
             target_params["extra_body"] = resolved_extra_body
@@ -224,14 +212,20 @@ class PromptOptimizer:
                 break
 
             if no_improvement_count >= self.config.no_improvement_rounds:
-                logger.info(f"  ✓ No improvement for {no_improvement_count} rounds, stopping")
+                logger.info(
+                    f"  ✓ No improvement for {no_improvement_count} rounds, stopping"
+                )
                 break
 
             # Step 4: 分离样本
             correct_samples = [r for r in annotated_results if r.get("is_correct")]
-            incorrect_samples = [r for r in annotated_results if not r.get("is_correct")]
+            incorrect_samples = [
+                r for r in annotated_results if not r.get("is_correct")
+            ]
 
-            logger.info(f"Step 3: Analyzing {len(incorrect_samples)} incorrect samples...")
+            logger.info(
+                f"Step 3: Analyzing {len(incorrect_samples)} incorrect samples..."
+            )
 
             if len(incorrect_samples) < self.config.min_error_samples:
                 logger.info(
@@ -323,7 +317,9 @@ class PromptOptimizer:
                         full_prompt = full_prompt.replace(f"{{{key}}}", str(value))
 
                 response = await self.target_llm.ainvoke(full_prompt)
-                output = response.content if hasattr(response, "content") else str(response)
+                output = (
+                    response.content if hasattr(response, "content") else str(response)
+                )
 
                 return {**item, "output": output, "prompt_used": full_prompt[:500]}
 
@@ -354,7 +350,9 @@ class PromptOptimizer:
                         analysis.get("prompt_issues", []), ensure_ascii=False, indent=2
                     ),
                     improvement_suggestions=json.dumps(
-                        analysis.get("improvement_suggestions", []), ensure_ascii=False, indent=2
+                        analysis.get("improvement_suggestions", []),
+                        ensure_ascii=False,
+                        indent=2,
                     ),
                     priority_fix=analysis.get("priority_fix", ""),
                     accuracy_history=str([f"{a:.1%}" for a in self.accuracy_history]),
@@ -441,7 +439,10 @@ async def run_optimization(
         优化结果
     """
     config = OptimizationConfig(
-        task_name=task_name, init_prompt=init_prompt, eval_function=eval_function, **config_kwargs
+        task_name=task_name,
+        init_prompt=init_prompt,
+        eval_function=eval_function,
+        **config_kwargs,
     )
 
     optimizer = PromptOptimizer(config)

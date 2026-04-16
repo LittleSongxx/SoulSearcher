@@ -23,6 +23,7 @@ from langchain_openai import AzureChatOpenAI, ChatOpenAI
 # Optional import for Anthropic
 try:
     from langchain_anthropic import ChatAnthropic
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ChatAnthropic = None  # type: ignore
@@ -35,20 +36,22 @@ logger = logging.getLogger(__name__)
 
 class TaskType(str, Enum):
     """Types of tasks in the research workflow."""
-    ROUTING = "routing"           # Smart router decision
-    PLANNING = "planning"         # Research plan generation
-    QUERY_GEN = "query_gen"       # Search query generation
-    RESEARCH = "research"         # Information gathering and analysis
-    CRITIQUE = "critique"         # URL selection and quality assessment
-    SYNTHESIS = "synthesis"       # Summarizing and synthesizing findings
-    WRITING = "writing"           # Final report writing
-    EVALUATION = "evaluation"     # Report quality evaluation
-    REFLECTION = "reflection"     # Self-critique and strategy adjustment
-    GAP_ANALYSIS = "gap_analysis" # Knowledge gap detection
+
+    ROUTING = "routing"  # Smart router decision
+    PLANNING = "planning"  # Research plan generation
+    QUERY_GEN = "query_gen"  # Search query generation
+    RESEARCH = "research"  # Information gathering and analysis
+    CRITIQUE = "critique"  # URL selection and quality assessment
+    SYNTHESIS = "synthesis"  # Summarizing and synthesizing findings
+    WRITING = "writing"  # Final report writing
+    EVALUATION = "evaluation"  # Report quality evaluation
+    REFLECTION = "reflection"  # Self-critique and strategy adjustment
+    GAP_ANALYSIS = "gap_analysis"  # Knowledge gap detection
 
 
 class ModelProvider(str, Enum):
     """Supported model providers."""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     AZURE = "azure"
@@ -60,6 +63,7 @@ class ModelProvider(str, Enum):
 @dataclass
 class ModelConfig:
     """Configuration for a specific model."""
+
     provider: ModelProvider
     model_name: str
     temperature: float = 0.7
@@ -81,6 +85,7 @@ class ModelConfig:
 @dataclass
 class ModelUsageStats:
     """Track model usage statistics."""
+
     task_type: TaskType
     model_name: str
     provider: str
@@ -104,16 +109,16 @@ class ModelRouter:
 
     # Default temperature settings per task type
     DEFAULT_TEMPERATURES = {
-        TaskType.ROUTING: 0.3,      # Deterministic routing
-        TaskType.PLANNING: 0.6,     # Creative but structured
-        TaskType.QUERY_GEN: 0.8,    # More exploratory
-        TaskType.RESEARCH: 0.4,     # Balanced analysis
-        TaskType.CRITIQUE: 0.2,     # Precise judgment
-        TaskType.SYNTHESIS: 0.5,    # Balanced synthesis
-        TaskType.WRITING: 0.6,      # Creative writing
-        TaskType.EVALUATION: 0.3,   # Consistent evaluation
-        TaskType.REFLECTION: 0.5,   # Thoughtful reflection
-        TaskType.GAP_ANALYSIS: 0.4, # Analytical
+        TaskType.ROUTING: 0.3,  # Deterministic routing
+        TaskType.PLANNING: 0.6,  # Creative but structured
+        TaskType.QUERY_GEN: 0.8,  # More exploratory
+        TaskType.RESEARCH: 0.4,  # Balanced analysis
+        TaskType.CRITIQUE: 0.2,  # Precise judgment
+        TaskType.SYNTHESIS: 0.5,  # Balanced synthesis
+        TaskType.WRITING: 0.6,  # Creative writing
+        TaskType.EVALUATION: 0.3,  # Consistent evaluation
+        TaskType.REFLECTION: 0.5,  # Thoughtful reflection
+        TaskType.GAP_ANALYSIS: 0.4,  # Analytical
     }
 
     def __init__(
@@ -154,10 +159,20 @@ class ModelRouter:
             if model_name:
                 provider = self._detect_provider(model_name)
                 temp = self.DEFAULT_TEMPERATURES.get(task_type, 0.5)
+                llm_cfg = settings.llm_config_for_model(model_name)
+                base_url = llm_cfg.base_url if llm_cfg and llm_cfg.base_url else None
+                api_key = None
+                if llm_cfg:
+                    api_key = llm_cfg.api_key or None
+                    if not api_key:
+                        if base_url and "dashscope.aliyuncs.com" in base_url.lower():
+                            api_key = settings.dashscope_api_key or None
                 self.task_model_map[task_type] = ModelConfig(
                     provider=provider,
                     model_name=model_name,
                     temperature=temp,
+                    api_key=api_key,
+                    base_url=base_url,
                 )
                 logger.debug(f"[ModelRouter] Loaded {task_type.value} -> {model_name}")
 
@@ -209,11 +224,21 @@ class ModelRouter:
         else:
             default_model = getattr(settings, "primary_model", "gpt-4o")
         temp = self.DEFAULT_TEMPERATURES.get(task_type, 0.5)
+        llm_cfg = settings.llm_config_for_model(default_model)
+        base_url = llm_cfg.base_url if llm_cfg and llm_cfg.base_url else None
+        api_key = None
+        if llm_cfg:
+            api_key = llm_cfg.api_key or None
+            if not api_key:
+                if base_url and "dashscope.aliyuncs.com" in base_url.lower():
+                    api_key = settings.dashscope_api_key or None
 
         return ModelConfig(
             provider=self._detect_provider(default_model),
             model_name=default_model,
             temperature=temp,
+            api_key=api_key,
+            base_url=base_url,
         )
 
     def get_model_name(
@@ -297,6 +322,19 @@ class ModelRouter:
         """Create a chat model instance from config."""
         provider = config.provider
         model_name = config.model_name
+        llm_cfg = settings.llm_config_for_model(model_name)
+        resolved_base_url = config.base_url or (
+            llm_cfg.base_url if llm_cfg and llm_cfg.base_url else None
+        )
+        resolved_api_key = config.api_key
+        if not resolved_api_key and llm_cfg:
+            resolved_api_key = llm_cfg.api_key or None
+            if not resolved_api_key:
+                if (
+                    resolved_base_url
+                    and "dashscope.aliyuncs.com" in resolved_base_url.lower()
+                ):
+                    resolved_api_key = settings.dashscope_api_key or None
 
         common_params = {
             "model": model_name,
@@ -339,7 +377,9 @@ class ModelRouter:
             return ChatOpenAI(
                 model=model_name,
                 temperature=temperature,
-                base_url=config.base_url or settings.openai_base_url or "http://localhost:11434/v1",
+                base_url=resolved_base_url
+                or settings.openai_base_url
+                or "http://localhost:11434/v1",
                 api_key="ollama",  # Ollama doesn't require real API key
                 timeout=config.timeout,
             )
@@ -348,8 +388,10 @@ class ModelRouter:
             return ChatOpenAI(
                 model=model_name,
                 temperature=temperature,
-                api_key=config.api_key or settings.openai_api_key,
-                base_url=config.base_url or settings.openai_base_url or "https://api.deepseek.com/v1",
+                api_key=resolved_api_key or settings.openai_api_key,
+                base_url=resolved_base_url
+                or settings.openai_base_url
+                or "https://api.deepseek.com/v1",
                 timeout=config.timeout,
             )
 
@@ -357,12 +399,12 @@ class ModelRouter:
             params = {
                 "model": model_name,
                 "temperature": temperature,
-                "api_key": config.api_key or settings.openai_api_key,
+                "api_key": resolved_api_key or settings.openai_api_key,
                 "timeout": config.timeout,
             }
 
-            if config.base_url or settings.openai_base_url:
-                params["base_url"] = config.base_url or settings.openai_base_url
+            if resolved_base_url or settings.openai_base_url:
+                params["base_url"] = resolved_base_url or settings.openai_base_url
 
             if settings.openai_extra_body:
                 try:
@@ -428,7 +470,9 @@ class ModelRouter:
 
         return {
             "total_calls": len(self.usage_stats),
-            "success_rate": success_count / len(self.usage_stats) if self.usage_stats else 0,
+            "success_rate": (
+                success_count / len(self.usage_stats) if self.usage_stats else 0
+            ),
             "total_input_tokens": total_input,
             "total_output_tokens": total_output,
             "total_latency_ms": total_latency,

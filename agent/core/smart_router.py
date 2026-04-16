@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Literal, Optional
 
+from agent.core.llm_factory import create_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
@@ -31,10 +32,14 @@ class RouteDecision(BaseModel):
     )
     reasoning: str = Field(description="Brief explanation of why this route was chosen")
     confidence: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="Confidence level of this routing decision (0-1)"
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level of this routing decision (0-1)",
     )
     suggested_queries: List[str] = Field(
-        default_factory=list, description="For 'deep' or 'web' routes, suggested search queries"
+        default_factory=list,
+        description="For 'deep' or 'web' routes, suggested search queries",
     )
     clarification_question: str = Field(
         default="", description="For 'clarify' route, the question to ask the user"
@@ -122,25 +127,7 @@ class SmartRouter:
     def _get_llm(self) -> ChatOpenAI:
         """Lazy initialization of LLM."""
         if self._llm is None:
-            params = {
-                "model": self.model,
-                "temperature": self.temperature,
-                "api_key": settings.openai_api_key,
-                "timeout": settings.openai_timeout or 30,
-            }
-            if settings.use_azure:
-                params.update(
-                    {
-                        "azure_endpoint": settings.azure_endpoint,
-                        "azure_deployment": self.model,
-                        "api_version": settings.azure_api_version,
-                        "api_key": settings.azure_api_key or settings.openai_api_key,
-                    }
-                )
-            elif settings.openai_base_url:
-                params["base_url"] = settings.openai_base_url
-
-            self._llm = ChatOpenAI(**params)
+            self._llm = create_chat_model(self.model, temperature=self.temperature)
         return self._llm
 
     def route(

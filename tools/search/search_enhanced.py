@@ -12,13 +12,12 @@ Features:
 - Backward compatible with LangChain
 """
 
-import json
 import logging
 import textwrap
 from typing import Any, Dict, List, Optional
 
+from agent.core.llm_factory import create_chat_model
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from tavily import TavilyClient
 
 from common.config import settings
@@ -64,38 +63,9 @@ class TavilySearchTool(WeaverTool):
         """
         if not raw_content:
             return None
-        if not settings.openai_api_key:
-            return None
 
         try:
-            params: Dict[str, Any] = {
-                "model": settings.primary_model,
-                "temperature": 0.3,
-                "api_key": settings.openai_api_key,
-                "timeout": settings.openai_timeout or None,
-            }
-            if settings.use_azure:
-                params.update(
-                    {
-                        "azure_endpoint": settings.azure_endpoint or None,
-                        "azure_deployment": settings.primary_model,
-                        "api_version": settings.azure_api_version or None,
-                        "api_key": settings.azure_api_key or settings.openai_api_key,
-                    }
-                )
-            elif settings.openai_base_url:
-                params["base_url"] = settings.openai_base_url
-
-            merged_extra: Dict[str, Any] = {}
-            if settings.openai_extra_body:
-                try:
-                    merged_extra.update(json.loads(settings.openai_extra_body))
-                except json.JSONDecodeError:
-                    logger.warning("Invalid JSON in openai_extra_body; ignoring.")
-            if merged_extra:
-                params["extra_body"] = merged_extra
-
-            llm = ChatOpenAI(**params)
+            llm = create_chat_model(settings.primary_model, temperature=0.3)
             prompt = ChatPromptTemplate.from_messages(
                 [
                     (
@@ -122,7 +92,10 @@ class TavilySearchTool(WeaverTool):
         parameters={
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "The search query to execute"},
+                "query": {
+                    "type": "string",
+                    "description": "The search query to execute",
+                },
                 "max_results": {
                     "type": "integer",
                     "description": "Maximum number of results to return",
@@ -166,7 +139,8 @@ class TavilySearchTool(WeaverTool):
         """
         if not self.api_key:
             return self.fail_response(
-                "Tavily API key not configured", metadata={"config_required": "TAVILY_API_KEY"}
+                "Tavily API key not configured",
+                metadata={"config_required": "TAVILY_API_KEY"},
             )
 
         try:
@@ -186,7 +160,9 @@ class TavilySearchTool(WeaverTool):
 
             # Sort results by score descending if score exists
             sorted_results = sorted(
-                response.get("results", []), key=lambda r: r.get("score", 0), reverse=True
+                response.get("results", []),
+                key=lambda r: r.get("score", 0),
+                reverse=True,
             )
 
             for result in sorted_results:
@@ -202,7 +178,8 @@ class TavilySearchTool(WeaverTool):
                     {
                         "title": result.get("title", ""),
                         "url": url,
-                        "summary": summary or self._trim_text(result.get("content", ""), 600),
+                        "summary": summary
+                        or self._trim_text(result.get("content", ""), 600),
                         "snippet": self._trim_text(result.get("content", ""), 600),
                         "raw_excerpt": self._trim_text(raw_content, 1200),
                         "score": result.get("score", 0),
@@ -265,7 +242,9 @@ class TavilySearchTool(WeaverTool):
             "required": ["queries"],
         },
     )
-    def search_multiple(self, queries: List[str], max_results_per_query: int = 5) -> ToolResult:
+    def search_multiple(
+        self, queries: List[str], max_results_per_query: int = 5
+    ) -> ToolResult:
         """
         Execute multiple search queries in sequence.
 
@@ -291,14 +270,20 @@ class TavilySearchTool(WeaverTool):
                     data = json.loads(result.output)
                     all_results.extend(data.get("results", []))
                     query_details.append(
-                        {"query": query, "count": data.get("count", 0), "status": "success"}
+                        {
+                            "query": query,
+                            "count": data.get("count", 0),
+                            "status": "success",
+                        }
                     )
                 except json.JSONDecodeError:
                     logger.warning(f"Failed to parse result for query: {query}")
                     failed_queries.append(query)
             else:
                 failed_queries.append(query)
-                query_details.append({"query": query, "status": "failed", "error": result.error})
+                query_details.append(
+                    {"query": query, "status": "failed", "error": result.error}
+                )
 
         # Remove duplicates based on URL
         seen_urls = set()
@@ -437,7 +422,8 @@ if __name__ == "__main__":
     print("=" * 60)
 
     result2 = tool.search_multiple(
-        queries=["Python async", "FastAPI tutorial", "LangChain agents"], max_results_per_query=2
+        queries=["Python async", "FastAPI tutorial", "LangChain agents"],
+        max_results_per_query=2,
     )
     print(f"Success: {result2.success}")
     if result2.metadata and "warning" in result2.metadata:

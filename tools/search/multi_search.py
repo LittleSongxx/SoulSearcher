@@ -83,6 +83,7 @@ def _canonicalize_result_url(raw_url: str) -> str:
 
 class SearchStrategy(str, Enum):
     """Search execution strategy."""
+
     FALLBACK = "fallback"  # Try providers sequentially until success
     PARALLEL = "parallel"  # Query all providers in parallel, merge results
     ROUND_ROBIN = "round_robin"  # Distribute queries across providers
@@ -92,6 +93,7 @@ class SearchStrategy(str, Enum):
 @dataclass
 class SearchResult:
     """Normalized search result from any provider."""
+
     title: str
     url: str
     snippet: str
@@ -132,6 +134,7 @@ class SearchResult:
 @dataclass
 class ProviderStats:
     """Track provider performance statistics."""
+
     name: str
     total_calls: int = 0
     success_count: int = 0
@@ -215,23 +218,27 @@ class TavilyProvider(SearchProvider):
 
         start_time = time.time()
         try:
-            raw_results = tavily_search.invoke({
-                "query": query,
-                "max_results": max_results,
-            })
+            raw_results = tavily_search.invoke(
+                {
+                    "query": query,
+                    "max_results": max_results,
+                }
+            )
 
             results = []
             for r in raw_results:
-                results.append(SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("url", ""),
-                    snippet=r.get("summary", r.get("snippet", "")),
-                    content=r.get("raw_excerpt", ""),
-                    score=float(r.get("score", 0.5)),
-                    published_date=r.get("published_date"),
-                    provider=self.name,
-                    raw_data=r,
-                ))
+                results.append(
+                    SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("url", ""),
+                        snippet=r.get("summary", r.get("snippet", "")),
+                        content=r.get("raw_excerpt", ""),
+                        score=float(r.get("score", 0.5)),
+                        published_date=r.get("published_date"),
+                        provider=self.name,
+                        raw_data=r,
+                    )
+                )
 
             latency = (time.time() - start_time) * 1000
             self.stats.record_success(latency, 0.8)
@@ -240,6 +247,47 @@ class TavilyProvider(SearchProvider):
         except Exception as e:
             self.stats.record_failure(str(e))
             logger.error(f"[TavilyProvider] Search failed: {e}")
+            return []
+
+
+class BochaProvider(SearchProvider):
+    """Bocha search provider."""
+
+    def __init__(self):
+        super().__init__("bocha", getattr(settings, "bocha_api_key", None))
+
+    def is_available(self) -> bool:
+        return bool(self.api_key)
+
+    def search(self, query: str, max_results: int = 10) -> List[SearchResult]:
+        from tools.search.providers import bocha_search
+
+        start_time = time.time()
+        try:
+            raw_results = bocha_search(query=query, max_results=max_results)
+
+            results = []
+            for r in raw_results:
+                results.append(
+                    SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("url", ""),
+                        snippet=r.get("summary", r.get("snippet", "")),
+                        content=r.get("content", ""),
+                        score=float(r.get("score", 0.75)),
+                        published_date=r.get("published_date"),
+                        provider=self.name,
+                        raw_data=r,
+                    )
+                )
+
+            latency = (time.time() - start_time) * 1000
+            self.stats.record_success(latency, 0.75)
+            return results
+
+        except Exception as e:
+            self.stats.record_failure(str(e))
+            logger.error(f"[BochaProvider] Search failed: {e}")
             return []
 
 
@@ -266,15 +314,17 @@ class DuckDuckGoProvider(SearchProvider):
 
             results = []
             for r in raw_results:
-                results.append(SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("href", r.get("link", "")),
-                    snippet=r.get("body", r.get("snippet", "")),
-                    content="",
-                    score=0.5,  # DDG doesn't provide scores
-                    provider=self.name,
-                    raw_data=r,
-                ))
+                results.append(
+                    SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("href", r.get("link", "")),
+                        snippet=r.get("body", r.get("snippet", "")),
+                        content="",
+                        score=0.5,  # DDG doesn't provide scores
+                        provider=self.name,
+                        raw_data=r,
+                    )
+                )
 
             latency = (time.time() - start_time) * 1000
             self.stats.record_success(latency, 0.6)
@@ -320,15 +370,17 @@ class BraveProvider(SearchProvider):
 
             results = []
             for r in data.get("web", {}).get("results", []):
-                results.append(SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("url", ""),
-                    snippet=r.get("description", ""),
-                    content="",
-                    score=0.6,
-                    provider=self.name,
-                    raw_data=r,
-                ))
+                results.append(
+                    SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("url", ""),
+                        snippet=r.get("description", ""),
+                        content="",
+                        score=0.6,
+                        provider=self.name,
+                        raw_data=r,
+                    )
+                )
 
             latency = (time.time() - start_time) * 1000
             self.stats.record_success(latency, 0.7)
@@ -374,16 +426,18 @@ class SerperProvider(SearchProvider):
 
             results = []
             for r in data.get("organic", []):
-                results.append(SearchResult(
-                    title=r.get("title", ""),
-                    url=r.get("link", ""),
-                    snippet=r.get("snippet", ""),
-                    content="",
-                    score=0.7,
-                    published_date=r.get("date"),
-                    provider=self.name,
-                    raw_data=r,
-                ))
+                results.append(
+                    SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("link", ""),
+                        snippet=r.get("snippet", ""),
+                        content="",
+                        score=0.7,
+                        published_date=r.get("date"),
+                        provider=self.name,
+                        raw_data=r,
+                    )
+                )
 
             latency = (time.time() - start_time) * 1000
             self.stats.record_success(latency, 0.8)
@@ -424,16 +478,20 @@ class ExaProvider(SearchProvider):
 
             results = []
             for r in response.results:
-                results.append(SearchResult(
-                    title=r.title or "",
-                    url=r.url or "",
-                    snippet=r.text[:500] if r.text else "",
-                    content=r.text or "",
-                    score=r.score if hasattr(r, "score") else 0.7,
-                    published_date=r.published_date if hasattr(r, "published_date") else None,
-                    provider=self.name,
-                    raw_data={"id": r.id},
-                ))
+                results.append(
+                    SearchResult(
+                        title=r.title or "",
+                        url=r.url or "",
+                        snippet=r.text[:500] if r.text else "",
+                        content=r.text or "",
+                        score=r.score if hasattr(r, "score") else 0.7,
+                        published_date=(
+                            r.published_date if hasattr(r, "published_date") else None
+                        ),
+                        provider=self.name,
+                        raw_data={"id": r.id},
+                    )
+                )
 
             latency = (time.time() - start_time) * 1000
             self.stats.record_success(latency, 0.85)
@@ -451,6 +509,7 @@ def _get_feed_providers() -> List[SearchProvider]:
     providers = []
     try:
         from tools.search.feeds.hackernews_provider import HackerNewsProvider
+
         hn = HackerNewsProvider()
         if hn.is_available():
             providers.append(hn)
@@ -459,6 +518,7 @@ def _get_feed_providers() -> List[SearchProvider]:
 
     try:
         from tools.search.feeds.twitter_provider import TwitterProvider
+
         twitter = TwitterProvider()
         if twitter.is_available():
             providers.append(twitter)
@@ -467,6 +527,7 @@ def _get_feed_providers() -> List[SearchProvider]:
 
     try:
         from tools.search.feeds.reddit_provider import RedditProvider
+
         reddit = RedditProvider()
         if reddit.is_available():
             providers.append(reddit)
@@ -482,6 +543,7 @@ def _get_academic_providers() -> List[SearchProvider]:
     providers = []
     try:
         from tools.search.academic.arxiv_provider import ArxivProvider
+
         arxiv = ArxivProvider()
         if arxiv.is_available():
             providers.append(arxiv)
@@ -489,7 +551,10 @@ def _get_academic_providers() -> List[SearchProvider]:
         pass
 
     try:
-        from tools.search.academic.semantic_scholar_provider import SemanticScholarProvider
+        from tools.search.academic.semantic_scholar_provider import (
+            SemanticScholarProvider,
+        )
+
         ss = SemanticScholarProvider()
         if ss.is_available():
             providers.append(ss)
@@ -498,6 +563,7 @@ def _get_academic_providers() -> List[SearchProvider]:
 
     try:
         from tools.search.academic.pubmed_provider import PubMedProvider
+
         pm = PubMedProvider()
         if pm.is_available():
             providers.append(pm)
@@ -554,19 +620,35 @@ class MultiSearchOrchestrator:
         )
 
         policy = ReliabilityPolicy(
-            max_retries=max(0, int(getattr(settings, "search_reliability_max_retries", 2))),
+            max_retries=max(
+                0, int(getattr(settings, "search_reliability_max_retries", 2))
+            ),
             retry_backoff_seconds=max(
-                0.0, float(getattr(settings, "search_reliability_retry_backoff_seconds", 0.5))
+                0.0,
+                float(
+                    getattr(settings, "search_reliability_retry_backoff_seconds", 0.5)
+                ),
             ),
             circuit_breaker_failures=max(
-                1, int(getattr(settings, "search_reliability_circuit_breaker_failures", 3))
+                1,
+                int(
+                    getattr(settings, "search_reliability_circuit_breaker_failures", 3)
+                ),
             ),
             circuit_breaker_reset_seconds=max(
                 0.0,
-                float(getattr(settings, "search_reliability_circuit_breaker_reset_seconds", 60.0)),
+                float(
+                    getattr(
+                        settings,
+                        "search_reliability_circuit_breaker_reset_seconds",
+                        60.0,
+                    )
+                ),
             ),
         )
-        self.reliability_manager = reliability_manager or ProviderReliabilityManager(policy)
+        self.reliability_manager = reliability_manager or ProviderReliabilityManager(
+            policy
+        )
 
     def _init_default_providers(self) -> List[SearchProvider]:
         """Initialize default providers based on available API keys."""
@@ -576,6 +658,10 @@ class MultiSearchOrchestrator:
         tavily = TavilyProvider()
         if tavily.is_available():
             providers.append(tavily)
+
+        bocha = BochaProvider()
+        if bocha.is_available():
+            providers.append(bocha)
 
         # DuckDuckGo (fallback, no API key needed)
         ddg = DuckDuckGoProvider()
@@ -605,7 +691,9 @@ class MultiSearchOrchestrator:
         academic_providers = _get_academic_providers()
         providers.extend(academic_providers)
 
-        logger.info(f"[MultiSearch] Initialized {len(providers)} providers: {[p.name for p in providers]}")
+        logger.info(
+            f"[MultiSearch] Initialized {len(providers)} providers: {[p.name for p in providers]}"
+        )
         return providers
 
     def get_available_providers(self) -> List[SearchProvider]:
@@ -639,7 +727,9 @@ class MultiSearchOrchestrator:
             return []
 
         cache = get_search_cache()
-        cache_key = self._cache_query_key(query, max_results, strategy, provider_profile)
+        cache_key = self._cache_query_key(
+            query, max_results, strategy, provider_profile
+        )
         cached = cache.get(cache_key)
         if cached is not None:
             logger.info(f"[MultiSearch] cache hit for query='{query[:80]}'")
@@ -710,7 +800,9 @@ class MultiSearchOrchestrator:
         if not provider_profile:
             return providers
 
-        preferred = [str(name).strip().lower() for name in provider_profile if str(name).strip()]
+        preferred = [
+            str(name).strip().lower() for name in provider_profile if str(name).strip()
+        ]
         if not preferred:
             return providers
 
@@ -724,7 +816,9 @@ class MultiSearchOrchestrator:
         if selected:
             remaining = [p for p in providers if p not in selected]
             ordered = selected + remaining
-            logger.info(f"[MultiSearch] Provider profile selected: {[p.name for p in selected]}")
+            logger.info(
+                f"[MultiSearch] Provider profile selected: {[p.name for p in selected]}"
+            )
             return ordered
 
         logger.warning(
@@ -740,6 +834,7 @@ class MultiSearchOrchestrator:
         max_results: int,
     ) -> List[SearchResult]:
         """Call provider through reliability layer (retry + circuit breaker)."""
+
         def call_once() -> List[SearchResult]:
             # Many provider adapters swallow exceptions and return [] while recording
             # error stats. Treat that as a failed attempt so the reliability layer can retry.
@@ -747,8 +842,15 @@ class MultiSearchOrchestrator:
             results = provider.search(query, max_results)
             after_errors = int(getattr(provider.stats, "error_count", 0) or 0)
 
-            if isinstance(results, list) and not results and after_errors > before_errors:
-                msg = provider.stats.last_error or f"{provider.name} returned empty results due to error"
+            if (
+                isinstance(results, list)
+                and not results
+                and after_errors > before_errors
+            ):
+                msg = (
+                    provider.stats.last_error
+                    or f"{provider.name} returned empty results due to error"
+                )
                 raise RuntimeError(msg)
 
             return results if isinstance(results, list) else []
@@ -766,9 +868,13 @@ class MultiSearchOrchestrator:
         for provider in providers:
             results = self._call_provider(provider, query, max_results)
             if results:
-                logger.info(f"[MultiSearch] Got {len(results)} results from {provider.name}")
+                logger.info(
+                    f"[MultiSearch] Got {len(results)} results from {provider.name}"
+                )
                 return self._deduplicate_and_rank(results, max_results, query=query)
-            logger.warning(f"[MultiSearch] {provider.name} returned no results, trying next...")
+            logger.warning(
+                f"[MultiSearch] {provider.name} returned no results, trying next..."
+            )
 
         logger.warning("[MultiSearch] All providers failed")
         return []
@@ -784,7 +890,9 @@ class MultiSearchOrchestrator:
 
         all_results = []
 
-        max_workers = min(len(providers), int(getattr(self, "parallel_max_workers", len(providers))))
+        max_workers = min(
+            len(providers), int(getattr(self, "parallel_max_workers", len(providers)))
+        )
         max_workers = max(1, max_workers)
         timeout_s = float(getattr(self, "parallel_timeout_seconds", 30.0))
 
@@ -795,17 +903,23 @@ class MultiSearchOrchestrator:
             }
 
             try:
-                for future in concurrent.futures.as_completed(futures, timeout=timeout_s):
+                for future in concurrent.futures.as_completed(
+                    futures, timeout=timeout_s
+                ):
                     provider = futures[future]
                     try:
                         results = future.result()
                         all_results.extend(results)
-                        logger.info(f"[MultiSearch] {provider.name} returned {len(results)} results")
+                        logger.info(
+                            f"[MultiSearch] {provider.name} returned {len(results)} results"
+                        )
                     except Exception as e:
                         logger.error(f"[MultiSearch] {provider.name} failed: {e}")
             except concurrent.futures.TimeoutError:
                 # Best-effort: keep whatever results completed, cancel the rest.
-                logger.warning("[MultiSearch] parallel search timed out; returning partial results")
+                logger.warning(
+                    "[MultiSearch] parallel search timed out; returning partial results"
+                )
             finally:
                 for f in futures:
                     if not f.done():
@@ -845,9 +959,9 @@ class MultiSearchOrchestrator:
         sorted_providers = sorted(
             providers,
             key=lambda p: (
-                p.stats.success_rate *
-                p.stats.avg_result_quality *
-                (1000 / max(p.stats.avg_latency_ms, 100))
+                p.stats.success_rate
+                * p.stats.avg_result_quality
+                * (1000 / max(p.stats.avg_latency_ms, 100))
             ),
             reverse=True,
         )
@@ -887,7 +1001,9 @@ class MultiSearchOrchestrator:
                     if similarity > self.similarity_threshold:
                         is_duplicate = True
                         # Keep higher scored result
-                        if self._ranking_score(r, query) > self._ranking_score(existing, query):
+                        if self._ranking_score(r, query) > self._ranking_score(
+                            existing, query
+                        ):
                             final.remove(existing)
                             final.append(r)
                         break
@@ -964,11 +1080,15 @@ class MultiSearchOrchestrator:
 
     def _ranking_score(self, result: SearchResult, query: str) -> float:
         base_score = float(result.score or 0.0)
-        if not self.enable_freshness_ranking or not self._is_time_sensitive_query(query):
+        if not self.enable_freshness_ranking or not self._is_time_sensitive_query(
+            query
+        ):
             return base_score
 
         freshness = self._freshness_score(result.published_date)
-        return (1.0 - self.freshness_weight) * base_score + self.freshness_weight * freshness
+        return (
+            1.0 - self.freshness_weight
+        ) * base_score + self.freshness_weight * freshness
 
     def get_provider_stats(self) -> List[Dict[str, Any]]:
         """Get statistics for all providers."""

@@ -7,9 +7,9 @@ Provides a simple LangGraph that:
 - Stores the interaction back to memory
 """
 
-import json
 from typing import Annotated, List, TypedDict
 
+from agent.core.llm_factory import create_chat_model
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
@@ -25,33 +25,7 @@ class SupportState(TypedDict):
 
 
 def _support_model() -> ChatOpenAI:
-    params = {
-        "temperature": 0.3,
-        "model": settings.primary_model,
-        "api_key": settings.openai_api_key,
-        "timeout": settings.openai_timeout or None,
-    }
-    if settings.use_azure:
-        params.update(
-            {
-                "azure_endpoint": settings.azure_endpoint or None,
-                "azure_deployment": settings.primary_model,
-                "api_version": settings.azure_api_version or None,
-                "api_key": settings.azure_api_key or settings.openai_api_key,
-            }
-        )
-    elif settings.openai_base_url:
-        params["base_url"] = settings.openai_base_url
-
-    extra = {}
-    if settings.openai_extra_body:
-        try:
-            extra.update(json.loads(settings.openai_extra_body))
-        except Exception:
-            pass
-    if extra:
-        params["extra_body"] = extra
-    return ChatOpenAI(**params)
+    return create_chat_model(settings.primary_model, temperature=0.3)
 
 
 def support_node(state: SupportState):
