@@ -26,6 +26,8 @@ yarn-debug.log*
 yarn-error.log*
 .next/
 web/.next/
+.pnpm-store/
+web/.pnpm-store/
 out/
 web/out/
 
@@ -39,6 +41,8 @@ web/out/
 .env
 .env.local
 .env.*.local
+.run/
+.docker-data/
 
 # Database
 postgres-data/

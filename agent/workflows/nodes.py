@@ -796,7 +796,11 @@ def perform_parallel_search(state: QueryState, config: RunnableConfig) -> Dict[s
         enforce_tool_call_limit(state, settings.tool_call_limit)
 
         call_kwargs = {"query": query, "max_results": 5}
-        if settings.tool_retry:
+        if len(settings.search_engines_list) > 1:
+            from tools.search.fallback_search import run_fallback_search
+
+            _, results = run_fallback_search(**call_kwargs)
+        elif settings.tool_retry:
             results = retry_call(
                 tavily_search.invoke,
                 attempts=settings.tool_retry_max_attempts,

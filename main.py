@@ -15,6 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import psycopg
 from fastapi import (
     FastAPI,
     File,
@@ -442,7 +443,8 @@ def _init_store():
             raise ValueError("memory_store_url is required when memory_store_backend=postgres")
         from langgraph.store.postgres import PostgresStore
 
-        store_obj = PostgresStore.from_conn_string(url)
+        conn = psycopg.connect(url, autocommit=True)
+        store_obj = PostgresStore(conn)
         store_obj.setup()
         logger.info("Initialized PostgresStore for long-term memory")
         return store_obj

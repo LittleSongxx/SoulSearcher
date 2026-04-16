@@ -34,9 +34,49 @@ def _tavily(query: str, max_results: int) -> List[Dict[str, Any]]:
     return tavily_search.invoke({"query": query, "max_results": max_results})
 
 
+def _duckduckgo(query: str, max_results: int) -> List[Dict[str, Any]]:
+    from tools.search.multi_search import DuckDuckGoProvider
+
+    provider = DuckDuckGoProvider()
+    if not provider.is_available():
+        return []
+    return [
+        {
+            "title": result.title,
+            "url": result.url,
+            "snippet": result.snippet,
+            "summary": result.snippet,
+            "raw_excerpt": result.content,
+            "score": result.score,
+            "source": result.provider,
+        }
+        for result in provider.search(query, max_results=max_results)
+    ]
+
+
+def _normalize_multi_search_results(query: str, max_results: int) -> List[Dict[str, Any]]:
+    from tools.search.multi_search import get_search_orchestrator
+
+    results = get_search_orchestrator().search(query=query, max_results=max_results)
+    return [
+        {
+            "title": result.title,
+            "url": result.url,
+            "snippet": result.snippet,
+            "summary": result.snippet,
+            "raw_excerpt": result.content,
+            "score": result.score,
+            "source": result.provider,
+            "published_date": result.published_date,
+        }
+        for result in results
+    ]
+
+
 # Map engine key -> handler
 _ENGINE_HANDLERS = {
     "tavily": _tavily,
+    "duckduckgo": _duckduckgo,
     "serper": lambda query, max_results: serper_search(query=query, max_results=max_results),
     "serpapi": lambda query, max_results: serpapi_search(query=query, max_results=max_results),
     "bing": lambda query, max_results: bing_search(query=query, max_results=max_results),
@@ -84,6 +124,12 @@ def run_fallback_search(
         except Exception as e:
             logger.warning(f"Engine {eng} failed: {e}")
             continue
+    try:
+        results = _normalize_multi_search_results(query=query, max_results=max_results)
+        if results:
+            return "multi_search", results
+    except Exception as e:
+        logger.warning(f"Multi-search fallback failed: {e}")
     return None, []
 
 

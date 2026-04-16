@@ -79,6 +79,9 @@ lerna-debug.log*
 pnpm-debug.log*
 logs/
 *.log.*
+.run/
+.docker-data/
+web/.pnpm-store/
 
 # Runtime artifacts
 screenshots/

@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.pnpm-store/
+out/
+coverage/
+playwright-report/
+test-results/
+tmp/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env.local
+.env.*.local
+.DS_Store
