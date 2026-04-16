@@ -58,34 +58,38 @@ graph TB
 
 ## 快速开始（本地 2 分钟跑起来）
 
-> 更完整的步骤（E2B / Playwright / MCP / Docker Compose）见：`docs/getting-started.md`
+> 推荐直接使用根目录 `./start_weaver.sh`。更完整的说明见：`docs/getting-started.md`
 
 ```bash
 git clone https://github.com/skygazer42/weaver.git
 cd weaver
 
-# 1) 配置环境变量
-cp .env.example .env
-cp web/.env.local.example web/.env.local
-
-# 你至少需要在 .env 里填写：
-# - OPENAI_API_KEY（或 ANTHROPIC_API_KEY / DeepSeek 兼容配置）
-# - TAVILY_API_KEY
-
-# 2) 安装依赖
-make setup
-pnpm -C web install --frozen-lockfile
-
-# 3) 启动服务
-.venv/bin/python main.py
-pnpm -C web dev
+# start 脚本会在缺少时自动生成：
+# - .env
+# - web/.env.local
+# - config/config.toml
+# 你只需要补充 API Key，然后再次执行同一条命令即可
+./start_weaver.sh
 ```
+
+首次执行如果刚自动创建本地配置文件，请至少补充：
+
+- `OPENAI_API_KEY`（或你的 DeepSeek/OpenAI 兼容网关 key）
+- `OPENAI_BASE_URL`（若使用 DeepSeek，填 `https://api.deepseek.com`）
+
+常见可选项：
+
+- `BOCHA_API_KEY`
+- `DASHSCOPE_API_KEY`
+- `E2B_API_KEY`
 
 访问入口：
 
-- 前端界面：http://localhost:3100
-- 后端 API：http://localhost:8001（默认；可在根目录 `.env` 里设置 `PORT`）
-- OpenAPI 文档：http://localhost:8001/docs（默认；同上）
+- 前端界面：默认 `http://127.0.0.1:3100`
+- 后端 API：默认 `http://127.0.0.1:8001`
+- OpenAPI 文档：默认 `http://127.0.0.1:8001/docs`
+
+如果默认端口被占用，`./start_weaver.sh` 会自动顺延到下一个可用端口，并在启动完成后打印实际地址。
 
 ---
 

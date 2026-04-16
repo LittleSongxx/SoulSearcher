@@ -1,0 +1,28 @@
+[llm]
+model = "deepseek-chat"
+base_url = "https://api.deepseek.com"
+api_key = ""
+max_tokens = 4096
+temperature = 0.7
+
+[llm."deepseek-reasoner"]
+model = "deepseek-reasoner"
+base_url = "https://api.deepseek.com"
+api_key = ""
+max_tokens = 8192
+temperature = 0.6
+
+[llm."qwen3-max-2026-01-23"]
+model = "qwen3-max-2026-01-23"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = ""
+max_tokens = 4096
+temperature = 0.7
+
+[search]
+engine = "bocha"
+fallback_engines = ["duckduckgo"]
+retry_delay = 60
+max_retries = 3
+lang = "zh-CN"
+country = "cn"

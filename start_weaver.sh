@@ -11,13 +11,15 @@ ENV_FILE="$PROJECT_ROOT/.env"
 ENV_EXAMPLE_FILE="$PROJECT_ROOT/.env.example"
 WEB_ENV_FILE="$PROJECT_ROOT/web/.env.local"
 WEB_ENV_EXAMPLE_FILE="$PROJECT_ROOT/web/.env.local.example"
-INSIGHT_ENV_FILE="/home/song/code/Agent/InsightValut/.env"
+CONFIG_FILE="$PROJECT_ROOT/config/config.toml"
+CONFIG_EXAMPLE_FILE="$PROJECT_ROOT/config/config.example.toml"
+INSIGHT_ENV_FILE="${WEAVER_SECRETS_ENV_FILE:-}"
 DOCKER_CONFIG_FALLBACK_DIR="$RUN_DIR/docker-config"
 
 DO_BUILD=0
 CREATED_ENV=0
 CURRENT_STEP=1
-TOTAL_STEPS=5
+TOTAL_STEPS=6
 
 usage() {
   cat <<'EOF'
@@ -29,6 +31,10 @@ Options:
 
 The script keeps all Python/Node runtime dependencies inside Docker.
 It records selected host ports in .run/compose.env and reuses them on later starts.
+It scaffolds .env, web/.env.local, and config/config.toml from committed templates when missing.
+
+Optional environment variables:
+  WEAVER_SECRETS_ENV_FILE   path to another .env file whose compatible keys should be imported
 EOF
 }
 
@@ -50,6 +56,32 @@ parse_args() {
     esac
     shift
   done
+}
+
+require_command() {
+  local name="$1"
+  if ! command -v "$name" >/dev/null 2>&1; then
+    echo "[error] required command not found: $name"
+    exit 1
+  fi
+}
+
+check_prerequisites() {
+  require_command docker
+  require_command curl
+  require_command awk
+  require_command sed
+  require_command mktemp
+
+  if ! docker compose version >/dev/null 2>&1; then
+    echo "[error] docker compose plugin is required"
+    exit 1
+  fi
+
+  if ! command -v ss >/dev/null 2>&1 && ! command -v timeout >/dev/null 2>&1; then
+    echo "[error] either 'ss' or 'timeout' is required for host port detection"
+    exit 1
+  fi
 }
 
 log_step() {
@@ -183,14 +215,31 @@ ensure_env_files() {
       touch "$WEB_ENV_FILE"
     fi
   fi
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    if [[ -f "$CONFIG_EXAMPLE_FILE" ]]; then
+      cp "$CONFIG_EXAMPLE_FILE" "$CONFIG_FILE"
+      echo "[info] created config/config.toml from config/config.example.toml"
+    else
+      echo "[warn] config/config.example.toml not found; skipping config/config.toml scaffold"
+    fi
+  fi
+
+  if ! dotenv_value_is_set "$INSIGHT_ENV_FILE"; then
+    INSIGHT_ENV_FILE="$(dotenv_get "$ENV_FILE" "WEAVER_SECRETS_ENV_FILE" || true)"
+  fi
 }
 
 sync_insightvault_env() {
   local overwrite="$CREATED_ENV"
   local openai_base qwen_base openai_key
 
+  if ! dotenv_value_is_set "$INSIGHT_ENV_FILE"; then
+    return 0
+  fi
+
   if [[ ! -f "$INSIGHT_ENV_FILE" ]]; then
-    echo "[warn] InsightVault .env not found: $INSIGHT_ENV_FILE"
+    echo "[warn] optional secrets source .env not found: $INSIGHT_ENV_FILE"
     return 0
   fi
 
@@ -238,7 +287,7 @@ sync_insightvault_env() {
     fi
   fi
 
-  echo "[info] synced compatible local secrets from InsightVault without printing values"
+  echo "[info] synced compatible local secrets from the optional source env file without printing values"
 }
 
 port_in_use() {
@@ -413,12 +462,10 @@ mkdir -p "$RUN_DIR" "$DATA_DIR/data" "$LOG_DIR"
 
 cd "$PROJECT_ROOT"
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "[error] docker command not found"
-  exit 1
-fi
+log_step "checking host prerequisites..."
+check_prerequisites
 
-log_step "preparing local env files..."
+log_step "preparing local env/config files..."
 ensure_env_files
 sync_insightvault_env
 
