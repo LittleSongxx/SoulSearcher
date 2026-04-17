@@ -4,20 +4,23 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
   Loader2,
   Globe,
-  X,
   Maximize2,
   Minimize2,
   ExternalLink,
   Play,
   Pause,
   Camera,
-  CornerDownLeft
+  CornerDownLeft,
+  Minus,
+  Square,
+  X as XIcon
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n/i18n-context'
 import { BrowserScreenshot } from '@/types/browser'
 import { useBrowserEvents } from '@/hooks/useBrowserEvents'
 import { useBrowserStream } from '@/hooks/useBrowserStream'
+import { useOS } from '@/hooks/useOS'
 
 interface BrowserViewerProps {
   threadId: string | null
@@ -47,6 +50,8 @@ export function BrowserViewer({
   const [urlDraft, setUrlDraft] = useState('')
   const [isEditingUrl, setIsEditingUrl] = useState(false)
   const { t } = useI18n()
+  const os = useOS()
+  const isMac = os === 'mac'
   const isLiveMode = viewerMode === 'stream'
   const liveViewportRef = useRef<HTMLDivElement | null>(null)
   const liveImageRef = useRef<HTMLImageElement | null>(null)
@@ -257,24 +262,26 @@ export function BrowserViewer({
     >
       {/* Browser Chrome - Title Bar */}
       <div className="bg-muted/80 px-3 py-2 flex items-center gap-2 border-b overflow-hidden min-w-0">
-        {/* Traffic Light Buttons */}
-        <div className="flex gap-1.5">
-          <button
-            onClick={handleClose}
-            className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors"
-            title={t('browserClose')}
-          />
-          <button
-            onClick={() => setIsExpanded(false)}
-            className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors"
-            title={t('browserMinimize')}
-          />
-          <button
-            onClick={toggleExpand}
-            className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors"
-            title={isExpanded ? t('browserCollapse') : t('browserExpand')}
-          />
-        </div>
+        {/* macOS Traffic Light Buttons (left side) */}
+        {isMac && (
+          <div className="flex gap-1.5">
+            <button
+              onClick={handleClose}
+              className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors"
+              title={t('browserClose')}
+            />
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors"
+              title={t('browserMinimize')}
+            />
+            <button
+              onClick={toggleExpand}
+              className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors"
+              title={isExpanded ? t('browserCollapse') : t('browserExpand')}
+            />
+          </div>
+        )}
 
         {/* Address Bar */}
         <div className="flex-1 flex items-center gap-2 bg-background/60 rounded px-2 py-1 text-xs">
@@ -385,18 +392,47 @@ export function BrowserViewer({
           </div>
         )}
 
-        {/* Expand/Collapse Button */}
-        <button
-          onClick={toggleExpand}
-          className="p-1 hover:bg-background/60 rounded transition-colors"
-          title={isExpanded ? t('browserCollapse') : t('browserExpand')}
-        >
-          {isExpanded ? (
-            <Minimize2 className="w-3.5 h-3.5 text-muted-foreground" />
-          ) : (
-            <Maximize2 className="w-3.5 h-3.5 text-muted-foreground" />
-          )}
-        </button>
+        {/* Expand/Collapse Button (non-Windows) */}
+        {isMac && (
+          <button
+            onClick={toggleExpand}
+            className="p-1 hover:bg-background/60 rounded transition-colors"
+            title={isExpanded ? t('browserCollapse') : t('browserExpand')}
+          >
+            {isExpanded ? (
+              <Minimize2 className="w-3.5 h-3.5 text-muted-foreground" />
+            ) : (
+              <Maximize2 className="w-3.5 h-3.5 text-muted-foreground" />
+            )}
+          </button>
+        )}
+
+        {/* Windows/Linux Window Buttons (right side) */}
+        {!isMac && (
+          <div className="flex items-center ml-1">
+            <button
+              onClick={() => setIsExpanded(false)}
+              className="h-7 w-10 flex items-center justify-center hover:bg-muted transition-colors"
+              title={t('browserMinimize')}
+            >
+              <Minus className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+            <button
+              onClick={toggleExpand}
+              className="h-7 w-10 flex items-center justify-center hover:bg-muted transition-colors"
+              title={isExpanded ? t('browserCollapse') : t('browserExpand')}
+            >
+              <Square className="w-3 h-3 text-muted-foreground" />
+            </button>
+            <button
+              onClick={handleClose}
+              className="h-7 w-10 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors rounded-tr-lg"
+              title={t('browserClose')}
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Browser Content */}
