@@ -14,6 +14,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n/i18n-context'
 import { ProcessEvent, RunMetrics, ToolInvocation } from '@/types/chat'
 
 interface ThinkingProcessProps {
@@ -33,6 +34,7 @@ export function ThinkingProcess({
   startedAt,
   completedAt,
 }: ThinkingProcessProps) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [userToggled, setUserToggled] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -94,8 +96,8 @@ export function ThinkingProcess({
   if (!hasDetails && !isThinking) return null
 
   const headerText = isThinking
-    ? `Thinking…${durationLabel ? ` · ${durationLabel}` : ''}${stepCount ? ` · ${stepCount} steps` : ''}`
-    : `Thought${durationLabel ? ` for ${durationLabel}` : ''}${stepCount ? ` · ${stepCount} steps` : ''}`
+    ? `${t('thinkingEllipsis')}${durationLabel ? ` · ${durationLabel}` : ''}${stepCount ? ` · ${stepCount} ${t('steps')}` : ''}`
+    : `${t('thought')}${durationLabel ? ` ${durationLabel}` : ''}${stepCount ? ` · ${stepCount} ${t('steps')}` : ''}`
 
   const toggle = () => {
     if (!hasDetails) return
@@ -148,9 +150,9 @@ export function ThinkingProcess({
             <div className="mt-2 pl-4 ml-2 border-l border-border/60 text-sm text-muted-foreground">
               <div className="space-y-2 py-1">
                 {displayEvents.length > 0 ? (
-                  displayEvents.map((ev) => <EventRow key={ev.id} ev={ev} />)
+                  displayEvents.map((ev) => <EventRow key={ev.id} ev={ev} t={t} />)
                 ) : (
-                  <FallbackTools tools={tools} />
+                  <FallbackTools tools={tools} t={t} />
                 )}
               </div>
             </div>
@@ -161,7 +163,7 @@ export function ThinkingProcess({
   )
 }
 
-function EventRow({ ev }: { ev: ProcessEvent }) {
+function EventRow({ ev, t }: { ev: ProcessEvent; t: (key: any) => string }) {
   const kind = ev.type
 
   if (kind === 'status') {
@@ -169,7 +171,7 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
       <div className="flex items-start gap-2">
         <span className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
         <div className="min-w-0">
-          <div className="truncate">{String(ev.data?.text || 'Working…')}</div>
+          <div className="truncate">{String(ev.data?.text || t('workingEllipsis'))}</div>
         </div>
       </div>
     )
@@ -201,7 +203,7 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
         <ListTodo className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Task</span>
+            <span className="font-medium text-foreground/80">{t('taskLabel')}</span>
             <span className="ml-2">{label}</span>
             {status ? (
               <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -224,8 +226,8 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
     const depth = ev.data?.depth
 
     const subtitle = [
-      typeof epoch === 'number' ? `epoch ${epoch}` : null,
-      typeof depth === 'number' ? `depth ${depth}` : null,
+      typeof epoch === 'number' ? `${t('epochLabel')} ${epoch}` : null,
+      typeof depth === 'number' ? `${t('depthLabel')} ${depth}` : null,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -235,7 +237,7 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
         <TreePine className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Research start</span>
+            <span className="font-medium text-foreground/80">{t('researchStart')}</span>
             {nodeId ? <span className="ml-2 font-mono text-[12px]">{nodeId}</span> : null}
           </div>
           {subtitle ? <div className="text-xs text-muted-foreground">{subtitle}</div> : null}
@@ -250,14 +252,14 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
     const epoch = ev.data?.epoch
     const summary = String(ev.data?.summary || '').trim()
 
-    const subtitle = typeof epoch === 'number' ? `epoch ${epoch}` : ''
+    const subtitle = typeof epoch === 'number' ? `${t('epochLabel')} ${epoch}` : ''
 
     return (
       <div className="flex items-start gap-2">
         <CheckCircle2 className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Research done</span>
+            <span className="font-medium text-foreground/80">{t('researchDone')}</span>
             {nodeId ? <span className="ml-2 font-mono text-[12px]">{nodeId}</span> : null}
             {subtitle ? <span className="ml-2 text-xs text-muted-foreground">{subtitle}</span> : null}
           </div>
@@ -287,8 +289,8 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
         <ShieldCheck className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Quality</span>
-            {typeof epoch === 'number' ? <span className="ml-2 text-xs">epoch {epoch}</span> : null}
+            <span className="font-medium text-foreground/80">{t('qualityLabel')}</span>
+            {typeof epoch === 'number' ? <span className="ml-2 text-xs">{t('epochLabel')} {epoch}</span> : null}
             {stage ? <span className="ml-2 text-xs text-muted-foreground">{stage}</span> : null}
             {scorePct ? <span className="ml-2 font-mono text-[12px]">{scorePct}</span> : null}
           </div>
@@ -303,7 +305,7 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
         <TreePine className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Research tree updated</span>
+            <span className="font-medium text-foreground/80">{t('researchTreeUpdated')}</span>
           </div>
         </div>
       </div>
@@ -319,11 +321,11 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
         <Search className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Search</span>
+            <span className="font-medium text-foreground/80">{t('searchLabel')}</span>
             {query ? <span className="ml-2 font-mono text-[12px]">{query}</span> : null}
           </div>
           <div className="text-xs text-muted-foreground">
-            {[provider || null, typeof count === 'number' ? `${count} results` : null]
+            {[provider || null, typeof count === 'number' ? `${count} ${t('resultsLabel')}` : null]
               .filter(Boolean)
               .join(' · ')}
           </div>
@@ -340,7 +342,7 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
         <ImageIcon className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
         <div className="min-w-0">
           <div className="truncate">
-            <span className="font-medium text-foreground/80">Screenshot</span>
+            <span className="font-medium text-foreground/80">{t('screenshotLabel')}</span>
             {action ? <span className="ml-2">{action}</span> : null}
           </div>
           {pageUrl ? <div className="truncate font-mono text-xs">{pageUrl}</div> : null}
@@ -387,9 +389,9 @@ function EventRow({ ev }: { ev: ProcessEvent }) {
   )
 }
 
-function FallbackTools({ tools }: { tools: ToolInvocation[] }) {
+function FallbackTools({ tools, t }: { tools: ToolInvocation[]; t: (key: any) => string }) {
   if (!tools.length) {
-    return <div className="text-xs text-muted-foreground">No process details.</div>
+    return <div className="text-xs text-muted-foreground">{t('noProcessDetails')}</div>
   }
   return (
     <div className="space-y-2">

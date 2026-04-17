@@ -145,7 +145,9 @@ def _get_or_create_gauge(name: str, *args, **kwargs):
 
 http_requests_total = (
     _get_or_create_counter(
-        "weaver_http_requests_total", "Total HTTP requests", ["method", "path", "status"]
+        "weaver_http_requests_total",
+        "Total HTTP requests",
+        ["method", "path", "status"],
     )
     if settings.enable_prometheus
     else None
@@ -185,20 +187,28 @@ browser_ws_dropped_messages_total = _get_or_create_counter(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all HTTP requests, enforce internal auth, and apply basic rate limiting."""
-    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(uuid.uuid4())[:8]
+    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(
+        uuid.uuid4()
+    )[:8]
     start_time = time.time()
 
     if http_inprogress:
         http_inprogress.inc()
 
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
-    auth_user_header = (getattr(settings, "auth_user_header", "") or "").strip() or "X-Weaver-User"
+    auth_user_header = (
+        getattr(settings, "auth_user_header", "") or ""
+    ).strip() or "X-Weaver-User"
     path = request.url.path
     method = request.method.upper()
     rate_limit_enabled = bool(getattr(settings, "rate_limit_enabled_effective", True))
 
-    principal_id = ((request.headers.get(auth_user_header) or "").strip() if internal_key else "").strip()
-    request.state.principal_id = principal_id or ("internal" if internal_key else "anonymous")
+    principal_id = (
+        (request.headers.get(auth_user_header) or "").strip() if internal_key else ""
+    ).strip()
+    request.state.principal_id = principal_id or (
+        "internal" if internal_key else "anonymous"
+    )
 
     logger.info(
         f"Request started | {request.method} {request.url.path} | "
@@ -220,7 +230,9 @@ async def log_requests(request: Request, call_next):
             if not provided:
                 provided = (request.headers.get("X-API-Key") or "").strip()
 
-        authorized = (not should_auth) or (provided and hmac.compare_digest(provided, internal_key))
+        authorized = (not should_auth) or (
+            provided and hmac.compare_digest(provided, internal_key)
+        )
 
         # Basic in-memory rate limiting (token bucket) with response headers.
         rate_limit_limit = 0
@@ -228,7 +240,11 @@ async def log_requests(request: Request, call_next):
         rate_limit_reset_ts = 0
         rate_limit_exceeded = False
         rate_limit_retry_after = 0
-        if rate_limit_enabled and path not in _RATE_LIMIT_EXEMPT and method != "OPTIONS":
+        if (
+            rate_limit_enabled
+            and path not in _RATE_LIMIT_EXEMPT
+            and method != "OPTIONS"
+        ):
             identity = (
                 (getattr(request.state, "principal_id", "") or "").strip()
                 if internal_key and authorized
@@ -241,7 +257,9 @@ async def log_requests(request: Request, call_next):
             rate_limit_limit = chat_limit if is_chat else general_limit
             bucket_key = f"{identity}:{'chat' if is_chat else 'general'}"
             now = time.time()
-            max_buckets = int(getattr(settings, "rate_limit_max_buckets", 10_000) or 10_000)
+            max_buckets = int(
+                getattr(settings, "rate_limit_max_buckets", 10_000) or 10_000
+            )
 
             bucket = _rate_limit_buckets.get(bucket_key)
             if bucket is None or now - bucket["window_start"] >= window_seconds:
@@ -266,7 +284,9 @@ async def log_requests(request: Request, call_next):
 
             if bucket.get("tokens", 0) < 0:
                 rate_limit_exceeded = True
-                rate_limit_retry_after = int(window_seconds - (now - bucket["window_start"])) + 1
+                rate_limit_retry_after = (
+                    int(window_seconds - (now - bucket["window_start"])) + 1
+                )
 
         if rate_limit_exceeded:
             response = JSONResponse(
@@ -307,7 +327,9 @@ async def log_requests(request: Request, call_next):
             f"Duration: {duration:.3f}s"
         )
         if http_requests_total:
-            http_requests_total.labels(request.method, request.url.path, response.status_code).inc()
+            http_requests_total.labels(
+                request.method, request.url.path, response.status_code
+            ).inc()
 
         return response
     except Exception as e:
@@ -329,7 +351,12 @@ async def log_requests(request: Request, call_next):
 cors_origin_regex = None
 try:
     env = (getattr(settings, "app_env", "") or "").strip().lower()
-    if bool(getattr(settings, "debug", False)) or env in {"dev", "debug", "local", "test"}:
+    if bool(getattr(settings, "debug", False)) or env in {
+        "dev",
+        "debug",
+        "local",
+        "test",
+    }:
         # Dev ergonomics: allow the UI to run on any local port (e.g. 3100, 5173, random e2e ports).
         cors_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 except Exception:
@@ -342,7 +369,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Thread-ID", "X-Request-ID"],  # Allow frontend to read these headers
+    expose_headers=[
+        "X-Thread-ID",
+        "X-Request-ID",
+    ],  # Allow frontend to read these headers
 )
 
 
@@ -362,7 +392,9 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _apply_rate_limit_headers(response: Any, *, limit: int, remaining: int, reset_ts: int) -> None:
+def _apply_rate_limit_headers(
+    response: Any, *, limit: int, remaining: int, reset_ts: int
+) -> None:
     if not hasattr(response, "headers"):
         return
     response.headers["X-RateLimit-Limit"] = str(limit)
@@ -401,7 +433,11 @@ def _require_thread_owner(request: Request, thread_id: str) -> None:
         if not session_state or not isinstance(session_state.state, dict):
             return
         persisted_owner = session_state.state.get("user_id")
-        if isinstance(persisted_owner, str) and persisted_owner.strip() and persisted_owner.strip() != principal_id:
+        if (
+            isinstance(persisted_owner, str)
+            and persisted_owner.strip()
+            and persisted_owner.strip() != principal_id
+        ):
             raise HTTPException(status_code=403, detail="Forbidden")
     except HTTPException:
         raise
@@ -418,7 +454,8 @@ async def _cleanup_rate_limit_buckets():
             now = time.time()
             window_seconds = int(getattr(settings, "rate_limit_window_seconds", 60))
             stale_keys = [
-                k for k, v in _rate_limit_buckets.items()
+                k
+                for k, v in _rate_limit_buckets.items()
                 if now - v["window_start"] > window_seconds * 2
             ]
             for k in stale_keys:
@@ -440,7 +477,9 @@ def _init_store():
     url = settings.memory_store_url.strip()
     if backend == "postgres":
         if not url:
-            raise ValueError("memory_store_url is required when memory_store_backend=postgres")
+            raise ValueError(
+                "memory_store_url is required when memory_store_backend=postgres"
+            )
         from langgraph.store.postgres import PostgresStore
 
         conn = psycopg.connect(url, autocommit=True)
@@ -450,7 +489,9 @@ def _init_store():
         return store_obj
     if backend == "redis":
         if not url:
-            raise ValueError("memory_store_url is required when memory_store_backend=redis")
+            raise ValueError(
+                "memory_store_url is required when memory_store_backend=redis"
+            )
         from redis import Redis
         from langgraph.store.redis import RedisStore
 
@@ -473,7 +514,9 @@ research_graph = create_research_graph(
     store=store,
 )
 support_graph = create_support_graph(checkpointer=checkpointer, store=store)
-mcp_thread_id = "default"  # thread id for MCP event emission; per-request tools will override
+mcp_thread_id = (
+    "default"  # thread id for MCP event emission; per-request tools will override
+)
 mcp_enabled = settings.enable_mcp
 mcp_servers_config = settings.mcp_servers
 mcp_loaded_tools = 0
@@ -519,9 +562,8 @@ async def startup_event():
 
     # Ensure the rate-limit bucket cleanup task is running (lifespan-managed).
     global _rate_limit_cleanup_task
-    if (
-        getattr(settings, "rate_limit_enabled_effective", False)
-        and (_rate_limit_cleanup_task is None or _rate_limit_cleanup_task.done())
+    if getattr(settings, "rate_limit_enabled_effective", False) and (
+        _rate_limit_cleanup_task is None or _rate_limit_cleanup_task.done()
     ):
         _rate_limit_cleanup_task = asyncio.create_task(
             _cleanup_rate_limit_buckets(),
@@ -532,7 +574,9 @@ async def startup_event():
     logger.info(f"Environment: {'DEBUG' if settings.debug else 'PRODUCTION'}")
     logger.info(f"Primary Model: {settings.primary_model}")
     logger.info(f"Reasoning Model: {settings.reasoning_model}")
-    logger.info(f"Database: {'Configured' if settings.database_url else 'Not configured'}")
+    logger.info(
+        f"Database: {'Configured' if settings.database_url else 'Not configured'}"
+    )
     logger.info(f"Checkpointer: {'Enabled' if checkpointer else 'Disabled'}")
 
     # Initialize MCP tools
@@ -541,7 +585,9 @@ async def startup_event():
         logger.info("Initializing MCP tools...")
         servers_cfg = _apply_mcp_thread_id(mcp_servers_config, mcp_thread_id)
         mcp_servers_config = servers_cfg
-        mcp_tools = await init_mcp_tools(servers_override=servers_cfg, enabled=mcp_enabled)
+        mcp_tools = await init_mcp_tools(
+            servers_override=servers_cfg, enabled=mcp_enabled
+        )
         if mcp_tools:
             set_registered_tools(mcp_tools)
             mcp_loaded_tools = len(mcp_tools)
@@ -559,7 +605,9 @@ async def startup_event():
         initialize_enhanced_tools()
         logger.info("Enhanced tool system initialized")
     except Exception as e:
-        logger.warning(f"Enhanced tool system initialization failed: {e}", exc_info=settings.debug)
+        logger.warning(
+            f"Enhanced tool system initialization failed: {e}", exc_info=settings.debug
+        )
 
     # Initialize ASR service
     if settings.dashscope_api_key:
@@ -656,7 +704,9 @@ async def startup_event():
         await init_trigger_manager()
         logger.info("Trigger system initialized successfully")
     except Exception as e:
-        logger.warning(f"Trigger system initialization failed: {e}", exc_info=settings.debug)
+        logger.warning(
+            f"Trigger system initialization failed: {e}", exc_info=settings.debug
+        )
 
 
 async def shutdown_event():
@@ -751,7 +801,9 @@ def _coerce_search_mode_input(value: Any) -> SearchMode | None:
         use_deep = bool(value.get("useDeepSearch", value.get("use_deep", False)))
 
         # If booleans were not provided but a mode string exists, derive flags from it.
-        if not (use_web or use_agent or use_deep) and isinstance(value.get("mode"), str):
+        if not (use_web or use_agent or use_deep) and isinstance(
+            value.get("mode"), str
+        ):
             mode_lower = value["mode"].strip().lower()
             if mode_lower == "web":
                 use_web = True
@@ -763,7 +815,9 @@ def _coerce_search_mode_input(value: Any) -> SearchMode | None:
         if use_deep and not use_agent:
             use_deep = False
 
-        return SearchMode(useWebSearch=use_web, useAgent=use_agent, useDeepSearch=use_deep)
+        return SearchMode(
+            useWebSearch=use_web, useAgent=use_agent, useDeepSearch=use_deep
+        )
 
     return None
 
@@ -948,7 +1002,9 @@ class ChatRequest(BaseModel):
     stream: bool = True
     model: Optional[str] = None
     search_mode: Optional[SearchMode] = None
-    agent_id: Optional[str] = None  # optional GPTs-like agent profile id (data/agents.json)
+    agent_id: Optional[str] = (
+        None  # optional GPTs-like agent profile id (data/agents.json)
+    )
     user_id: Optional[str] = None
     images: Optional[List[ImagePayload]] = None  # Base64 images for multimodal input
 
@@ -1044,7 +1100,9 @@ _browser_stream_conn_counts: Dict[str, int] = {}
 def _browser_stream_conn_inc(thread_id: str) -> None:
     tid = (thread_id or "").strip() or "default"
     with _browser_stream_conn_lock:
-        _browser_stream_conn_counts[tid] = int(_browser_stream_conn_counts.get(tid, 0)) + 1
+        _browser_stream_conn_counts[tid] = (
+            int(_browser_stream_conn_counts.get(tid, 0)) + 1
+        )
 
 
 def _browser_stream_conn_dec(thread_id: str) -> None:
@@ -1147,11 +1205,15 @@ from starlette.responses import JSONResponse as StarletteJSONResponse
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Return human-readable validation errors instead of raw Pydantic output."""
-    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(uuid.uuid4())[:8]
+    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(
+        uuid.uuid4()
+    )[:8]
     errors = []
     for err in exc.errors():
         field = " → ".join(str(loc) for loc in err.get("loc", []))
-        errors.append({"field": field, "message": err.get("msg", ""), "type": err.get("type", "")})
+        errors.append(
+            {"field": field, "message": err.get("msg", ""), "type": err.get("type", "")}
+        )
     logger.warning(f"Validation error | ID: {request_id} | Errors: {errors}")
     return StarletteJSONResponse(
         status_code=422,
@@ -1167,7 +1229,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Consistent JSON format for all HTTP exceptions."""
-    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(uuid.uuid4())[:8]
+    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(
+        uuid.uuid4()
+    )[:8]
     return StarletteJSONResponse(
         status_code=exc.status_code,
         content={
@@ -1182,7 +1246,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     """Catch-all handler — never leak stack traces in production."""
-    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(uuid.uuid4())[:8]
+    request_id = (request.headers.get("X-Request-ID") or "").strip() or str(
+        uuid.uuid4()
+    )[:8]
     logger.error(
         f"Unhandled exception | ID: {request_id} | {type(exc).__name__}: {exc}",
         exc_info=True,
@@ -1241,14 +1307,20 @@ async def agent_health():
         "agents_count": len(profiles),
         "agent_ids": sorted(agent_ids),
         "tool_registry_total_tools": len(registry.list_names()),
-        "enhanced_tool_discovery_enabled": bool(getattr(settings, "enhanced_tool_discovery_enabled", True)),
+        "enhanced_tool_discovery_enabled": bool(
+            getattr(settings, "enhanced_tool_discovery_enabled", True)
+        ),
         "enhanced_tool_discovery_recursive": bool(
             getattr(settings, "enhanced_tool_discovery_recursive", False)
         ),
         "rag_enabled": bool(getattr(settings, "rag_enabled", False)),
-        "search_strategy": str(getattr(settings, "search_strategy", "fallback") or "fallback"),
+        "search_strategy": str(
+            getattr(settings, "search_strategy", "fallback") or "fallback"
+        ),
         "search_engines": list(getattr(settings, "search_engines_list", [])),
-        "search_providers_available": sorted([str(n) for n in available if str(n).strip()]),
+        "search_providers_available": sorted(
+            [str(n) for n in available if str(n).strip()]
+        ),
     }
 
 
@@ -1256,7 +1328,9 @@ async def agent_health():
 
 
 @app.post("/api/chat/cancel/{thread_id}")
-async def cancel_chat(thread_id: str, request: Request, payload: CancelRequest | None = None):
+async def cancel_chat(
+    thread_id: str, request: Request, payload: CancelRequest | None = None
+):
     """
     鍙栨秷姝ｅ湪杩涜鐨勮亰澶╀换鍔?
     Args:
@@ -1293,7 +1367,9 @@ async def cancel_chat(thread_id: str, request: Request, payload: CancelRequest |
         }
 
 
-def _task_is_visible_to_principal(task_id: str, task_info: Dict[str, Any], principal_id: str) -> bool:
+def _task_is_visible_to_principal(
+    task_id: str, task_info: Dict[str, Any], principal_id: str
+) -> bool:
     owner_id = (get_thread_owner(task_id) or "").strip()
     if owner_id:
         return owner_id == principal_id
@@ -1490,11 +1566,25 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
 
     # Keep these as short, user-facing progress narratives (NOT chain-of-thought).
     if "clarify" in name:
-        return "我先确认是否需要你补充信息，避免跑偏。" if use_zh else "I'll check if any clarification is needed so we don't go off-track."
+        return (
+            "我先确认是否需要你补充信息，避免跑偏。"
+            if use_zh
+            else "I'll check if any clarification is needed so we don't go off-track."
+        )
     if "planner" in name or "web_plan" in name or "refine_plan" in name:
-        return "我会先拆解问题并生成一组检索关键词。" if use_zh else "I'll break the question down and generate targeted search queries."
-    if "perform_parallel_search" in name or (("search" in name) and "research" not in name):
-        return "接下来我会检索并收集资料，多来源交叉验证。" if use_zh else "Next I'll search and collect sources, cross-checking across providers."
+        return (
+            "我会先拆解问题并生成一组检索关键词。"
+            if use_zh
+            else "I'll break the question down and generate targeted search queries."
+        )
+    if "perform_parallel_search" in name or (
+        ("search" in name) and "research" not in name
+    ):
+        return (
+            "接下来我会检索并收集资料，多来源交叉验证。"
+            if use_zh
+            else "Next I'll search and collect sources, cross-checking across providers."
+        )
     if "deepsearch" in name:
         return (
             "我会进行迭代式深度检索（生成查询 → 搜索 → 阅读 → 汇总），直到覆盖充分。"
@@ -1502,15 +1592,35 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
             else "I'll run an iterative deep-search loop (query → search → read → summarize) until coverage is solid."
         )
     if "compressor" in name:
-        return "我会去重并压缩信息，保留最相关证据。" if use_zh else "I'll deduplicate and compress sources, keeping the most relevant evidence."
+        return (
+            "我会去重并压缩信息，保留最相关证据。"
+            if use_zh
+            else "I'll deduplicate and compress sources, keeping the most relevant evidence."
+        )
     if "writer" in name:
-        return "我会把证据整理成结构化的最终回答。" if use_zh else "I'll synthesize the evidence into a clear final answer."
+        return (
+            "我会把证据整理成结构化的最终回答。"
+            if use_zh
+            else "I'll synthesize the evidence into a clear final answer."
+        )
     if "evaluator" in name:
-        return "我会自检覆盖度/准确性，必要时补充检索或修订。" if use_zh else "I'll self-check coverage/accuracy and revise or research more if needed."
+        return (
+            "我会自检覆盖度/准确性，必要时补充检索或修订。"
+            if use_zh
+            else "I'll self-check coverage/accuracy and revise or research more if needed."
+        )
     if "reviser" in name or "revise" in name:
-        return "我会根据自检结果修订答案，让表述更清晰。" if use_zh else "I'll revise the draft for clarity and completeness."
+        return (
+            "我会根据自检结果修订答案，让表述更清晰。"
+            if use_zh
+            else "I'll revise the draft for clarity and completeness."
+        )
     if name == "agent":
-        return "我会调用工具完成任务步骤，并记录关键过程。" if use_zh else "I'll call tools to execute steps and log key actions."
+        return (
+            "我会调用工具完成任务步骤，并记录关键过程。"
+            if use_zh
+            else "I'll call tools to execute steps and log key actions."
+        )
 
     return ""
 
@@ -1567,7 +1677,9 @@ def _compact_tool_args(tool_input: Any) -> Dict[str, Any]:
     return out
 
 
-def _normalize_search_mode(search_mode: SearchMode | Dict[str, Any] | str | None) -> Dict[str, Any]:
+def _normalize_search_mode(
+    search_mode: SearchMode | Dict[str, Any] | str | None,
+) -> Dict[str, Any]:
     if isinstance(search_mode, SearchMode):
         use_web = search_mode.useWebSearch
         use_agent = search_mode.useAgent
@@ -1575,15 +1687,25 @@ def _normalize_search_mode(search_mode: SearchMode | Dict[str, Any] | str | None
         use_deep_prompt = use_deep
     elif isinstance(search_mode, dict):
         # Support both camelCase (frontend payload) and snake_case (already-normalized)
-        use_web = bool(search_mode.get("useWebSearch", search_mode.get("use_web", False)))
-        use_agent = bool(search_mode.get("useAgent", search_mode.get("use_agent", False)))
-        use_deep = bool(search_mode.get("useDeepSearch", search_mode.get("use_deep", False)))
+        use_web = bool(
+            search_mode.get("useWebSearch", search_mode.get("use_web", False))
+        )
+        use_agent = bool(
+            search_mode.get("useAgent", search_mode.get("use_agent", False))
+        )
+        use_deep = bool(
+            search_mode.get("useDeepSearch", search_mode.get("use_deep", False))
+        )
         use_deep_prompt = bool(
-            search_mode.get("useDeepPrompt", search_mode.get("use_deep_prompt", use_deep))
+            search_mode.get(
+                "useDeepPrompt", search_mode.get("use_deep_prompt", use_deep)
+            )
         )
 
         # If booleans were not provided but a mode string exists, derive flags from it
-        if not (use_web or use_agent or use_deep) and isinstance(search_mode.get("mode"), str):
+        if not (use_web or use_agent or use_deep) and isinstance(
+            search_mode.get("mode"), str
+        ):
             mode_lower = search_mode["mode"].strip().lower()
             if mode_lower == "web":
                 use_web = True
@@ -1602,7 +1724,14 @@ def _normalize_search_mode(search_mode: SearchMode | Dict[str, Any] | str | None
             use_deep_prompt = False
         else:
             use_web = lowered in {"web", "search", "tavily"}
-            use_agent = lowered in {"agent", "mcp", "deep", "deep_agent", "deep-agent", "ultra"}
+            use_agent = lowered in {
+                "agent",
+                "mcp",
+                "deep",
+                "deep_agent",
+                "deep-agent",
+                "ultra",
+            }
             use_deep = lowered in {"deep", "deep_agent", "deep-agent", "ultra"}
             use_deep_prompt = use_deep
     else:
@@ -1631,7 +1760,9 @@ def _normalize_search_mode(search_mode: SearchMode | Dict[str, Any] | str | None
     }
 
 
-def _normalize_images_payload(images: Optional[List[ImagePayload]]) -> List[Dict[str, Any]]:
+def _normalize_images_payload(
+    images: Optional[List[ImagePayload]],
+) -> List[Dict[str, Any]]:
     """
     Normalize incoming image payloads; strip data URL prefix if present.
     """
@@ -1645,7 +1776,9 @@ def _normalize_images_payload(images: Optional[List[ImagePayload]]) -> List[Dict
         data = img.data
         if data.startswith("data:") and "," in data:
             data = data.split(",", 1)[1]
-        normalized.append({"name": img.name or "", "mime": img.mime or "", "data": data})
+        normalized.append(
+            {"name": img.name or "", "mime": img.mime or "", "data": data}
+        )
     return normalized
 
 
@@ -1706,7 +1839,8 @@ async def support_chat(request: Request, payload: SupportChatRequest):
             state["messages"].insert(
                 0,
                 SystemMessage(
-                    content="Stored memories:\n" + "\n".join(f"- {m}" for m in store_memories)
+                    content="Stored memories:\n"
+                    + "\n".join(f"- {m}" for m in store_memories)
                 ),
             )
 
@@ -1802,7 +1936,9 @@ async def stream_agent_events(
         logger.debug(f"  Input: {input_text[:100]}...")
 
         mode_info = _normalize_search_mode(search_mode)
-        metrics = metrics_registry.start(thread_id, model=model, route=mode_info.get("mode", ""))
+        metrics = metrics_registry.start(
+            thread_id, model=model, route=mode_info.get("mode", "")
+        )
 
         # Initialize state with cancellation support
         initial_state: AgentState = {
@@ -1834,7 +1970,11 @@ async def stream_agent_events(
 
         # Load long-term memories (store) and Mem0 (optional) and inject deep prompt if needed
         messages: list[Any] = []
-        if mode_info.get("mode") == "agent" and agent_profile and agent_profile.system_prompt:
+        if (
+            mode_info.get("mode") == "agent"
+            and agent_profile
+            and agent_profile.system_prompt
+        ):
             messages.append(SystemMessage(content=agent_profile.system_prompt))
         if mode_info.get("use_deep_prompt"):
             messages.append(SystemMessage(content=get_deep_agent_prompt()))
@@ -1847,7 +1987,9 @@ async def stream_agent_events(
         mem_entries = fetch_memories(query=input_text, user_id=user_id)
         if mem_entries:
             memory_text = "\n".join(f"- {m}" for m in mem_entries)
-            messages.append(SystemMessage(content=f"Relevant past knowledge:\n{memory_text}"))
+            messages.append(
+                SystemMessage(content=f"Relevant past knowledge:\n{memory_text}")
+            )
 
         if messages:
             initial_state["messages"] = messages
@@ -1857,7 +1999,9 @@ async def stream_agent_events(
                 "thread_id": thread_id,
                 "model": model,
                 "search_mode": mode_info,
-                "agent_profile": agent_profile.model_dump(mode="json") if agent_profile else None,
+                "agent_profile": (
+                    agent_profile.model_dump(mode="json") if agent_profile else None
+                ),
                 "user_id": user_id,
                 "allow_interrupts": bool(checkpointer),
                 "tool_approval": settings.tool_approval or False,
@@ -1875,23 +2019,41 @@ async def stream_agent_events(
                     break
 
                 if tool_event.type == ToolEvent.TOOL_START:
-                    yield_event = await format_stream_event("tool_start", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "tool_start", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.TOOL_SCREENSHOT:
-                    yield_event = await format_stream_event("screenshot", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "screenshot", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.TOOL_RESULT:
-                    yield_event = await format_stream_event("tool_result", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "tool_result", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.TOOL_ERROR:
-                    yield_event = await format_stream_event("tool_error", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "tool_error", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.TASK_UPDATE:
-                    yield_event = await format_stream_event("task_update", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "task_update", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.RESEARCH_NODE_START:
-                    yield_event = await format_stream_event("research_node_start", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "research_node_start", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.RESEARCH_NODE_COMPLETE:
-                    yield_event = await format_stream_event("research_node_complete", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "research_node_complete", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.RESEARCH_TREE_UPDATE:
-                    yield_event = await format_stream_event("research_tree_update", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "research_tree_update", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.QUALITY_UPDATE:
-                    yield_event = await format_stream_event("quality_update", tool_event.data)
+                    yield_event = await format_stream_event(
+                        "quality_update", tool_event.data
+                    )
                 elif tool_event.type == ToolEvent.SEARCH:
                     yield_event = await format_stream_event("search", tool_event.data)
                 else:
@@ -1902,7 +2064,11 @@ async def stream_agent_events(
         # Send initial status
         yield await format_stream_event(
             "status",
-            {"text": "Initializing research agent...", "step": "init", "thread_id": thread_id},
+            {
+                "text": "Initializing research agent...",
+                "step": "init",
+                "thread_id": thread_id,
+            },
         )
 
         # Stream graph execution
@@ -1917,7 +2083,8 @@ async def stream_agent_events(
             if cancel_token.is_cancelled:
                 logger.info(f"Stream cancelled for thread {thread_id}")
                 yield await format_stream_event(
-                    "cancelled", {"message": "Task was cancelled by user", "thread_id": thread_id}
+                    "cancelled",
+                    {"message": "Task was cancelled by user", "thread_id": thread_id},
                 )
                 return
 
@@ -1935,7 +2102,10 @@ async def stream_agent_events(
                         logger.info(f"Stream cancelled for thread {thread_id}")
                         yield await format_stream_event(
                             "cancelled",
-                            {"message": "Task was cancelled by user", "thread_id": thread_id},
+                            {
+                                "message": "Task was cancelled by user",
+                                "thread_id": thread_id,
+                            },
                         )
                         return
 
@@ -1972,12 +2142,16 @@ async def stream_agent_events(
                     logger.debug(f"  Clarify node started | Thread: {thread_id}")
                     yield await format_stream_event(
                         "status",
-                        {"text": "Checking if clarification is needed...", "step": "clarifying"},
+                        {
+                            "text": "Checking if clarification is needed...",
+                            "step": "clarifying",
+                        },
                     )
                 elif "planner" in node_name:
                     logger.debug(f"  Planning node started | Thread: {thread_id}")
                     yield await format_stream_event(
-                        "status", {"text": "Creating research plan...", "step": "planning"}
+                        "status",
+                        {"text": "Creating research plan...", "step": "planning"},
                     )
                 elif "deepsearch" in node_name:
                     logger.debug(f"  Deep research node started | Thread: {thread_id}")
@@ -1993,21 +2167,26 @@ async def stream_agent_events(
                 elif "perform_parallel_search" in node_name or "search" in node_name:
                     logger.debug(f"  Search node started | Thread: {thread_id}")
                     yield await format_stream_event(
-                        "status", {"text": "Conducting research...", "step": "researching"}
+                        "status",
+                        {"text": "Conducting research...", "step": "researching"},
                     )
                 elif "writer" in node_name:
                     logger.debug(f"  Writer node started | Thread: {thread_id}")
                     yield await format_stream_event(
-                        "status", {"text": "Synthesizing findings...", "step": "writing"}
+                        "status",
+                        {"text": "Synthesizing findings...", "step": "writing"},
                     )
                 elif node_name == "agent":
                     logger.debug(f"  Agent node started | Thread: {thread_id}")
                     yield await format_stream_event(
-                        "status", {"text": "Running agent (tool-calling)...", "step": "agent"}
+                        "status",
+                        {"text": "Running agent (tool-calling)...", "step": "agent"},
                     )
 
             elif event_type in {"on_chain_end", "on_node_end", "on_graph_end"}:
-                output = data_dict.get("output", {}) if isinstance(data_dict, dict) else {}
+                output = (
+                    data_dict.get("output", {}) if isinstance(data_dict, dict) else {}
+                )
                 metrics.mark_event(event_type, node_name)
 
                 # Extract messages from output
@@ -2018,16 +2197,23 @@ async def stream_agent_events(
                         was_interrupted = True
                         yield await format_stream_event(
                             "interrupt",
-                            {"thread_id": thread_id, "prompts": _serialize_interrupts(interrupts)},
+                            {
+                                "thread_id": thread_id,
+                                "prompts": _serialize_interrupts(interrupts),
+                            },
                         )
                         return
 
                     # Optional "thinking summary" (safe progress narrative) — keep separate from main answer.
-                    if _should_emit_thinking_summary_for_node(node_name) and not output.get("is_complete"):
+                    if _should_emit_thinking_summary_for_node(
+                        node_name
+                    ) and not output.get("is_complete"):
                         try:
                             messages = output.get("messages", [])
                             for msg in messages or []:
-                                content = msg.content if hasattr(msg, "content") else str(msg)
+                                content = (
+                                    msg.content if hasattr(msg, "content") else str(msg)
+                                )
                                 safe = _sanitize_thinking_text(content)
                                 if not safe or _looks_like_structured_blob(safe):
                                     continue
@@ -2059,7 +2245,9 @@ async def stream_agent_events(
                             except Exception:
                                 pass
 
-                            yield await format_stream_event("completion", {"content": final_report})
+                            yield await format_stream_event(
+                                "completion", {"content": final_report}
+                            )
 
                             # Also emit as artifact
                             yield await format_stream_event(
@@ -2080,7 +2268,7 @@ async def stream_agent_events(
                             _store_add(input_text, final_report, user_id=user_id)
 
             elif event_type == "on_tool_start":
-                tool_name = str(data_dict.get("name", "unknown") or "unknown")
+                tool_name = name or str(data_dict.get("name", "") or "") or "unknown"
                 tool_input = data_dict.get("input", {})
                 tool_call_id = str(event.get("run_id") or "") or None
 
@@ -2100,7 +2288,7 @@ async def stream_agent_events(
                 yield await format_stream_event("tool", payload)
 
             elif event_type == "on_tool_error":
-                tool_name = str(data_dict.get("name", "unknown") or "unknown")
+                tool_name = name or str(data_dict.get("name", "") or "") or "unknown"
                 tool_input = data_dict.get("input", {})
                 tool_call_id = str(event.get("run_id") or "") or None
 
@@ -2120,7 +2308,7 @@ async def stream_agent_events(
                 yield await format_stream_event("tool", payload)
 
             elif event_type == "on_tool_end":
-                tool_name = str(data_dict.get("name", "unknown") or "unknown")
+                tool_name = name or str(data_dict.get("name", "") or "") or "unknown"
                 output = data_dict.get("output", {})
                 tool_call_id = str(event.get("run_id") or "") or None
 
@@ -2206,19 +2394,27 @@ async def stream_agent_events(
             "done",
             {
                 "timestamp": datetime.now().isoformat(),
-                "metrics": metrics_registry.get(thread_id).to_dict()
-                if metrics_registry.get(thread_id)
-                else {},
+                "metrics": (
+                    metrics_registry.get(thread_id).to_dict()
+                    if metrics_registry.get(thread_id)
+                    else {}
+                ),
             },
         )
 
     except asyncio.CancelledError:
         duration = time.time() - start_time
         metrics_registry.finish(thread_id, cancelled=True)
-        logger.info(f"? Agent stream cancelled | Thread: {thread_id} | Duration: {duration:.2f}s")
+        logger.info(
+            f"? Agent stream cancelled | Thread: {thread_id} | Duration: {duration:.2f}s"
+        )
         yield await format_stream_event(
             "cancelled",
-            {"message": "Task was cancelled", "thread_id": thread_id, "duration": duration},
+            {
+                "message": "Task was cancelled",
+                "thread_id": thread_id,
+                "duration": duration,
+            },
         )
 
     except Exception as e:
@@ -2265,7 +2461,9 @@ async def stream_agent_events(
             else:
                 # Avoid blocking the request/event loop on slow sandbox shutdown.
                 try:
-                    asyncio.create_task(asyncio.to_thread(sandbox_browser_sessions.reset, thread_id))
+                    asyncio.create_task(
+                        asyncio.to_thread(sandbox_browser_sessions.reset, thread_id)
+                    )
                 except Exception:
                     try:
                         sandbox_browser_sessions.reset(thread_id)
@@ -2290,11 +2488,17 @@ async def chat_sse(request: Request, payload: ChatRequest):
     last_message = user_messages[-1].content
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     principal_id = (getattr(request.state, "principal_id", "") or "").strip()
-    user_id = principal_id if internal_key and principal_id else (payload.user_id or settings.memory_user_id)
+    user_id = (
+        principal_id
+        if internal_key and principal_id
+        else (payload.user_id or settings.memory_user_id)
+    )
     mode_info = _normalize_search_mode(payload.search_mode)
     model = (payload.model or settings.primary_model).strip()
     thread_id = f"thread_{uuid.uuid4().hex}"
-    set_thread_owner(thread_id, getattr(request.state, "principal_id", "") or "anonymous")
+    set_thread_owner(
+        thread_id, getattr(request.state, "principal_id", "") or "anonymous"
+    )
 
     async def _sse_generator():
         gauge = None
@@ -2320,11 +2524,16 @@ async def chat_sse(request: Request, payload: ChatRequest):
                 seq += 1
                 yield format_sse_event(
                     event="error",
-                    data={"message": "OPENAI_API_KEY is not configured", "thread_id": thread_id},
+                    data={
+                        "message": "OPENAI_API_KEY is not configured",
+                        "thread_id": thread_id,
+                    },
                     event_id=seq,
                 )
                 seq += 1
-                yield format_sse_event(event="done", data={"thread_id": thread_id}, event_id=seq)
+                yield format_sse_event(
+                    event="done", data={"thread_id": thread_id}, event_id=seq
+                )
                 return
 
             source = iter_with_sse_keepalive(
@@ -2391,7 +2600,11 @@ async def chat(request: Request, payload: ChatRequest):
         last_message = user_messages[-1].content
         internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
         principal_id = (getattr(request.state, "principal_id", "") or "").strip()
-        user_id = principal_id if internal_key and principal_id else (payload.user_id or settings.memory_user_id)
+        user_id = (
+            principal_id
+            if internal_key and principal_id
+            else (payload.user_id or settings.memory_user_id)
+        )
         mode_info = _normalize_search_mode(payload.search_mode)
         model = (payload.model or settings.primary_model).strip()
         agent_id = (payload.agent_id or "default").strip() or "default"
@@ -2456,7 +2669,11 @@ async def chat(request: Request, payload: ChatRequest):
             }
 
             messages: list[Any] = []
-            if mode_info.get("mode") == "agent" and agent_profile and agent_profile.system_prompt:
+            if (
+                mode_info.get("mode") == "agent"
+                and agent_profile
+                and agent_profile.system_prompt
+            ):
                 messages.append(SystemMessage(content=agent_profile.system_prompt))
             if mode_info.get("use_deep_prompt"):
                 messages.append(SystemMessage(content=get_deep_agent_prompt()))
@@ -2464,12 +2681,16 @@ async def chat(request: Request, payload: ChatRequest):
             store_memories = _store_search(last_message, user_id=user_id)
             if store_memories:
                 store_text = "\n".join(f"- {m}" for m in store_memories)
-                messages.append(SystemMessage(content=f"Stored memories:\n{store_text}"))
+                messages.append(
+                    SystemMessage(content=f"Stored memories:\n{store_text}")
+                )
 
             mem_entries = fetch_memories(query=last_message, user_id=user_id)
             if mem_entries:
                 memory_text = "\n".join(f"- {m}" for m in mem_entries)
-                messages.append(SystemMessage(content=f"Relevant past knowledge:\n{memory_text}"))
+                messages.append(
+                    SystemMessage(content=f"Relevant past knowledge:\n{memory_text}")
+                )
 
             if messages:
                 initial_state["messages"] = messages
@@ -2479,9 +2700,9 @@ async def chat(request: Request, payload: ChatRequest):
                     "thread_id": "default",
                     "model": model,
                     "search_mode": mode_info,
-                    "agent_profile": agent_profile.model_dump(mode="json")
-                    if agent_profile
-                    else None,
+                    "agent_profile": (
+                        agent_profile.model_dump(mode="json") if agent_profile else None
+                    ),
                     "user_id": user_id,
                     "allow_interrupts": bool(checkpointer),
                     "tool_approval": settings.tool_approval or False,
@@ -2533,15 +2754,21 @@ async def resume_interrupt(request: Request, payload: GraphInterruptResumeReques
     if not payload.thread_id or not str(payload.thread_id).strip():
         raise HTTPException(status_code=400, detail="thread_id is required")
     _require_thread_owner(request, payload.thread_id)
-    existing = checkpointer.get_tuple({"configurable": {"thread_id": payload.thread_id}})
+    existing = checkpointer.get_tuple(
+        {"configurable": {"thread_id": payload.thread_id}}
+    )
     if not existing:
-        raise HTTPException(status_code=404, detail="No checkpoint found for this thread_id")
+        raise HTTPException(
+            status_code=404, detail="No checkpoint found for this thread_id"
+        )
     config = {
         "configurable": {
             "thread_id": payload.thread_id,
             "model": model,
             "search_mode": mode_info,
-            "agent_profile": agent_profile.model_dump(mode="json") if agent_profile else None,
+            "agent_profile": (
+                agent_profile.model_dump(mode="json") if agent_profile else None
+            ),
             "allow_interrupts": True,
             "tool_approval": settings.tool_approval or False,
             "human_review": settings.human_review or False,
@@ -2590,7 +2817,9 @@ async def get_tool_registry():
     for entry in raw_stats.get("most_used", []) or []:
         try:
             name, call_count = entry
-            most_used.append(ToolRegistryMostUsed(name=str(name), call_count=int(call_count)))
+            most_used.append(
+                ToolRegistryMostUsed(name=str(name), call_count=int(call_count))
+            )
         except Exception:
             continue
 
@@ -2674,7 +2903,9 @@ async def get_search_providers():
                 last_error_time=provider.stats.last_error_time,
                 circuit=ProviderCircuitSnapshot(
                     is_open=bool(circuit.get("is_open", False)),
-                    consecutive_failures=int(circuit.get("consecutive_failures", 0) or 0),
+                    consecutive_failures=int(
+                        circuit.get("consecutive_failures", 0) or 0
+                    ),
                     opened_for_seconds=circuit.get("opened_for_seconds"),
                     resets_in_seconds=circuit.get("resets_in_seconds"),
                 ),
@@ -2820,7 +3051,8 @@ async def list_runs(request: Request):
         runs = [
             run
             for run in runs
-            if (get_thread_owner(str(run.get("run_id") or "")) or "").strip() == principal_id
+            if (get_thread_owner(str(run.get("run_id") or "")) or "").strip()
+            == principal_id
         ]
     return {"runs": runs}
 
@@ -2915,7 +3147,9 @@ def _build_run_evidence_summary(thread_id: str) -> RunEvidenceSummary:
 
         quality_summary = artifacts.get("quality_summary", {})
         if isinstance(quality_summary, dict):
-            raw_citation = quality_summary.get("citation_coverage", quality_summary.get("citation_coverage_score"))
+            raw_citation = quality_summary.get(
+                "citation_coverage", quality_summary.get("citation_coverage_score")
+            )
             if raw_citation is not None:
                 try:
                     citation_coverage = float(raw_citation)
@@ -2949,10 +3183,18 @@ def _build_run_evidence_summary(thread_id: str) -> RunEvidenceSummary:
                 except (TypeError, ValueError):
                     return None
 
-            claim_verifier_total = _maybe_int(quality_summary.get("claim_verifier_total"))
-            claim_verifier_verified = _maybe_int(quality_summary.get("claim_verifier_verified"))
-            claim_verifier_unsupported = _maybe_int(quality_summary.get("claim_verifier_unsupported"))
-            claim_verifier_contradicted = _maybe_int(quality_summary.get("claim_verifier_contradicted"))
+            claim_verifier_total = _maybe_int(
+                quality_summary.get("claim_verifier_total")
+            )
+            claim_verifier_verified = _maybe_int(
+                quality_summary.get("claim_verifier_verified")
+            )
+            claim_verifier_unsupported = _maybe_int(
+                quality_summary.get("claim_verifier_unsupported")
+            )
+            claim_verifier_contradicted = _maybe_int(
+                quality_summary.get("claim_verifier_contradicted")
+            )
 
     except Exception:
         # Evidence summary is best-effort; never fail the metrics endpoint for this.
@@ -3036,7 +3278,9 @@ async def public_config():
 
         def _is_openai_family(name: str) -> bool:
             lowered = name.lower()
-            return "gpt" in lowered or lowered.startswith("o1") or lowered.startswith("o3")
+            return (
+                "gpt" in lowered or lowered.startswith("o1") or lowered.startswith("o3")
+            )
 
         def _is_anthropic_family(name: str) -> bool:
             return "claude" in name.lower()
@@ -3091,7 +3335,11 @@ async def public_config():
                 _add("o1-mini")
                 if _is_openai_family(reasoning):
                     _add(reasoning)
-        elif _is_qwen_family(primary) or "dashscope" in base_url or "aliyuncs" in base_url:
+        elif (
+            _is_qwen_family(primary)
+            or "dashscope" in base_url
+            or "aliyuncs" in base_url
+        ):
             _add("qwen-plus")
             _add("qwen3-vl-flash")
             if _is_qwen_family(reasoning):
@@ -3103,7 +3351,13 @@ async def public_config():
                 _add(reasoning)
 
         # Include task-specific overrides if they are explicitly configured.
-        for attr in ("planner_model", "researcher_model", "writer_model", "evaluator_model", "critic_model"):
+        for attr in (
+            "planner_model",
+            "researcher_model",
+            "writer_model",
+            "evaluator_model",
+            "critic_model",
+        ):
             _add(_norm(getattr(settings, attr, "")))
 
         return opts
@@ -3129,7 +3383,10 @@ async def public_config():
             "chat": {"protocol": "sse", "endpoint": "/api/chat/sse"},
             "research": {"protocol": "sse", "endpoint": "/api/research/sse"},
             "events": {"protocol": "sse", "endpoint": "/api/events/{thread_id}"},
-            "browser": {"protocol": "ws", "endpoint": "/api/browser/{thread_id}/stream"},
+            "browser": {
+                "protocol": "ws",
+                "endpoint": "/api/browser/{thread_id}/stream",
+            },
         },
     }
 
@@ -3153,7 +3410,9 @@ async def sandbox_browser_diagnose(deep: bool = False):
     elif not e2b_key.startswith("e2b_"):
         missing.append("E2B_API_KEY (invalid)")
 
-    template = (os.getenv("SANDBOX_TEMPLATE_BROWSER") or settings.sandbox_template_browser or "").strip()
+    template = (
+        os.getenv("SANDBOX_TEMPLATE_BROWSER") or settings.sandbox_template_browser or ""
+    ).strip()
     if not template:
         missing.append("SANDBOX_TEMPLATE_BROWSER")
 
@@ -3193,7 +3452,9 @@ async def sandbox_browser_diagnose(deep: bool = False):
             return len(jpg or b"")
 
         try:
-            frame_bytes = await sandbox_browser_sessions.run_async(diag_thread, _capture_one_frame)
+            frame_bytes = await sandbox_browser_sessions.run_async(
+                diag_thread, _capture_one_frame
+            )
             deep_result = {
                 "ok": True,
                 "latency_ms": int((time.time() - started) * 1000),
@@ -3244,7 +3505,9 @@ async def get_traces(thread_id: str, request: Request):
 
     trace = get_trace(thread_id)
     if not trace:
-        raise HTTPException(status_code=404, detail=f"No traces found for thread {thread_id}")
+        raise HTTPException(
+            status_code=404, detail=f"No traces found for thread {thread_id}"
+        )
 
     return trace
 
@@ -3265,7 +3528,9 @@ async def get_trace_summary(thread_id: str, request: Request):
 
     summary = _get_summary(thread_id)
     if not summary:
-        raise HTTPException(status_code=404, detail=f"No traces found for thread {thread_id}")
+        raise HTTPException(
+            status_code=404, detail=f"No traces found for thread {thread_id}"
+        )
 
     return summary
 
@@ -3293,6 +3558,7 @@ async def get_all_traces(thread_id: str, request: Request):
 
 class ExportRequest(BaseModel):
     """Export request for generating reports in various formats."""
+
     format: str = "html"  # html, pdf, docx
     title: Optional[str] = None
 
@@ -3357,12 +3623,16 @@ async def export_report_endpoint(
         config = {"configurable": {"thread_id": thread_id}}
         checkpoint = checkpointer.get_tuple(config)
         if not checkpoint:
-            raise HTTPException(status_code=404, detail=f"No checkpoint found for thread {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"No checkpoint found for thread {thread_id}"
+            )
 
         state = checkpoint.checkpoint.get("channel_values", {})
         final_report = state.get("final_report", "")
         if not final_report:
-            raise HTTPException(status_code=404, detail="No report found for this thread")
+            raise HTTPException(
+                status_code=404, detail="No report found for this thread"
+            )
 
         scraped = state.get("scraped_content", [])
         extracted_sources = []
@@ -3398,9 +3668,15 @@ async def export_report_endpoint(
 
                     scraped_list = scraped if isinstance(scraped, list) else []
                     passages_payload = deepsearch_artifacts.get("passages")
-                    passages_list = passages_payload if isinstance(passages_payload, list) else None
+                    passages_list = (
+                        passages_payload if isinstance(passages_payload, list) else None
+                    )
 
-                    if (scraped_list or passages_list) and isinstance(final_report, str) and final_report.strip():
+                    if (
+                        (scraped_list or passages_list)
+                        and isinstance(final_report, str)
+                        and final_report.strip()
+                    ):
                         verifier = ClaimVerifier()
                         checks = verifier.verify_report(
                             final_report,
@@ -3438,20 +3714,35 @@ async def export_report_endpoint(
                     "quality": quality_payload,
                     "exported_at": datetime.now().isoformat(),
                 },
-                headers={"Content-Disposition": f'attachment; filename="report_{thread_id}.json"'},
+                headers={
+                    "Content-Disposition": f'attachment; filename="report_{thread_id}.json"'
+                },
             )
 
         if format_lower == "html":
             from tools.export import export_report as do_export
 
             html_content = do_export(
-                final_report, format="html", title=report_title,
-                thread_id=thread_id, sources=source_urls,
+                final_report,
+                format="html",
+                title=report_title,
+                thread_id=thread_id,
+                sources=source_urls,
             )
             return StreamingResponse(
-                iter([html_content.encode("utf-8") if isinstance(html_content, str) else html_content]),
+                iter(
+                    [
+                        (
+                            html_content.encode("utf-8")
+                            if isinstance(html_content, str)
+                            else html_content
+                        )
+                    ]
+                ),
                 media_type="text/html",
-                headers={"Content-Disposition": f'inline; filename="report_{thread_id}.html"'},
+                headers={
+                    "Content-Disposition": f'inline; filename="report_{thread_id}.html"'
+                },
             )
 
         elif format_lower == "pdf":
@@ -3459,35 +3750,68 @@ async def export_report_endpoint(
                 from tools.export import export_report as do_export
 
                 pdf_bytes = do_export(
-                    final_report, format="pdf", title=report_title,
-                    thread_id=thread_id, sources=source_urls,
+                    final_report,
+                    format="pdf",
+                    title=report_title,
+                    thread_id=thread_id,
+                    sources=source_urls,
                 )
                 return StreamingResponse(
-                    iter([pdf_bytes if isinstance(pdf_bytes, bytes) else pdf_bytes.encode("utf-8")]),
+                    iter(
+                        [
+                            (
+                                pdf_bytes
+                                if isinstance(pdf_bytes, bytes)
+                                else pdf_bytes.encode("utf-8")
+                            )
+                        ]
+                    ),
                     media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="report_{thread_id}.pdf"'},
+                    headers={
+                        "Content-Disposition": f'attachment; filename="report_{thread_id}.pdf"'
+                    },
                 )
             except ImportError as e:
-                raise HTTPException(status_code=501, detail=f"PDF export requires WeasyPrint: {e}")
+                raise HTTPException(
+                    status_code=501, detail=f"PDF export requires WeasyPrint: {e}"
+                )
 
         elif format_lower in ("docx", "doc"):
             try:
                 from tools.export import export_report as do_export
 
                 docx_bytes = do_export(
-                    final_report, format="docx", title=report_title,
-                    thread_id=thread_id, sources=source_urls,
+                    final_report,
+                    format="docx",
+                    title=report_title,
+                    thread_id=thread_id,
+                    sources=source_urls,
                 )
                 return StreamingResponse(
-                    iter([docx_bytes if isinstance(docx_bytes, bytes) else docx_bytes.encode("utf-8")]),
+                    iter(
+                        [
+                            (
+                                docx_bytes
+                                if isinstance(docx_bytes, bytes)
+                                else docx_bytes.encode("utf-8")
+                            )
+                        ]
+                    ),
                     media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    headers={"Content-Disposition": f'attachment; filename="report_{thread_id}.docx"'},
+                    headers={
+                        "Content-Disposition": f'attachment; filename="report_{thread_id}.docx"'
+                    },
                 )
             except ImportError as e:
-                raise HTTPException(status_code=501, detail=f"DOCX export requires python-docx: {e}")
+                raise HTTPException(
+                    status_code=501, detail=f"DOCX export requires python-docx: {e}"
+                )
 
         else:
-            raise HTTPException(status_code=400, detail=f"Unsupported format: {format}. Use html, pdf, or docx.")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported format: {format}. Use html, pdf, or docx.",
+            )
 
     except HTTPException:
         raise
@@ -3507,12 +3831,16 @@ def _rag_collection_for_request(request: Request) -> str:
     - Default/dev (internal auth disabled): single shared collection
     - Enterprise internal (internal auth enabled): per-principal isolated collection
     """
-    base = (getattr(settings, "rag_collection_name", "") or "weaver_documents").strip() or "weaver_documents"
+    base = (
+        getattr(settings, "rag_collection_name", "") or "weaver_documents"
+    ).strip() or "weaver_documents"
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     if not internal_key:
         return base
 
-    principal_id = (getattr(request.state, "principal_id", "") or "").strip() or "internal"
+    principal_id = (
+        getattr(request.state, "principal_id", "") or ""
+    ).strip() or "internal"
     suffix = hashlib.sha256(principal_id.encode("utf-8")).hexdigest()[:12]
     return f"{base}__u_{suffix}"
 
@@ -3525,20 +3853,29 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
     Supports PDF, DOCX, TXT, MD files.
     """
     if not settings.rag_enabled:
-        raise HTTPException(status_code=400, detail="RAG is not enabled. Set rag_enabled=True in settings.")
+        raise HTTPException(
+            status_code=400,
+            detail="RAG is not enabled. Set rag_enabled=True in settings.",
+        )
 
     # Validate file size (max 50MB)
     MAX_FILE_SIZE = 50 * 1024 * 1024
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB.")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB.",
+        )
 
     # Validate file extension
     ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "txt", "md", "csv"}
     filename = file.filename or ""
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type '.{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '.{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
+        )
 
     try:
         from tools.rag.rag_tool import get_rag_tool
@@ -3550,7 +3887,9 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         result = rag.add_document(content=content, filename=file.filename)
 
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error", "Upload failed"))
+            raise HTTPException(
+                status_code=400, detail=result.get("error", "Upload failed")
+            )
 
         return {
             "success": True,
@@ -3611,7 +3950,9 @@ async def delete_document(source: str, request: Request):
 
         result = rag.delete_document(source)
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error", "Delete failed"))
+            raise HTTPException(
+                status_code=400, detail=result.get("error", "Delete failed")
+            )
 
         return {"success": True, "message": f"Document '{source}' deleted"}
 
@@ -3753,8 +4094,12 @@ async def list_sessions(
         internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
         user_filter = None
         if internal_key:
-            user_filter = (getattr(request.state, "principal_id", "") or "").strip() or "internal"
-        sessions = manager.list_sessions(limit=limit, status_filter=status, user_id_filter=user_filter)
+            user_filter = (
+                getattr(request.state, "principal_id", "") or ""
+            ).strip() or "internal"
+        sessions = manager.list_sessions(
+            limit=limit, status_filter=status, user_id_filter=user_filter
+        )
 
         return {
             "count": len(sessions),
@@ -3785,13 +4130,19 @@ async def get_session(thread_id: str, request: Request):
             session_state = manager.get_session_state(thread_id)
             if session_state and isinstance(session_state.state, dict):
                 owner = session_state.state.get("user_id")
-                if isinstance(owner, str) and owner.strip() and owner.strip() != principal_id:
+                if (
+                    isinstance(owner, str)
+                    and owner.strip()
+                    and owner.strip() != principal_id
+                ):
                     raise HTTPException(status_code=403, detail="Forbidden")
 
         session = manager.get_session(thread_id)
 
         if not session:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         return session.to_dict()
 
@@ -3817,13 +4168,21 @@ async def get_session_state(thread_id: str, request: Request):
         state = manager.get_session_state(thread_id)
 
         if not state:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
         if internal_key:
             principal_id = (getattr(request.state, "principal_id", "") or "").strip()
-            owner = state.state.get("user_id") if isinstance(state.state, dict) else None
-            if isinstance(owner, str) and owner.strip() and owner.strip() != principal_id:
+            owner = (
+                state.state.get("user_id") if isinstance(state.state, dict) else None
+            )
+            if (
+                isinstance(owner, str)
+                and owner.strip()
+                and owner.strip() != principal_id
+            ):
                 raise HTTPException(status_code=403, detail="Forbidden")
 
         return state.to_dict()
@@ -3849,13 +4208,23 @@ async def get_session_evidence(thread_id: str, request: Request):
         manager = get_session_manager(checkpointer)
         session_state = manager.get_session_state(thread_id)
         if not session_state:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
         if internal_key:
             principal_id = (getattr(request.state, "principal_id", "") or "").strip()
-            owner = session_state.state.get("user_id") if isinstance(session_state.state, dict) else None
-            if isinstance(owner, str) and owner.strip() and owner.strip() != principal_id:
+            owner = (
+                session_state.state.get("user_id")
+                if isinstance(session_state.state, dict)
+                else None
+            )
+            if (
+                isinstance(owner, str)
+                and owner.strip()
+                and owner.strip() != principal_id
+            ):
                 raise HTTPException(status_code=403, detail="Forbidden")
 
         artifacts = session_state.deepsearch_artifacts or {}
@@ -3871,7 +4240,9 @@ async def get_session_evidence(thread_id: str, request: Request):
         return {
             "sources": sources if isinstance(sources, list) else [],
             "claims": claims if isinstance(claims, list) else [],
-            "quality_summary": quality_summary if isinstance(quality_summary, dict) else {},
+            "quality_summary": (
+                quality_summary if isinstance(quality_summary, dict) else {}
+            ),
             "fetched_pages": fetched_pages if isinstance(fetched_pages, list) else [],
             "passages": passages if isinstance(passages, list) else [],
         }
@@ -3885,6 +4256,7 @@ async def get_session_evidence(thread_id: str, request: Request):
 
 class SessionResumeRequest(BaseModel):
     """Request to resume a session."""
+
     additional_input: Optional[str] = None
     update_state: Optional[Dict[str, Any]] = None
 
@@ -3916,7 +4288,9 @@ async def resume_session(
         # Get current state
         state = manager.get_session_state(thread_id)
         if not state:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         restored_state = manager.build_resume_state(
             thread_id=thread_id,
@@ -3924,21 +4298,31 @@ async def resume_session(
             update_state=payload.update_state if payload else None,
         )
         if restored_state is None:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         deepsearch_artifacts = restored_state.get("deepsearch_artifacts", {}) or {}
-        quality_summary = deepsearch_artifacts.get("quality_summary", {}) if isinstance(
-            deepsearch_artifacts, dict
-        ) else {}
-        queries = deepsearch_artifacts.get("queries", []) if isinstance(
-            deepsearch_artifacts, dict
-        ) else []
-        query_coverage = deepsearch_artifacts.get("query_coverage", {}) if isinstance(
-            deepsearch_artifacts, dict
-        ) else {}
-        freshness_summary = deepsearch_artifacts.get("freshness_summary", {}) if isinstance(
-            deepsearch_artifacts, dict
-        ) else {}
+        quality_summary = (
+            deepsearch_artifacts.get("quality_summary", {})
+            if isinstance(deepsearch_artifacts, dict)
+            else {}
+        )
+        queries = (
+            deepsearch_artifacts.get("queries", [])
+            if isinstance(deepsearch_artifacts, dict)
+            else []
+        )
+        query_coverage = (
+            deepsearch_artifacts.get("query_coverage", {})
+            if isinstance(deepsearch_artifacts, dict)
+            else {}
+        )
+        freshness_summary = (
+            deepsearch_artifacts.get("freshness_summary", {})
+            if isinstance(deepsearch_artifacts, dict)
+            else {}
+        )
         if not isinstance(query_coverage, dict):
             query_coverage = {}
         if not isinstance(freshness_summary, dict):
@@ -3981,8 +4365,14 @@ async def resume_session(
             },
             "deepsearch_resume": {
                 "artifacts_restored": bool(deepsearch_artifacts),
-                "mode": deepsearch_artifacts.get("mode") if isinstance(deepsearch_artifacts, dict) else None,
-                "quality_summary": quality_summary if isinstance(quality_summary, dict) else {},
+                "mode": (
+                    deepsearch_artifacts.get("mode")
+                    if isinstance(deepsearch_artifacts, dict)
+                    else None
+                ),
+                "quality_summary": (
+                    quality_summary if isinstance(quality_summary, dict) else {}
+                ),
                 "query_coverage_score": query_coverage_score,
                 "freshness_warning": freshness_warning,
                 "freshness_summary": freshness_summary,
@@ -3990,8 +4380,12 @@ async def resume_session(
             "resume_state": {
                 "route": restored_state.get("route"),
                 "revision_count": restored_state.get("revision_count", 0),
-                "research_plan_count": len(restored_state.get("research_plan", []) or []),
-                "resumed_from_checkpoint": bool(restored_state.get("resumed_from_checkpoint")),
+                "research_plan_count": len(
+                    restored_state.get("research_plan", []) or []
+                ),
+                "resumed_from_checkpoint": bool(
+                    restored_state.get("resumed_from_checkpoint")
+                ),
             },
         }
 
@@ -4019,7 +4413,9 @@ async def delete_session(thread_id: str, request: Request):
         success = manager.delete_session(thread_id)
 
         if not success:
-            raise HTTPException(status_code=400, detail=f"Failed to delete session: {thread_id}")
+            raise HTTPException(
+                status_code=400, detail=f"Failed to delete session: {thread_id}"
+            )
 
         return {
             "success": True,
@@ -4038,12 +4434,14 @@ async def delete_session(thread_id: str, request: Request):
 
 class ShareRequest(BaseModel):
     """Request to create a share link."""
+
     permissions: str = "view"
     expires_hours: Optional[int] = 72
 
 
 class CommentRequest(BaseModel):
     """Request to add a comment."""
+
     content: str
     author: str = "anonymous"
     message_id: Optional[str] = None
@@ -4108,7 +4506,9 @@ async def get_share(share_id: str):
 
         link = get_share_link(share_id)
         if not link:
-            raise HTTPException(status_code=404, detail="Share link not found or expired")
+            raise HTTPException(
+                status_code=404, detail="Share link not found or expired"
+            )
 
         # Get session state if checkpointer available
         session_data = None
@@ -4132,7 +4532,9 @@ async def get_share(share_id: str):
                                 role = m.get("role") or m.get("type") or m.get("name")
                                 content = m.get("content")
                             else:
-                                role = getattr(m, "role", None) or getattr(m, "type", None)
+                                role = getattr(m, "role", None) or getattr(
+                                    m, "type", None
+                                )
                                 content = getattr(m, "content", None)
 
                             if content is None:
@@ -4155,7 +4557,12 @@ async def get_share(share_id: str):
                         except Exception:
                             continue
 
-                title = state.get("title") or state.get("topic") or state.get("input") or link["thread_id"]
+                title = (
+                    state.get("title")
+                    or state.get("topic")
+                    or state.get("input")
+                    or link["thread_id"]
+                )
                 if not isinstance(title, str) or not title.strip():
                     title = link["thread_id"]
 
@@ -4214,7 +4621,9 @@ async def add_comment(thread_id: str, request: Request, req: CommentRequest):
 
 
 @app.get("/api/sessions/{thread_id}/comments", response_model=CommentsResponse)
-async def get_comments(thread_id: str, request: Request, message_id: Optional[str] = None):
+async def get_comments(
+    thread_id: str, request: Request, message_id: Optional[str] = None
+):
     """Get comments for a session."""
     try:
         _require_thread_owner(request, thread_id)
@@ -4305,14 +4714,16 @@ async def restore_version(thread_id: str, version_id: str, request: Request):
 
 class InterruptAction(str, Enum):
     """Actions for interrupt handling."""
-    APPROVE = "approve"      # Approve and continue
-    MODIFY = "modify"        # Modify state and continue
-    REJECT = "reject"        # Reject and stop
-    SKIP = "skip"            # Skip this checkpoint
+
+    APPROVE = "approve"  # Approve and continue
+    MODIFY = "modify"  # Modify state and continue
+    REJECT = "reject"  # Reject and stop
+    SKIP = "skip"  # Skip this checkpoint
 
 
 class InterruptResumeRequest(BaseModel):
     """Request to resume from an interrupt point."""
+
     action: str = "approve"
     modifications: Optional[Dict[str, Any]] = None
     feedback: Optional[str] = None
@@ -4334,7 +4745,9 @@ async def get_interrupt_status(thread_id: str, request: Request):
         checkpoint_tuple = checkpointer.get_tuple(config)
 
         if not checkpoint_tuple:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         pending_writes = getattr(checkpoint_tuple, "pending_writes", []) or []
         interrupt_items: List[Any] = []
@@ -4396,7 +4809,9 @@ async def get_interrupt_status(thread_id: str, request: Request):
 
 
 @app.post("/api/interrupt/{thread_id}/resume")
-async def resume_from_interrupt(thread_id: str, request: Request, payload: InterruptResumeRequest):
+async def resume_from_interrupt(
+    thread_id: str, request: Request, payload: InterruptResumeRequest
+):
     """
     Resume execution from an interrupt point.
 
@@ -4415,7 +4830,9 @@ async def resume_from_interrupt(thread_id: str, request: Request, payload: Inter
         checkpoint_tuple = checkpointer.get_tuple(config)
 
         if not checkpoint_tuple:
-            raise HTTPException(status_code=404, detail=f"Session not found: {thread_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
 
         action = payload.action.lower()
 
@@ -4502,9 +4919,17 @@ async def recognize_speech(request: ASRRequest):
         )
 
         if result["success"]:
-            return {"success": True, "text": result["text"], "metrics": result.get("metrics", {})}
+            return {
+                "success": True,
+                "text": result["text"],
+                "metrics": result.get("metrics", {}),
+            }
         else:
-            return {"success": False, "text": "", "error": result.get("error", "Unknown error")}
+            return {
+                "success": False,
+                "text": "",
+                "error": result.get("error", "Unknown error"),
+            }
 
     except HTTPException:
         raise
@@ -4521,24 +4946,34 @@ async def recognize_speech(request: ASRRequest):
 
 
 @app.post("/api/asr/upload")
-async def recognize_speech_upload(file: UploadFile = File(...), sample_rate: int = 16000):
+async def recognize_speech_upload(
+    file: UploadFile = File(...), sample_rate: int = 16000
+):
     """ASR upload endpoint receiving audio file."""
     # Validate file size (max 50MB)
     MAX_AUDIO_SIZE = 50 * 1024 * 1024
     audio_bytes = await file.read()
     if len(audio_bytes) > MAX_AUDIO_SIZE:
-        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_AUDIO_SIZE // (1024*1024)}MB.")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_AUDIO_SIZE // (1024*1024)}MB.",
+        )
 
     # Validate audio format
     VALID_AUDIO_FORMATS = {"wav", "mp3", "m4a", "flac", "ogg", "webm", "pcm"}
     filename = file.filename or "audio.wav"
     format_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "wav"
     if format_ext not in VALID_AUDIO_FORMATS:
-        raise HTTPException(status_code=400, detail=f"Unsupported audio format '.{format_ext}'. Allowed: {', '.join(VALID_AUDIO_FORMATS)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format '.{format_ext}'. Allowed: {', '.join(VALID_AUDIO_FORMATS)}",
+        )
 
     # Validate sample rate
     if not (8000 <= sample_rate <= 48000):
-        raise HTTPException(status_code=400, detail="Sample rate must be between 8000 and 48000 Hz.")
+        raise HTTPException(
+            status_code=400, detail="Sample rate must be between 8000 and 48000 Hz."
+        )
 
     try:
         asr_service = get_asr_service()
@@ -4558,9 +4993,17 @@ async def recognize_speech_upload(file: UploadFile = File(...), sample_rate: int
         )
 
         if result["success"]:
-            return {"success": True, "text": result["text"], "metrics": result.get("metrics", {})}
+            return {
+                "success": True,
+                "text": result["text"],
+                "metrics": result.get("metrics", {}),
+            }
         else:
-            return {"success": False, "text": "", "error": result.get("error", "Unknown error")}
+            return {
+                "success": False,
+                "text": "",
+                "error": result.get("error", "Unknown error"),
+            }
 
     except HTTPException:
         raise
@@ -4629,9 +5072,15 @@ async def synthesize_speech(request: TTSRequest):
     except Exception as e:
         message = str(e)
         lowered = message.lower()
-        if "invalidapikey" in lowered or "unauthorized" in lowered or "handshake status 401" in lowered:
+        if (
+            "invalidapikey" in lowered
+            or "unauthorized" in lowered
+            or "handshake status 401" in lowered
+        ):
             logger.warning("TTS auth error: %s", message)
-            raise HTTPException(status_code=401, detail=f"TTS authentication error: {message}")
+            raise HTTPException(
+                status_code=401, detail=f"TTS authentication error: {message}"
+            )
         logger.error(f"TTS error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"TTS processing error: {message}")
 
@@ -4701,7 +5150,11 @@ async def research_sse(request: Request, payload: ResearchRequest):
 
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     principal_id = (getattr(request.state, "principal_id", "") or "").strip()
-    user_id = principal_id if internal_key and principal_id else (payload.user_id or settings.memory_user_id)
+    user_id = (
+        principal_id
+        if internal_key and principal_id
+        else (payload.user_id or settings.memory_user_id)
+    )
     mode_info = _normalize_search_mode(payload.search_mode)
     model = (payload.model or settings.primary_model).strip()
     thread_id = f"thread_{uuid.uuid4().hex}"
@@ -4731,11 +5184,16 @@ async def research_sse(request: Request, payload: ResearchRequest):
                 seq += 1
                 yield format_sse_event(
                     event="error",
-                    data={"message": "OPENAI_API_KEY is not configured", "thread_id": thread_id},
+                    data={
+                        "message": "OPENAI_API_KEY is not configured",
+                        "thread_id": thread_id,
+                    },
                     event_id=seq,
                 )
                 seq += 1
-                yield format_sse_event(event="done", data={"thread_id": thread_id}, event_id=seq)
+                yield format_sse_event(
+                    event="done", data={"thread_id": thread_id}, event_id=seq
+                )
                 return
 
             source = iter_with_sse_keepalive(
@@ -4809,12 +5267,16 @@ async def get_screenshot(filename: str):
         media_type = "image/jpeg"
 
     return FileResponse(
-        filepath, media_type=media_type, headers={"Cache-Control": "public, max-age=3600"}
+        filepath,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 
 @app.get("/api/screenshots")
-async def list_screenshots(request: Request, thread_id: Optional[str] = None, limit: int = 50):
+async def list_screenshots(
+    request: Request, thread_id: Optional[str] = None, limit: int = 50
+):
     """
     List available screenshots.
 
@@ -4831,7 +5293,11 @@ async def list_screenshots(request: Request, thread_id: Optional[str] = None, li
     service = get_screenshot_service()
     screenshots = service.list_screenshots(thread_id=thread_id, limit=limit)
 
-    return {"screenshots": screenshots, "count": len(screenshots), "thread_id": thread_id}
+    return {
+        "screenshots": screenshots,
+        "count": len(screenshots),
+        "thread_id": thread_id,
+    }
 
 
 @app.post("/api/screenshots/cleanup")
@@ -4851,7 +5317,9 @@ async def cleanup_screenshots():
 
 
 @app.get("/api/events/{thread_id}")
-async def stream_tool_events(thread_id: str, request: Request, last_event_id: Optional[str] = None):
+async def stream_tool_events(
+    thread_id: str, request: Request, last_event_id: Optional[str] = None
+):
     """
     Subscribe to tool execution events for a specific thread.
 
@@ -5022,7 +5490,9 @@ async def trigger_browser_screenshot(thread_id: str, request: Request):
             session = sandbox_browser_sessions.get(thread_id)
             page = session.get_page()
             try:
-                png_bytes = page.screenshot(full_page=True, animations="disabled", caret="hide")
+                png_bytes = page.screenshot(
+                    full_page=True, animations="disabled", caret="hide"
+                )
             except TypeError:
                 png_bytes = page.screenshot(full_page=True)
             page_url = None
@@ -5033,7 +5503,9 @@ async def trigger_browser_screenshot(thread_id: str, request: Request):
             return png_bytes, page_url
 
         try:
-            png_bytes, page_url = await sandbox_browser_sessions.run_async(thread_id, _capture)
+            png_bytes, page_url = await sandbox_browser_sessions.run_async(
+                thread_id, _capture
+            )
         except Exception as e:
             if not _looks_like_browser_closed_error(e):
                 raise
@@ -5044,7 +5516,9 @@ async def trigger_browser_screenshot(thread_id: str, request: Request):
                 )
             except Exception:
                 pass
-            png_bytes, page_url = await sandbox_browser_sessions.run_async(thread_id, _capture)
+            png_bytes, page_url = await sandbox_browser_sessions.run_async(
+                thread_id, _capture
+            )
 
         # Save screenshot
         service = get_screenshot_service()
@@ -5096,7 +5570,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
     """
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     if internal_key:
-        auth_user_header = (getattr(settings, "auth_user_header", "") or "").strip() or "X-Weaver-User"
+        auth_user_header = (
+            getattr(settings, "auth_user_header", "") or ""
+        ).strip() or "X-Weaver-User"
         principal_id = (websocket.headers.get(auth_user_header) or "").strip()
 
         provided = ""
@@ -5154,7 +5630,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
     ping_task: Optional[asyncio.Task] = None
     dropped_messages = 0
 
-    async def _safe_send_json(payload: Dict[str, Any], *, timeout_s: Optional[float] = None) -> bool:
+    async def _safe_send_json(
+        payload: Dict[str, Any], *, timeout_s: Optional[float] = None
+    ) -> bool:
         """
         Best-effort send that won't spam logs on expected disconnects.
 
@@ -5191,7 +5669,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
         """
         while True:
             await asyncio.sleep(15.0)
-            ok = await _safe_send_json({"type": "ping", "timestamp": time.time()}, timeout_s=1.0)
+            ok = await _safe_send_json(
+                {"type": "ping", "timestamp": time.time()}, timeout_s=1.0
+            )
             if not ok:
                 break
 
@@ -5314,7 +5794,8 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
         async def _run_capture():
             try:
                 return await asyncio.wait_for(
-                    sandbox_browser_sessions.run_async(thread_id, _capture), timeout=capture_timeout_s
+                    sandbox_browser_sessions.run_async(thread_id, _capture),
+                    timeout=capture_timeout_s,
                 )
             except asyncio.TimeoutError as e:
                 raise TimeoutError(
@@ -5333,7 +5814,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
             try:
                 # Live streaming should preserve animations so the viewer can
                 # actually reflect motion between frames.
-                jpg_bytes = page.screenshot(type="jpeg", quality=q, full_page=False, caret="hide")
+                jpg_bytes = page.screenshot(
+                    type="jpeg", quality=q, full_page=False, caret="hide"
+                )
             except TypeError:
                 jpg_bytes = page.screenshot(type="jpeg", quality=q, full_page=False)
             metadata: Dict[str, Any] = {}
@@ -5346,7 +5829,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
             except Exception:
                 pass
             try:
-                session.set_page_meta(url=metadata.get("url"), title=metadata.get("title"))
+                session.set_page_meta(
+                    url=metadata.get("url"), title=metadata.get("title")
+                )
             except Exception:
                 pass
             return jpg_bytes, metadata
@@ -5438,7 +5923,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                         "timestamp": float(cdp_frame.get("timestamp") or now),
                         "metadata": cdp_frame.get("metadata") or {},
                     }
-                    if not await _safe_send_json(payload, timeout_s=frame_send_timeout_s):
+                    if not await _safe_send_json(
+                        payload, timeout_s=frame_send_timeout_s
+                    ):
                         streaming = False
                         break
                     last_frame_payload = payload
@@ -5469,7 +5956,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                         browser_ws_frames_total.labels("screenshot").inc()
                     except Exception:
                         pass
-                    if not await _safe_send_json(payload, timeout_s=frame_send_timeout_s):
+                    if not await _safe_send_json(
+                        payload, timeout_s=frame_send_timeout_s
+                    ):
                         streaming = False
                         break
                     last_frame_payload = payload
@@ -5563,7 +6052,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
             }
         )
 
-        ping_task = asyncio.create_task(_ping_loop(), name=f"weaver-browser-ws-ping-{thread_id}")
+        ping_task = asyncio.create_task(
+            _ping_loop(), name=f"weaver-browser-ws-ping-{thread_id}"
+        )
 
         while True:
             try:
@@ -5664,10 +6155,13 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                         except Exception:
                             pass
                         try:
-                            session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                            session.set_page_meta(
+                                url=meta.get("url"), title=meta.get("title")
+                            )
                         except Exception:
                             pass
                         return meta
+
                     # Acknowledge the start immediately. Sandbox cold starts can be slow; the
                     # client should not be stuck in "Starting live view..." while we initialize.
                     streaming = True
@@ -5696,7 +6190,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                         try:
                             try:
                                 await asyncio.wait_for(
-                                    sandbox_browser_sessions.run_async(thread_id, _set_status_page_if_blank),
+                                    sandbox_browser_sessions.run_async(
+                                        thread_id, _set_status_page_if_blank
+                                    ),
                                     timeout=10.0,
                                 )
                             except asyncio.TimeoutError:
@@ -5773,13 +6269,17 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                                     "type": "frame",
                                     "source": "cdp",
                                     "data": frame_payload["data"],
-                                    "timestamp": float(frame_payload.get("timestamp") or time.time()),
+                                    "timestamp": float(
+                                        frame_payload.get("timestamp") or time.time()
+                                    ),
                                     "metadata": frame_payload.get("metadata") or {},
                                 }
                             )
                             continue
 
-                        frame = await capture_frame(quality=int(data.get("quality", 70) or 70))
+                        frame = await capture_frame(
+                            quality=int(data.get("quality", 70) or 70)
+                        )
                         await _safe_send_json(
                             {
                                 "type": "frame",
@@ -5790,7 +6290,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                             }
                         )
                     except Exception as e:
-                        await _safe_send_json({"type": "error", "message": f"Capture failed: {e}"})
+                        await _safe_send_json(
+                            {"type": "error", "message": f"Capture failed: {e}"}
+                        )
 
                 elif action == "mouse":
                     mouse_type = str(data.get("type") or "").strip().lower()
@@ -5850,8 +6352,12 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                                     width = measured.get("w") or measured.get("width")
                                     height = measured.get("h") or measured.get("height")
 
-                            if not isinstance(width, (int, float)) or not isinstance(height, (int, float)):
-                                raise RuntimeError("Could not determine browser viewport size")
+                            if not isinstance(width, (int, float)) or not isinstance(
+                                height, (int, float)
+                            ):
+                                raise RuntimeError(
+                                    "Could not determine browser viewport size"
+                                )
                             if width <= 0 or height <= 0:
                                 raise RuntimeError("Invalid browser viewport size")
 
@@ -5885,7 +6391,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                                 if y_px < 0:
                                     y_px = 0
 
-                                page.mouse.click(x_px, y_px, button=button, click_count=clicks)
+                                page.mouse.click(
+                                    x_px, y_px, button=button, click_count=clicks
+                                )
 
                                 meta: Dict[str, Any] = {}
                                 try:
@@ -5897,21 +6405,31 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                                 except Exception:
                                     pass
                                 try:
-                                    session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                                    session.set_page_meta(
+                                        url=meta.get("url"), title=meta.get("title")
+                                    )
                                 except Exception:
                                     pass
                                 return meta
+
                             try:
-                                metadata = await sandbox_browser_sessions.run_async(thread_id, _click)
-                                ok = await _send_ack(ok=True, action_name="mouse", metadata=metadata)
+                                metadata = await sandbox_browser_sessions.run_async(
+                                    thread_id, _click
+                                )
+                                ok = await _send_ack(
+                                    ok=True, action_name="mouse", metadata=metadata
+                                )
                                 if not ok:
                                     break
                             except Exception as e:
-                                ok = await _send_ack(ok=False, action_name="mouse", error=str(e))
+                                ok = await _send_ack(
+                                    ok=False, action_name="mouse", error=str(e)
+                                )
                                 if not ok:
                                     break
 
                         else:
+
                             def _move(x_norm=x_norm, y_norm=y_norm):
                                 session = sandbox_browser_sessions.get(thread_id)
                                 page = session.get_page()
@@ -5940,21 +6458,31 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                                 except Exception:
                                     pass
                                 try:
-                                    session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                                    session.set_page_meta(
+                                        url=meta.get("url"), title=meta.get("title")
+                                    )
                                 except Exception:
                                     pass
                                 return meta
+
                             try:
-                                metadata = await sandbox_browser_sessions.run_async(thread_id, _move)
-                                ok = await _send_ack(ok=True, action_name="mouse", metadata=metadata)
+                                metadata = await sandbox_browser_sessions.run_async(
+                                    thread_id, _move
+                                )
+                                ok = await _send_ack(
+                                    ok=True, action_name="mouse", metadata=metadata
+                                )
                                 if not ok:
                                     break
                             except Exception as e:
-                                ok = await _send_ack(ok=False, action_name="mouse", error=str(e))
+                                ok = await _send_ack(
+                                    ok=False, action_name="mouse", error=str(e)
+                                )
                                 if not ok:
                                     break
 
                     elif mouse_type == "down":
+
                         def _down(button=button):
                             session = sandbox_browser_sessions.get(thread_id)
                             page = session.get_page()
@@ -5970,21 +6498,31 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                             except Exception:
                                 pass
                             try:
-                                session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                                session.set_page_meta(
+                                    url=meta.get("url"), title=meta.get("title")
+                                )
                             except Exception:
                                 pass
                             return meta
+
                         try:
-                            metadata = await sandbox_browser_sessions.run_async(thread_id, _down)
-                            ok = await _send_ack(ok=True, action_name="mouse", metadata=metadata)
+                            metadata = await sandbox_browser_sessions.run_async(
+                                thread_id, _down
+                            )
+                            ok = await _send_ack(
+                                ok=True, action_name="mouse", metadata=metadata
+                            )
                             if not ok:
                                 break
                         except Exception as e:
-                            ok = await _send_ack(ok=False, action_name="mouse", error=str(e))
+                            ok = await _send_ack(
+                                ok=False, action_name="mouse", error=str(e)
+                            )
                             if not ok:
                                 break
 
                     else:
+
                         def _up(button=button):
                             session = sandbox_browser_sessions.get(thread_id)
                             page = session.get_page()
@@ -6000,17 +6538,26 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                             except Exception:
                                 pass
                             try:
-                                session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                                session.set_page_meta(
+                                    url=meta.get("url"), title=meta.get("title")
+                                )
                             except Exception:
                                 pass
                             return meta
+
                         try:
-                            metadata = await sandbox_browser_sessions.run_async(thread_id, _up)
-                            ok = await _send_ack(ok=True, action_name="mouse", metadata=metadata)
+                            metadata = await sandbox_browser_sessions.run_async(
+                                thread_id, _up
+                            )
+                            ok = await _send_ack(
+                                ok=True, action_name="mouse", metadata=metadata
+                            )
                             if not ok:
                                 break
                         except Exception as e:
-                            ok = await _send_ack(ok=False, action_name="mouse", error=str(e))
+                            ok = await _send_ack(
+                                ok=False, action_name="mouse", error=str(e)
+                            )
                             if not ok:
                                 break
 
@@ -6043,17 +6590,26 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                         except Exception:
                             pass
                         try:
-                            session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                            session.set_page_meta(
+                                url=meta.get("url"), title=meta.get("title")
+                            )
                         except Exception:
                             pass
                         return meta
+
                     try:
-                        metadata = await sandbox_browser_sessions.run_async(thread_id, _wheel)
-                        ok = await _send_ack(ok=True, action_name="scroll", metadata=metadata)
+                        metadata = await sandbox_browser_sessions.run_async(
+                            thread_id, _wheel
+                        )
+                        ok = await _send_ack(
+                            ok=True, action_name="scroll", metadata=metadata
+                        )
                         if not ok:
                             break
                     except Exception as e:
-                        ok = await _send_ack(ok=False, action_name="scroll", error=str(e))
+                        ok = await _send_ack(
+                            ok=False, action_name="scroll", error=str(e)
+                        )
                         if not ok:
                             break
 
@@ -6096,17 +6652,26 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                             except Exception:
                                 pass
                             try:
-                                session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                                session.set_page_meta(
+                                    url=meta.get("url"), title=meta.get("title")
+                                )
                             except Exception:
                                 pass
                             return meta
+
                         try:
-                            metadata = await sandbox_browser_sessions.run_async(thread_id, _press)
-                            ok = await _send_ack(ok=True, action_name="keyboard", metadata=metadata)
+                            metadata = await sandbox_browser_sessions.run_async(
+                                thread_id, _press
+                            )
+                            ok = await _send_ack(
+                                ok=True, action_name="keyboard", metadata=metadata
+                            )
                             if not ok:
                                 break
                         except Exception as e:
-                            ok = await _send_ack(ok=False, action_name="keyboard", error=str(e))
+                            ok = await _send_ack(
+                                ok=False, action_name="keyboard", error=str(e)
+                            )
                             if not ok:
                                 break
 
@@ -6137,17 +6702,26 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                             except Exception:
                                 pass
                             try:
-                                session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                                session.set_page_meta(
+                                    url=meta.get("url"), title=meta.get("title")
+                                )
                             except Exception:
                                 pass
                             return meta
+
                         try:
-                            metadata = await sandbox_browser_sessions.run_async(thread_id, _type)
-                            ok = await _send_ack(ok=True, action_name="keyboard", metadata=metadata)
+                            metadata = await sandbox_browser_sessions.run_async(
+                                thread_id, _type
+                            )
+                            ok = await _send_ack(
+                                ok=True, action_name="keyboard", metadata=metadata
+                            )
                             if not ok:
                                 break
                         except Exception as e:
-                            ok = await _send_ack(ok=False, action_name="keyboard", error=str(e))
+                            ok = await _send_ack(
+                                ok=False, action_name="keyboard", error=str(e)
+                            )
                             if not ok:
                                 break
 
@@ -6205,17 +6779,26 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                         except Exception:
                             pass
                         try:
-                            session.set_page_meta(url=meta.get("url"), title=meta.get("title"))
+                            session.set_page_meta(
+                                url=meta.get("url"), title=meta.get("title")
+                            )
                         except Exception:
                             pass
                         return meta
+
                     try:
-                        metadata = await sandbox_browser_sessions.run_async(thread_id, _goto)
-                        ok = await _send_ack(ok=True, action_name="navigate", metadata=metadata)
+                        metadata = await sandbox_browser_sessions.run_async(
+                            thread_id, _goto
+                        )
+                        ok = await _send_ack(
+                            ok=True, action_name="navigate", metadata=metadata
+                        )
                         if not ok:
                             break
                     except Exception as e:
-                        ok = await _send_ack(ok=False, action_name="navigate", error=str(e))
+                        ok = await _send_ack(
+                            ok=False, action_name="navigate", error=str(e)
+                        )
                         if not ok:
                             break
                 else:
@@ -6239,7 +6822,9 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
                 # Starlette may raise RuntimeError on receive/send after the socket is closed.
                 # Treat this as a normal disconnect to avoid a tight error loop.
                 msg = str(e).lower()
-                if "websocket is not connected" in msg or ("need to call" in msg and "accept" in msg):
+                if "websocket is not connected" in msg or (
+                    "need to call" in msg and "accept" in msg
+                ):
                     break
                 logger.error(f"WebSocket runtime error: {e}")
                 await _safe_send_json({"type": "error", "message": str(e)})
@@ -6309,7 +6894,9 @@ class CreateEventTriggerRequest(BaseModel):
 
 
 @app.post("/api/triggers/scheduled")
-async def create_scheduled_trigger(request: Request, payload: CreateScheduledTriggerRequest):
+async def create_scheduled_trigger(
+    request: Request, payload: CreateScheduledTriggerRequest
+):
     """Create a new scheduled trigger with cron expression."""
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     principal_id = (getattr(request.state, "principal_id", "") or "").strip()
@@ -6337,7 +6924,9 @@ async def create_scheduled_trigger(request: Request, payload: CreateScheduledTri
 
 
 @app.post("/api/triggers/webhook")
-async def create_webhook_trigger(request: Request, payload: CreateWebhookTriggerRequest):
+async def create_webhook_trigger(
+    request: Request, payload: CreateWebhookTriggerRequest
+):
     """Create a new webhook trigger."""
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     principal_id = (getattr(request.state, "principal_id", "") or "").strip()
@@ -6546,7 +7135,9 @@ async def handle_webhook(
 
     if internal_key:
         provided = ""
-        if isinstance(auth_header, str) and auth_header.strip().lower().startswith("bearer "):
+        if isinstance(auth_header, str) and auth_header.strip().lower().startswith(
+            "bearer "
+        ):
             provided = auth_header.strip()[7:].strip()
         if not provided:
             provided = (request.headers.get("X-API-Key") or "").strip()
@@ -6554,7 +7145,9 @@ async def handle_webhook(
         internal_ok = bool(provided) and hmac.compare_digest(provided, internal_key)
         if not internal_ok:
             trigger = manager.get_trigger(trigger_id)
-            require_auth = bool(getattr(trigger, "require_auth", False)) if trigger else False
+            require_auth = (
+                bool(getattr(trigger, "require_auth", False)) if trigger else False
+            )
             if trigger and not require_auth:
                 raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -6587,7 +7180,9 @@ if __name__ == "__main__":
     # and crashes reload with "OS file watch limit reached".
     #
     # Keep reload opt-in to make `python main.py` reliable out-of-the-box.
-    reload_enabled = bool(settings.debug) and bool(getattr(settings, "weaver_reload", False))
+    reload_enabled = bool(settings.debug) and bool(
+        getattr(settings, "weaver_reload", False)
+    )
     if settings.debug and not reload_enabled:
         logger.info("Hot reload disabled (set WEAVER_RELOAD=true to enable).")
 
@@ -6595,7 +7190,10 @@ if __name__ == "__main__":
     reload_excludes = None
     if reload_enabled:
         try:
-            from common.uvicorn_reload import get_uvicorn_reload_dirs, get_uvicorn_reload_excludes
+            from common.uvicorn_reload import (
+                get_uvicorn_reload_dirs,
+                get_uvicorn_reload_excludes,
+            )
 
             reload_dirs = get_uvicorn_reload_dirs()
             reload_excludes = get_uvicorn_reload_excludes()

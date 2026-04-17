@@ -14,6 +14,7 @@ import {
   CornerDownLeft
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n/i18n-context'
 import { BrowserScreenshot } from '@/types/browser'
 import { useBrowserEvents } from '@/hooks/useBrowserEvents'
 import { useBrowserStream } from '@/hooks/useBrowserStream'
@@ -45,6 +46,7 @@ export function BrowserViewer({
   const [isInteracting, setIsInteracting] = useState(false)
   const [urlDraft, setUrlDraft] = useState('')
   const [isEditingUrl, setIsEditingUrl] = useState(false)
+  const { t } = useI18n()
   const isLiveMode = viewerMode === 'stream'
   const liveViewportRef = useRef<HTMLDivElement | null>(null)
   const liveImageRef = useRef<HTMLImageElement | null>(null)
@@ -118,7 +120,7 @@ export function BrowserViewer({
   const liveMetaTitle = typeof liveMetaTitleRaw === 'string' ? liveMetaTitleRaw : ''
 
   const addressUrl = isLiveMode ? liveMetaUrl : (displayScreenshot?.pageUrl || '')
-  const addressLabel = addressUrl || (isLiveMode ? 'Live Browser' : 'Browser')
+  const addressLabel = addressUrl || (isLiveMode ? t('liveBrowser') : t('browser'))
   const canOpenAddressUrl = addressUrl.startsWith('http://') || addressUrl.startsWith('https://')
   const isBlankLivePage =
     isLiveMode &&
@@ -254,23 +256,23 @@ export function BrowserViewer({
       )}
     >
       {/* Browser Chrome - Title Bar */}
-      <div className="bg-muted/80 px-3 py-2 flex items-center gap-2 border-b">
+      <div className="bg-muted/80 px-3 py-2 flex items-center gap-2 border-b overflow-hidden min-w-0">
         {/* Traffic Light Buttons */}
         <div className="flex gap-1.5">
           <button
             onClick={handleClose}
             className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors"
-            title="Close"
+            title={t('browserClose')}
           />
           <button
             onClick={() => setIsExpanded(false)}
             className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors"
-            title="Minimize"
+            title={t('browserMinimize')}
           />
           <button
             onClick={toggleExpand}
             className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors"
-            title={isExpanded ? 'Collapse' : 'Expand'}
+            title={isExpanded ? t('browserCollapse') : t('browserExpand')}
           />
         </div>
 
@@ -291,7 +293,7 @@ export function BrowserViewer({
                 onChange={(e) => setUrlDraft(e.target.value)}
                 onFocus={() => setIsEditingUrl(true)}
                 onBlur={() => setIsEditingUrl(false)}
-                placeholder={canOpenAddressUrl ? '' : 'Enter URL (https://...)'}
+                placeholder={canOpenAddressUrl ? '' : t('enterUrl')}
                 className={cn(
                   'flex-1 min-w-0 bg-transparent outline-none placeholder:text-muted-foreground/60',
                   isEditingUrl ? 'text-foreground' : 'text-muted-foreground'
@@ -300,7 +302,7 @@ export function BrowserViewer({
               <button
                 type="submit"
                 className="flex-shrink-0 p-0.5 rounded hover:bg-background/60 transition-colors"
-                title="Navigate"
+                title={t('navigate')}
               >
                 <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground" />
               </button>
@@ -316,7 +318,7 @@ export function BrowserViewer({
               target="_blank"
               rel="noopener noreferrer"
               className="flex-shrink-0 hover:text-primary"
-              title="Open in new tab"
+              title={t('openInNewTab')}
             >
               <ExternalLink className="w-3 h-3" />
             </a>
@@ -327,7 +329,7 @@ export function BrowserViewer({
         <button
           onClick={toggleMode}
           className="p-1 hover:bg-background/60 rounded transition-colors"
-          title={isLiveMode ? 'Switch to screenshots' : 'Switch to live view'}
+          title={isLiveMode ? t('switchToScreenshots') : t('switchToLiveView')}
         >
           {isLiveMode ? (
             <Camera className="w-3.5 h-3.5 text-muted-foreground" />
@@ -354,7 +356,7 @@ export function BrowserViewer({
               <button
                 onClick={stopStream}
                 className="p-1 hover:bg-background/60 rounded transition-colors"
-                title="Stop streaming"
+                title={t('stopStreaming')}
               >
                 <Pause className="w-3.5 h-3.5 text-red-500" />
               </button>
@@ -362,7 +364,7 @@ export function BrowserViewer({
               <button
                 onClick={startStream}
                 className="p-1 hover:bg-background/60 rounded transition-colors"
-                title="Start streaming"
+                title={t('startStreaming')}
               >
                 <Play className="w-3.5 h-3.5 text-green-500" />
               </button>
@@ -370,7 +372,7 @@ export function BrowserViewer({
             <button
               onClick={captureFrame}
               className="p-1 hover:bg-background/60 rounded transition-colors"
-              title="Capture frame"
+              title={t('captureFrame')}
             >
               <Camera className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
@@ -387,7 +389,7 @@ export function BrowserViewer({
         <button
           onClick={toggleExpand}
           className="p-1 hover:bg-background/60 rounded transition-colors"
-          title={isExpanded ? 'Collapse' : 'Expand'}
+          title={isExpanded ? t('browserCollapse') : t('browserExpand')}
         >
           {isExpanded ? (
             <Minimize2 className="w-3.5 h-3.5 text-muted-foreground" />
@@ -429,11 +431,10 @@ export function BrowserViewer({
                       <div className="rounded bg-background/80 backdrop-blur px-2 py-1 text-[10px] text-muted-foreground shadow-sm border">
                         {isInteracting ? (
                           <span>
-                            Control: <span className="text-foreground/80">ON</span> · Press{' '}
-                            <span className="font-mono">Esc</span> to exit
+                            Control: <span className="text-foreground/80">{t('controlOn')}</span> · {t('pressEscToExit')}
                           </span>
                         ) : (
-                          <span>Click the view to control · Scroll + type supported</span>
+                          <span>{t('clickToControl')}</span>
                         )}
                       </div>
                     </div>
@@ -443,10 +444,9 @@ export function BrowserViewer({
                     {isBlankLivePage && (
                       <div className="absolute inset-x-0 bottom-0 p-3">
                         <div className="rounded-lg border bg-background/80 backdrop-blur px-3 py-2 text-xs text-muted-foreground shadow-sm">
-                          <div className="font-medium text-foreground/80">Live view is ready</div>
+                          <div className="font-medium text-foreground/80">{t('liveViewReady')}</div>
                           <div className="mt-0.5">
-                            No page has been opened yet. Deep search often uses API search and may not navigate the
-                            browser.
+                            {t('noPageOpened')}
                           </div>
                           <div className="mt-1 flex items-center gap-2">
                             <button
@@ -454,7 +454,7 @@ export function BrowserViewer({
                               onClick={() => setViewerMode('events')}
                               className="text-primary hover:underline underline-offset-2"
                             >
-                              Switch to screenshots
+                              {t('switchToScreenshots')}
                             </button>
                             {liveMetaTitle ? (
                               <span className="truncate font-mono text-[10px] opacity-80">{liveMetaTitle}</span>
@@ -468,9 +468,9 @@ export function BrowserViewer({
                   <div className="flex items-center justify-center min-h-[240px] text-muted-foreground">
                     <div className="text-center">
                       <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin opacity-60" />
-                      <p className="text-sm">Connecting to live view...</p>
+                      <p className="text-sm">{t('connectingToLiveView')}</p>
                       <p className="text-xs mt-1 opacity-70">
-                        First run can take up to ~1 minute to start the sandbox browser.
+                        {t('firstRunCanTake')}
                       </p>
                     </div>
                   </div>
@@ -478,9 +478,9 @@ export function BrowserViewer({
                   <div className="flex items-center justify-center min-h-[240px] text-muted-foreground">
                     <div className="text-center">
                       <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin opacity-60" />
-                      <p className="text-sm">Starting live view...</p>
+                      <p className="text-sm">{t('startingLiveView')}</p>
                       <p className="text-xs mt-1 opacity-70">
-                        Waiting for the first frame. If this takes too long, check the error banner below.
+                        {t('waitingForFirstFrame')}
                       </p>
                     </div>
                   </div>
@@ -488,16 +488,16 @@ export function BrowserViewer({
                   <div className="flex items-center justify-center min-h-[240px] text-muted-foreground">
                     <div className="text-center">
                       <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin opacity-60" />
-                      <p className="text-sm">Waiting for first frame...</p>
-                      <p className="text-xs mt-1 opacity-70">This can take a bit if the sandbox is cold-starting.</p>
+                      <p className="text-sm">{t('waitingForFirstFrame')}</p>
+                      <p className="text-xs mt-1 opacity-70">{t('firstRunCanTake')}</p>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center min-h-[240px] text-muted-foreground">
                     <div className="text-center">
                       <Play className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Live view is paused</p>
-                      <p className="text-xs mt-1 opacity-70">Click play to resume streaming.</p>
+                      <p className="text-sm">{t('liveViewPaused')}</p>
+                      <p className="text-xs mt-1 opacity-70">{t('clickPlayToResume')}</p>
                     </div>
                   </div>
                 )
@@ -513,13 +513,13 @@ export function BrowserViewer({
                 <div className="flex items-center justify-center min-h-[240px] text-muted-foreground">
                   <div className="text-center">
                     <Globe className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Waiting for browser activity...</p>
+                    <p className="text-sm">{t('waitingForBrowserActivity')}</p>
                     <button
                       type="button"
                       onClick={() => setViewerMode('stream')}
                       className="mt-2 text-xs text-primary hover:underline underline-offset-2"
                     >
-                      Switch to live view
+                      {t('switchToLiveView')}
                     </button>
                   </div>
                 </div>
@@ -582,7 +582,7 @@ export function BrowserViewer({
                 ))}
               </div>
               <div className="text-[10px] text-muted-foreground mt-1 text-center">
-                {screenshots.length} screenshot{screenshots.length !== 1 ? 's' : ''}
+                {screenshots.length} {screenshots.length !== 1 ? t('screenshots') : t('screenshot')}
               </div>
             </div>
           )}
