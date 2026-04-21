@@ -1,0 +1,341 @@
+[
+  {
+    "status": "completed",
+    "thread_id": "thread_44778cc0e0644c2087bec6e23ae650fa",
+    "duration_ms": 592321.95,
+    "final_report_chars": 10776,
+    "final_report_preview": "好的，我将根据您提供的所有信息和要求，围绕“2024-2025年东南亚可再生能源投资趋势”这一主题，进行深度总结。\n\n# 2024-2025年东南亚可再生能源投资趋势深度研究报告\n\n## 目录\n1.  [概述：一个充满活力与挑战的关键市场](#概述一个充满活力与挑战的关键市场)\n2.  [核心驱动力：市场增长的基石](#核心驱动力市场增长的基石)\n    1.  [强劲的电力需求与经济活力](#强劲的电力需求与经济活力)\n    2.  [得天独厚的资源禀赋](#得天独厚的资源禀赋)\n    3.  [雄心勃勃的政策目标](#雄心勃勃的政策目标)\n    4.  [活跃的国际资本流动](#活跃的国际资本流动)\n3.  [投资趋势与热点领域：多元化与规模化并行](#投资趋势与热点领域多元化与规模化并行)\n    1.  [太阳能光伏：无可争议的投资主导力量](#太阳能光伏无可争议的投资主导力量)\n    2.  [“光伏+储能”：从示范走向规模化应用](#光伏储能从示范走向规模化应用)\n    3.  [电网现代化与储能：系统稳定性的投资关键](#电网现代化与储能系统稳定性的投资关键)\n    4.  [新兴技术：漂浮式光伏等领域的未来潜力](#新兴技术漂浮式光伏等领域的未来潜力)\n4.  [政策与监管环境：机遇与风险并存的双刃剑](#政策与监管环境机遇与风险并存的双刃剑)\n    ",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 26,
+          "official": 0,
+          "evidence": 5,
+          "risk": 8,
+          "implementation": 4
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 26,
+        "official": 0,
+        "evidence": 5,
+        "risk": 8,
+        "implementation": 4
+      },
+      "freshness_summary": {
+        "total_results": 148,
+        "known_count": 108,
+        "unknown_count": 40,
+        "fresh_7_count": 5,
+        "fresh_30_count": 5,
+        "stale_180_count": 102,
+        "fresh_30_ratio": 0.046,
+        "stale_180_ratio": 0.944
+      },
+      "time_sensitive_query": true,
+      "freshness_warning": "low_freshness_for_time_sensitive_query"
+    },
+    "run_metrics": {
+      "run_id": "thread_44778cc0e0644c2087bec6e23ae650fa",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T15:33:19.566579",
+      "ended_at": "2026-04-21T15:42:15.035648",
+      "duration_ms": 535469.07,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 139,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 139,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_009",
+    "query": "Renewable energy investment trends in Southeast Asia 2024-2025",
+    "wall_time_s": 596.9
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_5cd37c47a4c8466083b7b582822f17be",
+    "duration_ms": 495359.36,
+    "final_report_chars": 11322,
+    "final_report_preview": "好的，我将根据您提供的主题“History and evolution of transformer architecture in deep learning”和相关信息，撰写一份深度总结报告。\n\n# Transformer架构在深度学习中的历史与演化：一场从序列建模到通用智能的范式革命\n\n## 目录\n1.  [引言：一场静默的革命](#引言一场静默的革命)\n2.  [前Transformer时代：序列建模的困境与曙光](#前transformer时代序列建模的困境与曙光)\n    1.  [RNN家族的统治与固有缺陷](#rnn家族的统治与固有缺陷)\n    2.  [注意力机制的引入：缓解信息瓶颈](#注意力机制的引入缓解信息瓶颈)\n3.  [革命性突破：《Attention Is All You Need》与Transformer的诞生](#革命性突破attention-is-all-you-need与transformer的诞生)\n    1.  [核心思想：摒弃循环与卷积](#核心思想摒弃循环与卷积)\n    2.  [架构详解：编码器-解码器与核心组件](#架构详解编码器-解码器与核心组件)\n        1.  [自注意力与多头注意力机制](#自注意力与多头注意力机制)\n        2.  [位置编码：为无位置模型注入顺序信息](#位置编码为无位置模型注入顺序",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 4,
+          "risk": 5,
+          "implementation": 18
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 4,
+        "risk": 5,
+        "implementation": 18
+      },
+      "freshness_summary": {
+        "total_results": 150,
+        "known_count": 110,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 105,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.955
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_5cd37c47a4c8466083b7b582822f17be",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T15:42:21.902953",
+      "ended_at": "2026-04-21T15:49:53.356977",
+      "duration_ms": 451454.02,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 141,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 141,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "wall_time_s": 501.1
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_77df691973c04130a23bc5664d53fb06",
+    "duration_ms": 435123.96,
+    "final_report_chars": 8817,
+    "final_report_preview": "# 云原生环境下零信任安全架构最佳实践深度总结\n\n## 目录\n1.  [引言：云原生安全范式变革](#引言云原生安全范式变革)\n2.  [零信任核心原则与实施动因](#零信任核心原则与实施动因)\n3.  [构建零信任架构的关键组件与技术实现](#构建零信任架构的关键组件与技术实现)\n    1.  [基石：以身份为中心的控制平面](#基石以身份为中心的控制平面)\n    2.  [核心机制：持续认证与动态授权](#核心机制持续认证与动态授权)\n    3.  [关键基础设施：服务网格作为策略执行平面](#关键基础设施服务网格作为策略执行平面)\n    4.  [纵深防御：机密计算保护数据内核](#纵深防御机密计算保护数据内核)\n4.  [持续运营、自动化与DevSecOps集成](#持续运营自动化与devsecops集成)\n5.  [实施效益、挑战与权衡](#实施效益挑战与权衡)\n6.  [总结与展望](#总结与展望)\n\n## 引言：云原生安全范式变革\n随着企业数字化转型的深入，应用架构正加速向云原生模式演进，其特征包括容器化、微服务、动态编排和声明式API。这一转变在带来敏捷性、可扩展性和资源效率的同时，也彻底重塑了安全边界。传统的基于网络边界的“城堡与护城河”式安全模型在云原生环境中逐渐失效，因为资产分布在多云、混合云环境中，服务间通信（东西向流量）爆炸式增长，静态的网络边界变",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 7,
+          "official": 0,
+          "evidence": 9,
+          "risk": 2,
+          "implementation": 23
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 7,
+        "official": 0,
+        "evidence": 9,
+        "risk": 2,
+        "implementation": 23
+      },
+      "freshness_summary": {
+        "total_results": 138,
+        "known_count": 118,
+        "unknown_count": 20,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 107,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.907
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_77df691973c04130a23bc5664d53fb06",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T15:50:01.375195",
+      "ended_at": "2026-04-21T15:56:31.214187",
+      "duration_ms": 389838.99,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 119,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 119,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_011",
+    "query": "Best practices for zero-trust security architecture in cloud-native environments",
+    "wall_time_s": 439.0
+  }
+]

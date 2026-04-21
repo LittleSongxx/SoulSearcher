@@ -1,0 +1,587 @@
+[
+  {
+    "status": "completed",
+    "thread_id": "thread_e0d98cd9fdf34398a82f566f7ff92a8a",
+    "duration_ms": 441436.88,
+    "final_report_chars": 10567,
+    "final_report_preview": "# 生产环境微服务构建：Rust与Go深度对比研究报告\n\n## 目录\n1.  [引言](#引言)\n2.  [Rust概述：为性能与安全而生的系统语言](#rust概述为性能与安全而生的系统语言)\n3.  [Go概述：为云原生与并发而生的高效语言](#go概述为云原生与并发而生的高效语言)\n4.  [核心维度深度对比](#核心维度深度对比)\n    1.  [性能与资源控制](#性能与资源控制)\n    2.  [并发模型与异步编程](#并发模型与异步编程)\n    3.  [内存管理与安全性](#内存管理与安全性)\n    4.  [开发效率与学习曲线](#开发效率与学习曲线)\n    5.  [生态系统与云原生支持](#生态系统与云原生支持)\n    6.  [部署与运维](#部署与运维)\n5.  [适用场景与选型建议](#适用场景与选型建议)\n6.  [结论](#结论)\n\n## 引言\n\n在当今的微服务架构浪潮中，技术选型是决定系统长期成功的关键因素之一。微服务架构将单一应用程序分解为一组小型、独立的服务，每个服务运行在自己的进程中，并通过轻量级的通信机制（通常是HTTP资源API）进行通信【19】【20】。这种架构模式强调服务的模块化、独立部署和扩展能力，从而带来了更高的开发效率和系统灵活性【19】。然而，这也对构建服务的编程语言提出了更高的要求：它们需要具备高性能、高并发处理",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 3,
+          "risk": 0,
+          "implementation": 10
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 3,
+        "risk": 0,
+        "implementation": 10
+      },
+      "freshness_summary": {
+        "total_results": 150,
+        "known_count": 134,
+        "unknown_count": 16,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 116,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.866
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_e0d98cd9fdf34398a82f566f7ff92a8a",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T14:08:23.863959",
+      "ended_at": "2026-04-21T14:15:05.774735",
+      "duration_ms": 401910.78,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 140,
+        "unsupported_claims_count": 8,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 140,
+      "unsupported_claims_count": 8,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_004",
+    "query": "Compare Rust and Go for building microservices in production",
+    "wall_time_s": 448.4
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_0a6c7ba523ea4d038905a02d407556ad",
+    "duration_ms": 530539.04,
+    "final_report_chars": 10901,
+    "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，撰写一份关于《欧盟人工智能法案》对企业SaaS公司影响的深度总结报告。\n\n# 《欧盟人工智能法案》对企业SaaS公司的深度影响、合规挑战与战略转型研究报告\n\n## 目录\n1.  [引言：全球AI监管的里程碑](#引言全球ai监管的里程碑)\n2.  [法案核心框架：基于风险的分级监管与域外效力](#法案核心框架基于风险的分级监管与域外效力)\n    1.  [风险分级监管体系](#风险分级监管体系)\n    2.  [广泛的域外适用性](#广泛的域外适用性)\n    3.  [严厉的处罚机制](#严厉的处罚机制)\n3.  [对企业SaaS公司的具体影响与多维挑战](#对企业saas公司的具体影响与多维挑战)\n    1.  [普遍性挑战：成本、门槛与界定难题](#普遍性挑战成本门槛与界定难题)\n    2.  [对高风险SaaS应用的颠覆性重塑](#对高风险saas应用的颠覆性重塑)\n    3.  [对非欧盟（如中国）SaaS公司的特殊挑战](#对非欧盟如中国saas公司的特殊挑战)\n4.  [从合规负担到战略机遇：企业的应对与转型路径](#从合规负担到战略机遇企业的应对与转型路径)\n    1.  [系统性合规路径构建](#系统性合规路径构建)\n    2.  [将合规转化为竞争优势](#将合规转化为竞争优势)\n    3.  ",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 1.0,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "missing_dimensions": [],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 5,
+          "evidence": 7,
+          "risk": 22,
+          "implementation": 5
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 1.0,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimensions_missing": [],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 5,
+        "evidence": 7,
+        "risk": 22,
+        "implementation": 5
+      },
+      "freshness_summary": {
+        "total_results": 149,
+        "known_count": 114,
+        "unknown_count": 35,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 113,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.991
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_0a6c7ba523ea4d038905a02d407556ad",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T14:15:15.100823",
+      "ended_at": "2026-04-21T14:23:14.224463",
+      "duration_ms": 479123.64,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 101,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 101,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_005",
+    "query": "Impact of EU AI Act on enterprise SaaS companies",
+    "wall_time_s": 535.2
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_ff8659c7b6294070a88900e792e0ead7",
+    "duration_ms": 449502.76,
+    "final_report_chars": 10365,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于全球锂供应链风险与缓解策略的深度总结报告。\n\n# 全球锂供应链风险与缓解策略深度研究报告\n\n## 目录\n1.  [概述：能源转型的核心命脉](#概述能源转型的核心命脉)\n2.  [核心风险剖析：供应链的脆弱性根源](#核心风险剖析供应链的脆弱性根源)\n    1.  [地缘政治与供应集中风险](#地缘政治与供应集中风险)\n    2.  [环境与社会治理挑战](#环境与社会治理挑战)\n    3.  [需求激增与二次供应瓶颈](#需求激增与二次供应瓶颈)\n3.  [核心缓解策略：构建韧性供应链的路径](#核心缓解策略构建韧性供应链的路径)\n    1.  [供应多元化与区域合作](#供应多元化与区域合作)\n    2.  [发展循环经济体系](#发展循环经济体系)\n    3.  [推动全链条技术创新](#推动全链条技术创新)\n    4.  [强化ESG整合与负责任治理](#强化esg整合与负责任治理)\n4.  [未来展望：多重变量下的供应链演变](#未来展望多重变量下的供应链演变)\n5.  [结论](#结论)\n\n## 概述：能源转型的核心命脉\n在全球向低碳经济转型的宏大叙事中，锂已从一种相对小众的工业金属，跃升为支撑电动汽车、大规模储能等绿色技术的战略性关键原材料[3]。其供应链的稳定、可持续与韧性，直接关系到全球能源转",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 4,
+          "official": 0,
+          "evidence": 5,
+          "risk": 6,
+          "implementation": 4
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 4,
+        "official": 0,
+        "evidence": 5,
+        "risk": 6,
+        "implementation": 4
+      },
+      "freshness_summary": {
+        "total_results": 145,
+        "known_count": 124,
+        "unknown_count": 21,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 110,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.887
+      },
+      "time_sensitive_query": true,
+      "freshness_warning": "low_freshness_for_time_sensitive_query"
+    },
+    "run_metrics": {
+      "run_id": "thread_ff8659c7b6294070a88900e792e0ead7",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T14:23:21.231330",
+      "ended_at": "2026-04-21T14:30:07.446611",
+      "duration_ms": 406215.28,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 125,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 125,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_006",
+    "query": "Current global lithium supply chain risks and mitigation strategies",
+    "wall_time_s": 455.1
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_9e18e6074c0c46d2989dcc9132bcdbdf",
+    "duration_ms": 460338.49,
+    "final_report_chars": 10548,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“超越COVID-19的mRNA疫苗技术进展”的深度总结报告。\n\n# mRNA技术平台：超越COVID-19的进展、挑战与未来展望\n\n## 目录\n1.  [概述：从COVID-19到平台型技术的跨越](#概述从covid-19到平台型技术的跨越)\n2.  [应用领域的多元化扩展](#应用领域的多元化扩展)\n    1.  [传染病预防：迈向平台化与广谱化](#传染病预防迈向平台化与广谱化)\n    2.  [癌症治疗：革命性突破与临床曙光](#癌症治疗革命性突破与临床曙光)\n    3.  [非感染非肿瘤疾病：蛋白替代与免疫调节的潜力](#非感染非肿瘤疾病蛋白替代与免疫调节的潜力)\n3.  [技术平台的核心挑战与优化策略](#技术平台的核心挑战与优化策略)\n    1.  [递送系统：从通用LNP到精准靶向](#递送系统从通用lnp到精准靶向)\n    2.  [免疫原性与稳定性：序列工程的精雕细琢](#免疫原性与稳定性序列工程的精雕细琢)\n    3.  [生产与供应链：商业化应用的基石](#生产与供应链商业化应用的基石)\n4.  [行业共同主题与发展趋势](#行业共同主题与发展趋势)\n    1.  [平台化技术特性成为核心竞争力](#平台化技术特性成为核心竞争力)\n    2.  [联合疗法成为主流开发策略](#联合疗",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "evidence",
+          "freshness"
+        ],
+        "missing_dimensions": [
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 5,
+          "official": 0,
+          "evidence": 2,
+          "risk": 0,
+          "implementation": 0
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness"
+      ],
+      "query_dimensions_missing": [
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 5,
+        "official": 0,
+        "evidence": 2,
+        "risk": 0,
+        "implementation": 0
+      },
+      "freshness_summary": {
+        "total_results": 150,
+        "known_count": 125,
+        "unknown_count": 25,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 111,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.888
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_9e18e6074c0c46d2989dcc9132bcdbdf",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T14:30:15.502969",
+      "ended_at": "2026-04-21T14:37:12.487700",
+      "duration_ms": 416984.73,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 139,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 139,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_007",
+    "query": "Advances in mRNA vaccine technology beyond COVID-19",
+    "wall_time_s": 464.5
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_d1219716fd8f4903903dc62465cc1d20",
+    "duration_ms": 433195.06,
+    "final_report_chars": 9394,
+    "final_report_preview": "好的，我将根据您提供的主题和信息，撰写一份关于“检索增强生成系统如何处理幻觉问题”的深度总结报告。\n\n# 检索增强生成（RAG）系统处理幻觉问题的深度剖析\n\n## 目录\n1.  [引言：幻觉——大模型落地的核心障碍与RAG的应运而生](#引言幻觉大模型落地的核心障碍与rag的应运而生)\n2.  [RAG的核心机制与幻觉缓解原理](#rag的核心机制与幻觉缓解原理)\n3.  [RAG系统中幻觉的根源与分类](#rag系统中幻觉的根源与分类)\n    1.  [根源一：大型语言模型（LLM）的固有局限](#根源一大型语言模型llm的固有局限)\n    2.  [根源二：RAG流程中的特定缺陷](#根源二rag流程中的特定缺陷)\n4.  [幻觉的检测与评估：从通用基准到领域专用](#幻觉的检测与评估从通用基准到领域专用)\n    1.  [通用基准测试与自动化评估框架](#通用基准测试与自动化评估框架)\n    2.  [面向特定场景的评估框架](#面向特定场景的评估框架)\n    3.  [可解释性检测方法](#可解释性检测方法)\n5.  [缓解幻觉的全链路优化策略](#缓解幻觉的全链路优化策略)\n    1.  [检索器增强：确保信息源的准确与相关](#检索器增强确保信息源的准确与相关)\n    2.  [生成过程引导与知识整合优化](#生成过程引导与知识整合优化)\n    3.  ",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 1.0,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "missing_dimensions": [],
+        "dimension_hits": {
+          "freshness": 4,
+          "official": 1,
+          "evidence": 10,
+          "risk": 2,
+          "implementation": 5
+        },
+        "total_queries": 32
+      },
+      "query_coverage_score": 1.0,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimensions_missing": [],
+      "query_dimension_hits": {
+        "freshness": 4,
+        "official": 1,
+        "evidence": 10,
+        "risk": 2,
+        "implementation": 5
+      },
+      "freshness_summary": {
+        "total_results": 150,
+        "known_count": 120,
+        "unknown_count": 30,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 102,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.85
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_d1219716fd8f4903903dc62465cc1d20",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-21T14:37:16.303218",
+      "ended_at": "2026-04-21T14:43:48.949195",
+      "duration_ms": 392645.98,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 111,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 111,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_008",
+    "query": "How do retrieval-augmented generation systems handle hallucination",
+    "wall_time_s": 438.1
+  },
+  {
+    "status": "timeout",
+    "error": "subprocess timeout after 960s",
+    "final_report_chars": 0,
+    "case_id": "case_009",
+    "query": "Renewable energy investment trends in Southeast Asia 2024-2025",
+    "wall_time_s": 960.0
+  },
+  {
+    "status": "timeout",
+    "error": "subprocess timeout after 960s",
+    "final_report_chars": 0,
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "wall_time_s": 960.0
+  },
+  {
+    "status": "timeout",
+    "error": "subprocess timeout after 960s",
+    "final_report_chars": 0,
+    "case_id": "case_011",
+    "query": "Best practices for zero-trust security architecture in cloud-native environments",
+    "wall_time_s": 960.1
+  }
+]

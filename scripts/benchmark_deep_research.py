@@ -174,9 +174,18 @@ def _parse_sse_frame(frame: str) -> Optional[Tuple[str, Any]]:
 
 async def _iter_sse_events(
     text_stream: AsyncIterator[str],
+    chunk_timeout: float = 120.0,
 ) -> AsyncIterator[Tuple[str, Any]]:
     buffer = ""
-    async for chunk in text_stream:
+    ait = text_stream.__aiter__()
+    while True:
+        try:
+            chunk = await asyncio.wait_for(ait.__anext__(), timeout=chunk_timeout)
+        except StopAsyncIteration:
+            break
+        except asyncio.TimeoutError:
+            # No data received for chunk_timeout seconds — stream stalled
+            break
         if not chunk:
             continue
         buffer += chunk
