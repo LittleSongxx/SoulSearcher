@@ -43,8 +43,27 @@ _NEGATION_MARKERS = (
     "无",
 )
 
-_UP_MARKERS = ("increase", "increased", "grow", "growth", "up", "rise", "rose", "增长", "上升")
-_DOWN_MARKERS = ("decrease", "decreased", "decline", "down", "fell", "drop", "下降", "减少")
+_UP_MARKERS = (
+    "increase",
+    "increased",
+    "grow",
+    "growth",
+    "up",
+    "rise",
+    "rose",
+    "增长",
+    "上升",
+)
+_DOWN_MARKERS = (
+    "decrease",
+    "decreased",
+    "decline",
+    "down",
+    "fell",
+    "drop",
+    "下降",
+    "减少",
+)
 
 _STOPWORDS = {
     "the",
@@ -166,7 +185,9 @@ class ClaimVerifier:
             if quote:
                 passage_payload["quote"] = quote
             heading_path = item.get("heading_path")
-            if isinstance(heading_path, list) and all(isinstance(p, str) for p in heading_path):
+            if isinstance(heading_path, list) and all(
+                isinstance(p, str) for p in heading_path
+            ):
                 passage_payload["heading_path"] = heading_path
 
             if self._is_contradiction(claim, text):
@@ -179,7 +200,11 @@ class ClaimVerifier:
         limit = self.max_evidence_per_claim
 
         if contradicted:
-            urls = list(dict.fromkeys([u for _o, u, _p in contradicted] + [u for _o, u, _p in supported]))
+            urls = list(
+                dict.fromkeys(
+                    [u for _o, u, _p in contradicted] + [u for _o, u, _p in supported]
+                )
+            )
             evidence_passages = [p for _o, _u, p in (contradicted + supported)][:limit]
             return ClaimCheck(
                 claim=claim,
@@ -194,7 +219,9 @@ class ClaimVerifier:
             return ClaimCheck(
                 claim=claim,
                 status=ClaimStatus.VERIFIED,
-                evidence_urls=list(dict.fromkeys([u for _o, u, _p in supported]))[:limit],
+                evidence_urls=list(dict.fromkeys([u for _o, u, _p in supported]))[
+                    :limit
+                ],
                 evidence_passages=[p for _o, _u, p in supported][:limit],
                 score=float(best_overlap),
                 notes="supported by evidence",
@@ -240,7 +267,9 @@ class ClaimVerifier:
                 if quote:
                     item["quote"] = quote
                 heading_path = passage.get("heading_path")
-                if isinstance(heading_path, list) and all(isinstance(p, str) for p in heading_path):
+                if isinstance(heading_path, list) and all(
+                    isinstance(p, str) for p in heading_path
+                ):
                     item["heading_path"] = heading_path
                 evidence.append(item)
             return evidence
@@ -265,14 +294,26 @@ class ClaimVerifier:
         tokens = re.findall(r"[a-z0-9\u4e00-\u9fff]+", (text or "").lower())
         return {t for t in tokens if len(t) > 1 and t not in _STOPWORDS}
 
+    @staticmethod
+    def _marker_in_text(marker: str, text: str) -> bool:
+        """Check if *marker* appears in *text* as a whole word.
+
+        CJK markers use plain substring matching (Chinese has no whitespace
+        word boundaries).  ASCII markers require ``\\b`` word boundaries to
+        avoid false positives like "no" inside "now".
+        """
+        if re.search(r"[\u4e00-\u9fff]", marker):
+            return marker in text
+        return bool(re.search(r"(?:^|\W)" + re.escape(marker) + r"(?:$|\W)", text))
+
     def _has_negation(self, text: str) -> bool:
         lower = (text or "").lower()
-        return any(marker in lower for marker in _NEGATION_MARKERS)
+        return any(self._marker_in_text(m, lower) for m in _NEGATION_MARKERS)
 
     def _trend_direction(self, text: str) -> int:
         lower = (text or "").lower()
-        up = any(marker in lower for marker in _UP_MARKERS)
-        down = any(marker in lower for marker in _DOWN_MARKERS)
+        up = any(self._marker_in_text(m, lower) for m in _UP_MARKERS)
+        down = any(self._marker_in_text(m, lower) for m in _DOWN_MARKERS)
         if up and not down:
             return 1
         if down and not up:
