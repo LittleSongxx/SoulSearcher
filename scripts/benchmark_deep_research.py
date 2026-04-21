@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from eval.benchmarks.deep_research_bench_loader import load_benchmark_tasks  # noqa: E402
+from eval.benchmarks.deep_research_bench_loader import (
+    load_benchmark_tasks,
+)  # noqa: E402
 
 DEFAULT_BENCH_FILE = ROOT / "eval" / "benchmarks" / "sample_tasks.jsonl"
 DEFAULT_GOLDEN_FILE = ROOT / "eval" / "golden_queries.json"
@@ -54,13 +56,17 @@ def _case_quality_targets(
     base_freshness_target: float,
 ) -> Dict[str, Any]:
     freshness_days = constraints.get("freshness_days")
-    freshness_days = int(freshness_days) if isinstance(freshness_days, (int, float)) else None
+    freshness_days = (
+        int(freshness_days) if isinstance(freshness_days, (int, float)) else None
+    )
     time_sensitive = _is_time_sensitive_query(query) or (
         freshness_days is not None and freshness_days <= 30
     )
 
     field_complexity = len(expected_fields or [])
-    complexity_bonus = 0.1 if field_complexity >= 4 else 0.05 if field_complexity >= 2 else 0.0
+    complexity_bonus = (
+        0.1 if field_complexity >= 4 else 0.05 if field_complexity >= 2 else 0.0
+    )
 
     query_coverage_target = min(
         1.0,
@@ -166,7 +172,9 @@ def _parse_sse_frame(frame: str) -> Optional[Tuple[str, Any]]:
     return (event_name, payload)
 
 
-async def _iter_sse_events(text_stream: AsyncIterator[str]) -> AsyncIterator[Tuple[str, Any]]:
+async def _iter_sse_events(
+    text_stream: AsyncIterator[str],
+) -> AsyncIterator[Tuple[str, Any]]:
     buffer = ""
     async for chunk in text_stream:
         if not chunk:
@@ -229,7 +237,9 @@ async def _execute_research_case(
             headers={"Accept": "text/event-stream", "Content-Type": "application/json"},
             timeout=None,
         ) as resp:
-            thread_id = resp.headers.get("X-Thread-ID") or resp.headers.get("x-thread-id")
+            thread_id = resp.headers.get("X-Thread-ID") or resp.headers.get(
+                "x-thread-id"
+            )
 
             async for event_name, data in _iter_sse_events(resp.aiter_text()):
                 if event_name == "text" and isinstance(data, dict):
@@ -300,7 +310,9 @@ async def _execute_research_case(
             "thread_id": thread_id,
             "duration_ms": duration_ms,
             "final_report_chars": len(final_report),
-            "final_report_preview": (final_report[:600] if isinstance(final_report, str) else ""),
+            "final_report_preview": (
+                final_report[:600] if isinstance(final_report, str) else ""
+            ),
             "error": error_message,
             "last_quality_update": last_quality_update,
             "run_metrics": run_metrics,
@@ -330,12 +342,18 @@ def _evaluate_case_quality(
         "query_coverage": {
             "actual": actual_query_coverage,
             "target": coverage_target,
-            "pass": (actual_query_coverage is not None and actual_query_coverage >= coverage_target),
+            "pass": (
+                actual_query_coverage is not None
+                and actual_query_coverage >= coverage_target
+            ),
         },
         "citation_coverage": {
             "actual": actual_citation,
             "target": round(float(min_citation_coverage), 3),
-            "pass": (actual_citation is not None and actual_citation >= float(min_citation_coverage)),
+            "pass": (
+                actual_citation is not None
+                and actual_citation >= float(min_citation_coverage)
+            ),
         },
     }
 
@@ -343,7 +361,9 @@ def _evaluate_case_quality(
         checks["freshness_ratio_30d"] = {
             "actual": actual_freshness,
             "target": freshness_target,
-            "pass": (actual_freshness is not None and actual_freshness >= freshness_target),
+            "pass": (
+                actual_freshness is not None and actual_freshness >= freshness_target
+            ),
         }
 
     passed = all(bool(v.get("pass")) for v in checks.values())
@@ -376,7 +396,9 @@ def run_benchmark(
         quality_targets = _case_quality_targets(
             query=task.query,
             constraints=task.constraints if isinstance(task.constraints, dict) else {},
-            expected_fields=task.expected_fields if isinstance(task.expected_fields, list) else [],
+            expected_fields=(
+                task.expected_fields if isinstance(task.expected_fields, list) else []
+            ),
             base_query_coverage_target=min_query_coverage,
             base_freshness_target=min_freshness_ratio,
         )
@@ -406,7 +428,9 @@ def run_benchmark(
         try:
             from common.config import settings
 
-            min_citation = float(getattr(settings, "citation_gate_min_coverage", 0.6) or 0.6)
+            min_citation = float(
+                getattr(settings, "citation_gate_min_coverage", 0.6) or 0.6
+            )
         except Exception:
             min_citation = 0.6
 
@@ -415,11 +439,18 @@ def run_benchmark(
             try:
                 from common.config import settings
 
-                resolved_model = str(getattr(settings, "primary_model", "") or "").strip()
+                resolved_model = str(
+                    getattr(settings, "primary_model", "") or ""
+                ).strip()
             except Exception:
                 resolved_model = ""
 
-        for case in cases:
+        for idx, case in enumerate(cases, 1):
+            print(
+                f"[{idx}/{len(cases)}] Running case {case['id']}: {case['query'][:60]}...",
+                flush=True,
+            )
+            case_start = time.monotonic()
             result = asyncio.run(
                 _execute_research_case(
                     case["query"],
@@ -431,13 +462,22 @@ def run_benchmark(
             )
             case["execution"] = result
             case["status"] = result.get("status", "failed")
+            elapsed = time.monotonic() - case_start
+            print(
+                f"  -> {case['status']} in {elapsed:.0f}s, report={result.get('final_report_chars',0)} chars",
+                flush=True,
+            )
 
             if case["status"] in {"completed", "failed", "timeout"}:
                 executed_cases += 1
 
             quality = _evaluate_case_quality(
                 actual=result,
-                targets=case.get("quality_targets") if isinstance(case.get("quality_targets"), dict) else {},
+                targets=(
+                    case.get("quality_targets")
+                    if isinstance(case.get("quality_targets"), dict)
+                    else {}
+                ),
                 min_citation_coverage=min_citation,
             )
             case.update(quality)
@@ -454,12 +494,21 @@ def run_benchmark(
             return None
         return round(sum(float(v) for v in cleaned) / len(cleaned), 4)
 
-    evidence_citation = _avg([_maybe_float(e.get("citation_coverage")) for e in evidence_summaries])
-    evidence_freshness = _avg([_maybe_float(e.get("freshness_ratio_30d")) for e in evidence_summaries])
-    evidence_query_cov = _avg([_maybe_float(e.get("query_coverage_score")) for e in evidence_summaries])
+    evidence_citation = _avg(
+        [_maybe_float(e.get("citation_coverage")) for e in evidence_summaries]
+    )
+    evidence_freshness = _avg(
+        [_maybe_float(e.get("freshness_ratio_30d")) for e in evidence_summaries]
+    )
+    evidence_query_cov = _avg(
+        [_maybe_float(e.get("query_coverage_score")) for e in evidence_summaries]
+    )
 
     unsupported_claims_total = (
-        sum(int(_maybe_int(e.get("unsupported_claims_count")) or 0) for e in evidence_summaries)
+        sum(
+            int(_maybe_int(e.get("unsupported_claims_count")) or 0)
+            for e in evidence_summaries
+        )
         if evidence_summaries
         else 0
     )
@@ -480,16 +529,16 @@ def run_benchmark(
             "quality_passed_cases": executed_passed,
             "golden_covered": sum(1 for c in cases if c["golden_available"]),
             "time_sensitive_cases": time_sensitive_cases,
-            "avg_query_coverage_target": round(
-                sum(coverage_targets) / len(coverage_targets), 3
-            )
-            if coverage_targets
-            else 0.0,
-            "avg_freshness_ratio_target": round(
-                sum(freshness_targets) / len(freshness_targets), 3
-            )
-            if freshness_targets
-            else 0.0,
+            "avg_query_coverage_target": (
+                round(sum(coverage_targets) / len(coverage_targets), 3)
+                if coverage_targets
+                else 0.0
+            ),
+            "avg_freshness_ratio_target": (
+                round(sum(freshness_targets) / len(freshness_targets), 3)
+                if freshness_targets
+                else 0.0
+            ),
             "quality_gate_defaults": {
                 "min_query_coverage": min_query_coverage,
                 "min_freshness_ratio": min_freshness_ratio,
@@ -508,15 +557,21 @@ def run_benchmark(
     }
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    output.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return report
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run deep research benchmark smoke runner")
+    parser = argparse.ArgumentParser(
+        description="Run deep research benchmark smoke runner"
+    )
     parser.add_argument("--max-cases", type=int, default=5, help="Maximum cases to run")
     parser.add_argument("--mode", choices=["auto", "tree", "linear"], default="auto")
-    parser.add_argument("--output", type=Path, required=True, help="Output JSON report path")
+    parser.add_argument(
+        "--output", type=Path, required=True, help="Output JSON report path"
+    )
     parser.add_argument(
         "--min-query-coverage",
         type=float,
@@ -583,7 +638,9 @@ def main() -> int:
         model=str(args.model or "").strip(),
         timeout_s=max(1.0, float(args.timeout_s)),
     )
-    print(f"Benchmark report written: {args.output} ({report['summary']['total_cases']} cases)")
+    print(
+        f"Benchmark report written: {args.output} ({report['summary']['total_cases']} cases)"
+    )
     return 0
 
 
