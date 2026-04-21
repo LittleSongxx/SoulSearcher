@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n/i18n-context'
-import { Plus, Compass, LayoutGrid, FolderOpen, MessageSquare, PanelLeft, Trash2, Settings, Pin, PinOff } from 'lucide-react'
+import { Plus, Compass, LayoutGrid, FolderOpen, MessageSquare, PanelLeft, Trash2, Settings, Pin, PinOff, BarChart3 } from 'lucide-react'
 import { ChatSession } from '@/types/chat'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
@@ -147,6 +147,7 @@ export function Sidebar({
                             <SidebarItem icon={LayoutGrid} label={t('dashboard')} active={activeView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
                             <SidebarItem icon={Compass} label={t('discover')} active={activeView === 'discover'} onClick={() => onViewChange('discover')} />
                             <SidebarItem icon={FolderOpen} label={t('library')} active={activeView === 'library'} onClick={() => onViewChange('library')} />
+                            <SidebarItem icon={BarChart3} label={t('metricsNav')} active={activeView === 'metrics'} onClick={() => onViewChange('metrics')} />
                         </div>
 
                         {/* History Section */}

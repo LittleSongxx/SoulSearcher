@@ -18,6 +18,7 @@ import { useChatStream } from '@/hooks/useChatStream'
 import { filesToImageAttachments } from '@/lib/file-utils'
 import { Discover } from '@/components/views/Discover'
 import { Library } from '@/components/views/Library'
+import { MetricsDashboard } from './MetricsDashboard'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { BrowserViewer } from './BrowserViewer'
 import { useI18n } from '@/lib/i18n/i18n-context'
@@ -234,6 +235,7 @@ export function Chat() {
   const renderContent = () => {
     if (currentView === 'discover') return <Discover />
     if (currentView === 'library') return <Library />
+    if (currentView === 'metrics') return <MetricsDashboard />
 
     // Default: Dashboard/Chat
     return (

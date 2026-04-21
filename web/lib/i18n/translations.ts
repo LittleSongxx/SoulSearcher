@@ -215,6 +215,27 @@ export const translations = {
     academicResearchDesc: 'Find latest papers on LLM agents',
     creativeWriting: 'Creative Writing',
     creativeWritingDesc: 'Story brainstorming with AI',
+
+    // Metrics Dashboard
+    metricsNav: 'Metrics',
+    metricsTitle: 'Performance Metrics',
+    metricsDescription: 'Real-time monitoring of runs, latency, and research quality.',
+    metricsAutoRefreshOn: 'Live',
+    metricsAutoRefreshOff: 'Paused',
+    metricsRefresh: 'Refresh',
+    metricsConnectionError: 'Connection error',
+    metricsTotalRuns: 'Total Runs',
+    metricsActiveNow: 'Active Now',
+    metricsAvgDuration: 'Avg Duration',
+    metricsErrors: 'Errors',
+    metricsRunList: 'Run History',
+    metricsRunDetail: 'Run Detail',
+    metricsLoading: 'Loading metrics...',
+    metricsNoRuns: 'No runs recorded yet. Start a conversation to see metrics here.',
+    metricsSelectRun: 'Select a run from the list to view details.',
+    metricsDuration: 'Duration',
+    metricsNodeExecution: 'Node Execution',
+    metricsEvidenceSummary: 'Evidence Quality',
   },
   zh: {
     // Sidebar
@@ -432,6 +453,27 @@ export const translations = {
     academicResearchDesc: '查找最新 LLM 智能体论文',
     creativeWriting: '创意写作',
     creativeWritingDesc: '与 AI 一起故事头脑风暴',
+
+    // Metrics Dashboard
+    metricsNav: '性能监控',
+    metricsTitle: '性能指标',
+    metricsDescription: '实时监控运行状态、延迟和研究质量。',
+    metricsAutoRefreshOn: '实时',
+    metricsAutoRefreshOff: '已暂停',
+    metricsRefresh: '刷新',
+    metricsConnectionError: '连接错误',
+    metricsTotalRuns: '总运行次数',
+    metricsActiveNow: '当前活跃',
+    metricsAvgDuration: '平均耗时',
+    metricsErrors: '错误数',
+    metricsRunList: '运行记录',
+    metricsRunDetail: '运行详情',
+    metricsLoading: '正在加载指标...',
+    metricsNoRuns: '暂无运行记录。开始对话后即可在此查看指标。',
+    metricsSelectRun: '从列表中选择一条运行记录查看详情。',
+    metricsDuration: '耗时',
+    metricsNodeExecution: '节点执行',
+    metricsEvidenceSummary: '证据质量',
   },
   ja: {
     // Sidebar
@@ -527,6 +569,27 @@ export const translations = {
     // Common
     loading: '読み込み中...',
     error: 'エラー',
+
+    // Metrics Dashboard
+    metricsNav: 'メトリクス',
+    metricsTitle: 'パフォーマンス指標',
+    metricsDescription: '実行状況、レイテンシ、調査品質をリアルタイムで監視。',
+    metricsAutoRefreshOn: 'ライブ',
+    metricsAutoRefreshOff: '一時停止',
+    metricsRefresh: '更新',
+    metricsConnectionError: '接続エラー',
+    metricsTotalRuns: '合計実行数',
+    metricsActiveNow: '現在アクティブ',
+    metricsAvgDuration: '平均所要時間',
+    metricsErrors: 'エラー',
+    metricsRunList: '実行履歴',
+    metricsRunDetail: '実行詳細',
+    metricsLoading: 'メトリクスを読み込み中...',
+    metricsNoRuns: 'まだ実行記録がありません。会話を開始すると表示されます。',
+    metricsSelectRun: 'リストから実行を選択して詳細を表示。',
+    metricsDuration: '所要時間',
+    metricsNodeExecution: 'ノード実行',
+    metricsEvidenceSummary: '証拠品質',
   },
   ko: {
     // Sidebar
@@ -622,6 +685,27 @@ export const translations = {
     // Common
     loading: '로딩 중...',
     error: '오류',
+
+    // Metrics Dashboard
+    metricsNav: '성능 지표',
+    metricsTitle: '성능 지표',
+    metricsDescription: '실행 상태, 지연 시간, 연구 품질을 실시간으로 모니터링합니다.',
+    metricsAutoRefreshOn: '실시간',
+    metricsAutoRefreshOff: '일시정지',
+    metricsRefresh: '새로고침',
+    metricsConnectionError: '연결 오류',
+    metricsTotalRuns: '총 실행 수',
+    metricsActiveNow: '현재 활성',
+    metricsAvgDuration: '평균 소요 시간',
+    metricsErrors: '오류',
+    metricsRunList: '실행 기록',
+    metricsRunDetail: '실행 상세',
+    metricsLoading: '지표 로딩 중...',
+    metricsNoRuns: '아직 실행 기록이 없습니다. 대화를 시작하면 여기에 표시됩니다.',
+    metricsSelectRun: '목록에서 실행을 선택하여 상세 정보를 확인하세요.',
+    metricsDuration: '소요 시간',
+    metricsNodeExecution: '노드 실행',
+    metricsEvidenceSummary: '증거 품질',
   }
 } as const
 
