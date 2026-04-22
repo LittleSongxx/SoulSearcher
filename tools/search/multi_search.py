@@ -208,10 +208,15 @@ class TavilyProvider(SearchProvider):
     """Tavily search provider (primary)."""
 
     def __init__(self):
-        super().__init__("tavily", settings.tavily_api_key)
+        from tools.search.tavily_key_pool import get_tavily_key_pool
+
+        pool = get_tavily_key_pool()
+        super().__init__("tavily", pool.get_key())
 
     def is_available(self) -> bool:
-        return bool(self.api_key)
+        from tools.search.tavily_key_pool import get_tavily_key_pool
+
+        return get_tavily_key_pool().available_count > 0
 
     def search(self, query: str, max_results: int = 10) -> List[SearchResult]:
         from tools.search.search import tavily_search

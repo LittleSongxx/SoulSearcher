@@ -175,6 +175,9 @@ class Settings(BaseSettings):
     openai_timeout: int = 60
     openai_extra_body: str = ""  # JSON string for extra OpenAI-compatible params
     tavily_api_key: str = ""
+    tavily_api_keys: str = (
+        ""  # comma-separated Tavily keys for auto-rotation on quota exhaustion
+    )
     bocha_api_key: str = ""
     # Web search providers (optional; used when SEARCH_ENGINES includes them)
     serper_api_key: str = ""
