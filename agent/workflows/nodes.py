@@ -870,6 +870,21 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         summary_notes = state.get("summary_notes", [])
         revision_count = state.get("revision_count", 0)
         max_revisions = state.get("max_revisions", 2)
+
+        # Track coordinator iterations to prevent infinite loops.
+        # revision_count is never incremented in the hierarchical path,
+        # so we maintain our own counter via coordinator_iterations.
+        coord_iters = int(state.get("coordinator_iterations", 0) or 0) + 1
+        if coord_iters > max_revisions + 1:
+            logger.info(
+                f"[coordinator] Forcing completion after {coord_iters} iterations "
+                f"(max_revisions={max_revisions})"
+            )
+            return {
+                "coordinator_action": "complete",
+                "coordinator_reasoning": f"Forced completion: {coord_iters} iterations exceeded limit.",
+                "coordinator_iterations": coord_iters,
+            }
         eval_dimensions = state.get("eval_dimensions", {}) or {}
         quality_overall_score = state.get("quality_overall_score")
         if (
@@ -925,6 +940,7 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         return {
             "coordinator_action": decision.action.value,
             "coordinator_reasoning": decision.reasoning,
+            "coordinator_iterations": coord_iters,
             "missing_topics": (
                 decision.priority_topics
                 if decision.priority_topics

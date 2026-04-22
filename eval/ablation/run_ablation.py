@@ -58,10 +58,15 @@ VARIANTS = {
     },
     "linear": {
         "DEEPSEARCH_MODE": "linear",
+        "DEEPSEARCH_MAX_EPOCHS": "1",
+        "DEEPSEARCH_QUERY_NUM": "3",
     },
     "single_provider": {
         "SEARCH_ENGINES": "tavily",
         "SEARCH_STRATEGY": "fallback",
+    },
+    "hierarchical": {
+        "USE_HIERARCHICAL_AGENTS": "true",
     },
 }
 
@@ -72,7 +77,7 @@ sys.path.insert(0, "{root}")
 {env_overrides}
 from scripts.benchmark_deep_research import _execute_research_case
 result = asyncio.run(_execute_research_case(
-    sys.argv[1], mode="{mode}", base_url="asgi", model="", timeout_s=360,
+    sys.argv[1], mode="{mode}", base_url="asgi", model="", timeout_s=540,
 ))
 print(json.dumps(result, ensure_ascii=False))
 """.strip()
@@ -100,7 +105,7 @@ def run_single_case(variant: str, task: dict, runner_code: str) -> dict:
             [sys.executable, "-u", "-c", runner_code, query],
             capture_output=True,
             text=True,
-            timeout=420,
+            timeout=600,
             cwd=str(ROOT),
         )
         elapsed = time.monotonic() - t0

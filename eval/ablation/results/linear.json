@@ -1,52 +1,367 @@
 [
   {
     "status": "timeout",
-    "error": "timeout after 420s",
+    "error": "timeout after 600s",
     "final_report_chars": 0,
     "case_id": "case_001",
     "query": "Latest AI chip market share in 2025",
     "variant": "linear",
-    "wall_time_s": 420.1,
+    "wall_time_s": 600.1,
     "domain": "financial"
   },
   {
-    "status": "timeout",
-    "error": "timeout after 420s",
-    "final_report_chars": 0,
+    "status": "completed",
+    "thread_id": "thread_ee34bfade2154bf6a99f7bec6805ef09",
+    "duration_ms": 417451.05,
+    "final_report_chars": 12794,
+    "final_report_preview": "# Rust vs Go 在生产环境构建微服务：深度对比分析报告\n\n## 目录\n\n1. 引言\n2. 语言哲学与设计理念对比\n3. 性能与资源消耗深度分析\n4. 并发模型与微服务架构适配性\n5. 内存安全与错误处理机制\n6. 开发者体验与学习曲线\n7. 生态系统与生产就绪度\n8. 成本效益分析\n9. 适用场景与战略选择\n10. 结论与建议\n\n## 1. 引言\n\n在2026年的微服务架构领域，Rust和Go已成为构建高性能后端服务的两大主流选择。两者都强调内存安全、现代工具链、性能和规模，但采取了截然不同的技术路线[20]。对于在生产环境中构建微服务的团队而言，选择哪种语言不仅影响开发效率，更直接关系到系统的性能表现、运维成本和长期可维护性。\n\n本报告基于2024-2026年的最新基准测试数据、行业实践和技术分析，从多个维度对Rust和Go进行深度对比，旨在为技术决策者提供全面的参考依据。需要特别说明的是，本报告聚焦于Rust和Go两种语言的直接对比，不涉及其他编程语言（如Python、Node.js、Java等）的横向比较。\n\n## 2. 语言哲学与设计理念对比\n\n### 2.1 Go：简洁高效的云原生语言\n\nGo语言由Google于2009年发布，其设计哲学核心是**简洁性**和**生产力**。Go的语法极其精简，仅有25个关键字，没有继承、泛型（早期版本）等复杂特性，使得代码易于",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 2,
+      "stage": "epoch",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 2,
+          "official": 0,
+          "evidence": 1,
+          "risk": 1,
+          "implementation": 1
+        },
+        "total_queries": 16
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 2,
+        "official": 0,
+        "evidence": 1,
+        "risk": 1,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 80,
+        "known_count": 0,
+        "unknown_count": 80,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_ee34bfade2154bf6a99f7bec6805ef09",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T09:10:32.612941",
+      "ended_at": "2026-04-22T09:16:49.746037",
+      "duration_ms": 377133.1,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 51,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 51,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
     "case_id": "case_004",
     "query": "Compare Rust and Go for building microservices in production",
     "variant": "linear",
-    "wall_time_s": 420.1,
+    "wall_time_s": 422.0,
     "domain": "technical"
   },
   {
-    "status": "timeout",
-    "error": "timeout after 420s",
-    "final_report_chars": 0,
+    "status": "completed",
+    "thread_id": "thread_c799681953c7414b9a458cd9796e90e3",
+    "duration_ms": 461466.49,
+    "final_report_chars": 14375,
+    "final_report_preview": "好的，遵照您的指示，我将基于提供的信息，围绕“Impact of EU AI Act on enterprise SaaS companies”这一主题，撰写一篇深度、全面、专业的总结报告。\n\n# 欧盟《人工智能法案》对企业级SaaS公司的深度影响与合规指南\n\n## 目录\n\n1.  **概述：监管新纪元的开启**\n2.  **核心概念与法律框架**\n    - 2.1 法案性质与适用范围\n    - 2.2 基于风险的AI系统分类\n    - 2.3 SaaS公司的双重角色：提供者与部署者\n3.  **对SaaS公司的具体影响与合规要求**\n    - 3.1 高风险AI系统的严格义务\n    - 3.2 有限风险与最小风险AI系统的透明度义务\n    - 3.3 数据治理与隐私保护的融合\n    - 3.4 文档、记录保存与技术文档要求\n    - 3.5 人工监督与偏见缓解\n    - 3.6 第三方AI集成与供应链责任\n4.  **合规成本、挑战与商业考量**\n    - 4.1 合规成本模型与预算编制\n    - 4.2 不合规的严重后果：罚款、声誉与市场准入\n    - 4.3 合规作为竞争优势\n    - 4.4 企业客户（部署者）的义务与SaaS公司的支持角色\n5.  **实施路线图与最佳实践**\n    - 5.1 第一步：AI系统盘点与风险分类\n    - 5.2",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 2,
+      "stage": "epoch",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 2,
+          "official": 0,
+          "evidence": 2,
+          "risk": 3,
+          "implementation": 1
+        },
+        "total_queries": 16
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 2,
+        "official": 0,
+        "evidence": 2,
+        "risk": 3,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 80,
+        "known_count": 0,
+        "unknown_count": 80,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_c799681953c7414b9a458cd9796e90e3",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T09:16:56.270799",
+      "ended_at": "2026-04-22T09:23:53.757822",
+      "duration_ms": 417487.02,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 85,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 85,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
     "case_id": "case_005",
     "query": "Impact of EU AI Act on enterprise SaaS companies",
     "variant": "linear",
-    "wall_time_s": 420.1,
+    "wall_time_s": 465.1,
     "domain": "legal"
   },
   {
-    "status": "timeout",
-    "error": "timeout after 420s",
-    "final_report_chars": 0,
+    "status": "completed",
+    "thread_id": "thread_add7868d2e1c413888693dfaa5dc6dc1",
+    "duration_ms": 439565.63,
+    "final_report_chars": 13155,
+    "final_report_preview": "# Advances in mRNA Vaccine Technology Beyond COVID-19：深度综述\n\n## 目录\n\n1. 概述\n2. 治疗性癌症疫苗：从预防到治疗的范式转变\n   - 2.1 胰腺癌个性化mRNA疫苗\n   - 2.2 非小细胞肺癌mRNA疫苗\n   - 2.3 其他癌症领域的探索\n3. 传染病疫苗的扩展应用\n   - 3.1 流感疫苗\n   - 3.2 呼吸道合胞病毒（RSV）疫苗\n   - 3.3 巨细胞病毒（CMV）疫苗\n   - 3.4 寨卡病毒、疟疾与结核病疫苗\n   - 3.5 禽流感及其他新兴威胁\n4. HIV疫苗：最具挑战性的目标\n   - 4.1 HIV疫苗的核心挑战\n   - 4.2 早期临床试验进展\n   - 4.3 未来策略与方向\n5. 递送技术的革命性突破\n   - 5.1 脂质纳米颗粒（LNP）的优化\n   - 5.2 3-氨基酸递送增强技术\n   - 5.3 其他递送载体探索\n6. 自扩增mRNA（saRNA）与人工智能的融合\n   - 6.1 saRNA技术原理与优势\n   - 6.2 saRNA与传统mRNA的对比\n   - 6.3 AI增强型saRNA疫苗：尼帕病毒案例\n7. 未来发展趋势与挑战\n   - 7.1 技术平台化与模块化\n   - 7.2 生产与储存的革新\n   - 7.3 监管与伦理考量\n8. 总结",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 2,
+      "stage": "epoch",
+      "query_coverage": {
+        "score": 0.2,
+        "covered_dimensions": [
+          "freshness"
+        ],
+        "missing_dimensions": [
+          "evidence",
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 6,
+          "official": 0,
+          "evidence": 0,
+          "risk": 0,
+          "implementation": 0
+        },
+        "total_queries": 16
+      },
+      "query_coverage_score": 0.2,
+      "query_dimensions_covered": [
+        "freshness"
+      ],
+      "query_dimensions_missing": [
+        "evidence",
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 6,
+        "official": 0,
+        "evidence": 0,
+        "risk": 0,
+        "implementation": 0
+      },
+      "freshness_summary": {
+        "total_results": 80,
+        "known_count": 0,
+        "unknown_count": 80,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_add7868d2e1c413888693dfaa5dc6dc1",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T09:23:59.553055",
+      "ended_at": "2026-04-22T09:30:36.308407",
+      "duration_ms": 396755.35,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 75,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 75,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
     "case_id": "case_007",
     "query": "Advances in mRNA vaccine technology beyond COVID-19",
     "variant": "linear",
-    "wall_time_s": 420.1,
+    "wall_time_s": 443.5,
     "domain": "medical"
   },
   {
     "status": "timeout",
-    "error": "timeout after 420s",
+    "error": "timeout after 600s",
     "final_report_chars": 0,
     "case_id": "case_010",
     "query": "History and evolution of transformer architecture in deep learning",
     "variant": "linear",
-    "wall_time_s": 420.0,
+    "wall_time_s": 600.1,
     "domain": "scientific"
   }
 ]

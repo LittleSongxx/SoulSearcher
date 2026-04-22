@@ -46,7 +46,9 @@ def capped_add_messages(
 
 
 # Execution status type
-ExecutionStatus = Literal["pending", "running", "paused", "completed", "failed", "cancelled"]
+ExecutionStatus = Literal[
+    "pending", "running", "paused", "completed", "failed", "cancelled"
+]
 
 
 class AgentState(TypedDict):
@@ -164,6 +166,8 @@ class AgentState(TypedDict):
     coordinator_action: str
     # Coordinator's reasoning for the decision
     coordinator_reasoning: str
+    # Number of coordinator iterations (prevents infinite loops)
+    coordinator_iterations: int
 
     # ============ Compressed Knowledge ============
     # Structured compressed knowledge from research
