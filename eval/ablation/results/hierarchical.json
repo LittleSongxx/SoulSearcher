@@ -293,5 +293,15 @@
     "variant": "hierarchical",
     "wall_time_s": 388.7,
     "domain": "medical"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 600s",
+    "final_report_chars": 0,
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "variant": "hierarchical",
+    "wall_time_s": 600.1,
+    "domain": "scientific"
   }
 ]
