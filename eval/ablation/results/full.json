@@ -1,0 +1,577 @@
+[
+  {
+    "status": "completed",
+    "thread_id": "thread_4be9e1798d1547628d274171367b6808",
+    "duration_ms": 350667.66,
+    "final_report_chars": 11722,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，为您撰写一份关于“2025年AI芯片市场占有率”的深度总结报告。\n\n# 2025年全球AI芯片市场占有率深度研究报告\n\n## 目录\n1.  [概述：生成式AI浪潮下的市场格局重塑](#概述生成式ai浪潮下的市场格局重塑)\n2.  [市场整体规模与增长动力](#市场整体规模与增长动力)\n    1.  [市场规模与增长预测](#市场规模与增长预测)\n    2.  [核心增长驱动力分析](#核心增长驱动力分析)\n3.  [竞争格局深度剖析：一超多强，多元竞逐](#竞争格局深度剖析一超多强多元竞逐)\n    1.  [绝对领导者：英伟达的生态霸权](#绝对领导者英伟达的生态霸权)\n    2.  [传统巨头与新兴挑战者：多元化的竞争格局](#传统巨头与新兴挑战者多元化的竞争格局)\n    3.  [中国市场的特殊性：国产替代加速，华为领跑](#中国市场的特殊性国产替代加速华为领跑)\n4.  [产品、功能与部署细分市场分析](#产品功能与部署细分市场分析)\n    1.  [产品类型：GPU主导，专用芯片崛起](#产品类型gpu主导专用芯片崛起)\n    2.  [功能需求：推理为主，训练驱动高端](#功能需求推理为主训练驱动高端)\n    3.  [部署位置：云端主战场，边缘快速扩张](#部署位置云端主战场边缘快速扩张)\n5.  [区域市场",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "evidence",
+          "freshness"
+        ],
+        "missing_dimensions": [
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 2,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 0
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness"
+      ],
+      "query_dimensions_missing": [
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 2,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 0
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": true,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_4be9e1798d1547628d274171367b6808",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T01:33:53.960731",
+      "ended_at": "2026-04-22T01:39:10.691555",
+      "duration_ms": 316730.82,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 36,
+        "unsupported_claims_count": 8,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 36,
+      "unsupported_claims_count": 8,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_001",
+    "query": "Latest AI chip market share in 2025",
+    "variant": "full",
+    "wall_time_s": 356.2,
+    "domain": "financial"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_fd1b18bb9f804a5f869291b7f04ac4bf",
+    "duration_ms": 328627.2,
+    "final_report_chars": 11070,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“比较Rust与Go在生产环境中构建微服务”的深度总结报告。\n\n# Rust 与 Go 构建生产级微服务的深度对比与选型指南\n\n## 目录\n1.  [引言：微服务架构下的语言选择之争](#引言微服务架构下的语言选择之争)\n2.  [Rust 概述：追求极致性能与安全的系统语言](#rust-概述追求极致性能与安全的系统语言)\n3.  [Go 概述：为云原生而生的高效并发语言](#go-概述为云原生而生的高效并发语言)\n4.  [核心维度深度对比](#核心维度深度对比)\n    1.  [性能与资源效率：成本与效能的终极权衡](#性能与资源效率成本与效能的终极权衡)\n    2.  [开发体验与团队协作：效率与严谨性的哲学碰撞](#开发体验与团队协作效率与严谨性的哲学碰撞)\n    3.  [安全性模型：运行时安全与编译时安全的根本差异](#安全性模型运行时安全与编译时安全的根本差异)\n    4.  [并发编程模型：轻量级协程与异步任务的对决](#并发编程模型轻量级协程与异步任务的对决)\n    5.  [生态系统与云原生集成：成熟稳定与快速发展的分野](#生态系统与云原生集成成熟稳定与快速发展的分野)\n    6.  [部署、运维与可观测性](#部署运维与可观测性)\n5.  [适用场景与战略选型建议](#适用场景与战略选型",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 3,
+          "official": 0,
+          "evidence": 2,
+          "risk": 0,
+          "implementation": 2
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 3,
+        "official": 0,
+        "evidence": 2,
+        "risk": 0,
+        "implementation": 2
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_fd1b18bb9f804a5f869291b7f04ac4bf",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T01:39:24.516669",
+      "ended_at": "2026-04-22T01:44:14.340562",
+      "duration_ms": 289823.89,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 35,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 35,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_004",
+    "query": "Compare Rust and Go for building microservices in production",
+    "variant": "full",
+    "wall_time_s": 332.3,
+    "domain": "technical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_ce70d1be12674fa4a78b0b9d31609449",
+    "duration_ms": 333316.08,
+    "final_report_chars": 10755,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于《欧盟人工智能法案》对企业SaaS公司影响的深度总结报告。\n\n# 《欧盟人工智能法案》对企业SaaS公司的深度影响与战略合规路径研究报告\n\n## 目录\n1.  [引言：全球AI监管的里程碑](#引言全球ai监管的里程碑)\n2.  [法案核心框架：风险分级与域外效力](#法案核心框架风险分级与域外效力)\n    1.  [风险分级监管体系](#风险分级监管体系)\n    2.  [广泛的域外管辖权](#广泛的域外管辖权)\n3.  [核心监管焦点：高风险AI系统的严苛义务](#核心监管焦点高风险ai系统的严苛义务)\n    1.  [高风险AI的典型应用场景](#高风险ai的典型应用场景)\n    2.  [高风险AI提供者的核心合规义务](#高风险ai提供者的核心合规义务)\n    3.  [关键合规时间表](#关键合规时间表)\n4.  [企业SaaS公司面临的多维挑战](#企业saas公司面临的多维挑战)\n    1.  [产品合规性判定与分类的模糊性挑战](#产品合规性判定与分类的模糊性挑战)\n    2.  [SaaS架构与运营模式带来的复杂性](#saas架构与运营模式带来的复杂性)\n    3.  [与GDPR等现有法规的叠加监管负担](#与gdpr等现有法规的叠加监管负担)\n    4.  [组织能力与技术实现的高",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 3,
+          "risk": 3,
+          "implementation": 2
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 3,
+        "risk": 3,
+        "implementation": 2
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_ce70d1be12674fa4a78b0b9d31609449",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T01:44:25.537349",
+      "ended_at": "2026-04-22T01:49:20.675332",
+      "duration_ms": 295137.98,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 36,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 36,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_005",
+    "query": "Impact of EU AI Act on enterprise SaaS companies",
+    "variant": "full",
+    "wall_time_s": 341.3,
+    "domain": "legal"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_88de2a7110b444f0bac90053ca5dd1c1",
+    "duration_ms": 341833.55,
+    "final_report_chars": 11385,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“COVID-19之外mRNA疫苗技术的进展”的深度总结报告。\n\n# COVID-19之外mRNA疫苗技术的进展：从传染病快速响应到精准癌症治疗的革命性平台\n\n## 目录\n1.  [概述：从应急工具到多功能治疗平台的范式转变](#概述从应急工具到多功能治疗平台的范式转变)\n2.  [核心驱动力：mRNA技术平台的固有优势与广泛应用前景](#核心驱动力mrna技术平台的固有优势与广泛应用前景)\n    1.  [快速、灵活与高效的核心特性](#快速灵活与高效的核心特性)\n    2.  [应用领域的多元化拓展](#应用领域的多元化拓展)\n3.  [关键瓶颈与突破前沿：下一代递送系统的研发](#关键瓶颈与突破前沿下一代递送系统的研发)\n    1.  [当前LNP递送系统的核心挑战](#当前lnp递送系统的核心挑战)\n    2.  [理性设计与新型脂质开发](#理性设计与新型脂质开发)\n    3.  [增强内体逃逸效率](#增强内体逃逸效率)\n    4.  [实现精准靶向递送](#实现精准靶向递送)\n    5.  [人工智能的赋能作用](#人工智能的赋能作用)\n4.  [最具前景的应用领域：个性化mRNA癌症疫苗](#最具前景的应用领域个性化mrna癌症疫苗)\n    1.  [个性化策略的核心流程](#个性化策略的核心",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "evidence",
+          "freshness"
+        ],
+        "missing_dimensions": [
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 2,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 0
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness"
+      ],
+      "query_dimensions_missing": [
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 2,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 0
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_88de2a7110b444f0bac90053ca5dd1c1",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T01:49:29.864245",
+      "ended_at": "2026-04-22T01:54:38.455482",
+      "duration_ms": 308591.24,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 39,
+        "unsupported_claims_count": 7,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 39,
+      "unsupported_claims_count": 7,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_007",
+    "query": "Advances in mRNA vaccine technology beyond COVID-19",
+    "variant": "full",
+    "wall_time_s": 345.9,
+    "domain": "medical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_7af627e36dbc4a059db7dbd9d25759cc",
+    "duration_ms": 326598.83,
+    "final_report_chars": 11975,
+    "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，撰写一份关于“深度学习中的Transformer架构历史与演变”的深度总结报告。\n\n# 深度学习中的Transformer架构：历史、演变与未来展望\n\n## 目录\n1.  [引言：一场静默的革命](#引言一场静默的革命)\n2.  [起源与核心突破：告别循环与卷积](#起源与核心突破告别循环与卷积)\n    1.  [历史背景与核心论文](#历史背景与核心论文)\n    2.  [核心创新：注意力即一切](#核心创新注意力即一切)\n    3.  [解决的关键瓶颈](#解决的关键瓶颈)\n3.  [架构详解：Transformer的核心机制](#架构详解transformer的核心机制)\n    1.  [自注意力与多头注意力机制](#自注意力与多头注意力机制)\n    2.  [位置编码：为序列注入顺序信息](#位置编码为序列注入顺序信息)\n    3.  [编码器-解码器结构与训练稳定技术](#编码器-解码器结构与训练稳定技术)\n    4.  [核心优势：并行性与全局建模能力](#核心优势并行性与全局建模能力)\n4.  [早期演变：在NLP领域的范式革命（2017-2019）](#早期演变在nlp领域的范式革命2017-2019)\n    1.  [BERT：双向编码与“预训练-微调”范式的确立](#bert双向编码与预训练-微",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 3,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 5
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 3,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 5
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_7af627e36dbc4a059db7dbd9d25759cc",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T01:54:50.227871",
+      "ended_at": "2026-04-22T01:59:39.070238",
+      "duration_ms": 288842.37,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 39,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 39,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "variant": "full",
+    "wall_time_s": 329.9,
+    "domain": "scientific"
+  }
+]

@@ -1,0 +1,368 @@
+[
+  {
+    "status": "timeout",
+    "error": "timeout after 420s",
+    "final_report_chars": 0,
+    "case_id": "case_001",
+    "query": "Latest AI chip market share in 2025",
+    "variant": "no_iterdrag",
+    "wall_time_s": 420.1,
+    "domain": "financial"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_1bcb3267cf5042c993c743e6527317f7",
+    "duration_ms": 329823.2,
+    "final_report_chars": 10928,
+    "final_report_preview": "好的，我将根据您提供的主题“Compare Rust and Go for building microservices in production”以及所有相关信息，为您撰写一份深度总结报告。\n\n# Rust 与 Go 构建生产级微服务的深度对比与选型指南\n\n## 目录\n1.  [引言：微服务时代的语言抉择](#引言微服务时代的语言抉择)\n2.  [核心性能与资源效率：极致的控制力与高效的平衡](#核心性能与资源效率极致的控制力与高效的平衡)\n    1.  [Rust：追求极致性能与可预测性](#rust追求极致性能与可预测性)\n    2.  [Go：性能“足够好”与开发效率的平衡](#go性能足够好与开发效率的平衡)\n    3.  [真实案例：性能与成本效益的量化分析](#真实案例性能与成本效益的量化分析)\n3.  [开发体验与安全性：学习曲线与长期维护的权衡](#开发体验与安全性学习曲线与长期维护的权衡)\n    1.  [Go：简洁高效，快速上手](#go简洁高效快速上手)\n    2.  [Rust：陡峭但回报丰厚的安全保障](#rust陡峭但回报丰厚的安全保障)\n    3.  [内存管理范式的根本差异](#内存管理范式的根本差异)\n4.  [生态系统、部署与运维成熟度](#生态系统部署与运维成熟度)\n    1.  [Go：成熟稳定的云原生生态](#go成熟稳定",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 3,
+          "official": 0,
+          "evidence": 3,
+          "risk": 0,
+          "implementation": 3
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 3,
+        "official": 0,
+        "evidence": 3,
+        "risk": 0,
+        "implementation": 3
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_1bcb3267cf5042c993c743e6527317f7",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T02:06:06.131107",
+      "ended_at": "2026-04-22T02:11:04.252316",
+      "duration_ms": 298121.21,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 38,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 38,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_004",
+    "query": "Compare Rust and Go for building microservices in production",
+    "variant": "no_iterdrag",
+    "wall_time_s": 337.8,
+    "domain": "technical"
+  },
+  {
+    "status": "timeout",
+    "thread_id": null,
+    "duration_ms": 362163.18,
+    "error": "timeout after 360s",
+    "case_id": "case_005",
+    "query": "Impact of EU AI Act on enterprise SaaS companies",
+    "variant": "no_iterdrag",
+    "wall_time_s": 367.7,
+    "domain": "legal"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_82b7c6d025f24fbf8020df3b8bd5075d",
+    "duration_ms": 311821.74,
+    "final_report_chars": 10671,
+    "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“超越COVID-19的mRNA疫苗技术进展”的深度总结报告。\n\n# 超越COVID-19的mRNA疫苗技术进展：多元化应用、核心挑战与未来展望\n\n## 目录\n1.  [概述：从紧急工具到多元化药物开发平台](#概述从紧急工具到多元化药物开发平台)\n2.  [多元化应用领域的深度拓展](#多元化应用领域的深度拓展)\n    1.  [传染病预防：从新冠到流感及其他新发传染病](#传染病预防从新冠到流感及其他新发传染病)\n    2.  [癌症免疫治疗：迈向精准与个性化的革命](#癌症免疫治疗迈向精准与个性化的革命)\n        1.  [个性化新生抗原疫苗：范式转变的先锋](#个性化新生抗原疫苗范式转变的先锋)\n        2.  [靶向共享抗原疫苗：广谱策略的探索](#靶向共享抗原疫苗广谱策略的探索)\n    3.  [治疗性蛋白替代与罕见遗传病：弥补基因缺陷的新策略](#治疗性蛋白替代与罕见遗传病弥补基因缺陷的新策略)\n    4.  [基因编辑工具递送：临时性干预的潜力](#基因编辑工具递送临时性干预的潜力)\n3.  [共同的核心挑战：递送系统的优化与靶向](#共同的核心挑战递送系统的优化与靶向)\n    1.  [肝向性局限：当前LNP的主要瓶颈](#肝向性局限当前lnp的主要瓶颈)\n    2.  [靶向策",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "evidence",
+          "freshness"
+        ],
+        "missing_dimensions": [
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 3,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 0
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness"
+      ],
+      "query_dimensions_missing": [
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 3,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 0
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_82b7c6d025f24fbf8020df3b8bd5075d",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T02:16:47.628376",
+      "ended_at": "2026-04-22T02:21:29.194038",
+      "duration_ms": 281565.66,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 37,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 37,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_007",
+    "query": "Advances in mRNA vaccine technology beyond COVID-19",
+    "variant": "no_iterdrag",
+    "wall_time_s": 319.5,
+    "domain": "medical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_b02d3ae007a34d53a0378401f3c2225c",
+    "duration_ms": 327938.68,
+    "final_report_chars": 11796,
+    "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，撰写一份关于“深度学习中的Transformer架构历史与演进”的深度总结报告。\n\n# 深度学习中的Transformer架构：历史、演进与影响深度总结\n\n## 目录\n1.  [概述：一场范式革命的开端](#概述一场范式革命的开端)\n2.  [奠基时刻：原始Transformer架构的诞生与核心创新](#奠基时刻原始transformer架构的诞生与核心创新)\n    1.  [历史背景与革命性突破](#历史背景与革命性突破)\n    2.  [核心组件解析](#核心组件解析)\n3.  [早期演进：在自然语言处理领域的范式确立与架构分化](#早期演进在自然语言处理领域的范式确立与架构分化)\n    1.  [预训练范式的确立](#预训练范式的确立)\n    2.  [三大技术路线的形成](#三大技术路线的形成)\n4.  [跨模态扩展：从语言到视觉与多模态的统一架构](#跨模态扩展从语言到视觉与多模态的统一架构)\n    1.  [视觉Transformer：打破CNN的垄断](#视觉transformer打破cnn的垄断)\n    2.  [多模态Transformer：对齐与融合](#多模态transformer对齐与融合)\n5.  [面向规模与效率的持续优化：应对挑战的演进](#面向规模与效率的持续优化应对挑战的演进)\n   ",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 2,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 6
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 2,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 6
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_b02d3ae007a34d53a0378401f3c2225c",
+      "model": "deepseek-chat",
+      "route": "deep",
+      "started_at": "2026-04-22T02:21:38.181449",
+      "ended_at": "2026-04-22T02:26:34.329681",
+      "duration_ms": 296148.23,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 38,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 38,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "variant": "no_iterdrag",
+    "wall_time_s": 335.9,
+    "domain": "scientific"
+  }
+]

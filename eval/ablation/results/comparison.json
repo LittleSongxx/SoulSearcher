@@ -1,0 +1,2089 @@
+{
+  "full": {
+    "completed": 5,
+    "total": 5,
+    "avg_time_s": 341.1,
+    "avg_report_chars": 11381,
+    "avg_query_coverage": 0.56,
+    "avg_sources": 37,
+    "cases": [
+      {
+        "status": "completed",
+        "thread_id": "thread_4be9e1798d1547628d274171367b6808",
+        "duration_ms": 350667.66,
+        "final_report_chars": 11722,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，为您撰写一份关于“2025年AI芯片市场占有率”的深度总结报告。\n\n# 2025年全球AI芯片市场占有率深度研究报告\n\n## 目录\n1.  [概述：生成式AI浪潮下的市场格局重塑](#概述生成式ai浪潮下的市场格局重塑)\n2.  [市场整体规模与增长动力](#市场整体规模与增长动力)\n    1.  [市场规模与增长预测](#市场规模与增长预测)\n    2.  [核心增长驱动力分析](#核心增长驱动力分析)\n3.  [竞争格局深度剖析：一超多强，多元竞逐](#竞争格局深度剖析一超多强多元竞逐)\n    1.  [绝对领导者：英伟达的生态霸权](#绝对领导者英伟达的生态霸权)\n    2.  [传统巨头与新兴挑战者：多元化的竞争格局](#传统巨头与新兴挑战者多元化的竞争格局)\n    3.  [中国市场的特殊性：国产替代加速，华为领跑](#中国市场的特殊性国产替代加速华为领跑)\n4.  [产品、功能与部署细分市场分析](#产品功能与部署细分市场分析)\n    1.  [产品类型：GPU主导，专用芯片崛起](#产品类型gpu主导专用芯片崛起)\n    2.  [功能需求：推理为主，训练驱动高端](#功能需求推理为主训练驱动高端)\n    3.  [部署位置：云端主战场，边缘快速扩张](#部署位置云端主战场边缘快速扩张)\n5.  [区域市场",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.4,
+            "covered_dimensions": [
+              "evidence",
+              "freshness"
+            ],
+            "missing_dimensions": [
+              "implementation",
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 2,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 0
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.4,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness"
+          ],
+          "query_dimensions_missing": [
+            "implementation",
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 2,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 0
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": true,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_4be9e1798d1547628d274171367b6808",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T01:33:53.960731",
+          "ended_at": "2026-04-22T01:39:10.691555",
+          "duration_ms": 316730.82,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 36,
+            "unsupported_claims_count": 8,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 36,
+          "unsupported_claims_count": 8,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "variant": "full",
+        "wall_time_s": 356.2,
+        "domain": "financial"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_fd1b18bb9f804a5f869291b7f04ac4bf",
+        "duration_ms": 328627.2,
+        "final_report_chars": 11070,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“比较Rust与Go在生产环境中构建微服务”的深度总结报告。\n\n# Rust 与 Go 构建生产级微服务的深度对比与选型指南\n\n## 目录\n1.  [引言：微服务架构下的语言选择之争](#引言微服务架构下的语言选择之争)\n2.  [Rust 概述：追求极致性能与安全的系统语言](#rust-概述追求极致性能与安全的系统语言)\n3.  [Go 概述：为云原生而生的高效并发语言](#go-概述为云原生而生的高效并发语言)\n4.  [核心维度深度对比](#核心维度深度对比)\n    1.  [性能与资源效率：成本与效能的终极权衡](#性能与资源效率成本与效能的终极权衡)\n    2.  [开发体验与团队协作：效率与严谨性的哲学碰撞](#开发体验与团队协作效率与严谨性的哲学碰撞)\n    3.  [安全性模型：运行时安全与编译时安全的根本差异](#安全性模型运行时安全与编译时安全的根本差异)\n    4.  [并发编程模型：轻量级协程与异步任务的对决](#并发编程模型轻量级协程与异步任务的对决)\n    5.  [生态系统与云原生集成：成熟稳定与快速发展的分野](#生态系统与云原生集成成熟稳定与快速发展的分野)\n    6.  [部署、运维与可观测性](#部署运维与可观测性)\n5.  [适用场景与战略选型建议](#适用场景与战略选型",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 3,
+              "official": 0,
+              "evidence": 2,
+              "risk": 0,
+              "implementation": 2
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 3,
+            "official": 0,
+            "evidence": 2,
+            "risk": 0,
+            "implementation": 2
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_fd1b18bb9f804a5f869291b7f04ac4bf",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T01:39:24.516669",
+          "ended_at": "2026-04-22T01:44:14.340562",
+          "duration_ms": 289823.89,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 35,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 35,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "variant": "full",
+        "wall_time_s": 332.3,
+        "domain": "technical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_ce70d1be12674fa4a78b0b9d31609449",
+        "duration_ms": 333316.08,
+        "final_report_chars": 10755,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于《欧盟人工智能法案》对企业SaaS公司影响的深度总结报告。\n\n# 《欧盟人工智能法案》对企业SaaS公司的深度影响与战略合规路径研究报告\n\n## 目录\n1.  [引言：全球AI监管的里程碑](#引言全球ai监管的里程碑)\n2.  [法案核心框架：风险分级与域外效力](#法案核心框架风险分级与域外效力)\n    1.  [风险分级监管体系](#风险分级监管体系)\n    2.  [广泛的域外管辖权](#广泛的域外管辖权)\n3.  [核心监管焦点：高风险AI系统的严苛义务](#核心监管焦点高风险ai系统的严苛义务)\n    1.  [高风险AI的典型应用场景](#高风险ai的典型应用场景)\n    2.  [高风险AI提供者的核心合规义务](#高风险ai提供者的核心合规义务)\n    3.  [关键合规时间表](#关键合规时间表)\n4.  [企业SaaS公司面临的多维挑战](#企业saas公司面临的多维挑战)\n    1.  [产品合规性判定与分类的模糊性挑战](#产品合规性判定与分类的模糊性挑战)\n    2.  [SaaS架构与运营模式带来的复杂性](#saas架构与运营模式带来的复杂性)\n    3.  [与GDPR等现有法规的叠加监管负担](#与gdpr等现有法规的叠加监管负担)\n    4.  [组织能力与技术实现的高",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.8,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation",
+              "risk"
+            ],
+            "missing_dimensions": [
+              "official"
+            ],
+            "dimension_hits": {
+              "freshness": 1,
+              "official": 0,
+              "evidence": 3,
+              "risk": 3,
+              "implementation": 2
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.8,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation",
+            "risk"
+          ],
+          "query_dimensions_missing": [
+            "official"
+          ],
+          "query_dimension_hits": {
+            "freshness": 1,
+            "official": 0,
+            "evidence": 3,
+            "risk": 3,
+            "implementation": 2
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_ce70d1be12674fa4a78b0b9d31609449",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T01:44:25.537349",
+          "ended_at": "2026-04-22T01:49:20.675332",
+          "duration_ms": 295137.98,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 36,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 36,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "variant": "full",
+        "wall_time_s": 341.3,
+        "domain": "legal"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_88de2a7110b444f0bac90053ca5dd1c1",
+        "duration_ms": 341833.55,
+        "final_report_chars": 11385,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“COVID-19之外mRNA疫苗技术的进展”的深度总结报告。\n\n# COVID-19之外mRNA疫苗技术的进展：从传染病快速响应到精准癌症治疗的革命性平台\n\n## 目录\n1.  [概述：从应急工具到多功能治疗平台的范式转变](#概述从应急工具到多功能治疗平台的范式转变)\n2.  [核心驱动力：mRNA技术平台的固有优势与广泛应用前景](#核心驱动力mrna技术平台的固有优势与广泛应用前景)\n    1.  [快速、灵活与高效的核心特性](#快速灵活与高效的核心特性)\n    2.  [应用领域的多元化拓展](#应用领域的多元化拓展)\n3.  [关键瓶颈与突破前沿：下一代递送系统的研发](#关键瓶颈与突破前沿下一代递送系统的研发)\n    1.  [当前LNP递送系统的核心挑战](#当前lnp递送系统的核心挑战)\n    2.  [理性设计与新型脂质开发](#理性设计与新型脂质开发)\n    3.  [增强内体逃逸效率](#增强内体逃逸效率)\n    4.  [实现精准靶向递送](#实现精准靶向递送)\n    5.  [人工智能的赋能作用](#人工智能的赋能作用)\n4.  [最具前景的应用领域：个性化mRNA癌症疫苗](#最具前景的应用领域个性化mrna癌症疫苗)\n    1.  [个性化策略的核心流程](#个性化策略的核心",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.4,
+            "covered_dimensions": [
+              "evidence",
+              "freshness"
+            ],
+            "missing_dimensions": [
+              "implementation",
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 2,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 0
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.4,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness"
+          ],
+          "query_dimensions_missing": [
+            "implementation",
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 2,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 0
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_88de2a7110b444f0bac90053ca5dd1c1",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T01:49:29.864245",
+          "ended_at": "2026-04-22T01:54:38.455482",
+          "duration_ms": 308591.24,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 39,
+            "unsupported_claims_count": 7,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 39,
+          "unsupported_claims_count": 7,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "variant": "full",
+        "wall_time_s": 345.9,
+        "domain": "medical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_7af627e36dbc4a059db7dbd9d25759cc",
+        "duration_ms": 326598.83,
+        "final_report_chars": 11975,
+        "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，撰写一份关于“深度学习中的Transformer架构历史与演变”的深度总结报告。\n\n# 深度学习中的Transformer架构：历史、演变与未来展望\n\n## 目录\n1.  [引言：一场静默的革命](#引言一场静默的革命)\n2.  [起源与核心突破：告别循环与卷积](#起源与核心突破告别循环与卷积)\n    1.  [历史背景与核心论文](#历史背景与核心论文)\n    2.  [核心创新：注意力即一切](#核心创新注意力即一切)\n    3.  [解决的关键瓶颈](#解决的关键瓶颈)\n3.  [架构详解：Transformer的核心机制](#架构详解transformer的核心机制)\n    1.  [自注意力与多头注意力机制](#自注意力与多头注意力机制)\n    2.  [位置编码：为序列注入顺序信息](#位置编码为序列注入顺序信息)\n    3.  [编码器-解码器结构与训练稳定技术](#编码器-解码器结构与训练稳定技术)\n    4.  [核心优势：并行性与全局建模能力](#核心优势并行性与全局建模能力)\n4.  [早期演变：在NLP领域的范式革命（2017-2019）](#早期演变在nlp领域的范式革命2017-2019)\n    1.  [BERT：双向编码与“预训练-微调”范式的确立](#bert双向编码与预训练-微",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 3,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 5
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 3,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 5
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_7af627e36dbc4a059db7dbd9d25759cc",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T01:54:50.227871",
+          "ended_at": "2026-04-22T01:59:39.070238",
+          "duration_ms": 288842.37,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 39,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 39,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "variant": "full",
+        "wall_time_s": 329.9,
+        "domain": "scientific"
+      }
+    ]
+  },
+  "no_iterdrag": {
+    "completed": 3,
+    "total": 5,
+    "avg_time_s": 331.1,
+    "avg_report_chars": 11132,
+    "avg_query_coverage": 0.533,
+    "avg_sources": 38,
+    "cases": [
+      {
+        "status": "timeout",
+        "error": "timeout after 420s",
+        "final_report_chars": 0,
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "variant": "no_iterdrag",
+        "wall_time_s": 420.1,
+        "domain": "financial"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_1bcb3267cf5042c993c743e6527317f7",
+        "duration_ms": 329823.2,
+        "final_report_chars": 10928,
+        "final_report_preview": "好的，我将根据您提供的主题“Compare Rust and Go for building microservices in production”以及所有相关信息，为您撰写一份深度总结报告。\n\n# Rust 与 Go 构建生产级微服务的深度对比与选型指南\n\n## 目录\n1.  [引言：微服务时代的语言抉择](#引言微服务时代的语言抉择)\n2.  [核心性能与资源效率：极致的控制力与高效的平衡](#核心性能与资源效率极致的控制力与高效的平衡)\n    1.  [Rust：追求极致性能与可预测性](#rust追求极致性能与可预测性)\n    2.  [Go：性能“足够好”与开发效率的平衡](#go性能足够好与开发效率的平衡)\n    3.  [真实案例：性能与成本效益的量化分析](#真实案例性能与成本效益的量化分析)\n3.  [开发体验与安全性：学习曲线与长期维护的权衡](#开发体验与安全性学习曲线与长期维护的权衡)\n    1.  [Go：简洁高效，快速上手](#go简洁高效快速上手)\n    2.  [Rust：陡峭但回报丰厚的安全保障](#rust陡峭但回报丰厚的安全保障)\n    3.  [内存管理范式的根本差异](#内存管理范式的根本差异)\n4.  [生态系统、部署与运维成熟度](#生态系统部署与运维成熟度)\n    1.  [Go：成熟稳定的云原生生态](#go成熟稳定",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 3,
+              "official": 0,
+              "evidence": 3,
+              "risk": 0,
+              "implementation": 3
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 3,
+            "official": 0,
+            "evidence": 3,
+            "risk": 0,
+            "implementation": 3
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_1bcb3267cf5042c993c743e6527317f7",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:06:06.131107",
+          "ended_at": "2026-04-22T02:11:04.252316",
+          "duration_ms": 298121.21,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 38,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 38,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "variant": "no_iterdrag",
+        "wall_time_s": 337.8,
+        "domain": "technical"
+      },
+      {
+        "status": "timeout",
+        "thread_id": null,
+        "duration_ms": 362163.18,
+        "error": "timeout after 360s",
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "variant": "no_iterdrag",
+        "wall_time_s": 367.7,
+        "domain": "legal"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_82b7c6d025f24fbf8020df3b8bd5075d",
+        "duration_ms": 311821.74,
+        "final_report_chars": 10671,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于“超越COVID-19的mRNA疫苗技术进展”的深度总结报告。\n\n# 超越COVID-19的mRNA疫苗技术进展：多元化应用、核心挑战与未来展望\n\n## 目录\n1.  [概述：从紧急工具到多元化药物开发平台](#概述从紧急工具到多元化药物开发平台)\n2.  [多元化应用领域的深度拓展](#多元化应用领域的深度拓展)\n    1.  [传染病预防：从新冠到流感及其他新发传染病](#传染病预防从新冠到流感及其他新发传染病)\n    2.  [癌症免疫治疗：迈向精准与个性化的革命](#癌症免疫治疗迈向精准与个性化的革命)\n        1.  [个性化新生抗原疫苗：范式转变的先锋](#个性化新生抗原疫苗范式转变的先锋)\n        2.  [靶向共享抗原疫苗：广谱策略的探索](#靶向共享抗原疫苗广谱策略的探索)\n    3.  [治疗性蛋白替代与罕见遗传病：弥补基因缺陷的新策略](#治疗性蛋白替代与罕见遗传病弥补基因缺陷的新策略)\n    4.  [基因编辑工具递送：临时性干预的潜力](#基因编辑工具递送临时性干预的潜力)\n3.  [共同的核心挑战：递送系统的优化与靶向](#共同的核心挑战递送系统的优化与靶向)\n    1.  [肝向性局限：当前LNP的主要瓶颈](#肝向性局限当前lnp的主要瓶颈)\n    2.  [靶向策",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.4,
+            "covered_dimensions": [
+              "evidence",
+              "freshness"
+            ],
+            "missing_dimensions": [
+              "implementation",
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 3,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 0
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.4,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness"
+          ],
+          "query_dimensions_missing": [
+            "implementation",
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 3,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 0
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_82b7c6d025f24fbf8020df3b8bd5075d",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:16:47.628376",
+          "ended_at": "2026-04-22T02:21:29.194038",
+          "duration_ms": 281565.66,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 37,
+            "unsupported_claims_count": 9,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 37,
+          "unsupported_claims_count": 9,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "variant": "no_iterdrag",
+        "wall_time_s": 319.5,
+        "domain": "medical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_b02d3ae007a34d53a0378401f3c2225c",
+        "duration_ms": 327938.68,
+        "final_report_chars": 11796,
+        "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，撰写一份关于“深度学习中的Transformer架构历史与演进”的深度总结报告。\n\n# 深度学习中的Transformer架构：历史、演进与影响深度总结\n\n## 目录\n1.  [概述：一场范式革命的开端](#概述一场范式革命的开端)\n2.  [奠基时刻：原始Transformer架构的诞生与核心创新](#奠基时刻原始transformer架构的诞生与核心创新)\n    1.  [历史背景与革命性突破](#历史背景与革命性突破)\n    2.  [核心组件解析](#核心组件解析)\n3.  [早期演进：在自然语言处理领域的范式确立与架构分化](#早期演进在自然语言处理领域的范式确立与架构分化)\n    1.  [预训练范式的确立](#预训练范式的确立)\n    2.  [三大技术路线的形成](#三大技术路线的形成)\n4.  [跨模态扩展：从语言到视觉与多模态的统一架构](#跨模态扩展从语言到视觉与多模态的统一架构)\n    1.  [视觉Transformer：打破CNN的垄断](#视觉transformer打破cnn的垄断)\n    2.  [多模态Transformer：对齐与融合](#多模态transformer对齐与融合)\n5.  [面向规模与效率的持续优化：应对挑战的演进](#面向规模与效率的持续优化应对挑战的演进)\n   ",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 2,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 6
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 2,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 6
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_b02d3ae007a34d53a0378401f3c2225c",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:21:38.181449",
+          "ended_at": "2026-04-22T02:26:34.329681",
+          "duration_ms": 296148.23,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 38,
+            "unsupported_claims_count": 9,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 38,
+          "unsupported_claims_count": 9,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "variant": "no_iterdrag",
+        "wall_time_s": 335.9,
+        "domain": "scientific"
+      }
+    ]
+  },
+  "no_claimverify": {
+    "completed": 4,
+    "total": 5,
+    "avg_time_s": 331.6,
+    "avg_report_chars": 11107,
+    "avg_query_coverage": 0.55,
+    "avg_sources": 38,
+    "cases": [
+      {
+        "status": "timeout",
+        "thread_id": null,
+        "duration_ms": 362228.74,
+        "error": "timeout after 360s",
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "variant": "no_claimverify",
+        "wall_time_s": 366.6,
+        "domain": "financial"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_fd6aeac9587d463389a9b1dca5f0b834",
+        "duration_ms": 330160.59,
+        "final_report_chars": 11377,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，为您撰写一份关于在生产环境中使用 Rust 与 Go 构建微服务的深度对比总结报告。\n\n# 生产环境微服务构建：Rust 与 Go 深度对比与战略选型指南\n\n## 目录\n1.  [引言：微服务时代的语言抉择](#引言微服务时代的语言抉择)\n2.  [战略定位与设计哲学：效率优先 vs. 控制至上](#战略定位与设计哲学效率优先-vs-控制至上)\n    1.  [Go：为云原生与开发效率而生](#go为云原生与开发效率而生)\n    2.  [Rust：为极致性能与安全可控而战](#rust为极致性能与安全可控而战)\n    3.  [核心决策框架：互补而非替代](#核心决策框架互补而非替代)\n3.  [底层机制深度剖析：内存与并发模型](#底层机制深度剖析内存与并发模型)\n    1.  [内存管理：垃圾回收与编译时安全](#内存管理垃圾回收与编译时安全)\n    2.  [并发模型：Goroutine 的简洁与 Async/Await 的精细](#并发模型goroutine-的简洁与-asyncawait-的精细)\n4.  [性能表现：基准测试与现实世界数据](#性能表现基准测试与现实世界数据)\n    1.  [吞吐量与延迟：不同负载下的表现](#吞吐量与延迟不同负载下的表现)\n    2.  [资源效率：内存与 CPU 占用](",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 2,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 1
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 2,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 1
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_fd6aeac9587d463389a9b1dca5f0b834",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:32:22.982491",
+          "ended_at": "2026-04-22T02:37:21.912188",
+          "duration_ms": 298929.7,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 38,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 38,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "variant": "no_claimverify",
+        "wall_time_s": 338.5,
+        "domain": "technical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_883c03ce5c1443868dcb139c742e79b5",
+        "duration_ms": 322428.21,
+        "final_report_chars": 11278,
+        "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，为您撰写一份关于“欧盟《人工智能法案》对企业级SaaS公司的影响”的深度总结报告。\n\n# 欧盟《人工智能法案》对企业级SaaS公司的深远影响与系统性合规路径\n\n## 目录\n1.  [引言：全球AI治理的里程碑与SaaS行业的十字路口](#引言全球ai治理的里程碑与saas行业的十字路口)\n2.  [法案核心框架：风险分级与广泛的域外效力](#法案核心框架风险分级与广泛的域外效力)\n    1.  [基于风险的四级监管体系](#基于风险的四级监管体系)\n    2.  [广泛的域外效力：全球SaaS公司的“欧盟准入门槛”](#广泛的域外效力全球saas公司的欧盟准入门槛)\n3.  [SaaS公司的双重角色与首要责任](#saas公司的双重角色与首要责任)\n    1.  [提供者与部署者：双重身份的界定与挑战](#提供者与部署者双重身份的界定与挑战)\n    2.  [提供者的首要责任：供应链风险的核心承担者](#提供者的首要责任供应链风险的核心承担者)\n4.  [高风险AI系统的合规“重镇”：义务详解与实施路径](#高风险ai系统的合规重镇义务详解与实施路径)\n    1.  [高风险场景识别与核心合规义务](#高风险场景识别与核心合规义务)\n    2.  [构建多层级的体系化合规框架](#构建多层级的体系化合规框架)\n5.  ",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "risk"
+            ],
+            "missing_dimensions": [
+              "implementation",
+              "official"
+            ],
+            "dimension_hits": {
+              "freshness": 2,
+              "official": 0,
+              "evidence": 2,
+              "risk": 3,
+              "implementation": 0
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "risk"
+          ],
+          "query_dimensions_missing": [
+            "implementation",
+            "official"
+          ],
+          "query_dimension_hits": {
+            "freshness": 2,
+            "official": 0,
+            "evidence": 2,
+            "risk": 3,
+            "implementation": 0
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_883c03ce5c1443868dcb139c742e79b5",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:37:24.357682",
+          "ended_at": "2026-04-22T02:42:20.929004",
+          "duration_ms": 296571.32,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 34,
+            "unsupported_claims_count": 9,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 34,
+          "unsupported_claims_count": 9,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "variant": "no_claimverify",
+        "wall_time_s": 324.7,
+        "domain": "legal"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_149f2abd7e934cdeb1729b6968ad066b",
+        "duration_ms": 336499.31,
+        "final_report_chars": 10337,
+        "final_report_preview": "好的，我将根据您提供的主题、信息、工作流和质量要求，撰写一份关于“超越COVID-19的mRNA疫苗技术进展”的深度总结报告。\n\n# 超越COVID-19的mRNA疫苗技术进展：深度总结与未来展望\n\n## 目录\n1.  [概述：从应急工具到通用治疗平台](#概述从应急工具到通用治疗平台)\n2.  [传染病预防领域的扩展与深化](#传染病预防领域的扩展与深化)\n    1.  [流感疫苗：超越传统效力的新标杆](#流感疫苗超越传统效力的新标杆)\n    2.  [应对多元病原体：从RSV到疟疾](#应对多元病原体从rsv到疟疾)\n    3.  [面向未来的大流行防范](#面向未来的大流行防范)\n    4.  [传染病领域面临的挑战](#传染病领域面临的挑战)\n3.  [癌症免疫治疗：开启个性化精准医疗新纪元](#癌症免疫治疗开启个性化精准医疗新纪元)\n    1.  [核心研发策略：个性化与通用型并举](#核心研发策略个性化与通用型并举)\n    2.  [分子与结构优化：提升疫苗效能](#分子与结构优化提升疫苗效能)\n    3.  [临床疗效：从黑色素瘤到多癌种的突破](#临床疗效从黑色素瘤到多癌种的突破)\n    4.  [协同效应：与现有疗法的联合增效](#协同效应与现有疗法的联合增效)\n    5.  [癌症治疗领域的前景与挑战](#癌症治疗领域的前景与挑战)\n4.  ",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.4,
+            "covered_dimensions": [
+              "evidence",
+              "freshness"
+            ],
+            "missing_dimensions": [
+              "implementation",
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 4,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 0
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.4,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness"
+          ],
+          "query_dimensions_missing": [
+            "implementation",
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 4,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 0
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_149f2abd7e934cdeb1729b6968ad066b",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:42:24.758766",
+          "ended_at": "2026-04-22T02:47:28.716606",
+          "duration_ms": 303957.84,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 38,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 38,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "variant": "no_claimverify",
+        "wall_time_s": 340.5,
+        "domain": "medical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_b1e45a2f5d5e4057ae264ae84621f1d5",
+        "duration_ms": 319115.72,
+        "final_report_chars": 11436,
+        "final_report_preview": "# 深度学习中的Transformer架构：历史与演进深度总结\n\n## 目录\n1.  [概述：一场架构革命的开端](#概述一场架构革命的开端)\n2.  [起源与核心突破（2017年）：告别循环与卷积](#起源与核心突破2017年告别循环与卷积)\n    *   [2.1 历史背景与核心问题](#21-历史背景与核心问题)\n    *   [2.2 革命性架构设计](#22-革命性架构设计)\n    *   [2.3 核心组件详解](#23-核心组件详解)\n3.  [NLP领域的范式确立（2017-2018年）：从模型到生态](#nlp领域的范式确立2017-2018年从模型到生态)\n    *   [3.1 并行化带来的规模化潜力](#31-并行化带来的规模化潜力)\n    *   [3.2 BERT与“预训练+微调”范式的确立](#32-bert与预训练微调范式的确立)\n    *   [3.3 对NLP领域的深远影响与早期局限](#33-对nlp领域的深远影响与早期局限)\n4.  [效率优化与架构变体（2019-2022年）：应对规模化的挑战](#效率优化与架构变体2019-2022年应对规模化的挑战)\n    *   [4.1 核心瓶颈：注意力机制的O(n²)复杂度](#41-核心瓶颈注意力机制的on²复杂度)\n    *   [4.2 高效注意力机制的探索](#42-高效注",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "freshness",
+              "implementation",
+              "risk"
+            ],
+            "missing_dimensions": [
+              "evidence",
+              "official"
+            ],
+            "dimension_hits": {
+              "freshness": 4,
+              "official": 0,
+              "evidence": 0,
+              "risk": 1,
+              "implementation": 7
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "freshness",
+            "implementation",
+            "risk"
+          ],
+          "query_dimensions_missing": [
+            "evidence",
+            "official"
+          ],
+          "query_dimension_hits": {
+            "freshness": 4,
+            "official": 0,
+            "evidence": 0,
+            "risk": 1,
+            "implementation": 7
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_b1e45a2f5d5e4057ae264ae84621f1d5",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T02:47:34.629726",
+          "ended_at": "2026-04-22T02:52:22.344501",
+          "duration_ms": 287714.77,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 40,
+            "unsupported_claims_count": 9,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 40,
+          "unsupported_claims_count": 9,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "variant": "no_claimverify",
+        "wall_time_s": 322.7,
+        "domain": "scientific"
+      }
+    ]
+  },
+  "linear": {
+    "completed": 0,
+    "total": 5,
+    "avg_time_s": 0,
+    "avg_report_chars": 0,
+    "avg_query_coverage": 0,
+    "avg_sources": 0,
+    "cases": [
+      {
+        "status": "timeout",
+        "error": "timeout after 420s",
+        "final_report_chars": 0,
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "variant": "linear",
+        "wall_time_s": 420.1,
+        "domain": "financial"
+      },
+      {
+        "status": "timeout",
+        "error": "timeout after 420s",
+        "final_report_chars": 0,
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "variant": "linear",
+        "wall_time_s": 420.1,
+        "domain": "technical"
+      },
+      {
+        "status": "timeout",
+        "error": "timeout after 420s",
+        "final_report_chars": 0,
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "variant": "linear",
+        "wall_time_s": 420.1,
+        "domain": "legal"
+      },
+      {
+        "status": "timeout",
+        "error": "timeout after 420s",
+        "final_report_chars": 0,
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "variant": "linear",
+        "wall_time_s": 420.1,
+        "domain": "medical"
+      },
+      {
+        "status": "timeout",
+        "error": "timeout after 420s",
+        "final_report_chars": 0,
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "variant": "linear",
+        "wall_time_s": 420.0,
+        "domain": "scientific"
+      }
+    ]
+  },
+  "single_provider": {
+    "completed": 5,
+    "total": 5,
+    "avg_time_s": 335.9,
+    "avg_report_chars": 10812,
+    "avg_query_coverage": 0.64,
+    "avg_sources": 35,
+    "cases": [
+      {
+        "status": "completed",
+        "thread_id": "thread_41d4e71b7e2e4f078973cafd867e3a1e",
+        "duration_ms": 350843.81,
+        "final_report_chars": 10573,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，为您撰写一份关于“2025年AI芯片市场份额”的深度总结报告。\n\n# 2025年AI芯片市场格局深度研究报告：份额、竞争与重塑\n\n## 目录\n1.  [概述：一个处于剧变与爆发中的市场](#概述一个处于剧变与爆发中的市场)\n2.  [全球市场概览：规模、增长与驱动力](#全球市场概览规模增长与驱动力)\n    1.  [市场规模：迈向千亿美元量级](#市场规模迈向千亿美元量级)\n    2.  [核心增长动力：从云端到边缘的全面需求](#核心增长动力从云端到边缘的全面需求)\n3.  [全球竞争格局：一超多强的生态博弈](#全球竞争格局一超多强的生态博弈)\n    1.  [绝对领导者：英伟达的生态护城河](#绝对领导者英伟达的生态护城河)\n    2.  [主要挑战者：AMD与英特尔的追赶之路](#主要挑战者amd与英特尔的追赶之路)\n    3.  [垂直整合者：云巨头的自研芯片战略](#垂直整合者云巨头的自研芯片战略)\n    4.  [其他重要参与者：多元化生态的构建者](#其他重要参与者多元化生态的构建者)\n4.  [中国市场：地缘政治下的独立赛道](#中国市场地缘政治下的独立赛道)\n    1.  [格局剧变：英伟达份额下滑与国产替代崛起](#格局剧变英伟达份额下滑与国产替代崛起)\n    2.  [本土领军者：华为与阿里巴巴",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.8,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation",
+              "risk"
+            ],
+            "missing_dimensions": [
+              "official"
+            ],
+            "dimension_hits": {
+              "freshness": 2,
+              "official": 0,
+              "evidence": 1,
+              "risk": 1,
+              "implementation": 1
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.8,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation",
+            "risk"
+          ],
+          "query_dimensions_missing": [
+            "official"
+          ],
+          "query_dimension_hits": {
+            "freshness": 2,
+            "official": 0,
+            "evidence": 1,
+            "risk": 1,
+            "implementation": 1
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": true,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_41d4e71b7e2e4f078973cafd867e3a1e",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T03:24:17.041739",
+          "ended_at": "2026-04-22T03:29:34.174594",
+          "duration_ms": 317132.85,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 35,
+            "unsupported_claims_count": 9,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 35,
+          "unsupported_claims_count": 9,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "variant": "single_provider",
+        "wall_time_s": 354.4,
+        "domain": "financial"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_824015a0e9e04aebaecbba33f36aa9cc",
+        "duration_ms": 336516.74,
+        "final_report_chars": 11062,
+        "final_report_preview": "好的，我将根据您提供的主题“Compare Rust and Go for building microservices in production”以及所有相关信息，为您撰写一份深度总结报告。\n\n# Rust 与 Go 在生产环境微服务构建中的深度对比与选型指南\n\n## 目录\n1.  [引言：微服务时代的语言抉择](#引言微服务时代的语言抉择)\n2.  [Rust 概述：追求极致性能与安全的系统语言](#rust-概述追求极致性能与安全的系统语言)\n3.  [Go 概述：为云原生而生的高效并发语言](#go-概述为云原生而生的高效并发语言)\n4.  [核心维度深度对比](#核心维度深度对比)\n    1.  [性能与资源效率：毫秒之争与成本之省](#性能与资源效率毫秒之争与成本之省)\n    2.  [开发体验与生产力：学习曲线与迭代速度](#开发体验与生产力学习曲线与迭代速度)\n    3.  [并发与内存模型：哲学的根本分野](#并发与内存模型哲学的根本分野)\n    4.  [生态系统与成熟度：广度与深度的权衡](#生态系统与成熟度广度与深度的权衡)\n    5.  [安全性与可靠性：编译时保障与运行时权衡](#安全性与可靠性编译时保障与运行时权衡)\n    6.  [运维与可观测性：部署便捷性与深度洞察](#运维与可观测性部署便捷性与深度洞察)\n5.  [适用场景与选型策",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 3,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 2
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 3,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 2
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_824015a0e9e04aebaecbba33f36aa9cc",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T03:29:39.174757",
+          "ended_at": "2026-04-22T03:34:43.178362",
+          "duration_ms": 304003.6,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 31,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 31,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "variant": "single_provider",
+        "wall_time_s": 339.2,
+        "domain": "technical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_5d34ebe7fd3a441d9bd1ecf6eb407df6",
+        "duration_ms": 324424.25,
+        "final_report_chars": 11181,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流要求，撰写一份关于《欧盟人工智能法案》对企业SaaS公司影响的深度总结报告。\n\n# 《欧盟人工智能法案》对企业SaaS公司的深度影响、挑战与合规策略研究报告\n\n## 目录\n1.  [引言：全球首部综合性AI法规的诞生与深远意义](#引言全球首部综合性ai法规的诞生与深远意义)\n2.  [法案核心框架：基于风险分级的监管范式](#法案核心框架基于风险分级的监管范式)\n    1.  [风险分级体系：从禁止到豁免](#风险分级体系从禁止到豁免)\n    2.  [广泛的域外适用性：全球SaaS企业的“达摩克利斯之剑”](#广泛的域外适用性全球saas企业的达摩克利斯之剑)\n3.  [高风险AI系统的认定与核心合规义务](#高风险ai系统的认定与核心合规义务)\n    1.  [高风险场景清单：SaaS产品的“体检表”](#高风险场景清单saas产品的体检表)\n    2.  [核心义务体系：构建可信AI的技术与管理基石](#核心义务体系构建可信ai的技术与管理基石)\n4.  [与GDPR的交叉合规：双重监管下的复杂挑战](#与gdpr的交叉合规双重监管下的复杂挑战)\n    1.  [法律基础的挑战：从“正当利益”到透明实践](#法律基础的挑战从正当利益到透明实践)\n    2.  [数据治理的张力：大规模训练与最小化原则](#数据治理的张力大规",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.8,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation",
+              "risk"
+            ],
+            "missing_dimensions": [
+              "official"
+            ],
+            "dimension_hits": {
+              "freshness": 1,
+              "official": 0,
+              "evidence": 2,
+              "risk": 2,
+              "implementation": 2
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.8,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation",
+            "risk"
+          ],
+          "query_dimensions_missing": [
+            "official"
+          ],
+          "query_dimension_hits": {
+            "freshness": 1,
+            "official": 0,
+            "evidence": 2,
+            "risk": 2,
+            "implementation": 2
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_5d34ebe7fd3a441d9bd1ecf6eb407df6",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T03:34:47.626723",
+          "ended_at": "2026-04-22T03:39:41.512846",
+          "duration_ms": 293886.12,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 34,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 34,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "variant": "single_provider",
+        "wall_time_s": 331.4,
+        "domain": "legal"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_79d6c52d827f4ba4b73543afdd2ef285",
+        "duration_ms": 314727.98,
+        "final_report_chars": 9242,
+        "final_report_preview": "好的，我将根据您提供的主题、信息和工作流，撰写一份关于“COVID-19之外的mRNA疫苗技术进展”的深度总结报告。\n\n# COVID-19之外的mRNA疫苗技术进展：深度总结与未来展望\n\n## 目录\n1.  [概述：从紧急授权到平台革命](#概述从紧急授权到平台革命)\n2.  [应用领域的多元化拓展](#应用领域的多元化拓展)\n    1.  [传染病预防：超越呼吸道病毒](#传染病预防超越呼吸道病毒)\n    2.  [癌症免疫治疗：个性化医疗的先锋](#癌症免疫治疗个性化医疗的先锋)\n    3.  [其他治疗领域的探索](#其他治疗领域的探索)\n3.  [核心技术进展：设计、递送与制造的革新](#核心技术进展设计递送与制造的革新)\n    1.  [分子设计与人工智能的深度融合](#分子设计与人工智能的深度融合)\n    2.  [递送系统的演进：从LNP到下一代靶向载体](#递送系统的演进从lnp到下一代靶向载体)\n4.  [面临的共同挑战与瓶颈](#面临的共同挑战与瓶颈)\n    1.  [稳定性与可及性：冷链依赖的枷锁](#稳定性与可及性冷链依赖的枷锁)\n    2.  [靶向递送效率：非肝器官递送的技术壁垒](#靶向递送效率非肝器官递送的技术壁垒)\n    3.  [生产与监管的复杂性](#生产与监管的复杂性)\n    4.  [免疫原性与安全性的平衡](#免疫原性",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.4,
+            "covered_dimensions": [
+              "evidence",
+              "freshness"
+            ],
+            "missing_dimensions": [
+              "implementation",
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 3,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 0
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.4,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness"
+          ],
+          "query_dimensions_missing": [
+            "implementation",
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 3,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 0
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_79d6c52d827f4ba4b73543afdd2ef285",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T03:39:50.204484",
+          "ended_at": "2026-04-22T03:44:35.712650",
+          "duration_ms": 285508.17,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 37,
+            "unsupported_claims_count": 8,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 37,
+          "unsupported_claims_count": 8,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "variant": "single_provider",
+        "wall_time_s": 318.5,
+        "domain": "medical"
+      },
+      {
+        "status": "completed",
+        "thread_id": "thread_6390cfe9ddfa417490a6e0a55d5a392a",
+        "duration_ms": 332114.96,
+        "final_report_chars": 12003,
+        "final_report_preview": "# Transformer架构在深度学习中的历史与演进：从“Attention Is All You Need”到多模态智能基石\n\n## 目录\n1.  [引言：一场颠覆性的范式革命](#引言一场颠覆性的范式革命)\n2.  [起源与核心创新（2017年）：告别循环与卷积](#起源与核心创新2017年告别循环与卷积)\n    *   [2.1 历史背景与前序模型的局限](#21-历史背景与前序模型的局限)\n    *   [2.2 《Attention Is All You Need》的划时代宣言](#22-attention-is-all-you-need的划时代宣言)\n    *   [2.3 核心创新：并行化与自注意力机制](#23-核心创新并行化与自注意力机制)\n3.  [核心机制与基础架构解析](#核心机制与基础架构解析)\n    *   [3.1 自注意力机制：架构的基石](#31-自注意力机制架构的基石)\n    *   [3.2 编码器-解码器结构](#32-编码器-解码器结构)\n    *   [3.3 支撑深度训练的关键技术](#33-支撑深度训练的关键技术)\n4.  [早期变体与范式确立（2018年）：BERT与GPT的双星闪耀](#早期变体与范式确立2018年bert与gpt的双星闪耀)\n    *   [4.1 从通用架构到专用变体](#41-从通用架构到专用",
+        "error": null,
+        "last_quality_update": {
+          "epoch": 1,
+          "stage": "final",
+          "query_coverage": {
+            "score": 0.6,
+            "covered_dimensions": [
+              "evidence",
+              "freshness",
+              "implementation"
+            ],
+            "missing_dimensions": [
+              "official",
+              "risk"
+            ],
+            "dimension_hits": {
+              "freshness": 4,
+              "official": 0,
+              "evidence": 1,
+              "risk": 0,
+              "implementation": 6
+            },
+            "total_queries": 8
+          },
+          "query_coverage_score": 0.6,
+          "query_dimensions_covered": [
+            "evidence",
+            "freshness",
+            "implementation"
+          ],
+          "query_dimensions_missing": [
+            "official",
+            "risk"
+          ],
+          "query_dimension_hits": {
+            "freshness": 4,
+            "official": 0,
+            "evidence": 1,
+            "risk": 0,
+            "implementation": 6
+          },
+          "freshness_summary": {
+            "total_results": 40,
+            "known_count": 0,
+            "unknown_count": 40,
+            "fresh_7_count": 0,
+            "fresh_30_count": 0,
+            "stale_180_count": 0,
+            "fresh_30_ratio": 0.0,
+            "stale_180_ratio": 0.0
+          },
+          "time_sensitive_query": false,
+          "freshness_warning": ""
+        },
+        "run_metrics": {
+          "run_id": "thread_6390cfe9ddfa417490a6e0a55d5a392a",
+          "model": "deepseek-chat",
+          "route": "deep",
+          "started_at": "2026-04-22T03:44:41.086535",
+          "ended_at": "2026-04-22T03:49:47.963507",
+          "duration_ms": 306876.97,
+          "event_count": 10,
+          "nodes_started": {
+            "langgraph": 1,
+            "router": 1,
+            "route_decision": 1,
+            "deepsearch": 1,
+            "human_review": 1
+          },
+          "nodes_completed": {
+            "route_decision": 1,
+            "router": 1,
+            "deepsearch": 1,
+            "human_review": 1,
+            "langgraph": 1
+          },
+          "errors": [],
+          "cancelled": false,
+          "evidence_summary": {
+            "sources_count": 40,
+            "unsupported_claims_count": 10,
+            "freshness_ratio_30d": null,
+            "citation_coverage": null,
+            "query_coverage_score": null,
+            "freshness_warning": null,
+            "claim_verifier_total": null,
+            "claim_verifier_verified": null,
+            "claim_verifier_unsupported": null,
+            "claim_verifier_contradicted": null
+          }
+        },
+        "evidence_summary": {
+          "sources_count": 40,
+          "unsupported_claims_count": 10,
+          "freshness_ratio_30d": null,
+          "citation_coverage": null,
+          "query_coverage_score": null,
+          "freshness_warning": null,
+          "claim_verifier_total": null,
+          "claim_verifier_verified": null,
+          "claim_verifier_unsupported": null,
+          "claim_verifier_contradicted": null
+        },
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "variant": "single_provider",
+        "wall_time_s": 335.9,
+        "domain": "scientific"
+      }
+    ]
+  }
+}

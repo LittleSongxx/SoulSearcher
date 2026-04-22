@@ -1,0 +1,52 @@
+[
+  {
+    "status": "timeout",
+    "error": "timeout after 420s",
+    "final_report_chars": 0,
+    "case_id": "case_001",
+    "query": "Latest AI chip market share in 2025",
+    "variant": "linear",
+    "wall_time_s": 420.1,
+    "domain": "financial"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 420s",
+    "final_report_chars": 0,
+    "case_id": "case_004",
+    "query": "Compare Rust and Go for building microservices in production",
+    "variant": "linear",
+    "wall_time_s": 420.1,
+    "domain": "technical"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 420s",
+    "final_report_chars": 0,
+    "case_id": "case_005",
+    "query": "Impact of EU AI Act on enterprise SaaS companies",
+    "variant": "linear",
+    "wall_time_s": 420.1,
+    "domain": "legal"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 420s",
+    "final_report_chars": 0,
+    "case_id": "case_007",
+    "query": "Advances in mRNA vaccine technology beyond COVID-19",
+    "variant": "linear",
+    "wall_time_s": 420.1,
+    "domain": "medical"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 420s",
+    "final_report_chars": 0,
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "variant": "linear",
+    "wall_time_s": 420.0,
+    "domain": "scientific"
+  }
+]
