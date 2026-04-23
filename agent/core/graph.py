@@ -24,6 +24,7 @@ from agent.workflows.nodes import (
     refine_plan_node,
     revise_report_node,
     route_node,
+    tree_search_node,
     web_search_plan_node,
     writer_node,
 )
@@ -85,6 +86,7 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     from common.config import settings
 
     use_hierarchical = getattr(settings, "use_hierarchical_agents", False)
+    use_hybrid = use_hierarchical and getattr(settings, "use_hybrid_search", True)
 
     # Initialize the graph
     workflow = StateGraph(AgentState)
@@ -111,6 +113,8 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     # Add coordinator node for hierarchical mode
     if use_hierarchical:
         workflow.add_node("coordinator", coordinator_node)
+    if use_hybrid:
+        workflow.add_node("tree_search", tree_search_node)
 
     # Set entry point
     workflow.set_entry_point("router")
@@ -121,7 +125,9 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
 
         if route == "deep":
             if use_hierarchical:
-                logger.info("[route_decision] → Routing to 'coordinator' node (hierarchical)")
+                logger.info(
+                    "[route_decision] → Routing to 'coordinator' node (hierarchical)"
+                )
                 return "coordinator"
             logger.info("[route_decision] → Routing to 'deepsearch' node")
             return "deepsearch"
@@ -146,30 +152,36 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
 
     # Coordinator edges (hierarchical mode only)
     if use_hierarchical:
+
         def after_coordinator(state: AgentState) -> str:
             action = state.get("coordinator_action", "research")
             logger.info(f"[after_coordinator] action='{action}'")
-            if action == "plan":
-                return "planner"
-            elif action == "research":
-                return "planner"  # plan then research
-            elif action == "synthesize":
+            if action == "synthesize":
                 return "writer"
             elif action == "complete":
                 return "human_review"
-            elif action == "reflect":
-                return "planner"  # reflect feeds back into planning
+            # plan, research, reflect all go to search
+            if use_hybrid:
+                return "tree_search"
             return "planner"
 
-        workflow.add_conditional_edges(
-            "coordinator", after_coordinator,
-            ["planner", "writer", "human_review"]
-        )
+        coord_targets = ["writer", "human_review"]
+        if use_hybrid:
+            coord_targets.append("tree_search")
+        else:
+            coord_targets.append("planner")
+        workflow.add_conditional_edges("coordinator", after_coordinator, coord_targets)
+
+        # Hybrid: tree_search → compressor (reuses existing compressor → writer path)
+        if use_hybrid:
+            workflow.add_edge("tree_search", "compressor")
 
     def after_clarify(state: AgentState) -> str:
         return "human_review" if state.get("needs_clarification") else "planner"
 
-    workflow.add_conditional_edges("clarify", after_clarify, ["planner", "human_review"])
+    workflow.add_conditional_edges(
+        "clarify", after_clarify, ["planner", "human_review"]
+    )
 
     # Planning path (agent + deep)
     workflow.add_edge("planner", "hitl_plan_review")
@@ -189,7 +201,9 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
             return "compressor"
         return "writer"
 
-    workflow.add_conditional_edges("perform_parallel_search", after_search, ["compressor", "writer"])
+    workflow.add_conditional_edges(
+        "perform_parallel_search", after_search, ["compressor", "writer"]
+    )
 
     # Compressor feeds into (optional) sources review, then writer.
     workflow.add_edge("compressor", "hitl_sources_review")
@@ -198,13 +212,12 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     def after_writer(state: AgentState) -> str:
         if state.get("route") == "deep":
             if use_hierarchical:
-                return "coordinator"
+                # Hybrid: run evaluator for quality signals, then coordinator decides
+                return "evaluator"
             return "evaluator"
         return "human_review"
 
     writer_targets = ["evaluator", "human_review"]
-    if use_hierarchical:
-        writer_targets.append("coordinator")
     workflow.add_edge("writer", "hitl_draft_review")
     workflow.add_conditional_edges("hitl_draft_review", after_writer, writer_targets)
 
@@ -218,6 +231,10 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
         - "revise" with acceptable coverage → reviser (rewrite report)
         - "incomplete" → refine_plan (major gaps)
         - max_revisions exceeded → human_review (stop iterating)
+
+        In hierarchical mode, revise/incomplete route back to coordinator
+        instead of refine_plan, letting coordinator decide next action
+        with full quality context.
         """
         verdict = state.get("verdict", "pass")
         revision_count = int(state.get("revision_count", 0))
@@ -225,13 +242,21 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
 
         # Check if we've exceeded max revisions
         if revision_count >= max_revisions:
-            logger.info(f"Max revisions ({max_revisions}) reached, proceeding to human review")
+            if use_hierarchical:
+                return "coordinator"
+            logger.info(
+                f"Max revisions ({max_revisions}) reached, proceeding to human review"
+            )
             return "human_review"
 
         if verdict == "pass":
+            if use_hierarchical:
+                return "coordinator"  # coordinator will see quality=pass and complete
             return "human_review"
 
         if verdict == "incomplete":
+            if use_hierarchical:
+                return "coordinator"  # coordinator decides: more research or complete
             return "refine_plan"
 
         # For "revise" verdict, check if we need more research or just a rewrite
@@ -239,18 +264,24 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
         coverage = eval_dims.get("coverage", 0.7)
         missing_topics = state.get("missing_topics", [])
 
+        if use_hierarchical:
+            return "coordinator"  # let coordinator handle all revise decisions
+
         # Low coverage or missing topics → need more research
         if coverage < 0.6 or missing_topics:
-            logger.info(f"Low coverage ({coverage:.2f}) or missing topics, routing to refine_plan")
+            logger.info(
+                f"Low coverage ({coverage:.2f}) or missing topics, routing to refine_plan"
+            )
             return "refine_plan"
 
         # Acceptable coverage but poor writing → rewrite
         logger.info("Coverage acceptable, routing to reviser for rewrite")
         return "reviser"
 
-    workflow.add_conditional_edges(
-        "evaluator", after_evaluator, ["refine_plan", "reviser", "human_review"]
-    )
+    evaluator_targets = ["refine_plan", "reviser", "human_review"]
+    if use_hierarchical:
+        evaluator_targets.append("coordinator")
+    workflow.add_conditional_edges("evaluator", after_evaluator, evaluator_targets)
 
     # Reviser rewrites the report and goes back to evaluator
     workflow.add_edge("reviser", "evaluator")
@@ -281,7 +312,9 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     return graph
 
 
-def export_graph_mermaid(output_path: str = "graph_mermaid.md", xray: bool = True) -> Path:
+def export_graph_mermaid(
+    output_path: str = "graph_mermaid.md", xray: bool = True
+) -> Path:
     """
     Export the compiled graph to a mermaid markdown file for visualization.
     """
@@ -300,13 +333,17 @@ def create_checkpointer(database_url: str):
     This allows long-running agents to pause/resume and handle failures.
     """
     if not database_url:
-        raise ValueError("database_url is required to initialize the Postgres checkpointer.")
+        raise ValueError(
+            "database_url is required to initialize the Postgres checkpointer."
+        )
 
     # Create connection (psycopg3)
     try:
         conn = psycopg.connect(database_url, autocommit=True)
     except Exception as e:
-        raise RuntimeError(f"Failed to connect to Postgres for checkpointer: {e}") from e
+        raise RuntimeError(
+            f"Failed to connect to Postgres for checkpointer: {e}"
+        ) from e
 
     # Create checkpointer
     checkpointer = AsyncCompatPostgresSaver(conn)

@@ -1013,6 +1013,176 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         }
 
 
+def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+    """
+    Tree-based search node for hybrid coordinator mode.
+
+    Uses TreeExplorer for parallel subtopic decomposition and search,
+    but does NOT generate a report. Returns scraped_content + summary_notes
+    for the coordinator → compressor → writer pipeline.
+
+    On subsequent coordinator iterations, uses missing_topics to focus
+    the tree exploration on gaps.
+    """
+    logger.info("Executing tree_search_node (hybrid mode)")
+    try:
+        check_cancellation(state)
+
+        topic = str(state.get("input", "") or "").strip()
+        missing_topics = state.get("missing_topics", []) or []
+        coord_iters = int(state.get("coordinator_iterations", 0) or 0)
+
+        # On subsequent rounds, focus tree on missing topics
+        existing_knowledge = ""
+        if coord_iters > 1 and missing_topics:
+            existing_knowledge = (
+                "Already researched. Focus on these gaps:\n"
+                + "\n".join(f"- {t}" for t in missing_topics[:5])
+            )
+            logger.info(
+                f"[tree_search] Focused search on {len(missing_topics)} missing topics"
+            )
+
+        planning_model = _model_for_task("planning", config)
+        research_model = _model_for_task("research", config)
+        writing_model = _model_for_task("writing", config)
+
+        planner_llm = _chat_model(planning_model, temperature=0.8)
+        critic_llm = _chat_model(research_model, temperature=0.2)
+        writer_llm = _chat_model(writing_model, temperature=0.5)
+
+        max_depth = int(getattr(settings, "tree_max_depth", 2))
+        max_branches = int(getattr(settings, "tree_max_branches", 4))
+        queries_per_branch = int(getattr(settings, "tree_queries_per_branch", 3))
+        per_query_results = int(getattr(settings, "deepsearch_results_per_query", 5))
+        parallel_branches = int(getattr(settings, "tree_parallel_branches", 3))
+
+        # Tighter budget on subsequent iterations (gap-filling, not full exploration)
+        if coord_iters > 1:
+            max_branches = min(max_branches, 2)
+            queries_per_branch = min(queries_per_branch, 2)
+
+        from agent.workflows.research_tree import TreeExplorer
+
+        search_runs: List[Dict[str, Any]] = []
+
+        def _tree_search_func(payload, config_payload=None, **kwargs):
+            query = (payload or {}).get("query", "")
+            max_results = int((payload or {}).get("max_results", per_query_results))
+            from agent.workflows.deepsearch_optimized import (
+                _search_query,
+                _resolve_provider_profile,
+            )
+
+            provider_profile = _resolve_provider_profile(state)
+            effective_config = (
+                kwargs.get("config")
+                if isinstance(kwargs.get("config"), dict)
+                else config_payload if isinstance(config_payload, dict) else config
+            )
+            results = _search_query(
+                query, max_results, effective_config, provider_profile=provider_profile
+            )
+            search_runs.append(
+                {
+                    "query": query,
+                    "results": results if isinstance(results, list) else [],
+                }
+            )
+            return results
+
+        explorer = TreeExplorer(
+            planner_llm=planner_llm,
+            researcher_llm=critic_llm,
+            writer_llm=writer_llm,
+            search_func=_tree_search_func,
+            config=config,
+            max_depth=max_depth,
+            max_branches=max_branches,
+            queries_per_branch=queries_per_branch,
+        )
+
+        t0 = time.time()
+
+        # Run tree exploration (prefer async parallel)
+        import concurrent.futures
+
+        tree = None
+        if parallel_branches > 0:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(
+                            lambda: asyncio.run(
+                                explorer.run_async(
+                                    topic, state, decompose_root=(max_depth > 0)
+                                )
+                            )
+                        )
+                        tree = future.result()
+                else:
+                    tree = loop.run_until_complete(
+                        explorer.run_async(topic, state, decompose_root=(max_depth > 0))
+                    )
+            except RuntimeError:
+                tree = asyncio.run(
+                    explorer.run_async(topic, state, decompose_root=(max_depth > 0))
+                )
+            except Exception as e:
+                logger.warning(f"[tree_search] Async failed, using sync: {e}")
+                tree = explorer.run(topic, state, decompose_root=(max_depth > 0))
+        else:
+            tree = explorer.run(topic, state, decompose_root=(max_depth > 0))
+
+        if tree is None:
+            tree = getattr(explorer, "tree", None)
+
+        # Collect results
+        merged_summary = explorer.get_final_summary()
+        all_sources = explorer.get_all_sources()
+        all_queries = []
+        if tree:
+            for node in tree.nodes.values():
+                all_queries.extend(node.queries)
+
+        summary_notes = [merged_summary] if merged_summary else []
+        # Also add per-branch summaries for richer context
+        if tree:
+            for node in tree.get_completed_nodes():
+                if node.summary and node.summary != merged_summary:
+                    summary_notes.append(node.summary)
+
+        elapsed = time.time() - t0
+        logger.info(
+            f"[tree_search] Completed in {elapsed:.1f}s: "
+            f"{len(search_runs)} searches, {len(all_sources)} sources, "
+            f"{len(summary_notes)} summaries"
+        )
+
+        # Merge with existing scraped_content from prior rounds
+        existing_scraped = state.get("scraped_content", []) or []
+        existing_notes = state.get("summary_notes", []) or []
+
+        return {
+            "research_plan": list(set(all_queries)),
+            "scraped_content": existing_scraped + search_runs,
+            "summary_notes": existing_notes + summary_notes,
+        }
+
+    except asyncio.CancelledError as e:
+        return handle_cancellation(state, e)
+    except Exception as e:
+        logger.error(f"[tree_search] Error: {e}", exc_info=True)
+        # Fallback: return empty so coordinator can decide next step
+        return {
+            "research_plan": [state.get("input", "")],
+            "scraped_content": state.get("scraped_content", []),
+            "summary_notes": state.get("summary_notes", []),
+            "errors": [f"Tree search error: {str(e)}"],
+        }
+
+
 def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """Deep search pipeline that iterates query → search → summarize."""
     logger.info("Executing deepsearch node")

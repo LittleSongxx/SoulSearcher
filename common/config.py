@@ -309,6 +309,9 @@ class Settings(BaseSettings):
     use_hierarchical_agents: bool = (
         False  # Enable coordinator→planner→researcher→reporter flow
     )
+    use_hybrid_search: bool = (
+        True  # When hierarchical is enabled, use tree search instead of flat planner
+    )
 
     # Domain Routing Config
     domain_routing_enabled: bool = False  # Enable domain-specific routing and prompts

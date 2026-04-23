@@ -10,11 +10,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Hierarchical mode with minimal resource usage for testing
 os.environ["USE_HIERARCHICAL_AGENTS"] = "true"
-os.environ["DEEPSEARCH_MAX_EPOCHS"] = "0"
-os.environ["MAX_REVISIONS"] = "0"
+os.environ["DEEPSEARCH_MAX_EPOCHS"] = "2"
+os.environ["MAX_REVISIONS"] = "1"
 os.environ["TREE_MAX_DEPTH"] = "1"
 os.environ["TREE_MAX_BRANCHES"] = "2"
-os.environ["DEEPSEARCH_MAX_SECONDS"] = "180"
+os.environ["DEEPSEARCH_MAX_SECONDS"] = "240"
 os.environ["DEEPSEARCH_RESULTS_PER_QUERY"] = "2"
 os.environ["DEEPSEARCH_TREE_MAX_SEARCHES"] = "3"
 os.environ["ENABLE_REPORT_CHARTS"] = "false"  # Skip chart gen to save time/tokens
@@ -49,7 +49,7 @@ async def main():
         mode="auto",
         base_url="asgi",
         model="",
-        timeout_s=240,
+        timeout_s=360,
     )
     elapsed = time.time() - t0
     status = result.get("status", "unknown")

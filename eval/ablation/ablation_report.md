@@ -1,10 +1,10 @@
 # Deep Research 消融实验报告 (Ablation Study)
 
-**日期**: 2026-04-23 (v4)  
-**测试条件**: 快速模式 (max_epochs=2, tree_depth=1, branches=3, queries/branch=2, results/query=3, max_seconds=300, subprocess timeout=600s)  
+**日期**: 2026-04-23 (v5)  
+**测试条件**: 快速模式 (max_epochs=2, tree_depth=1, branches=3, queries/branch=2, results/query=3, max_seconds=300, subprocess timeout=720s)  
 **测试 Case**: 5 个代表性 case (financial, technical, legal, medical, scientific)  
-**变体数**: 6 (full, no_iterdrag, no_claimverify, linear, single_provider, hierarchical)  
-**v4 更新**: Hierarchical 模式经过完整修复后重新测试（coordinator 决策逻辑、compressor 反序列化、writer tool-calling 优化）
+**变体数**: 7 (full, no_iterdrag, no_claimverify, linear, single_provider, hierarchical, **hybrid**)  
+**v5 更新**: 新增 Hybrid 模式 — Coordinator 外层质量循环 + Tree Explorer 内层并行搜索，结合两种方案优势
 
 ---
 
@@ -18,6 +18,7 @@
 | linear | 3/5 (60%) | 444s | 13,441 chars | 0.60 | 70 |
 | single_provider | 5/5 (100%) | 336s | 10,812 chars | 0.64 | 35 |
 | hierarchical (v4修复后) | 4/5 (80%) | 257s | 6,957 chars | 0.00 | 5 |
+| **hybrid (v5新增)** | **5/5 (100%)** | **340s** | **7,413 chars** | 0.00 | **36** |
 
 > **注**: no_iterdrag 和 no_claimverify 在 v2 run 中因增加了 subprocess timeout (420s→600s) 而全部完成，v1 run 中分别有 2/1 个 timeout。
 
@@ -80,6 +81,43 @@
 
 - **结论**: 修复后 Hierarchical 模式**功能基本可用**。完成率和报告质量显著提升，但报告长度仍比 baseline 短 ~39%，主要原因是 coordinator 循环的搜索广度受限（单轮 plan→search→write vs tree 的并行多分支搜索）。case_010 超时可能与特定 topic 的搜索复杂度有关。
 
+### 2.7 Hybrid 模式 (v5 新增 — Coordinator + Tree Search)
+
+#### 架构设计
+将 Hierarchical 的 **Coordinator 质量循环** 与 Tree Explorer 的 **并行多分支搜索** 结合：
+```
+coordinator(plan) → tree_search_node → compressor → writer → evaluator → coordinator(complete/research)
+```
+关键改进：
+1. Coordinator 的 `plan/research/reflect` 动作路由到 `tree_search_node`（替代原来的 flat planner → search）
+2. `tree_search_node` 使用 `TreeExplorer` 做子主题分解 + 并行分支搜索
+3. `evaluator` 产出的质量信号（verdict/missing_topics）回传 coordinator 驱动下一步决策
+4. 后续 coordinator 循环使用 `missing_topics` 聚焦缺口搜索（缩减 branches/queries 参数）
+
+#### 实验结果
+| 指标 | Full Baseline | Hierarchical (v4) | **Hybrid (v5)** | Hybrid vs Full |
+|---|---|---|---|---|
+| 完成率 | 5/5 (100%) | 4/5 (80%) | **5/5 (100%)** | 持平 |
+| 平均耗时 | 341s | 257s | **340s** | -0.3% |
+| 平均报告长度 | 11,381 chars | 6,957 chars | **7,413 chars** | **-34.9%** |
+| 平均引用源数 | 37 | 5 | **36** | -2.7% |
+| 节点执行流 | 5 nodes | ~8 nodes | **14 nodes** | — |
+
+#### 分析
+**相比 Hierarchical (v4) 的提升**:
+- **完成率**: 80% → **100%** (消除了 case_010 超时问题)
+- **引用源数**: 5 → **36** (**7.2x 提升** — 恢复到 baseline 水平)
+- **报告长度**: 6,957 → **7,413** (+6.6%)
+- **稳定性**: 5个 case 报告长度方差显著降低 (6476-8637 chars vs 0-7960 chars)
+
+**与 Full Baseline 的差距**:
+- 报告长度仍短 34.9%，根因分析：
+  1. **Writer 上下文差异**: Full baseline 的 `run_deepsearch_tree` 内部 writer 直接使用完整的搜索结果和树摘要生成报告；Hybrid 的 writer 通过 `ResultAggregator + CompressedKnowledge` 管道，压缩过程丢失了部分细节
+  2. **报告后处理缺失**: Full baseline 有 `_append_auto_references` 和 `_final_report` 等专用报告生成函数；Hybrid 使用通用 `writer_node`，缺少这些增强
+  3. **Evaluator 结构化输出失败**: 当前 API 对 `response_format` 返回 400 错误，evaluator fallback 为 `verdict=pass`，导致 coordinator 直接 complete 而非触发追加搜索
+
+**结论**: Hybrid 模式成功解决了 Hierarchical 的**搜索广度不足**（源数从 5 恢复到 36）和**稳定性差**（完成率 80%→100%）两大问题。但报告长度差距仍需通过优化 writer 管道和修复 evaluator 来弥合。
+
 ## 3. 组件重要性排序
 
 | 排名 | 组件 | 贡献维度 | 影响程度 |
@@ -87,8 +125,9 @@
 | 1 | **Tree Explorer** | 效率 & 可靠性 | 🔴 关键 (30%+ 速度提升, 完成率 100%→60%) |
 | 2 | **ClaimVerifier** | 搜索质量 | 🟠 重要 (QC +14.3%, 但增加 18% 耗时) |
 | 3 | **IterDRAG** | 收敛效率 & 紧约束稳定性 | 🟡 中等 (耗时 +5.9%, 紧约束下完成率下降) |
-| 4 | **Multi-Provider** | 信息源多样性 | 🟢 轻微 (报告长度 -5%, 源数 -5.4%) |
-| 5 | **Hierarchical Agents** | 智能循环控制 | 🟡 可用 (完成率80%, 报告-39%, 速度+25%) |
+| 4 | **Hybrid (Coordinator+Tree)** | 搜索广度 + 质量循环 | 🟡 有潜力 (完成率100%, 源数恢复, 报告长度待优化) |
+| 5 | **Multi-Provider** | 信息源多样性 | 🟢 轻微 (报告长度 -5%, 源数 -5.4%) |
+| 6 | **Hierarchical Agents** | 智能循环控制 | 🟡 可用但不推荐 (完成率80%, 报告-39%) |
 
 ## 4. 发现的 Bug 及修复
 
@@ -108,8 +147,12 @@
 2. **ClaimVerifier 的真正价值** 体现在报告中无支撑声明 (unsupported claims) 的数量上，需要额外指标来量化
 3. **Search Cache** 未单独测试（本次所有变体共享相同 cache 设置），建议后续添加 no_cache 变体
 4. 每变体仅 5 个 case，样本量较小，结论需审慎解读
-5. **Hierarchical 模式** v4修复后基本可用(80%完成率)，但报告长度仍低于 baseline ~39%；后续可优化搜索广度（并行子任务）和 writer 上下文管理
-6. **Linear 模式** 仍有 2/5 超时，建议进一步缩小搜索范围或增加 timeout
+5. **Hierarchical 模式** v4修复后基本可用(80%完成率)，但报告长度仍低于 baseline ~39%
+6. **Hybrid 模式** v5验证了 Coordinator+Tree 结合的可行性（完成率100%，源数36），但报告长度差距（-35%）需通过以下方向优化：
+   - 修复 Evaluator 的结构化输出兼容性，使 coordinator 能触发追加搜索轮次
+   - 优化 writer_node 的上下文管理，传入完整的 tree summary 而非仅 compressed knowledge
+   - 在 tree_search_node 中集成 IterDRAG gap analysis
+7. **Linear 模式** 仍有 2/5 超时，建议进一步缩小搜索范围或增加 timeout
 
 ## 6. Per-Case 明细
 
@@ -166,3 +209,12 @@
 | case_005 | legal | 239s | 6,222 | ✅ |
 | case_007 | medical | 246s | 7,960 | ✅ |
 | case_010 | scientific | 600s | 0 | ❌ timeout |
+
+### hybrid (v5 新增 — Coordinator + Tree Search)
+| Case | Domain | Time | Chars | Sources | Status |
+|---|---|---|---|---|---|
+| case_001 | financial | 345s | 6,476 | 35 | ✅ |
+| case_004 | technical | 308s | 7,978 | 30 | ✅ |
+| case_005 | legal | 330s | 8,637 | 35 | ✅ |
+| case_007 | medical | 364s | 6,367 | 40 | ✅ |
+| case_010 | scientific | 352s | 7,606 | 40 | ✅ |
