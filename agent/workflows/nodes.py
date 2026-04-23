@@ -1160,13 +1160,13 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
             f"{len(summary_notes)} summaries"
         )
 
-        # Merge with existing scraped_content from prior rounds
-        existing_scraped = state.get("scraped_content", []) or []
+        # scraped_content uses operator.add reducer → only return NEW items.
+        # summary_notes is plain replace → must merge manually.
         existing_notes = state.get("summary_notes", []) or []
 
         return {
             "research_plan": list(set(all_queries)),
-            "scraped_content": existing_scraped + search_runs,
+            "scraped_content": search_runs,
             "summary_notes": existing_notes + summary_notes,
         }
 
@@ -1177,7 +1177,7 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         # Fallback: return empty so coordinator can decide next step
         return {
             "research_plan": [state.get("input", "")],
-            "scraped_content": state.get("scraped_content", []),
+            "scraped_content": [],  # operator.add reducer; empty = no change
             "summary_notes": state.get("summary_notes", []),
             "errors": [f"Tree search error: {str(e)}"],
         }
