@@ -47,15 +47,20 @@ def _get_judge_llm():
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from common.config import settings
-    from common.llm import _chat_model
+    from langchain_openai import ChatOpenAI
 
-    model = getattr(settings, "default_model", "deepseek-chat")
-    return _chat_model(model, temperature=0.1)
+    model = getattr(settings, "primary_model", None) or "deepseek-chat"
+    base_url = getattr(settings, "openai_base_url", None)
+    api_key = getattr(settings, "openai_api_key", None)
+    kwargs = {}
+    if base_url:
+        kwargs["base_url"] = base_url
+    if api_key:
+        kwargs["api_key"] = api_key
+    return ChatOpenAI(model=model, temperature=0.1, **kwargs)
 
 
-def score_report(
-    query: str, report: str, llm: Any = None
-) -> Dict[str, Any]:
+def score_report(query: str, report: str, llm: Any = None) -> Dict[str, Any]:
     """Score a single report using LLM-as-Judge."""
     if llm is None:
         llm = _get_judge_llm()
@@ -65,13 +70,14 @@ def score_report(
 
     from langchain_core.messages import HumanMessage
 
-    response = llm.invoke([HumanMessage(content=JUDGE_PROMPT.format(
-        query=query, report=report_text
-    ))])
+    response = llm.invoke(
+        [HumanMessage(content=JUDGE_PROMPT.format(query=query, report=report_text))]
+    )
     raw = getattr(response, "content", "") or ""
 
     # Parse JSON from response
     import re
+
     json_match = re.search(r"\{[^{}]*\}", raw, re.DOTALL)
     if not json_match:
         logger.warning(f"Failed to parse judge response: {raw[:200]}")
@@ -90,9 +96,7 @@ def score_report(
         return {"error": "json_decode_failed", "raw": raw[:500]}
 
 
-def score_variant_file(
-    variant_file: Path, llm: Any = None
-) -> List[Dict[str, Any]]:
+def score_variant_file(variant_file: Path, llm: Any = None) -> List[Dict[str, Any]]:
     """Score all completed reports in a variant result file."""
     if not variant_file.exists():
         logger.warning(f"File not found: {variant_file}")
@@ -105,22 +109,26 @@ def score_variant_file(
     scored = []
     for case in data:
         if case.get("status") != "completed":
-            scored.append({
-                "case_id": case.get("case_id"),
-                "status": case.get("status"),
-                "judge_scores": None,
-            })
+            scored.append(
+                {
+                    "case_id": case.get("case_id"),
+                    "status": case.get("status"),
+                    "judge_scores": None,
+                }
+            )
             continue
 
         query = case.get("query", "")
         report = case.get("final_report_preview", "")
         # If full report not in preview, use what we have
         if not report:
-            scored.append({
-                "case_id": case.get("case_id"),
-                "status": "no_report",
-                "judge_scores": None,
-            })
+            scored.append(
+                {
+                    "case_id": case.get("case_id"),
+                    "status": "no_report",
+                    "judge_scores": None,
+                }
+            )
             continue
 
         t0 = time.monotonic()
@@ -136,7 +144,10 @@ def score_variant_file(
         }
         scored.append(entry)
 
-        dims = [scores.get(d, 0) for d in ("coverage", "depth", "structure", "citations", "overall")]
+        dims = [
+            scores.get(d, 0)
+            for d in ("coverage", "depth", "structure", "citations", "overall")
+        ]
         print(
             f"  {case.get('case_id', '?'):12s} "
             f"C={dims[0]:2d} D={dims[1]:2d} S={dims[2]:2d} Ci={dims[3]:2d} O={dims[4]:2d}  "
@@ -168,7 +179,11 @@ def score_all_variants(variant_names: Optional[List[str]] = None) -> Dict[str, A
     summary: Dict[str, Any] = {}
     dims = ("coverage", "depth", "structure", "citations", "overall")
     for variant, cases in all_scores.items():
-        scored_cases = [c for c in cases if c.get("judge_scores") and "error" not in c["judge_scores"]]
+        scored_cases = [
+            c
+            for c in cases
+            if c.get("judge_scores") and "error" not in c["judge_scores"]
+        ]
         if not scored_cases:
             summary[variant] = {"scored": 0, "avg_scores": {}}
             continue
@@ -185,8 +200,12 @@ def score_all_variants(variant_names: Optional[List[str]] = None) -> Dict[str, A
 
     # Print comparison
     print(f"\n{'='*70}")
-    print(f"  {'Variant':<16} {'N':>3} {'Cover':>6} {'Depth':>6} {'Struct':>6} {'Cite':>6} {'Overall':>7}")
-    print(f"  {'-'*16} {'---':>3} {'------':>6} {'------':>6} {'------':>6} {'------':>6} {'-------':>7}")
+    print(
+        f"  {'Variant':<16} {'N':>3} {'Cover':>6} {'Depth':>6} {'Struct':>6} {'Cite':>6} {'Overall':>7}"
+    )
+    print(
+        f"  {'-'*16} {'---':>3} {'------':>6} {'------':>6} {'------':>6} {'------':>6} {'-------':>7}"
+    )
     for variant, info in summary.items():
         n = info["scored"]
         a = info["avg_scores"]
