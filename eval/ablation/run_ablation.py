@@ -82,7 +82,7 @@ sys.path.insert(0, "{root}")
 {env_overrides}
 from scripts.benchmark_deep_research import _execute_research_case
 result = asyncio.run(_execute_research_case(
-    sys.argv[1], mode="{mode}", base_url="asgi", model="", timeout_s=660,
+    sys.argv[1], mode="{mode}", base_url="asgi", model="", timeout_s=840,
 ))
 print(json.dumps(result, ensure_ascii=False))
 """.strip()
@@ -110,7 +110,7 @@ def run_single_case(variant: str, task: dict, runner_code: str) -> dict:
             [sys.executable, "-u", "-c", runner_code, query],
             capture_output=True,
             text=True,
-            timeout=720,
+            timeout=900,
             cwd=str(ROOT),
         )
         elapsed = time.monotonic() - t0
@@ -199,42 +199,85 @@ def main():
         print("No results found.")
         return
 
+    def _avg(vals):
+        return round(sum(vals) / len(vals), 3) if vals else 0
+
+    def _extract_metrics(completed_cases):
+        """Extract all quality metrics from completed cases."""
+        times = [r["wall_time_s"] for r in completed_cases]
+        chars = [r.get("final_report_chars", 0) for r in completed_cases]
+        qc_scores, sources = [], []
+        claim_verified, claim_total = [], []
+        citation_cov = []
+
+        for r in completed_cases:
+            # query_coverage from SSE quality_update event
+            qu = r.get("last_quality_update") or {}
+            if qu.get("query_coverage_score") is not None:
+                qc_scores.append(qu["query_coverage_score"])
+
+            # evidence_summary from run metrics API
+            es = r.get("evidence_summary") or {}
+            if es.get("sources_count") is not None:
+                sources.append(es["sources_count"])
+            if es.get("query_coverage_score") is not None and not qc_scores:
+                qc_scores.append(es["query_coverage_score"])
+            if es.get("citation_coverage") is not None:
+                citation_cov.append(es["citation_coverage"])
+
+            # claim verifier stats
+            cv_total = es.get("claim_verifier_total")
+            cv_verified = es.get("claim_verifier_verified")
+            if cv_total is not None and cv_total > 0:
+                claim_total.append(cv_total)
+                claim_verified.append(cv_verified or 0)
+
+        return {
+            "avg_time_s": _avg(times),
+            "avg_report_chars": round(_avg(chars)),
+            "avg_query_coverage": _avg(qc_scores),
+            "avg_sources": round(_avg(sources)),
+            "avg_citation_coverage": _avg(citation_cov),
+            "avg_claim_verified_ratio": (
+                round(sum(claim_verified) / max(1, sum(claim_total)), 3)
+                if claim_total
+                else None
+            ),
+            "claim_cases_with_data": len(claim_total),
+        }
+
     # Print per-variant aggregates
-    header = f"{'Variant':<18} {'Completed':>9} {'Avg Time':>9} {'Avg Chars':>10} {'Avg QC':>7} {'Avg Src':>8}"
+    header = (
+        f"{'Variant':<16} {'Done':>5} {'Time':>6} {'Chars':>7} "
+        f"{'QC':>5} {'Src':>5} {'Cite':>5} {'Claims':>7}"
+    )
     print(header)
     print("-" * len(header))
 
     summary = {}
     for variant, results in all_data.items():
         completed = [r for r in results if r.get("status") == "completed"]
-        times = [r["wall_time_s"] for r in completed]
-        chars = [r.get("final_report_chars", 0) for r in completed]
-        qc_scores = []
-        sources = []
-        for r in completed:
-            qu = r.get("last_quality_update") or {}
-            if qu.get("query_coverage_score") is not None:
-                qc_scores.append(qu["query_coverage_score"])
-            es = r.get("evidence_summary") or {}
-            if es.get("sources_count") is not None:
-                sources.append(es["sources_count"])
+        m = _extract_metrics(completed)
 
-        avg_time = sum(times) / len(times) if times else 0
-        avg_chars = sum(chars) / len(chars) if chars else 0
-        avg_qc = sum(qc_scores) / len(qc_scores) if qc_scores else 0
-        avg_src = sum(sources) / len(sources) if sources else 0
+        claim_str = (
+            f"{m['avg_claim_verified_ratio']:.0%}"
+            if m["avg_claim_verified_ratio"] is not None
+            else "n/a"
+        )
+        cite_str = (
+            f"{m['avg_citation_coverage']:.2f}" if m["avg_citation_coverage"] else "n/a"
+        )
 
         print(
-            f"{variant:<18} {len(completed):>5}/{len(results):<3} "
-            f"{avg_time:>8.0f}s {avg_chars:>9.0f} {avg_qc:>7.2f} {avg_src:>7.0f}"
+            f"{variant:<16} {len(completed):>3}/{len(results):<1} "
+            f"{m['avg_time_s']:>5.0f}s {m['avg_report_chars']:>6d} "
+            f"{m['avg_query_coverage']:>5.2f} {m['avg_sources']:>4d} "
+            f"{cite_str:>5} {claim_str:>7}"
         )
         summary[variant] = {
             "completed": len(completed),
             "total": len(results),
-            "avg_time_s": round(avg_time, 1),
-            "avg_report_chars": round(avg_chars),
-            "avg_query_coverage": round(avg_qc, 3),
-            "avg_sources": round(avg_src),
+            **m,
             "cases": results,
         }
 

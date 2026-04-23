@@ -2303,6 +2303,193 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
             f"tiers: {len(aggregated.tier_1)}/{len(aggregated.tier_2)}/{len(aggregated.tier_3)}"
         )
 
+        # --- Hierarchical / hybrid mode: use deepsearch final_summary_prompt ---
+        # This matches the baseline _final_report() exactly: same prompt template,
+        # same summary_notes (tree branch summaries), same sources_block format.
+        if is_hierarchical:
+            from prompts.templates.deepsearch import final_summary_prompt
+            from agent.workflows.deepsearch_optimized import (
+                _format_sources_for_writer,
+                _append_auto_references,
+            )
+
+            summary_notes = state.get("summary_notes", []) or []
+            summary_search = "\n\n".join(summary_notes) or "暂无"
+
+            # Build numbered sources block (same as baseline)
+            report_sources_limit = int(
+                getattr(settings, "deepsearch_report_sources_limit", 20) or 20
+            )
+            extracted_sources: List[Dict[str, Any]] = []
+            try:
+                from agent.workflows.evidence_extractor import extract_message_sources
+
+                extracted_sources = extract_message_sources(scraped_content)
+            except Exception:
+                extracted_sources = []
+            report_sources = extracted_sources[: max(1, report_sources_limit)]
+            sources_block = _format_sources_for_writer(
+                report_sources,
+                scraped_content,
+                limit=report_sources_limit,
+            )
+
+            prompt_template = ChatPromptTemplate.from_messages(
+                [("user", final_summary_prompt)]
+            )
+            prompt_msgs = prompt_template.format_messages(
+                topic=original_query,
+                summary_search=summary_search,
+                sources=sources_block or "暂无",
+            )
+
+            llm = _chat_model(model, temperature=0.5)
+            response = llm.invoke(prompt_msgs, config=config)
+            logger.info(
+                f"[timing] writer (hybrid/deepsearch prompt) {(time.time() - t0):.3f}s"
+            )
+
+            report_text = getattr(response, "content", "") or ""
+            # Append auto-references block (same as baseline)
+            report_text = _append_auto_references(
+                report_text,
+                report_sources,
+                limit=report_sources_limit,
+            )
+
+            # Generate visualizations if compressed_knowledge available
+            compressed_knowledge = state.get("compressed_knowledge", {})
+            if compressed_knowledge and getattr(settings, "enable_report_charts", True):
+                try:
+                    from agent.workflows.viz_planner import (
+                        VizPlanner,
+                        embed_charts_in_report,
+                    )
+
+                    viz_llm = _chat_model(
+                        _model_for_task("writing", config), temperature=0.3
+                    )
+                    viz_planner = VizPlanner(viz_llm, config)
+                    charts = viz_planner.generate_all_charts(
+                        compressed_knowledge,
+                        report_text=report_text,
+                        max_charts=3,
+                    )
+                    if charts:
+                        report_text = embed_charts_in_report(
+                            report_text, charts, format="markdown"
+                        )
+                        logger.info(f"[writer] Embedded {len(charts)} charts in report")
+                except Exception as e:
+                    logger.warning(f"[writer] Chart generation skipped: {e}")
+
+            # --- Build quality diagnostics (same as baseline) ---
+            quality_summary: Dict[str, Any] = {}
+            claims: List[Dict[str, Any]] = []
+            searched_queries: List[str] = []
+            for sc in scraped_content:
+                q = sc.get("query") if isinstance(sc, dict) else None
+                if isinstance(q, str) and q.strip():
+                    searched_queries.append(q.strip())
+            try:
+                from agent.workflows.deepsearch_optimized import (
+                    _build_quality_diagnostics,
+                )
+
+                diagnostics = _build_quality_diagnostics(
+                    original_query, searched_queries, scraped_content
+                )
+                quality_summary = {
+                    "epochs_completed": 1,
+                    "summary_count": len(state.get("summary_notes", []) or []),
+                    "source_count": len(extracted_sources),
+                    **diagnostics,
+                }
+            except Exception as diag_err:
+                logger.warning(f"[writer] Quality diagnostics failed: {diag_err}")
+
+            try:
+                from agent.workflows.claim_verifier import ClaimVerifier
+
+                min_overlap = int(
+                    getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2)
+                    or 2
+                )
+                max_evidence = int(
+                    getattr(
+                        settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3
+                    )
+                    or 3
+                )
+                verifier = ClaimVerifier(
+                    min_overlap_tokens=min_overlap,
+                    max_evidence_per_claim=max_evidence,
+                )
+                checks = verifier.verify_report(report_text, scraped_content)
+                claims = [
+                    {
+                        "claim": c.claim,
+                        "status": c.status.value,
+                        "evidence_urls": c.evidence_urls,
+                        "evidence_passages": c.evidence_passages,
+                        "score": c.score,
+                        "notes": c.notes,
+                    }
+                    for c in checks
+                ]
+                # Add claim stats to quality_summary
+                verified = sum(1 for c in checks if c.status.value == "verified")
+                unsupported = sum(1 for c in checks if c.status.value == "unsupported")
+                contradicted = sum(
+                    1 for c in checks if c.status.value == "contradicted"
+                )
+                quality_summary["claim_verifier_total"] = len(checks)
+                quality_summary["claim_verifier_verified"] = verified
+                quality_summary["claim_verifier_unsupported"] = unsupported
+                quality_summary["claim_verifier_contradicted"] = contradicted
+            except Exception as claim_err:
+                logger.warning(f"[writer] Claim verification failed: {claim_err}")
+
+            deepsearch_artifacts = {
+                "mode": "hybrid",
+                "queries": searched_queries,
+                "quality_summary": quality_summary,
+                "query_coverage": quality_summary.get("query_coverage", {}),
+                "freshness_summary": quality_summary.get("freshness_summary", {}),
+                "sources": extracted_sources,
+                "claims": claims,
+            }
+
+            # Emit quality_update SSE event (same as baseline deepsearch_node)
+            if quality_summary:
+                try:
+                    from agent.workflows.deepsearch_optimized import (
+                        _resolve_event_emitter,
+                    )
+
+                    emitter = _resolve_event_emitter(state, config)
+                    if emitter:
+                        from common.event_system import ToolEventType
+
+                        emitter.emit_sync(
+                            ToolEventType.QUALITY_UPDATE,
+                            {"epoch": 1, "stage": "final", **quality_summary},
+                        )
+                except Exception:
+                    pass
+
+            return {
+                "draft_report": report_text,
+                "final_report": report_text,
+                "is_complete": False,
+                "messages": [AIMessage(content=report_text)],
+                "code_results": code_results,
+                "sources": extracted_sources,
+                "quality_summary": quality_summary,
+                "deepsearch_artifacts": deepsearch_artifacts,
+            }
+
+        # --- Standard (non-hierarchical) path ---
         # Use enhanced writer prompt
         from agent.prompts.system_prompts import get_writer_prompt
 
@@ -2508,15 +2695,8 @@ Provide specific, actionable feedback and search queries to address gaps.""",
 
     report = state.get("draft_report") or state.get("final_report", "")
 
-    try:
-        response = llm.with_structured_output(EvalResponse).invoke(
-            prompt.format_messages(report=report, question=state["input"]),
-            config=config,
-        )
-        _log_usage(response, "evaluator")
-        logger.info(f"[timing] evaluator {(time.time() - t0):.3f}s")
-
-        # Extract structured data
+    def _parse_eval_response(response) -> tuple:
+        """Extract fields from a structured EvalResponse object."""
         verdict = (response.verdict or "pass").lower().strip()
         if verdict not in ("pass", "revise", "incomplete"):
             verdict = "revise" if "revise" in verdict else "pass"
@@ -2541,6 +2721,91 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         feedback = getattr(response, "feedback", "") or ""
         missing_topics = list(getattr(response, "missing_topics", []) or [])
         suggested_queries = list(getattr(response, "suggested_queries", []) or [])
+        return verdict, dimensions, feedback, missing_topics, suggested_queries
+
+    def _parse_eval_json(raw: str) -> tuple:
+        """Fallback: parse evaluator output from raw JSON text."""
+        import json as _json
+        import re as _re
+
+        json_match = _re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            json_str = raw[start:end] if start >= 0 and end > start else ""
+
+        data = _json.loads(json_str) if json_str else {}
+        verdict = str(data.get("verdict", "revise")).lower().strip()
+        if verdict not in ("pass", "revise", "incomplete"):
+            verdict = "revise"
+        dims_raw = data.get("dimensions", {})
+        dimensions = {
+            "coverage": float(dims_raw.get("coverage", 0.6)),
+            "accuracy": float(dims_raw.get("accuracy", 0.6)),
+            "freshness": float(dims_raw.get("freshness", 0.6)),
+            "coherence": float(dims_raw.get("coherence", 0.6)),
+        }
+        feedback = str(data.get("feedback", ""))
+        missing_topics = list(data.get("missing_topics", []))
+        suggested_queries = list(data.get("suggested_queries", []))
+        return verdict, dimensions, feedback, missing_topics, suggested_queries
+
+    try:
+        # Try structured output first (works on OpenAI, may fail on others)
+        try:
+            response = llm.with_structured_output(EvalResponse).invoke(
+                prompt.format_messages(report=report, question=state["input"]),
+                config=config,
+            )
+            _log_usage(response, "evaluator")
+            logger.info(f"[timing] evaluator (structured) {(time.time() - t0):.3f}s")
+            verdict, dimensions, feedback, missing_topics, suggested_queries = (
+                _parse_eval_response(response)
+            )
+        except Exception as struct_err:
+            # Fallback: plain LLM call with JSON output instructions
+            logger.warning(
+                f"[evaluator] Structured output failed ({struct_err}), "
+                "falling back to JSON prompt"
+            )
+            system_text = (
+                prompt.messages[0].prompt.template
+                + "\n\nYou MUST respond with a single JSON object (no markdown fencing). "
+                "Schema:\n"
+                '{"verdict": "pass|revise|incomplete", '
+                '"dimensions": {"coverage": float, "accuracy": float, '
+                '"freshness": float, "coherence": float}, '
+                '"feedback": "string", "missing_topics": ["string"], '
+                '"suggested_queries": ["string"]}'
+            )
+            fallback_msgs = [
+                SystemMessage(content=system_text),
+                HumanMessage(
+                    content=f"Question:\n{state['input']}\n\nReport:\n{report}"
+                ),
+            ]
+            fallback_response = llm.invoke(fallback_msgs, config=config)
+            raw_text = getattr(fallback_response, "content", "") or ""
+            logger.info(f"[timing] evaluator (json fallback) {(time.time() - t0):.3f}s")
+            try:
+                verdict, dimensions, feedback, missing_topics, suggested_queries = (
+                    _parse_eval_json(raw_text)
+                )
+                logger.info(f"[evaluator] JSON fallback parsed: verdict={verdict}")
+            except Exception as parse_err:
+                logger.warning(f"[evaluator] JSON parse also failed: {parse_err}")
+                verdict = "pass"
+                dimensions = {
+                    "coverage": 0.7,
+                    "accuracy": 0.7,
+                    "freshness": 0.7,
+                    "coherence": 0.7,
+                }
+                feedback = f"Evaluation parse failed: {parse_err}"
+                missing_topics = []
+                suggested_queries = []
 
         # Smart verdict adjustment based on dimensions
         min_score = min(dimensions.values())

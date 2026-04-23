@@ -172,9 +172,11 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
             coord_targets.append("planner")
         workflow.add_conditional_edges("coordinator", after_coordinator, coord_targets)
 
-        # Hybrid: tree_search → compressor (reuses existing compressor → writer path)
+        # Hybrid: tree_search → writer (via optional HITL sources review).
+        # Skips compressor because the hybrid writer uses summary_notes + sources
+        # directly (same as baseline _final_report), not compressed_knowledge.
         if use_hybrid:
-            workflow.add_edge("tree_search", "compressor")
+            workflow.add_edge("tree_search", "hitl_sources_review")
 
     def after_clarify(state: AgentState) -> str:
         return "human_review" if state.get("needs_clarification") else "planner"

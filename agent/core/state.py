@@ -119,6 +119,12 @@ class AgentState(TypedDict):
     # Sources collected
     sources: List[Dict[str, str]]
 
+    # ============ Deep Search Artifacts ============
+    # Structured artifacts from deep search (quality metrics, claims, sources, etc.)
+    deepsearch_artifacts: Dict[str, Any]
+    # Quality summary from deep search diagnostics
+    quality_summary: Dict[str, Any]
+
     # ============ Quality Control ============
     # Evaluation feedback for optimizer
     evaluation: str
