@@ -19,4 +19,5 @@ RUN chmod +x /usr/local/bin/docker-dev-entrypoint.sh
 
 EXPOSE 3100
 
-CMD ["docker-dev-entrypoint.sh"]
+ENTRYPOINT []
+CMD ["/bin/sh", "/usr/local/bin/docker-dev-entrypoint.sh"]
