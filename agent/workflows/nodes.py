@@ -860,6 +860,10 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
     Returns state updates including the coordinator's decision as 'coordinator_action'.
     """
     from agent.workflows.agents import ResearchCoordinator
+    from agent.workflows.agents.coordinator import (
+        CoordinatorAction,
+        CoordinatorDecision,
+    )
 
     logger.info("Executing coordinator node")
 
@@ -875,7 +879,23 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         # revision_count is never incremented in the hierarchical path,
         # so we maintain our own counter via coordinator_iterations.
         coord_iters = int(state.get("coordinator_iterations", 0) or 0) + 1
+        has_report = bool(
+            (state.get("final_report") or state.get("draft_report") or "").strip()
+        )
+        has_sources = bool(state.get("scraped_content"))
+
         if coord_iters > max_revisions + 1:
+            # Force synthesize first if no report yet, otherwise complete.
+            if not has_report and has_sources:
+                logger.info(
+                    f"[coordinator] Forcing synthesize after {coord_iters} iterations "
+                    f"(report missing, sources available)"
+                )
+                return {
+                    "coordinator_action": "synthesize",
+                    "coordinator_reasoning": f"Forced synthesize: {coord_iters} iterations, no report yet.",
+                    "coordinator_iterations": coord_iters,
+                }
             logger.info(
                 f"[coordinator] Forcing completion after {coord_iters} iterations "
                 f"(max_revisions={max_revisions})"
@@ -924,16 +944,46 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
             num_queries=len(research_plan),
             num_sources=len(scraped_content),
             num_summaries=len(summary_notes),
-            current_epoch=revision_count,
+            current_epoch=coord_iters,
             max_epochs=max_revisions + 1,
             knowledge_summary=knowledge_summary,
             quality_score=quality_overall_score,
             quality_gap_count=int(quality_gap_count or 0),
             citation_accuracy=citation_accuracy,
+            has_report=has_report,
         )
 
+        action = decision.action.value
+
+        # Guard: never complete without a report
+        if action == "complete" and not has_report:
+            if has_sources:
+                action = "synthesize"
+                decision = CoordinatorDecision(
+                    action=CoordinatorAction.SYNTHESIZE,
+                    reasoning="Overridden: cannot complete without a report, synthesizing first.",
+                    priority_topics=decision.priority_topics,
+                )
+            else:
+                action = "plan"
+                decision = CoordinatorDecision(
+                    action=CoordinatorAction.PLAN,
+                    reasoning="Overridden: cannot complete without sources, planning first.",
+                    priority_topics=decision.priority_topics,
+                )
+
+        # Guard: never synthesize without sources
+        if action == "synthesize" and not has_sources:
+            action = "plan"
+            decision = CoordinatorDecision(
+                action=CoordinatorAction.PLAN,
+                reasoning="Overridden: cannot synthesize without sources, planning first.",
+                priority_topics=decision.priority_topics,
+            )
+
         logger.info(
-            f"[coordinator] Decision: {decision.action.value} | "
+            f"[coordinator] iter={coord_iters} Decision: {decision.action.value} | "
+            f"has_report={has_report} has_sources={has_sources} | "
             f"Reasoning: {decision.reasoning[:100]}"
         )
 
@@ -958,6 +1008,7 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         return {
             "coordinator_action": "plan",
             "coordinator_reasoning": f"Coordinator error, defaulting to plan: {str(e)}",
+            "coordinator_iterations": coord_iters,
             "missing_topics": state.get("missing_topics", []),
         }
 
@@ -1990,9 +2041,22 @@ def compressor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
         if existing_knowledge and existing_knowledge.get("facts"):
             from agent.workflows.compressor import CompressedKnowledge, ExtractedFact
 
+            def _fact_from_dict(d: dict) -> ExtractedFact:
+                """Reconstruct ExtractedFact, mapping 'source' → 'source_url'."""
+                d = dict(d)
+                if "source" in d and "source_url" not in d:
+                    d["source_url"] = d.pop("source")
+                return ExtractedFact(
+                    **{
+                        k: v
+                        for k, v in d.items()
+                        if k in ("fact", "source_url", "confidence", "category")
+                    }
+                )
+
             existing = CompressedKnowledge(
                 topic=existing_knowledge.get("topic", topic),
-                facts=[ExtractedFact(**f) for f in existing_knowledge.get("facts", [])],
+                facts=[_fact_from_dict(f) for f in existing_knowledge.get("facts", [])],
                 statistics=existing_knowledge.get("statistics", []),
                 key_entities=existing_knowledge.get("key_entities", []),
                 summary=existing_knowledge.get("summary", ""),
@@ -2036,7 +2100,10 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         # Web-mode responses should be fast and deterministic. The tool-calling writer
         # agent can decide to execute code (E2B) which is slow and can exceed API
         # timeouts for simple web answers.
-        use_tools = route != "web"
+        # Hierarchical mode also skips tools: the coordinator loop already provides
+        # sufficient research context, and tool-calling adds 2+ min overhead per cycle.
+        is_hierarchical = bool(state.get("coordinator_action"))
+        use_tools = route != "web" and not is_hierarchical
         agent, writer_tools = build_writer_agent(model) if use_tools else (None, [])
         t0 = time.time()
         code_results: List[Dict[str, Any]] = []
