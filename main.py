@@ -68,6 +68,7 @@ from common.agents_store import (
     upsert_agent as upsert_agent_profile,
 )
 from common.cancellation import TaskStatus, cancellation_manager
+from common.skills_loader import get_skill as get_skill_profile, load_all_skills
 from common.chat_stream_translate import translate_legacy_line_to_sse
 from common.config import settings
 from common.logger import get_logger, setup_logging
@@ -1005,6 +1006,9 @@ class ChatRequest(BaseModel):
     agent_id: Optional[str] = (
         None  # optional GPTs-like agent profile id (data/agents.json)
     )
+    skill_id: Optional[str] = (
+        None  # optional skill id (skills/*.md) — overrides search_mode, tools, system prompt
+    )
     user_id: Optional[str] = None
     images: Optional[List[ImagePayload]] = None  # Base64 images for multimodal input
 
@@ -1019,6 +1023,7 @@ class ResearchRequest(BaseModel):
     model: Optional[str] = None
     search_mode: Optional[SearchMode] = None
     agent_id: Optional[str] = None
+    skill_id: Optional[str] = None
     user_id: Optional[str] = None
     images: Optional[List[ImagePayload]] = None
 
@@ -1322,6 +1327,25 @@ async def agent_health():
             [str(n) for n in available if str(n).strip()]
         ),
     }
+
+
+# ==================== Skills API ====================
+
+
+@app.get("/api/skills")
+async def list_skills():
+    """List all available skills (metadata only, no full prompt)."""
+    skills = load_all_skills()
+    return {"skills": [s.to_summary_dict() for s in skills], "count": len(skills)}
+
+
+@app.get("/api/skills/{skill_id}")
+async def get_skill_detail(skill_id: str):
+    """Get full skill detail including system prompt."""
+    skill = get_skill_profile(skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_id}' not found")
+    return skill.to_full_dict()
 
 
 # ==================== 鍙栨秷浠诲姟 API ====================
@@ -1866,6 +1890,7 @@ async def stream_agent_events(
     model: str | None = None,
     search_mode: Dict[str, Any] | None = None,
     agent_id: str | None = None,
+    skill_id: str | None = None,
     images: Optional[List[Dict[str, Any]]] = None,
     user_id: Optional[str] = None,
 ):
@@ -1886,6 +1911,27 @@ async def stream_agent_events(
     model = (model or settings.primary_model).strip()
     agent_id = (agent_id or "default").strip() or "default"
     agent_profile = get_agent_profile(agent_id) or get_agent_profile("default")
+
+    # --- Skill override: if skill_id is provided, override agent_profile and search_mode ---
+    _active_skill = None
+    if skill_id:
+        _active_skill = get_skill_profile(skill_id)
+        if _active_skill:
+            logger.info(f"Skill activated: {_active_skill.id} (mode={_active_skill.mode})")
+            # Override agent_profile with skill-derived profile
+            agent_profile = AgentProfile(
+                id=_active_skill.id,
+                name=_active_skill.name,
+                description=_active_skill.description,
+                system_prompt=_active_skill.system_prompt,
+                model="",
+                enabled_tools=_active_skill.to_enabled_tools(),
+                metadata={"skill": True, "category": _active_skill.category},
+            )
+            # Override search_mode with skill's workflow mode
+            search_mode = _active_skill.mode
+        else:
+            logger.warning(f"Skill '{skill_id}' not found, falling back to default")
 
     # Optional per-thread log handler for easier debugging
     thread_handler = None
@@ -1970,7 +2016,10 @@ async def stream_agent_events(
 
         # Load long-term memories (store) and Mem0 (optional) and inject deep prompt if needed
         messages: list[Any] = []
-        if (
+        if _active_skill and agent_profile and agent_profile.system_prompt:
+            # Skill is active: inject skill prompt for ALL modes (direct, agent, deep)
+            messages.append(SystemMessage(content=agent_profile.system_prompt))
+        elif (
             mode_info.get("mode") == "agent"
             and agent_profile
             and agent_profile.system_prompt
@@ -2543,6 +2592,7 @@ async def chat_sse(request: Request, payload: ChatRequest):
                     model=model,
                     search_mode=mode_info,
                     agent_id=payload.agent_id,
+                    skill_id=payload.skill_id,
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
                 ),
@@ -2632,6 +2682,7 @@ async def chat(request: Request, payload: ChatRequest):
                     model=model,
                     search_mode=mode_info,
                     agent_id=payload.agent_id,
+                    skill_id=payload.skill_id,
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
                 ),
@@ -5203,6 +5254,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
                     model=model,
                     search_mode=mode_info,
                     agent_id=payload.agent_id,
+                    skill_id=payload.skill_id,
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
                 ),

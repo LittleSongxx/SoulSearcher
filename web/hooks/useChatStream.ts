@@ -6,9 +6,10 @@ import { createLegacyChatStreamState, consumeLegacyChatStreamChunk } from '@/lib
 interface UseChatStreamProps {
   selectedModel: string
   searchMode: string
+  skillId: string | null
 }
 
-export function useChatStream({ selectedModel, searchMode }: UseChatStreamProps) {
+export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStreamProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [currentStatus, setCurrentStatus] = useState<string>('')
@@ -58,6 +59,7 @@ export function useChatStream({ selectedModel, searchMode }: UseChatStreamProps)
             stream: true,
             model: selectedModel,
             search_mode: searchMode,
+            skill_id: skillId || undefined,
             images: (images || []).map(img => ({
               name: img.name,
               mime: img.mime,

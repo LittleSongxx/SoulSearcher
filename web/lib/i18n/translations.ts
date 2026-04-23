@@ -39,6 +39,7 @@ export const translations = {
     direct: 'Direct',
     ultra: 'Deep Research',
     mcp: 'MCP',
+    skills: 'Skills',
     web: 'Web',
 
     // Empty state
@@ -277,6 +278,7 @@ export const translations = {
     direct: '直答',
     ultra: '深度研究',
     mcp: 'MCP',
+    skills: '技能',
     web: '网络',
 
     // Empty state
@@ -515,6 +517,7 @@ export const translations = {
     direct: 'ダイレクト',
     ultra: 'ディープリサーチ',
     mcp: 'MCP',
+    skills: 'スキル',
     web: 'ウェブ',
 
     // Empty state
@@ -631,6 +634,7 @@ export const translations = {
     direct: '직답',
     ultra: '딥 리서치',
     mcp: 'MCP',
+    skills: '스킬',
     web: '웹',
 
     // Empty state

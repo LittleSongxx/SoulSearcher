@@ -2,12 +2,22 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Send, Globe, Bot, Paperclip, X, Mic, MicOff, ChevronDown, Check, Trash2, File as FileIcon, Image as ImageIcon, Bug, BookOpen, PenTool, TestTube, Plug, Rocket, MessageSquare } from 'lucide-react'
+import { Send, Globe, Bot, Paperclip, X, Mic, MicOff, ChevronDown, Check, Trash2, File as FileIcon, Image as ImageIcon, Bug, BookOpen, PenTool, TestTube, Plug, Rocket, MessageSquare, Zap } from 'lucide-react'
 import { useI18n } from '@/lib/i18n/i18n-context'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createFilePreview } from '@/lib/file-utils'
 import { getApiBaseUrl } from '@/lib/api'
+
+interface SkillOption {
+  id: string
+  name: string
+  name_en: string
+  icon: string
+  mode: string
+  description: string
+  description_en: string
+}
 
 interface ChatInputProps {
   input: string
@@ -19,6 +29,8 @@ interface ChatInputProps {
   onStop: () => void
   searchMode: string
   setSearchMode: (mode: string) => void
+  selectedSkill: string | null
+  setSelectedSkill: (skillId: string | null) => void
 }
 
 interface AttachmentPreview {
@@ -36,7 +48,9 @@ export function ChatInput({
   isLoading,
   onStop,
   searchMode,
-  setSearchMode
+  setSearchMode,
+  selectedSkill,
+  setSelectedSkill
 }: ChatInputProps) {
   const { t } = useI18n()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -44,9 +58,21 @@ export function ChatInput({
   const [isFocused, setIsFocused] = useState(false)
   const [showCommandMenu, setShowCommandMenu] = useState(false)
   const [isMcpOpen, setIsMcpOpen] = useState(false)
+  const [isSkillsOpen, setIsSkillsOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [selectedMcp, setSelectedMcp] = useState('filesystem') // Default MCP
+  const [skillOptions, setSkillOptions] = useState<SkillOption[]>([])
   const [previews, setPreviews] = useState<AttachmentPreview[]>([])
+
+  // Fetch skills on mount
+  useEffect(() => {
+    fetch(`${getApiBaseUrl()}/api/skills`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.skills) setSkillOptions(data.skills)
+      })
+      .catch(() => {})
+  }, [])
 
   // Manage Previews
   useEffect(() => {
@@ -300,6 +326,7 @@ export function ChatInput({
     if (e.key === 'Escape') {
       setShowCommandMenu(false)
       setIsMcpOpen(false)
+      setIsSkillsOpen(false)
     }
   }
 
@@ -424,6 +451,62 @@ export function ChatInput({
                     >
                       {opt.label}
                       {selectedMcp === opt.id && searchMode === 'mcp' && <Check className="h-3 w-3" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Skills Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                if (selectedSkill) {
+                  setSelectedSkill(null)
+                  setSearchMode('')
+                  setIsSkillsOpen(false)
+                } else {
+                  setIsSkillsOpen(!isSkillsOpen)
+                }
+              }}
+              className={cn(
+                "relative flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border",
+                selectedSkill
+                  ? "bg-amber-500/10 text-foreground border-amber-500/20 shadow-sm"
+                  : "text-muted-foreground border-transparent hover:bg-muted/50"
+              )}
+            >
+              <Zap className={cn("h-3.5 w-3.5 transition-colors", selectedSkill ? "text-amber-500" : "text-muted-foreground")} />
+              {selectedSkill
+                ? (skillOptions.find(s => s.id === selectedSkill)?.icon + ' ' + skillOptions.find(s => s.id === selectedSkill)?.name || 'Skills')
+                : t('skills')}
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </button>
+
+            {isSkillsOpen && (
+              <div className="absolute bottom-full left-0 mb-2 w-52 bg-popover border rounded-xl shadow-lg animate-in fade-in zoom-in-95 z-50 overflow-hidden">
+                <div className="p-1 max-h-64 overflow-y-auto">
+                  {skillOptions.map(skill => (
+                    <button
+                      key={skill.id}
+                      onClick={() => {
+                        setSelectedSkill(skill.id)
+                        setSearchMode(skill.mode === 'direct' ? '' : skill.mode)
+                        setIsSkillsOpen(false)
+                        setIsMcpOpen(false)
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs transition-colors hover:bg-muted text-left",
+                        selectedSkill === skill.id && "bg-muted font-medium text-amber-500"
+                      )}
+                    >
+                      <span className="text-base leading-none">{skill.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{skill.name}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{skill.description}</div>
+                      </div>
+                      {selectedSkill === skill.id && <Check className="h-3 w-3 flex-shrink-0" />}
                     </button>
                   ))}
                 </div>

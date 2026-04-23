@@ -29,6 +29,7 @@ export function Chat() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
   const [searchMode, setSearchMode] = useState('') // empty = direct LLM only
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [showMobileArtifacts, setShowMobileArtifacts] = useState(false)
   const [isArtifactsOpen, setIsArtifactsOpen] = useState(true)
@@ -72,7 +73,7 @@ export function Chat() {
     processChat,
     handleStop,
     handleApproveInterrupt
-  } = useChatStream({ selectedModel, searchMode })
+  } = useChatStream({ selectedModel, searchMode, skillId: selectedSkill })
 
   // Debug: Log browser viewer conditions
   useEffect(() => {
@@ -123,6 +124,7 @@ export function Chat() {
     setThreadId(null)
     setPendingInterrupt(null)
     setSearchMode('') // default to direct LLM
+    setSelectedSkill(null)
     handleStop() // Abort any ongoing request
   }
 
@@ -363,6 +365,8 @@ export function Chat() {
             onStop={handleStop}
             searchMode={searchMode}
             setSearchMode={setSearchMode}
+            selectedSkill={selectedSkill}
+            setSelectedSkill={setSelectedSkill}
           />
         )}
       </div>

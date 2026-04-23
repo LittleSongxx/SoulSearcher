@@ -1443,12 +1443,22 @@ def direct_answer_node(state: AgentState, config: RunnableConfig) -> Dict[str, A
     logger.info("Executing direct answer node")
     t0 = time.time()
     llm = _chat_model(_model_for_task("writing", config), temperature=0.7)
-    messages = [
-        SystemMessage(
-            content="You are a helpful assistant. Answer succinctly and accurately."
-        ),
-        HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
-    ]
+
+    # Check if seeded messages contain a SystemMessage (e.g. from a skill prompt)
+    seeded = state.get("messages") or []
+    has_seeded_system = any(isinstance(m, SystemMessage) for m in seeded)
+    if has_seeded_system:
+        # Use skill/agent system prompt + any memory messages already in state
+        messages = list(seeded) + [
+            HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
+        ]
+    else:
+        messages = [
+            SystemMessage(
+                content="You are a helpful assistant. Answer succinctly and accurately."
+            ),
+            HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
+        ]
     response = llm.invoke(messages, config=config)
     _log_usage(response, "direct_answer")
     logger.info(f"[timing] direct_answer {(time.time() - t0):.3f}s")
