@@ -3,12 +3,6 @@
   "model": "deepseek-chat",
   "search_engines": "tavily,duckduckgo,bocha",
   "mode": "auto (tree explorer)",
-  "data_sources": {
-    "cases_001_003": "bench_3cases.json (single batch run)",
-    "cases_004_008": "bench_cases_4_11.json (subprocess isolation)",
-    "cases_009_011": "bench_retry_9_10_11.json (retry with chunk_timeout fix)",
-    "cases_012_015": "bench_remaining_4cases.json (subprocess isolation)"
-  },
   "total_cases": 15,
   "completed": 15,
   "completion_rate": 1.0,

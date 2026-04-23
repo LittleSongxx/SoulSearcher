@@ -16,6 +16,7 @@
 ## Full 15-Case End-to-End Results
 
 All 15 cases have **real execution data** including reports, quality metrics, and evidence summaries.
+Canonical result file: `eval/results/bench_full_15cases.json`.
 
 ### Per-Case Metrics
 
