@@ -49,7 +49,7 @@ def _get_judge_llm():
     from common.config import settings
     from langchain_openai import ChatOpenAI
 
-    model = getattr(settings, "primary_model", None) or "deepseek-chat"
+    model = getattr(settings, "primary_model", None) or "deepseek-v4-flash"
     base_url = getattr(settings, "openai_base_url", None)
     api_key = getattr(settings, "openai_api_key", None)
     kwargs = {}

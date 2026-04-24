@@ -25,7 +25,9 @@ def test_agent_node_delegates_simple_verification_query_to_fast_search(monkeypat
         }
 
     def fail_build_tools(_config):
-        raise AssertionError("full tool agent should be skipped for simple verification query")
+        raise AssertionError(
+            "full tool agent should be skipped for simple verification query"
+        )
 
     monkeypatch.setattr(nodes, "_answer_simple_agent_query", fake_fast, raising=False)
     monkeypatch.setattr(nodes, "build_agent_tools", fail_build_tools)
@@ -49,12 +51,18 @@ def test_agent_node_delegates_narrow_comparison_query_to_fast_search(monkeypatch
         return {
             "draft_report": "Paris is the capital of France, and Berlin is the capital of Germany.",
             "final_report": "Paris is the capital of France, and Berlin is the capital of Germany.",
-            "messages": [AIMessage(content="Paris is the capital of France, and Berlin is the capital of Germany.")],
+            "messages": [
+                AIMessage(
+                    content="Paris is the capital of France, and Berlin is the capital of Germany."
+                )
+            ],
             "is_complete": False,
         }
 
     def fail_build_tools(_config):
-        raise AssertionError("full tool agent should be skipped for narrow comparison query")
+        raise AssertionError(
+            "full tool agent should be skipped for narrow comparison query"
+        )
 
     monkeypatch.setattr(nodes, "_answer_simple_agent_query", fake_fast, raising=False)
     monkeypatch.setattr(nodes, "build_agent_tools", fail_build_tools)
@@ -77,7 +85,9 @@ def test_agent_node_keeps_full_tool_agent_for_complex_research_queries(monkeypat
             return {"messages": [AIMessage(content="Structured comparison")]}
 
     def fail_fast(_state, _config):
-        raise AssertionError("fast search path should be skipped for complex research queries")
+        raise AssertionError(
+            "fast search path should be skipped for complex research queries"
+        )
 
     monkeypatch.setattr(nodes, "_answer_simple_agent_query", fail_fast, raising=False)
     monkeypatch.setattr(nodes, "build_agent_tools", lambda _config: [])
@@ -107,25 +117,39 @@ def test_fast_agent_path_preserves_seeded_system_messages(monkeypatch):
         "_run_fast_agent_search",
         lambda _query, _config: (
             "tavily_search",
-            [{"title": "France", "url": "https://example.com/fr", "snippet": "Paris is the capital of France."}],
+            [
+                {
+                    "title": "France",
+                    "url": "https://example.com/fr",
+                    "snippet": "Paris is the capital of France.",
+                }
+            ],
         ),
         raising=False,
     )
     monkeypatch.setattr(nodes, "_chat_model", lambda _model, temperature=0.2: FakeLLM())
-    monkeypatch.setattr(nodes, "_model_for_task", lambda *_args, **_kwargs: "deepseek-chat")
+    monkeypatch.setattr(
+        nodes, "_model_for_task", lambda *_args, **_kwargs: "deepseek-v4-flash"
+    )
 
     result = nodes._answer_simple_agent_query(
         {
             "input": "Use current web search to verify: What is the capital of France? Reply with exactly Paris.",
             "messages": [
                 SystemMessage(content="Custom agent instruction"),
-                SystemMessage(content="Relevant past knowledge:\n- France is a country in Europe"),
+                SystemMessage(
+                    content="Relevant past knowledge:\n- France is a country in Europe"
+                ),
             ],
         },
         {"configurable": {}},
     )
 
     assert result["final_report"] == "Paris"
-    system_contents = [msg.content for msg in captured["messages"] if isinstance(msg, SystemMessage)]
+    system_contents = [
+        msg.content for msg in captured["messages"] if isinstance(msg, SystemMessage)
+    ]
     assert "Custom agent instruction" in system_contents
-    assert "Relevant past knowledge:\n- France is a country in Europe" in system_contents
+    assert (
+        "Relevant past knowledge:\n- France is a country in Europe" in system_contents
+    )

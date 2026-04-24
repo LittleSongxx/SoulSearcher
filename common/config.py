@@ -289,7 +289,7 @@ class Settings(BaseSettings):
     otlp_endpoint: str = ""  # Optional OTLP exporter endpoint
 
     # Model Config
-    primary_model: str = "deepseek-chat"
+    primary_model: str = "deepseek-v4-flash"
     reasoning_model: str = "o1-mini"  # For planning
 
     # Multi-Model Research Config (Task-specific models)
@@ -373,7 +373,7 @@ class Settings(BaseSettings):
         12  # when messages count exceeds this, summarize middle
     )
     summary_messages_keep_last: int = 4
-    summary_messages_model: str = "gpt-4o-mini"
+    summary_messages_model: str = "deepseek-v4-flash"
     summary_messages_word_limit: int = 200
 
     # Concurrency Control (并发控制)

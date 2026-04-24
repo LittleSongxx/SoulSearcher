@@ -14,7 +14,9 @@ def test_parse_sse_frame_extracts_event_and_json():
 
 
 def test_parse_sse_frame_unwraps_legacy_envelope():
-    parsed = _parse_sse_frame('event: text\ndata: {"type":"text","data":{"content":"hi"}}\n')
+    parsed = _parse_sse_frame(
+        'event: text\ndata: {"type":"text","data":{"content":"hi"}}\n'
+    )
     assert parsed == ("text", {"content": "hi"})
 
 
@@ -31,11 +33,13 @@ async def test_execute_case_returns_failed_when_no_openai_key(monkeypatch):
         "hello",
         mode="auto",
         base_url="asgi",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         timeout_s=20.0,
     )
     assert result["status"] == "failed"
-    assert isinstance(result.get("thread_id"), str) and result["thread_id"].startswith("thread_")
+    assert isinstance(result.get("thread_id"), str) and result["thread_id"].startswith(
+        "thread_"
+    )
     assert "OPENAI_API_KEY" in str(result.get("error") or "")
 
 
@@ -51,7 +55,7 @@ def test_run_benchmark_execute_mode_writes_report(tmp_path, monkeypatch):
         min_freshness_ratio=0.4,
         execute=True,
         base_url="asgi",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         timeout_s=20.0,
     )
     assert output.exists()

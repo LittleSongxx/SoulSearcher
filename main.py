@@ -3367,7 +3367,7 @@ async def public_config():
 
         # Provider-aware suggestions.
         if _is_deepseek_family(primary) or "deepseek" in base_url:
-            _add("deepseek-chat")
+            _add("deepseek-v4-flash")
             _add("deepseek-reasoner")
             if _is_deepseek_family(reasoning):
                 _add(reasoning)
