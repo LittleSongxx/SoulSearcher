@@ -518,6 +518,8 @@ class Settings(BaseSettings):
     tool_retry_max_delay: float = 60.0
     tool_call_limit: int = 12
     strip_tool_messages: bool = False  # drop ToolMessage from history to save tokens
+    observation_masking: bool = True  # mask old tool observations instead of dropping
+    observation_masking_window: int = 5  # keep last N turns' observations in full
     context_edit_trigger_tokens: int = 1000
     context_edit_keep_tools: int = 3
     tool_selector: bool = (
@@ -554,6 +556,25 @@ class Settings(BaseSettings):
 
     # Search fallback
     search_engines: str = "tavily"  # comma-separated engines in order
+
+    # Context Offloading
+    context_offloading: bool = True  # offload large tool results to filesystem
+    context_offloading_threshold: int = 2000  # chars above which content is offloaded
+    context_offloading_dir: str = ""  # empty = /tmp/weaver_offload
+
+    # Agent Reflexion
+    agent_reflexion_enabled: bool = True  # self-reflection after tool-calling rounds
+    agent_reflexion_max_rounds: int = 2  # max reflection iterations
+
+    # LATS-style tree backtracking
+    tree_backtrack_enabled: bool = True  # allow backtracking on low-quality branches
+    tree_backtrack_score_threshold: float = (
+        0.4  # branches below this score trigger retry
+    )
+    tree_backtrack_max_retries: int = 1  # max retries per branch
+
+    # Dynamic tool pruning
+    dynamic_tool_pruning: bool = True  # prune tools by route to reduce token overhead
 
     # Prompt Optimization (Prompt 优化)
     prompt_optimizer_model: str = "gpt-4o"  # 用于优化 Prompt 的模型

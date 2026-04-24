@@ -52,8 +52,12 @@ def test_tree_explorer_searches_raw_topic_before_query_generation(monkeypatch):
         queries_per_branch=2,
     )
 
+    # Disable LATS backtracking so the test asserts exact call sequence
+    from common.config import settings
+
+    monkeypatch.setattr(settings, "tree_backtrack_enabled", False)
+
     node = ResearchTreeNode(topic="Test Topic")
     explorer.explore_branch(node, state={})
 
     assert calls == ["search:Test Topic", "llm", "search:extra query"]
-

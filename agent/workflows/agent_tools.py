@@ -273,9 +273,83 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
     )
     tool_list = collection.to_list()
 
+    # Dynamic tool pruning: reduce tool set based on route to cut token overhead
+    if settings.dynamic_tool_pruning:
+        route = str(profile.get("route", "") or cfg.get("route", "")).strip().lower()
+        tool_list = _prune_tools_by_route(tool_list, route)
+
     # Event wrapping for front-end visibility
     emit_events = bool(profile.get("emit_tool_events", settings.emit_tool_events))
     if emit_events:
         tool_list = wrap_tools_with_events(tool_list, thread_id=thread_id)
 
     return tool_list
+
+
+# Tool name sets relevant to each route mode
+_WEB_ROUTE_TOOLS = {
+    "tavily_search",
+    "fallback_search",
+    "crawl_url",
+    "crawl_urls",
+    "crawl4ai",
+    "plan_steps",
+}
+_DEEP_ROUTE_TOOLS = {
+    "tavily_search",
+    "fallback_search",
+    "crawl_url",
+    "crawl_urls",
+    "crawl4ai",
+    "execute_python_code",
+    "plan_steps",
+}
+_AGENT_CORE_TOOLS = {
+    "tavily_search",
+    "fallback_search",
+    "crawl_url",
+    "crawl_urls",
+    "crawl4ai",
+    "execute_python_code",
+    "chart_visualize",
+    "plan_steps",
+    "ask_human",
+    "str_replace",
+    "safe_bash",
+}
+_MAX_PRUNED_TOOLS = 10
+
+
+def _prune_tools_by_route(tools: List[BaseTool], route: str) -> List[BaseTool]:
+    """
+    Prune tool list to route-relevant subset.
+
+    - web:   search + crawl only
+    - deep:  search + crawl + code
+    - agent: core tools, capped at _MAX_PRUNED_TOOLS
+    - other: no pruning
+    """
+    if not route:
+        return tools
+
+    if route == "web":
+        allowed = _WEB_ROUTE_TOOLS
+    elif route == "deep":
+        allowed = _DEEP_ROUTE_TOOLS
+    elif route == "agent":
+        allowed = _AGENT_CORE_TOOLS
+    else:
+        return tools
+
+    pruned = [t for t in tools if getattr(t, "name", "") in allowed]
+
+    # Always keep at least some tools — fall back to full list if pruning
+    # would leave nothing (e.g., custom tool names not in the sets)
+    if not pruned:
+        return tools[:_MAX_PRUNED_TOOLS]
+
+    if len(pruned) > _MAX_PRUNED_TOOLS:
+        pruned = pruned[:_MAX_PRUNED_TOOLS]
+
+    logger.info(f"[tool_pruning] Route '{route}': {len(tools)} → {len(pruned)} tools")
+    return pruned

@@ -25,6 +25,8 @@ from common.config import settings
 from tools import execute_python_code, tavily_search
 from tools.core.registry import get_global_registry, get_registered_tools
 
+from agent.core.context_offloader import load_all_offloaded, offload_content_list
+
 from .agent_factory import build_tool_agent, build_writer_agent
 from .agent_tools import build_agent_tools
 from .deepsearch_optimized import _auto_mode_prefers_linear, run_deepsearch_auto
@@ -835,7 +837,11 @@ def perform_parallel_search(
             "timestamp": datetime.now().isoformat(),
         }
 
-        return {"scraped_content": [search_data]}
+        # Context offloading: write large results to filesystem, keep compact refs
+        thread_id = state.get("thread_id", "")
+        offloaded = offload_content_list([search_data], thread_id)
+
+        return {"scraped_content": offloaded}
 
     except asyncio.CancelledError as e:
         logger.info(f"Search cancelled for {query}: {e}")
@@ -1164,9 +1170,13 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         # summary_notes is plain replace → must merge manually.
         existing_notes = state.get("summary_notes", []) or []
 
+        # Context offloading: write large results to filesystem
+        thread_id = state.get("thread_id", "")
+        offloaded_runs = offload_content_list(search_runs, thread_id)
+
         return {
             "research_plan": list(set(all_queries)),
-            "scraped_content": search_runs,
+            "scraped_content": offloaded_runs,
             "summary_notes": existing_notes + summary_notes,
         }
 
@@ -1450,14 +1460,18 @@ def direct_answer_node(state: AgentState, config: RunnableConfig) -> Dict[str, A
     if has_seeded_system:
         # Use skill/agent system prompt + any memory messages already in state
         messages = list(seeded) + [
-            HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
+            HumanMessage(
+                content=_build_user_content(state["input"], state.get("images"))
+            ),
         ]
     else:
         messages = [
             SystemMessage(
                 content="You are a helpful assistant. Answer succinctly and accurately."
             ),
-            HumanMessage(content=_build_user_content(state["input"], state.get("images"))),
+            HumanMessage(
+                content=_build_user_content(state["input"], state.get("images"))
+            ),
         ]
     response = llm.invoke(messages, config=config)
     _log_usage(response, "direct_answer")
@@ -2116,6 +2130,32 @@ You can also use XML format for tool calls:
         response = agent.invoke({"messages": messages}, config=config)
         logger.info(f"[timing] agent {(time.time() - t0):.3f}s")
 
+        # Reflexion: self-reflect on tool-calling results and optionally re-invoke
+        from agent.core.reflexion import build_reflexion_message, should_reflect
+
+        resp_messages = (
+            response.get("messages", []) if isinstance(response, dict) else []
+        )
+        round_num = 1
+        while should_reflect(round_num, len(resp_messages)):
+            llm = create_chat_model(model, temperature=0.3)
+            reflection_msg = build_reflexion_message(
+                user_goal=state.get("input", ""),
+                last_messages=resp_messages,
+                llm=llm,
+                config=config,
+            )
+            if reflection_msg is None:
+                break  # Goal achieved or reflection not needed
+            # Inject reflection and re-invoke agent
+            messages.append(reflection_msg)
+            logger.info(f"[agent_node] Reflexion round {round_num}: re-invoking agent")
+            response = agent.invoke({"messages": messages}, config=config)
+            resp_messages = (
+                response.get("messages", []) if isinstance(response, dict) else []
+            )
+            round_num += 1
+
         text = ""
         if isinstance(response, dict) and response.get("messages"):
             last = response["messages"][-1]
@@ -2200,6 +2240,9 @@ def compressor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
     if not scraped_content:
         logger.info("[compressor] No content to compress")
         return {"compressed_knowledge": {}}
+
+    # Reload offloaded content so compressor sees full data
+    scraped_content = load_all_offloaded(scraped_content)
 
     try:
         model = _model_for_task("research", config)
@@ -2290,6 +2333,8 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
 
         # Use ResultAggregator for intelligent fusion
         scraped_content = state.get("scraped_content", [])
+        # Reload offloaded content so writer sees full data
+        scraped_content = load_all_offloaded(scraped_content)
         original_query = state.get("input", "")
 
         aggregator = ResultAggregator(

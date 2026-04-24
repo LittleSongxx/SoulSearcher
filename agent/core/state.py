@@ -7,7 +7,7 @@ from langgraph.graph.message import add_messages
 from agent.core.message_utils import summarize_messages
 from common.config import settings
 
-from .middleware import maybe_strip_tool_messages
+from .middleware import mask_old_observations, maybe_strip_tool_messages
 
 
 def capped_add_messages(
@@ -16,14 +16,21 @@ def capped_add_messages(
     """
     Aggregate messages and trim to keep context bounded.
 
-    Keeps the first N (usually system/setup) and last M recent messages.
-    Controlled via settings:
-    - trim_messages (bool): enable/disable
-    - trim_messages_keep_first (int)
-    - trim_messages_keep_last (int)
+    Uses a hybrid strategy (observation masking + optional LLM summarization):
+    1. Merge new messages via LangGraph's add_messages.
+    2. Apply legacy strip_tool_messages if enabled (backward compat).
+    3. Apply observation masking: mask stale ToolMessage observations while
+       keeping reasoning/action history intact (KV-cache friendly).
+    4. If trim_messages is enabled, keep head (immutable prefix for KV-cache
+       stability) + tail, with optional summarization of the middle.
     """
     merged = add_messages(existing, new)
     merged = maybe_strip_tool_messages(merged)
+
+    # Hybrid observation masking — replaces stale observations with compact
+    # placeholders, preserving reasoning and action history.
+    merged = mask_old_observations(merged)
+
     if not settings.trim_messages:
         return merged
 
@@ -32,15 +39,18 @@ def capped_add_messages(
     if keep_first + keep_last == 0 or len(merged) <= keep_first + keep_last:
         return merged
 
+    # KV-cache friendly: head (prefix) is immutable — never modify these messages
     head = merged[:keep_first] if keep_first else []
     tail = merged[-keep_last:] if keep_last else []
-    trimmed = head + tail
 
-    # Optional summarization of middle history
+    # Optional summarization of middle history (hybrid: masking first, then summarize)
     if settings.summary_messages and len(merged) > settings.summary_messages_trigger:
         middle = merged[keep_first : len(merged) - keep_last]
         summary_msg = summarize_messages(middle)
+        # Append summary after immutable prefix (not replacing head messages)
         trimmed = head + [summary_msg] + tail
+    else:
+        trimmed = head + tail
 
     return trimmed
 

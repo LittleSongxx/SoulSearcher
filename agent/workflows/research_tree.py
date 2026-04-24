@@ -42,11 +42,13 @@ class TreeExplorationBudgetExceeded(Exception):
 
 class NodeStatus(str, Enum):
     """Status of a research tree node."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    RETRY = "retry"
 
 
 @dataclass
@@ -69,6 +71,7 @@ class ResearchTreeNode:
         created_at: Timestamp of node creation
         completed_at: Timestamp of completion
     """
+
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     topic: str = ""
     depth: int = 0
@@ -80,6 +83,8 @@ class ResearchTreeNode:
     summary: str = ""
     queries: List[str] = field(default_factory=list)
     relevance_score: float = 1.0
+    score: float = 0.0  # branch quality score (set by tree_evaluator)
+    retry_count: int = 0  # number of backtrack retries
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     completed_at: Optional[str] = None
 
@@ -124,6 +129,7 @@ class ResearchTree:
     The tree starts with a root topic and branches into sub-topics,
     each explored in parallel up to a configurable depth.
     """
+
     root_id: Optional[str] = None
     nodes: Dict[str, ResearchTreeNode] = field(default_factory=dict)
     max_depth: int = 2
@@ -143,7 +149,9 @@ class ResearchTree:
         logger.info(f"[ResearchTree] Created root node: {root.id} - '{topic}'")
         return root
 
-    def add_child(self, parent_id: str, topic: str, relevance_score: float = 1.0) -> Optional[ResearchTreeNode]:
+    def add_child(
+        self, parent_id: str, topic: str, relevance_score: float = 1.0
+    ) -> Optional[ResearchTreeNode]:
         """Add a child node to the specified parent."""
         parent = self.nodes.get(parent_id)
         if not parent:
@@ -152,12 +160,16 @@ class ResearchTree:
 
         # Check depth limit
         if parent.depth >= self.max_depth:
-            logger.info(f"[ResearchTree] Max depth {self.max_depth} reached, skipping child")
+            logger.info(
+                f"[ResearchTree] Max depth {self.max_depth} reached, skipping child"
+            )
             return None
 
         # Check branch limit
         if len(parent.children_ids) >= self.max_branches:
-            logger.info(f"[ResearchTree] Max branches {self.max_branches} reached for parent {parent_id}")
+            logger.info(
+                f"[ResearchTree] Max branches {self.max_branches} reached for parent {parent_id}"
+            )
             return None
 
         child = ResearchTreeNode(
@@ -169,7 +181,9 @@ class ResearchTree:
         self.nodes[child.id] = child
         parent.children_ids.append(child.id)
 
-        logger.info(f"[ResearchTree] Added child node: {child.id} - '{topic}' (depth={child.depth})")
+        logger.info(
+            f"[ResearchTree] Added child node: {child.id} - '{topic}' (depth={child.depth})"
+        )
         return child
 
     def get_node(self, node_id: str) -> Optional[ResearchTreeNode]:
@@ -384,9 +398,7 @@ class TreeExplorer:
         Returns:
             List of (subtopic, relevance_score) tuples
         """
-        prompt = ChatPromptTemplate.from_messages([
-            ("user", DECOMPOSE_TOPIC_PROMPT)
-        ])
+        prompt = ChatPromptTemplate.from_messages([("user", DECOMPOSE_TOPIC_PROMPT)])
 
         msg = prompt.format_messages(
             topic=topic,
@@ -443,7 +455,9 @@ class TreeExplorer:
                 try:
                     import threading
 
-                    from agent.workflows.browser_visualizer import show_browser_status_page
+                    from agent.workflows.browser_visualizer import (
+                        show_browser_status_page,
+                    )
 
                     threading.Thread(
                         target=lambda q=query: show_browser_status_page(
@@ -467,7 +481,9 @@ class TreeExplorer:
                 try:
                     import threading
 
-                    from agent.workflows.browser_visualizer import visualize_urls_from_results
+                    from agent.workflows.browser_visualizer import (
+                        visualize_urls_from_results,
+                    )
 
                     threading.Thread(
                         target=lambda rs=results: visualize_urls_from_results(
@@ -487,11 +503,13 @@ class TreeExplorer:
                     if url and url not in self.all_searched_urls:
                         self.all_searched_urls.append(url)
                         node.sources.append(url)
-                    node.findings.append({
-                        "query": query,
-                        "result": r,
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    node.findings.append(
+                        {
+                            "query": query,
+                            "result": r,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
 
             if node.queries:
                 _search_one(node.queries[0])
@@ -501,7 +519,9 @@ class TreeExplorer:
             if remaining > 0:
                 from prompts.templates.deepsearch import formulate_query_prompt
 
-                prompt = ChatPromptTemplate.from_messages([("user", formulate_query_prompt)])
+                prompt = ChatPromptTemplate.from_messages(
+                    [("user", formulate_query_prompt)]
+                )
                 msg = prompt.format_messages(
                     topic=node.topic,
                     have_query=", ".join(node.queries) or "[]",
@@ -512,7 +532,11 @@ class TreeExplorer:
                 response = self.planner_llm.invoke(msg, config=self.config)
                 queries = self._parse_list_output(getattr(response, "content", ""))
 
-                seen = {q.strip().lower() for q in (node.queries or []) if isinstance(q, str)}
+                seen = {
+                    q.strip().lower()
+                    for q in (node.queries or [])
+                    if isinstance(q, str)
+                }
                 for q in queries:
                     if not isinstance(q, str):
                         continue
@@ -527,7 +551,9 @@ class TreeExplorer:
                     if len(node.queries) >= int(self.queries_per_branch):
                         break
 
-            logger.info(f"[TreeExplorer] Prepared {len(node.queries)} queries for branch {node.id}")
+            logger.info(
+                f"[TreeExplorer] Prepared {len(node.queries)} queries for branch {node.id}"
+            )
 
             # Execute remaining searches (topic search already done above).
             for query in (node.queries or [])[1:]:
@@ -539,7 +565,32 @@ class TreeExplorer:
                 node.summary = self._summarize_branch(node)
 
             node.mark_complete()
-            logger.info(f"[TreeExplorer] Completed branch {node.id}: {len(node.findings)} findings, {len(node.sources)} sources")
+            logger.info(
+                f"[TreeExplorer] Completed branch {node.id}: {len(node.findings)} findings, {len(node.sources)} sources"
+            )
+
+            # LATS-style evaluation: score the branch and decide if backtracking is needed
+            from agent.workflows.tree_evaluator import score_branch, should_backtrack
+
+            node.score = score_branch(node)
+            max_retries = int(getattr(settings, "tree_backtrack_max_retries", 1))
+            if should_backtrack(node) and node.retry_count < max_retries:
+                node.retry_count += 1
+                node.status = NodeStatus.RETRY
+                logger.info(
+                    f"[TreeExplorer] Branch {node.id} scored {node.score:.3f}, "
+                    f"triggering backtrack retry {node.retry_count}/{max_retries}"
+                )
+                # Clear previous findings and retry with modified query
+                node.findings = []
+                node.sources = []
+                node.summary = ""
+                node.queries = (
+                    [f"{node.topic} alternative perspective"] if node.topic else []
+                )
+                node.status = NodeStatus.IN_PROGRESS
+                # Re-explore with alternative framing
+                self.explore_branch(node, state, per_query_results)
 
         except asyncio.CancelledError:
             raise
@@ -560,8 +611,11 @@ class TreeExplorer:
                 f"摘要: {r.get('summary', r.get('snippet', ''))[:500]}"
             )
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("user", """
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "user",
+                    """
 # 任务
 总结以下搜索结果中与主题相关的关键信息。
 
@@ -576,8 +630,10 @@ class TreeExplorer:
 - 保持简洁，500字以内
 - 使用要点列表格式
 - 标注重要来源
-""")
-        ])
+""",
+                )
+            ]
+        )
 
         msg = prompt.format_messages(
             topic=node.topic,
@@ -608,8 +664,11 @@ class TreeExplorer:
         if not branch_summaries:
             return ""
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("user", """
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "user",
+                    """
 # 任务
 整合以下各分支的研究发现，生成一份统一的研究摘要。
 
@@ -622,8 +681,10 @@ class TreeExplorer:
 - 按逻辑顺序组织内容
 - 保留重要细节和来源
 - 字数不超过1000字
-""")
-        ])
+""",
+                )
+            ]
+        )
 
         msg = prompt.format_messages(
             branch_summaries="\n\n".join(branch_summaries),
@@ -697,7 +758,9 @@ class TreeExplorer:
 
         return self.tree
 
-    def _explore_children(self, parent: ResearchTreeNode, state: Dict[str, Any]) -> None:
+    def _explore_children(
+        self, parent: ResearchTreeNode, state: Dict[str, Any]
+    ) -> None:
         """Recursively explore children of a node (synchronous version)."""
         if parent.depth >= self.max_depth:
             return
@@ -734,7 +797,9 @@ class TreeExplorer:
         self._check_cancel(state)
 
         node.status = NodeStatus.IN_PROGRESS
-        logger.info(f"[TreeExplorer] Async exploring branch: {node.id} - '{node.topic}'")
+        logger.info(
+            f"[TreeExplorer] Async exploring branch: {node.id} - '{node.topic}'"
+        )
 
         try:
             loop = asyncio.get_event_loop()
@@ -747,7 +812,9 @@ class TreeExplorer:
 
                 # Keep the Live browser view non-blank while API search runs (off the event loop).
                 try:
-                    from agent.workflows.browser_visualizer import show_browser_status_page
+                    from agent.workflows.browser_visualizer import (
+                        show_browser_status_page,
+                    )
 
                     status_task = loop.run_in_executor(
                         None,
@@ -772,12 +839,14 @@ class TreeExplorer:
                     lambda q=query: self.search_func(
                         {"query": q, "max_results": per_query_results},
                         config=self.config,
-                    )
+                    ),
                 )
 
                 # Best-effort: run browser preview off the event loop (does not affect research correctness).
                 try:
-                    from agent.workflows.browser_visualizer import visualize_urls_from_results
+                    from agent.workflows.browser_visualizer import (
+                        visualize_urls_from_results,
+                    )
 
                     loop.run_in_executor(
                         None,
@@ -797,11 +866,13 @@ class TreeExplorer:
                     if url and url not in self.all_searched_urls:
                         self.all_searched_urls.append(url)
                         node.sources.append(url)
-                    node.findings.append({
-                        "query": query,
-                        "result": r,
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    node.findings.append(
+                        {
+                            "query": query,
+                            "result": r,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
 
             if node.queries:
                 await _search_one_async(node.queries[0])
@@ -811,7 +882,9 @@ class TreeExplorer:
             if remaining > 0:
                 from prompts.templates.deepsearch import formulate_query_prompt
 
-                prompt = ChatPromptTemplate.from_messages([("user", formulate_query_prompt)])
+                prompt = ChatPromptTemplate.from_messages(
+                    [("user", formulate_query_prompt)]
+                )
                 msg = prompt.format_messages(
                     topic=node.topic,
                     have_query=", ".join(node.queries) or "[]",
@@ -821,12 +894,15 @@ class TreeExplorer:
 
                 # Run LLM call in executor to not block event loop
                 response = await loop.run_in_executor(
-                    None,
-                    lambda: self.planner_llm.invoke(msg, config=self.config)
+                    None, lambda: self.planner_llm.invoke(msg, config=self.config)
                 )
                 queries = self._parse_list_output(getattr(response, "content", ""))
 
-                seen = {q.strip().lower() for q in (node.queries or []) if isinstance(q, str)}
+                seen = {
+                    q.strip().lower()
+                    for q in (node.queries or [])
+                    if isinstance(q, str)
+                }
                 for q in queries:
                     if not isinstance(q, str):
                         continue
@@ -841,7 +917,9 @@ class TreeExplorer:
                     if len(node.queries) >= int(self.queries_per_branch):
                         break
 
-            logger.info(f"[TreeExplorer] Prepared {len(node.queries)} queries for branch {node.id}")
+            logger.info(
+                f"[TreeExplorer] Prepared {len(node.queries)} queries for branch {node.id}"
+            )
 
             # Execute remaining searches (topic search already done above).
             for query in (node.queries or [])[1:]:
@@ -849,14 +927,38 @@ class TreeExplorer:
 
             # Summarize findings (in executor)
             if node.findings:
-                logger.info(f"[TreeExplorer] Summarizing branch {node.id} ({len(node.findings)} findings)")
+                logger.info(
+                    f"[TreeExplorer] Summarizing branch {node.id} ({len(node.findings)} findings)"
+                )
                 node.summary = await loop.run_in_executor(
-                    None,
-                    lambda: self._summarize_branch(node)
+                    None, lambda: self._summarize_branch(node)
                 )
 
             node.mark_complete()
-            logger.info(f"[TreeExplorer] Async completed branch {node.id}: {len(node.findings)} findings")
+            logger.info(
+                f"[TreeExplorer] Async completed branch {node.id}: {len(node.findings)} findings"
+            )
+
+            # LATS-style evaluation for async path
+            from agent.workflows.tree_evaluator import score_branch, should_backtrack
+
+            node.score = score_branch(node)
+            max_retries = int(getattr(settings, "tree_backtrack_max_retries", 1))
+            if should_backtrack(node) and node.retry_count < max_retries:
+                node.retry_count += 1
+                node.status = NodeStatus.RETRY
+                logger.info(
+                    f"[TreeExplorer] Async branch {node.id} scored {node.score:.3f}, "
+                    f"triggering backtrack retry {node.retry_count}/{max_retries}"
+                )
+                node.findings = []
+                node.sources = []
+                node.summary = ""
+                node.queries = (
+                    [f"{node.topic} alternative perspective"] if node.topic else []
+                )
+                node.status = NodeStatus.IN_PROGRESS
+                await self.explore_branch_async(node, state, per_query_results)
 
         except asyncio.CancelledError:
             raise
@@ -930,7 +1032,9 @@ class TreeExplorer:
                     child_results.append((scope_id, forked_state))
 
         # Explore all children in parallel with isolated contexts
-        logger.info(f"[TreeExplorer] Parallel exploring {len(children)} children of {parent.id} with context isolation")
+        logger.info(
+            f"[TreeExplorer] Parallel exploring {len(children)} children of {parent.id} with context isolation"
+        )
         await asyncio.gather(*[explore_with_isolation(c) for c in children])
 
         # Merge all child results back to parent state
@@ -1019,7 +1123,9 @@ class TreeExplorer:
                         await self._explore_children_async(child, state, semaphore)
 
                 # Explore all first-level children in parallel
-                logger.info(f"[TreeExplorer] Parallel exploring {len(children)} subtopics")
+                logger.info(
+                    f"[TreeExplorer] Parallel exploring {len(children)} subtopics"
+                )
                 await asyncio.gather(*[explore_child(c) for c in children])
 
         elapsed = time.time() - self.start_time
@@ -1046,12 +1152,14 @@ class TreeExplorer:
         start = text.find("[")
         end = text.rfind("]")
         if start != -1 and end > start:
-            text = text[start:end + 1]
+            text = text[start : end + 1]
 
         try:
             data = ast.literal_eval(text)
             if isinstance(data, list):
-                return [str(x).strip() for x in data if isinstance(x, (str, int, float))]
+                return [
+                    str(x).strip() for x in data if isinstance(x, (str, int, float))
+                ]
         except Exception:
             pass
 
