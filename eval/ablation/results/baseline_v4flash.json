@@ -1,0 +1,367 @@
+[
+  {
+    "status": "completed",
+    "thread_id": "thread_caaabfe5f80b48a1b8ffcaccbd90e594",
+    "duration_ms": 182068.22,
+    "final_report_chars": 9513,
+    "final_report_preview": "# 2025年AI芯片市场深度总结：格局、分化与未来趋势\n\n## 1. 概述：市场全景与核心格局\n\n### 1.1 市场规模与增长趋势\n\n2025年，全球AI芯片市场正处于一个历史性的增长拐点。根据市场研究数据，2025年全球AI芯片市场规模预计将达到2032.4亿美元，展现出强劲的扩张势头[1]。这一市场的年复合增长率（CAGR）预估为15.7%，预计到2032年，全球AI芯片市场规模将进一步攀升至5648.7亿美元[1]。从区域分布来看，北美地区凭借其强大的科技生态和资本优势，占据了最大的市场份额，约为36.4%[1]。这一增长主要受到生成式人工智能（GenAI）大模型训练、推理需求的爆发式增长，以及AI技术向边缘计算、物联网（IoT）和智能驾驶等新兴领域加速渗透的双重驱动。\n\n### 1.2 “一超多强”的竞争格局\n\n当前，AI芯片市场呈现出“一超多强”的竞争态势。NVIDIA凭借其在GPU架构和CUDA软件生态上的先发优势，依然稳居市场主导地位。在全球整体AI芯片市场中，NVIDIA的份额估计约为40%[7]；而在数据中心AI芯片这一核心领域，其优势更为显著，市场份额超过了70%[7]。然而，NVIDIA的霸主地位正面临前所未有的挑战。一方面，以谷歌（Google）、亚马逊（Amazon）为代表的云服务巨头正在加速自研定制化ASIC芯片，其出货量预计在2025年将达到NVI",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "evidence",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 2,
+          "official": 0,
+          "evidence": 0,
+          "risk": 0,
+          "implementation": 1
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "evidence",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 2,
+        "official": 0,
+        "evidence": 0,
+        "risk": 0,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": true,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_caaabfe5f80b48a1b8ffcaccbd90e594",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T10:37:38.207468",
+      "ended_at": "2026-04-24T10:40:38.199687",
+      "duration_ms": 179992.22,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 34,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.4,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 34,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.4,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_001",
+    "query": "Latest AI chip market share in 2025",
+    "variant": "baseline_v4flash",
+    "wall_time_s": 185.3,
+    "domain": "financial"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 900s",
+    "final_report_chars": 0,
+    "case_id": "case_004",
+    "query": "Compare Rust and Go for building microservices in production",
+    "variant": "baseline_v4flash",
+    "wall_time_s": 900.0,
+    "domain": "technical"
+  },
+  {
+    "status": "timeout",
+    "error": "timeout after 900s",
+    "final_report_chars": 0,
+    "case_id": "case_005",
+    "query": "Impact of EU AI Act on enterprise SaaS companies",
+    "variant": "baseline_v4flash",
+    "wall_time_s": 900.1,
+    "domain": "legal"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_df2872663fa640f0b6716d32dc10f108",
+    "duration_ms": 202706.74,
+    "final_report_chars": 12088,
+    "final_report_preview": "# 深度总结：COVID-19 之外的 mRNA 疫苗技术进展\n\n## 目录\n\n1.  [概述：mRNA 技术的平台化转型与多领域拓展](#1-概述mRNA-技术的平台化转型与多领域拓展)\n2.  [核心领域一：个性化癌症疫苗](#2-核心领域一个性化癌症疫苗)\n    - 2.1 技术原理与核心流程\n    - 2.2 关键临床里程碑\n    - 2.3 面临的挑战与未来方向\n3.  [核心领域二：自身免疫疾病与诱导免疫耐受](#3-核心领域二自身免疫疾病与诱导免疫耐受)\n    - 3.1 核心策略：从免疫激活到免疫耐受\n    - 3.2 代表性策略与临床进展\n    - 3.3 挑战与展望\n4.  [核心领域三：遗传病与蛋白替代/基因编辑疗法](#4-核心领域三遗传病与蛋白替代基因编辑疗法)\n    - 4.1 蛋白替代疗法\n    - 4.2 基因编辑工具的递送\n5.  [跨领域技术瓶颈与突破：脂质纳米颗粒（LNP）递送系统的精准化](#5-跨领域技术瓶颈与突破脂质纳米颗粒LNP递送系统的精准化)\n    - 5.1 肝脏趋向性的核心瓶颈\n    - 5.2 肝外靶向递送的主要策略\n    - 5.3 LNP 的免疫原性与安全性考量\n6.  [共同主题与未来展望：从通用疫苗到精准治疗](#6-共同主题与未来展望从通用疫苗到精准治疗)\n    - 6.1 平台化与灵活性\n ",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.2,
+        "covered_dimensions": [
+          "freshness"
+        ],
+        "missing_dimensions": [
+          "evidence",
+          "implementation",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 0,
+          "risk": 0,
+          "implementation": 0
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.2,
+      "query_dimensions_covered": [
+        "freshness"
+      ],
+      "query_dimensions_missing": [
+        "evidence",
+        "implementation",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 0,
+        "risk": 0,
+        "implementation": 0
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_df2872663fa640f0b6716d32dc10f108",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T11:10:43.837099",
+      "ended_at": "2026-04-24T11:14:04.559596",
+      "duration_ms": 200722.5,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 35,
+        "unsupported_claims_count": 8,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.2,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 35,
+      "unsupported_claims_count": 8,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.2,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_007",
+    "query": "Advances in mRNA vaccine technology beyond COVID-19",
+    "variant": "baseline_v4flash",
+    "wall_time_s": 206.2,
+    "domain": "medical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_948635a410e54583b551160c523bc56b",
+    "duration_ms": 195018.4,
+    "final_report_chars": 12111,
+    "final_report_preview": "# Transformer 架构在深度学习中的历史与演进：深度综述\n\n## 目录\n\n1.  [概述](#1-概述)\n2.  [前 Transformer 时代：序列建模的困境与变革动机](#2-前-transformer-时代序列建模的困境与变革动机)\n    *   2.1 RNN与LSTM的局限性\n    *   2.2 从RNN到Transformer的动机与效果对比\n3.  [Transformer 架构的起源与核心创新](#3-transformer-架构的起源与核心创新)\n    *   3.1 《Attention Is All You Need》的里程碑意义\n    *   3.2 核心架构组件详解\n    *   3.3 并行化与全局依赖：开启新范式\n4.  [关键组件的改进轨迹：从静态到自适应](#4-关键组件的改进轨迹从静态到自适应)\n    *   4.1 位置编码的演进\n    *   4.2 层归一化策略的转变\n    *   4.3 注意力机制的改进与优化\n5.  [架构变体与应用领域的爆炸式扩展](#5-架构变体与应用领域的爆炸式扩展)\n    *   5.1 自然语言处理：BERT 与 GPT 的双子星\n    *   5.2 计算机视觉：Vision Transformer 的诞生\n    *   5.3 时间序列分析：全局注意力超越序列模型\n ",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.2,
+        "covered_dimensions": [
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "evidence",
+          "freshness",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 0,
+          "official": 0,
+          "evidence": 0,
+          "risk": 0,
+          "implementation": 4
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.2,
+      "query_dimensions_covered": [
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "evidence",
+        "freshness",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 0,
+        "official": 0,
+        "evidence": 0,
+        "risk": 0,
+        "implementation": 4
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_948635a410e54583b551160c523bc56b",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T11:14:10.160634",
+      "ended_at": "2026-04-24T11:17:23.157146",
+      "duration_ms": 192996.51,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 37,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.2,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 37,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.2,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "variant": "baseline_v4flash",
+    "wall_time_s": 197.8,
+    "domain": "scientific"
+  }
+]
