@@ -1,0 +1,577 @@
+[
+  {
+    "status": "completed",
+    "thread_id": "thread_52defdf4e8054630a05f3b7d429e482b",
+    "duration_ms": 209136.82,
+    "final_report_chars": 11956,
+    "final_report_preview": "# 2025年全球AI芯片市场深度分析：格局、竞争与未来趋势\n\n## 目录\n\n1.  [概述：2025年AI芯片市场的全景图](#1-概述2025年ai芯片市场的全景图)\n2.  [核心格局：英伟达的霸主地位与挑战者崛起](#2-核心格局英伟达的霸主地位与挑战者崛起)\n    - [2.1 英伟达（NVIDIA）：绝对主导下的隐忧](#21-英伟达nvidia绝对主导下的隐忧)\n    - [2.2 AMD：奋力追赶的“第二极”](#22-amd奋力追赶的第二极)\n    - [2.3 科技巨头自研芯片与新兴力量](#23-科技巨头自研芯片与新兴力量)\n3.  [竞争维度的范式转移：从“算力军备竞赛”到“能效革命”](#3-竞争维度的范式转移从算力军备竞赛到能效革命)\n    - [3.1 转型背景：数据中心能耗瓶颈与端侧AI爆发](#31-转型背景数据中心能耗瓶颈与端侧ai爆发)\n    - [3.2 关键能效指标与产品实例](#32-关键能效指标与产品实例)\n    - [3.3 能效技术路径：架构创新与制程升级](#33-能效技术路径架构创新与制程升级)\n4.  [政策干预与供应链重构：地缘政治下的新秩序](#4-政策干预与供应链重构地缘政治下的新秩序)\n    - [4.1 美国出口管制的全面升级](#41-美国出口管制的全面升级)\n    - [4.2 美国“芯片回流”与",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 4,
+          "official": 0,
+          "evidence": 2,
+          "risk": 0,
+          "implementation": 1
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 4,
+        "official": 0,
+        "evidence": 2,
+        "risk": 0,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": true,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_52defdf4e8054630a05f3b7d429e482b",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T09:37:56.027010",
+      "ended_at": "2026-04-24T09:41:22.874005",
+      "duration_ms": 206846.99,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 35,
+        "unsupported_claims_count": 9,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.6,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 35,
+      "unsupported_claims_count": 9,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.6,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_001",
+    "query": "Latest AI chip market share in 2025",
+    "variant": "no_tool_pruning",
+    "wall_time_s": 211.0,
+    "domain": "financial"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_664734cf1a5849e1ac2d707ac770e422",
+    "duration_ms": 222264.66,
+    "final_report_chars": 11652,
+    "final_report_preview": "# 深度分析报告：Rust 与 Go 在生产级微服务中的对比\n\n## 目录\n\n1.  [引言与背景概述](#1-引言与背景概述)\n2.  [对象概述：Go 与 Rust 的核心理念](#2-对象概述go-与-rust-的核心理念)\n    *   [2.1 Go 语言](#21-go-语言)\n    *   [2.2 Rust 语言](#22-rust-语言)\n3.  [详细对比：性能与资源效率](#3-详细对比性能与资源效率)\n    *   [3.1 延迟与响应时间](#31-延迟与响应时间)\n    *   [3.2 内存消耗与云成本](#32-内存消耗与云成本)\n    *   [3.3 垃圾回收与确定性](#33-垃圾回收与确定性)\n    *   [3.4 硬件资源适配与调优](#34-硬件资源适配与调优)\n4.  [详细对比：并发模型与开发效率](#4-详细对比并发模型与开发效率)\n    *   [4.1 Go 的 Goroutines 与 Channel](#41-go-的-goroutines-与-channel)\n    *   [4.2 Rust 的 Async/Await 与所有权](#42-rust-的-asyncawait-与所有权)\n    *   [4.3 开发效率、学习曲线与调试体验](#43-开发效率学习曲线与调试体验)\n5.  [详细对比：生",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "freshness",
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 0,
+          "official": 0,
+          "evidence": 1,
+          "risk": 1,
+          "implementation": 1
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "freshness",
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 0,
+        "official": 0,
+        "evidence": 1,
+        "risk": 1,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_664734cf1a5849e1ac2d707ac770e422",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T09:41:26.790227",
+      "ended_at": "2026-04-24T09:45:06.728330",
+      "duration_ms": 219938.1,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 38,
+        "unsupported_claims_count": 7,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.6,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 38,
+      "unsupported_claims_count": 7,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.6,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_004",
+    "query": "Compare Rust and Go for building microservices in production",
+    "variant": "no_tool_pruning",
+    "wall_time_s": 224.7,
+    "domain": "technical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_5a8990e2641d491486c2b74b39b92cb3",
+    "duration_ms": 240029.23,
+    "final_report_chars": 12049,
+    "final_report_preview": "# 欧盟《人工智能法案》对企业SaaS公司的影响：深度综述\n\n## 1. 概述\n\n2024年8月1日，欧盟《人工智能法案》（EU AI Act，简称AIA）正式生效，成为全球首部全面监管人工智能的综合性法律框架[15][27]。这部法案不仅对欧盟境内的AI开发者和部署者产生直接影响，更通过其强大的**域外管辖**条款，将所有在欧盟市场提供或使用AI系统的企业——包括大量企业级SaaS公司——纳入监管范围[1][6]。对于企业SaaS公司而言，这一法案的出台意味着合规已从“可选项”转变为进入欧盟市场的“准入门槛”，违规罚款最高可达**3500万欧元或全球年营收的7%**（取高者），其严厉程度甚至超过GDPR[7]。\n\n企业级SaaS（Software as a Service）公司因其业务特性，在AI集成的深度和广度上远超普通软件企业：从人力资源管理、客户关系管理、财务分析到自动化营销，AI功能已经渗透到SaaS产品的每一个模块。欧盟AI法案基于风险的分级监管框架，对这些AI功能提出了差异化的合规要求，尤其是针对高风险AI系统的严格规定，将直接重塑企业SaaS产品的设计、开发、部署和运营全流程[2][6]。本综述将基于现有资料，从法规框架、高风险识别、域外管辖、双重义务、落地实践、时间线等多个维度，系统分析欧盟AI法案对企业SaaS公司的深远影响。\n\n## 2. 法规核心框架与适用范",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "freshness",
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 0,
+          "official": 0,
+          "evidence": 1,
+          "risk": 3,
+          "implementation": 2
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "freshness",
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 0,
+        "official": 0,
+        "evidence": 1,
+        "risk": 3,
+        "implementation": 2
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_5a8990e2641d491486c2b74b39b92cb3",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T09:45:11.041465",
+      "ended_at": "2026-04-24T09:49:08.916921",
+      "duration_ms": 237875.46,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 34,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.6,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 34,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.6,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_005",
+    "query": "Impact of EU AI Act on enterprise SaaS companies",
+    "variant": "no_tool_pruning",
+    "wall_time_s": 242.6,
+    "domain": "legal"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_dfb8d58f13b84c289848b7a4e02b1307",
+    "duration_ms": 272888.18,
+    "final_report_chars": 13241,
+    "final_report_preview": "# mRNA疫苗技术超越COVID-19的进展：深度总结\n\n## 目录\n\n1. **概述：从应急平台到新一代疗法的范式转变**\n2. **技术平台演进与应用拓展**\n3. **个性化癌症mRNA疫苗：最成熟的拓展方向**\n   - 3.1 临床突破案例：黑色素瘤、胰腺癌与乳腺癌\n   - 3.2 优化策略：分子设计与新抗原鉴定\n   - 3.3 联合免疫治疗范式\n4. **传染病疫苗：进展与瓶颈**\n   - 4.1 流感疫苗：快速响应与广谱保护\n   - 4.2 RSV疫苗：市场潜力与保护周期挑战\n   - 4.3 HIV疫苗：核心障碍与科学探索\n5. **递送系统：最关键的技术瓶颈**\n   - 5.1 传统LNP的肝脏趋向性局限\n   - 5.2 SORT技术与器官选择性递送\n   - 5.3 AI驱动脂质设计与新型LNP平台\n   - 5.4 组分替代与配体修饰策略\n6. **共同挑战与未来展望**\n   - 6.1 递送效率与肝外靶向\n   - 6.2 保护周期与持久免疫\n   - 6.3 专利壁垒与自主创新\n   - 6.4 安全性考量\n7. **总结：从应急工具到新范式的跨越**\n\n---\n\n## 1. 概述：从应急平台到新一代疗法的范式转变\n\nmRNA疫苗技术在应对COVID-19疫情中展现了前所未有的开发速度和有效性，从而确立了其作为下一代疫苗平台的巨大潜力[1]",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 1
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_dfb8d58f13b84c289848b7a4e02b1307",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T09:49:13.455320",
+      "ended_at": "2026-04-24T09:53:44.054520",
+      "duration_ms": 270599.2,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 37,
+        "unsupported_claims_count": 10,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.6,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 37,
+      "unsupported_claims_count": 10,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.6,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_007",
+    "query": "Advances in mRNA vaccine technology beyond COVID-19",
+    "variant": "no_tool_pruning",
+    "wall_time_s": 275.3,
+    "domain": "medical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_4f3f823a69e648e793d8d8c104a7248d",
+    "duration_ms": 186965.86,
+    "final_report_chars": 11275,
+    "final_report_preview": "# 深度总结：深度学习中的Transformer架构历史与演进\n\n## 目录\n\n1. [概述：变革的起点与核心突破](#1-概述变革的起点与核心突破)\n2. [核心机制详解](#2-核心机制详解)\n   - 2.1 自注意力与缩放点积注意力\n   - 2.2 多头注意力\n   - 2.3 位置编码\n3. [架构分岔：BERT与GPT两大路线](#3-架构分岔bert与gpt两大路线)\n   - 3.1 BERT：双向理解的纯编码器\n   - 3.2 GPT系列：单向生成的自回归解码器\n   - 3.3 详细对比分析\n4. [后2017年的效率革命与跨模态扩展](#4-后2017年的效率革命与跨模态扩展)\n   - 4.1 跨模态扩展：Vision Transformer (ViT)\n   - 4.2 效率革命：稀疏注意力机制\n   - 4.3 其他关键改进\n5. [发展趋势与未来方向](#5-发展趋势与未来方向)\n6. [总结](#6-总结)\n\n---\n\n## 1. 概述：变革的起点与核心突破\n\nTransformer架构的诞生标志着深度学习领域，尤其是自然语言处理（NLP），进入了一个全新的时代。2017年，Google团队在论文《Attention Is All You Need》中首次提出了这一架构，其核心创新在于**完全摒弃了循环神经网络（RNN）的序列处理方式**，转而采",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "final",
+      "query_coverage": {
+        "score": 0.6,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 3
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.6,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 3
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_4f3f823a69e648e793d8d8c104a7248d",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-24T09:53:48.389725",
+      "ended_at": "2026-04-24T09:56:53.182143",
+      "duration_ms": 184792.42,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 38,
+        "unsupported_claims_count": 8,
+        "freshness_ratio_30d": 0.0,
+        "citation_coverage": null,
+        "query_coverage_score": 0.6,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 38,
+      "unsupported_claims_count": 8,
+      "freshness_ratio_30d": 0.0,
+      "citation_coverage": null,
+      "query_coverage_score": 0.6,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "case_010",
+    "query": "History and evolution of transformer architecture in deep learning",
+    "variant": "no_tool_pruning",
+    "wall_time_s": 189.4,
+    "domain": "scientific"
+  }
+]

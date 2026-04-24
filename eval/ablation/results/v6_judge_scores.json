@@ -1,0 +1,571 @@
+{
+  "summary": {
+    "no_backtrack": {
+      "scored": 5,
+      "avg_scores": {
+        "coverage": 4.0,
+        "depth": 2.8,
+        "structure": 6.0,
+        "citations": 1.4,
+        "overall": 2.8
+      }
+    },
+    "no_obs_masking": {
+      "scored": 5,
+      "avg_scores": {
+        "coverage": 3.8,
+        "depth": 2.2,
+        "structure": 7.0,
+        "citations": 1.6,
+        "overall": 3.2
+      }
+    },
+    "no_offloading": {
+      "scored": 5,
+      "avg_scores": {
+        "coverage": 5.0,
+        "depth": 3.8,
+        "structure": 6.6,
+        "citations": 0.2,
+        "overall": 3.4
+      }
+    },
+    "no_optimizations": {
+      "scored": 5,
+      "avg_scores": {
+        "coverage": 3.8,
+        "depth": 1.8,
+        "structure": 6.4,
+        "citations": 1.2,
+        "overall": 2.6
+      }
+    },
+    "no_reflexion": {
+      "scored": 4,
+      "avg_scores": {
+        "coverage": 4.5,
+        "depth": 3.75,
+        "structure": 7.0,
+        "citations": 1.75,
+        "overall": 3.75
+      }
+    },
+    "no_tool_pruning": {
+      "scored": 5,
+      "avg_scores": {
+        "coverage": 4.0,
+        "depth": 3.8,
+        "structure": 6.4,
+        "citations": 2.0,
+        "overall": 3.4
+      }
+    },
+    "optimized_full": {
+      "scored": 5,
+      "avg_scores": {
+        "coverage": 3.6,
+        "depth": 3.2,
+        "structure": 5.8,
+        "citations": 2.6,
+        "overall": 3.4
+      }
+    }
+  },
+  "details": {
+    "no_backtrack": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 4,
+          "depth": 3,
+          "structure": 8,
+          "citations": 0,
+          "overall": 3,
+          "brief_rationale": "The report is well-structured but incomplete, cutting off before providing any actual market share data, specific examples, or citations, making it insufficient for a thorough evaluation."
+        },
+        "judge_time_s": 7.4
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 1,
+          "structure": 3,
+          "citations": 0,
+          "overall": 1,
+          "brief_rationale": "The report is incomplete, with only an introduction and table of contents provided; no substantive analysis, data, or citations are present to answer the query."
+        },
+        "judge_time_s": 5.5
+      },
+      {
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 4,
+          "depth": 3,
+          "structure": 6,
+          "citations": 3,
+          "overall": 3,
+          "brief_rationale": "The report is incomplete, cutting off mid-sentence, and only covers introductory and risk classification aspects. It lacks depth, specific examples, and sufficient citations to be a reliable, decision-ready analysis."
+        },
+        "judge_time_s": 6.3
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 4,
+          "depth": 2,
+          "structure": 6,
+          "citations": 3,
+          "overall": 3,
+          "brief_rationale": "Report is incomplete (cut off at end), lacks specific data or examples, and has minimal depth; citations are numbered but no bibliography; structure is logical but unfinished."
+        },
+        "judge_time_s": 9.4
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 5,
+          "structure": 7,
+          "citations": 1,
+          "overall": 4,
+          "brief_rationale": "The report covers key aspects of transformer evolution but ends abruptly, omitting significant milestones (e.g., BERT, GPT) and entirely lacks citations, undermining its trustworthiness."
+        },
+        "judge_time_s": 5.8
+      }
+    ],
+    "no_obs_masking": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 5,
+          "structure": 9,
+          "citations": 1,
+          "overall": 5,
+          "brief_rationale": "The report's outline suggests comprehensive coverage, but the provided snippet lacks actual market share data, analysis, and any citations, making it insufficient for a full evaluation. Structure is clear, but depth and evidence are missing."
+        },
+        "judge_time_s": 10.2
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 0,
+          "structure": 6,
+          "citations": 0,
+          "overall": 2,
+          "brief_rationale": "The report is only a table of contents and an incomplete introduction; it provides no actual analysis, data, or citations, so it fails to answer the query substantively."
+        },
+        "judge_time_s": 10.4
+      },
+      {
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 2,
+          "structure": 8,
+          "citations": 3,
+          "overall": 4,
+          "brief_rationale": "Report provides a comprehensive outline covering key aspects, but lacks detailed analysis, data, and substantive content to be a full research report."
+        },
+        "judge_time_s": 5.3
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 3,
+          "depth": 2,
+          "structure": 5,
+          "citations": 4,
+          "overall": 3,
+          "brief_rationale": "The report begins addressing the query but is incomplete, lacking full coverage of key subtopics and deep analysis with specific data; structure is clear but truncated."
+        },
+        "judge_time_s": 8.7
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 2,
+          "structure": 7,
+          "citations": 0,
+          "overall": 2,
+          "brief_rationale": "The report begins with a clear outline and covers key topics, but it is incomplete (cuts off mid-section) and lacks any citations, specific data, or detailed analysis, severely limiting its depth and trustworthiness."
+        },
+        "judge_time_s": 5.9
+      }
+    ],
+    "no_offloading": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 1,
+          "structure": 4,
+          "citations": 0,
+          "overall": 2,
+          "brief_rationale": "The report is an incomplete outline with no actual data, analysis, or citations, making it insufficient to answer the query about AI chip market share in 2025."
+        },
+        "judge_time_s": 5.9
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 3,
+          "structure": 7,
+          "citations": 0,
+          "overall": 4,
+          "brief_rationale": "The report covers many relevant dimensions but is incomplete and lacks specific data, examples, or citations, making it insufficient for informed decision-making."
+        },
+        "judge_time_s": 5.0
+      },
+      {
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 7,
+          "depth": 5,
+          "structure": 8,
+          "citations": 0,
+          "overall": 4,
+          "brief_rationale": "The report covers key aspects of the EU AI Act's impact on enterprise SaaS, with a clear structure, but lacks citations, specific data, and is incomplete, reducing its depth and trustworthiness."
+        },
+        "judge_time_s": 6.7
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 7,
+          "depth": 5,
+          "structure": 8,
+          "citations": 1,
+          "overall": 4,
+          "brief_rationale": "The report provides a broad overview of mRNA vaccine applications beyond COVID-19 with clear organization, but lacks specific data, examples, and any citations to support claims, severely limiting its depth and trustworthiness for decision-making."
+        },
+        "judge_time_s": 5.6
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 3,
+          "depth": 5,
+          "structure": 6,
+          "citations": 0,
+          "overall": 3,
+          "brief_rationale": "The report is cut off before completion, missing significant content, and lacks any citations or specific data sources, making it insufficient for decision-making."
+        },
+        "judge_time_s": 5.8
+      }
+    ],
+    "no_optimizations": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 3,
+          "depth": 2,
+          "structure": 5,
+          "citations": 1,
+          "overall": 2,
+          "brief_rationale": "The report has a promising outline but is incomplete, lacks specific data, citations, and sufficient depth to be useful for decision-making."
+        },
+        "judge_time_s": 3.8
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 1,
+          "depth": 1,
+          "structure": 5,
+          "citations": 0,
+          "overall": 1,
+          "brief_rationale": "The report is cut off after the introduction and table of contents, providing no actual analysis, data, or comparison; thus it fails to answer the query meaningfully."
+        },
+        "judge_time_s": 5.7
+      },
+      {
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 3,
+          "structure": 7,
+          "citations": 1,
+          "overall": 4,
+          "brief_rationale": "The report provides a structured overview of the EU AI Act's implications for enterprise SaaS companies, but lacks specific data, examples, and expert insights, with no citations or evidence to support its claims."
+        },
+        "judge_time_s": 3.9
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 1,
+          "structure": 6,
+          "citations": 2,
+          "overall": 2,
+          "brief_rationale": "The report outline suggests a comprehensive structure, but the provided content is only a brief introduction, lacking substantive analysis, data, and evidence for the stated topics."
+        },
+        "judge_time_s": 6.9
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 7,
+          "depth": 2,
+          "structure": 9,
+          "citations": 2,
+          "overall": 4,
+          "brief_rationale": "The outline covers many relevant topics but lacks actual content, analysis, or citations; it is merely a table of contents, not a full report."
+        },
+        "judge_time_s": 12.2
+      }
+    ],
+    "no_reflexion": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 4,
+          "depth": 3,
+          "structure": 7,
+          "citations": 0,
+          "overall": 3,
+          "brief_rationale": "The report begins to address the query but is clearly truncated, lacking actual market share data, complete sections, and any citations, making it unreliable for decision-making."
+        },
+        "judge_time_s": 6.7
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 5,
+          "structure": 7,
+          "citations": 0,
+          "overall": 5,
+          "brief_rationale": "The report starts with a strong structure and covers key dimensions, but is cut off prematurely and lacks any citations, limiting its completeness and trustworthiness."
+        },
+        "judge_time_s": 7.0
+      },
+      {
+        "case_id": "case_005",
+        "status": "timeout",
+        "judge_scores": null
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 5,
+          "depth": 4,
+          "structure": 6,
+          "citations": 2,
+          "overall": 3,
+          "brief_rationale": "The report outlines many relevant topics but is cut off mid-sentence, leaving it incomplete; depth is limited by truncation, and only one citation is provided without proper attribution, making it untrustworthy for decision-making."
+        },
+        "judge_time_s": 8.2
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 3,
+          "depth": 3,
+          "structure": 8,
+          "citations": 5,
+          "overall": 4,
+          "brief_rationale": "The report begins with a clear introduction and structure, but is incomplete, lacking full coverage and deep analysis of the transformer's evolution."
+        },
+        "judge_time_s": 9.6
+      }
+    ],
+    "no_tool_pruning": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 3,
+          "depth": 4,
+          "structure": 6,
+          "citations": 1,
+          "overall": 3,
+          "brief_rationale": "The report is incomplete, lacking crucial market share data, specific figures, and citations, making it insufficient to answer the query reliably."
+        },
+        "judge_time_s": 4.2
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 6,
+          "depth": 5,
+          "structure": 6,
+          "citations": 0,
+          "overall": 4,
+          "brief_rationale": "The report covers key comparison areas but is incomplete, lacks citations, and provides no concrete data or examples, reducing trustworthiness for decision-making."
+        },
+        "judge_time_s": 5.4
+      },
+      {
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 4,
+          "depth": 5,
+          "structure": 7,
+          "citations": 6,
+          "overall": 4,
+          "brief_rationale": "The report is incomplete, covering only the introductory framework and lacking detailed analysis of enterprise SaaS specifics. Citations are present but limited in scope."
+        },
+        "judge_time_s": 6.4
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 1,
+          "structure": 6,
+          "citations": 1,
+          "overall": 2,
+          "brief_rationale": "The report is mostly an outline with only a single introductory sentence; it lacks the detailed analysis, data, and evidence needed to answer the query thoroughly."
+        },
+        "judge_time_s": 6.8
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 5,
+          "depth": 4,
+          "structure": 7,
+          "citations": 2,
+          "overall": 4,
+          "brief_rationale": "Report covers key topics but is incomplete (cut off) and lacks deep analysis or specific data; no inline citations beyond mentioning one paper."
+        },
+        "judge_time_s": 7.4
+      }
+    ],
+    "optimized_full": [
+      {
+        "case_id": "case_001",
+        "query": "Latest AI chip market share in 2025",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 8,
+          "depth": 9,
+          "structure": 9,
+          "citations": 6,
+          "overall": 8,
+          "brief_rationale": "The report provides comprehensive coverage of the AI chip market with deep analysis and clear organization, but lacks formal citation details such as specific sources or publication references."
+        },
+        "judge_time_s": 7.6
+      },
+      {
+        "case_id": "case_004",
+        "query": "Compare Rust and Go for building microservices in production",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 3,
+          "depth": 2,
+          "structure": 6,
+          "citations": 3,
+          "overall": 3,
+          "brief_rationale": "The report is incomplete, ending mid-sentence with no actual comparison or analysis, making it insufficient to answer the query. While the structure is well-planned, the lack of substantive content and proper citations severely undermines its utility."
+        },
+        "judge_time_s": 7.4
+      },
+      {
+        "case_id": "case_005",
+        "query": "Impact of EU AI Act on enterprise SaaS companies",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 4,
+          "depth": 3,
+          "structure": 6,
+          "citations": 4,
+          "overall": 4,
+          "brief_rationale": "The report appears to be cut off, providing only introductory content and an outline; it lacks the detailed analysis, data, and full exposition needed for a thorough evaluation."
+        },
+        "judge_time_s": 8.5
+      },
+      {
+        "case_id": "case_007",
+        "query": "Advances in mRNA vaccine technology beyond COVID-19",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 2,
+          "depth": 1,
+          "structure": 3,
+          "citations": 0,
+          "overall": 1,
+          "brief_rationale": "Report is incomplete, missing most body content and all citations; only an outline and one truncated paragraph are provided."
+        },
+        "judge_time_s": 7.6
+      },
+      {
+        "case_id": "case_010",
+        "query": "History and evolution of transformer architecture in deep learning",
+        "status": "scored",
+        "judge_scores": {
+          "coverage": 1,
+          "depth": 1,
+          "structure": 5,
+          "citations": 0,
+          "overall": 1,
+          "brief_rationale": "The report is incomplete, cutting off mid-sentence after the first paragraph. While the table of contents shows a promising structure, the lack of actual content, analysis, and citations makes it unsuitable for evaluation as a research report."
+        },
+        "judge_time_s": 5.9
+      }
+    ]
+  }
+}
