@@ -148,3 +148,18 @@ def test_agent_defaults_enable_provider_safe_middlewares(monkeypatch):
     assert s.tool_call_limit == 12
     assert s.tool_selector is True
     assert s.enable_todo_middleware is True
+
+
+def test_context_optimization_defaults_disabled(monkeypatch):
+    from common.config import Settings
+
+    for key in (
+        "CONTEXT_OFFLOADING",
+        "DYNAMIC_TOOL_PRUNING",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    s = Settings(_env_file=None)
+
+    assert s.context_offloading is False
+    assert s.dynamic_tool_pruning is False

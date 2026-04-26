@@ -65,8 +65,8 @@ def score_report(query: str, report: str, llm: Any = None) -> Dict[str, Any]:
     if llm is None:
         llm = _get_judge_llm()
 
-    # Truncate very long reports to avoid excessive cost
-    report_text = report[:16000] if len(report) > 16000 else report
+    # Truncate very long reports to avoid excessive cost (raised to 64k for full-report scoring)
+    report_text = report[:64000] if len(report) > 64000 else report
 
     from langchain_core.messages import HumanMessage
 

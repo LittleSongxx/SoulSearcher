@@ -112,10 +112,6 @@ web/tmp/
 .vercel/
 .claude/
 .worktrees/
-.beads/
-!.beads/
-.beads/*
-!.beads/issues.jsonl
 *.tsbuildinfo
 .eslintcache
 .npm

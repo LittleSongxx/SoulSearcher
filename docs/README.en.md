@@ -328,8 +328,8 @@ TAVILY_API_KEY=tvly-...                   # Tavily search API
 E2B_API_KEY=e2b_...                       # E2B sandbox API
 
 # Models
-PRIMARY_MODEL=gpt-4o                      # Main LLM model
-REASONING_MODEL=o1-mini                   # Planning/reasoning model
+PRIMARY_MODEL=deepseek-v4-flash           # Main LLM model
+REASONING_MODEL=deepseek-v4-pro           # Planning/reasoning model
 
 # Database
 DATABASE_URL=postgresql://user:pass@localhost:5432/weaver

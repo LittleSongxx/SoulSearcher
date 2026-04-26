@@ -20,6 +20,7 @@ from fastapi import (
     FastAPI,
     File,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     WebSocket,
@@ -68,7 +69,14 @@ from common.agents_store import (
     upsert_agent as upsert_agent_profile,
 )
 from common.cancellation import TaskStatus, cancellation_manager
-from common.skills_loader import get_skill as get_skill_profile, load_all_skills
+from common.skills_loader import (
+    get_skill,
+    get_skill_registry,
+    load_all_skills,
+    reload_skill_registry,
+    update_skill_status,
+    validate_skills,
+)
 from common.chat_stream_translate import translate_legacy_line_to_sse
 from common.config import settings
 from common.logger import get_logger, setup_logging
@@ -1332,17 +1340,112 @@ async def agent_health():
 # ==================== Skills API ====================
 
 
+def _resolve_requested_skill(skill_id: str | None):
+    if not skill_id:
+        return None
+    normalized_skill_id = str(skill_id).strip()
+    if not normalized_skill_id:
+        return None
+
+    skill = get_skill(
+        normalized_skill_id,
+        include_disabled=True,
+        include_invalid=True,
+    )
+    if not skill:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill '{normalized_skill_id}' not found",
+        )
+    if not skill.is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Skill '{normalized_skill_id}' is invalid; "
+                f"inspect /api/skills/{normalized_skill_id}?include_invalid=true"
+            ),
+        )
+    if skill.status != "enabled":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Skill '{normalized_skill_id}' is currently {skill.status}",
+        )
+    return skill
+
+
 @app.get("/api/skills")
-async def list_skills():
+async def list_skills(
+    include_disabled: bool = Query(default=False),
+    include_invalid: bool = Query(default=False),
+):
     """List all available skills (metadata only, no full prompt)."""
-    skills = load_all_skills()
-    return {"skills": [s.to_summary_dict() for s in skills], "count": len(skills)}
+    skills = load_all_skills(
+        include_disabled=include_disabled,
+        include_invalid=include_invalid,
+    )
+    registry = get_skill_registry()
+    return {
+        "skills": [s.to_summary_dict(include_diagnostics=include_invalid) for s in skills],
+        "count": len(skills),
+        "registry": registry.to_dict(include_skills=False),
+    }
+
+
+@app.get("/api/skills/registry")
+async def get_skills_registry():
+    """Get registry snapshot including validation diagnostics."""
+    return get_skill_registry().to_dict(include_skills=True)
+
+
+@app.post("/api/skills/reload")
+async def reload_skills_api():
+    """Reload skill manifests from disk and return registry snapshot."""
+    return reload_skill_registry().to_dict(include_skills=True)
+
+
+@app.post("/api/skills/validate")
+async def validate_skills_api():
+    """Validate skill manifests without mutating the runtime cache."""
+    return validate_skills().to_dict(include_skills=True)
+
+
+@app.post("/api/skills/{skill_id}/enable")
+async def enable_skill(skill_id: str):
+    """Enable a skill via local lifecycle state."""
+    try:
+        snapshot = update_skill_status(skill_id, "enabled")
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill '{skill_id}' not found",
+        ) from exc
+    return snapshot.to_dict(include_skills=True)
+
+
+@app.post("/api/skills/{skill_id}/disable")
+async def disable_skill(skill_id: str):
+    """Disable a skill via local lifecycle state."""
+    try:
+        snapshot = update_skill_status(skill_id, "disabled")
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Skill '{skill_id}' not found",
+        ) from exc
+    return snapshot.to_dict(include_skills=True)
 
 
 @app.get("/api/skills/{skill_id}")
-async def get_skill_detail(skill_id: str):
+async def get_skill_detail(
+    skill_id: str,
+    include_invalid: bool = Query(default=False),
+):
     """Get full skill detail including system prompt."""
-    skill = get_skill_profile(skill_id)
+    skill = get_skill(
+        skill_id,
+        include_disabled=True,
+        include_invalid=include_invalid,
+    )
     if not skill:
         raise HTTPException(status_code=404, detail=f"Skill '{skill_id}' not found")
     return skill.to_full_dict()
@@ -1915,7 +2018,7 @@ async def stream_agent_events(
     # --- Skill override: if skill_id is provided, override agent_profile and search_mode ---
     _active_skill = None
     if skill_id:
-        _active_skill = get_skill_profile(skill_id)
+        _active_skill = _resolve_requested_skill(skill_id)
         if _active_skill:
             logger.info(f"Skill activated: {_active_skill.id} (mode={_active_skill.mode})")
             # Override agent_profile with skill-derived profile
@@ -1926,12 +2029,26 @@ async def stream_agent_events(
                 system_prompt=_active_skill.system_prompt,
                 model="",
                 enabled_tools=_active_skill.to_enabled_tools(),
-                metadata={"skill": True, "category": _active_skill.category},
+                metadata={
+                    "skill": True,
+                    "category": _active_skill.category,
+                    "version": _active_skill.version,
+                    "status": _active_skill.status,
+                    "tool_policy": _active_skill.tool_policy,
+                    "permissions": _active_skill.permissions.to_dict(),
+                    "dependencies": [
+                        item.to_dict() for item in _active_skill.dependencies
+                    ],
+                    "input_contract": [
+                        item.to_dict() for item in _active_skill.input_contract
+                    ],
+                    "output_contract": [
+                        item.to_dict() for item in _active_skill.output_contract
+                    ],
+                },
             )
             # Override search_mode with skill's workflow mode
             search_mode = _active_skill.mode
-        else:
-            logger.warning(f"Skill '{skill_id}' not found, falling back to default")
 
     # Optional per-thread log handler for easier debugging
     thread_handler = None
@@ -2542,6 +2659,7 @@ async def chat_sse(request: Request, payload: ChatRequest):
         if internal_key and principal_id
         else (payload.user_id or settings.memory_user_id)
     )
+    _resolve_requested_skill(payload.skill_id)
     mode_info = _normalize_search_mode(payload.search_mode)
     model = (payload.model or settings.primary_model).strip()
     thread_id = f"thread_{uuid.uuid4().hex}"
@@ -2655,10 +2773,39 @@ async def chat(request: Request, payload: ChatRequest):
             if internal_key and principal_id
             else (payload.user_id or settings.memory_user_id)
         )
+        active_skill = _resolve_requested_skill(payload.skill_id)
         mode_info = _normalize_search_mode(payload.search_mode)
         model = (payload.model or settings.primary_model).strip()
         agent_id = (payload.agent_id or "default").strip() or "default"
         agent_profile = get_agent_profile(agent_id) or get_agent_profile("default")
+
+        if active_skill:
+            agent_profile = AgentProfile(
+                id=active_skill.id,
+                name=active_skill.name,
+                description=active_skill.description,
+                system_prompt=active_skill.system_prompt,
+                model="",
+                enabled_tools=active_skill.to_enabled_tools(),
+                metadata={
+                    "skill": True,
+                    "category": active_skill.category,
+                    "version": active_skill.version,
+                    "status": active_skill.status,
+                    "tool_policy": active_skill.tool_policy,
+                    "permissions": active_skill.permissions.to_dict(),
+                    "dependencies": [
+                        item.to_dict() for item in active_skill.dependencies
+                    ],
+                    "input_contract": [
+                        item.to_dict() for item in active_skill.input_contract
+                    ],
+                    "output_contract": [
+                        item.to_dict() for item in active_skill.output_contract
+                    ],
+                },
+            )
+            mode_info = _normalize_search_mode(active_skill.mode)
 
         logger.info("Chat request received")
         logger.info(f"  Model: {model}")
@@ -5206,6 +5353,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
         if internal_key and principal_id
         else (payload.user_id or settings.memory_user_id)
     )
+    _resolve_requested_skill(payload.skill_id)
     mode_info = _normalize_search_mode(payload.search_mode)
     model = (payload.model or settings.primary_model).strip()
     thread_id = f"thread_{uuid.uuid4().hex}"

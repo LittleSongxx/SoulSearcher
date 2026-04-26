@@ -54,6 +54,8 @@ export function Header({ sidebarOpen, onToggleSidebar, selectedModel, onModelCha
     { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'Anthropic' },
 
     // DeepSeek 系列
+    { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', provider: t('deepseek') },
+    { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', provider: t('deepseek') },
     { id: 'deepseek-chat', name: 'deepseek-chat', provider: t('deepseek') },
     { id: 'deepseek-reasoner', name: 'deepseek-reasoner', provider: t('deepseek') },
 

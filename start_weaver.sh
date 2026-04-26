@@ -262,7 +262,7 @@ sync_insightvault_env() {
     local qwen_model current_model
     qwen_model="$(dotenv_get "$INSIGHT_ENV_FILE" "QWEN_MODEL" || true)"
     current_model="$(dotenv_get "$ENV_FILE" "PRIMARY_MODEL" || true)"
-    if dotenv_value_is_set "$qwen_model" && [[ "${current_model,,}" == "deepseek-chat" ]]; then
+    if dotenv_value_is_set "$qwen_model" && [[ "${current_model,,}" == "deepseek-chat" || "${current_model,,}" == "deepseek-v4-flash" ]]; then
       upsert_env "$ENV_FILE" "PRIMARY_MODEL" "$qwen_model"
       upsert_env "$ENV_FILE" "REASONING_MODEL" "$qwen_model"
     fi

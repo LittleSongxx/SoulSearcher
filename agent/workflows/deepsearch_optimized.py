@@ -1560,6 +1560,45 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
             ]
         except Exception:
             claims = []
+
+        # ---- Patch quality_summary with citation_coverage & claim_verifier stats ----
+        # _build_run_evidence_summary reads these from quality_summary; without them
+        # the evidence_summary endpoint returns None for these metrics.
+        try:
+            import re as _re
+            _claim_like = []
+            for _sent in _re.split(r"(?<=[。！？.!?])\s+", final_report):
+                _t = _sent.strip()
+                if len(_t) < 15:
+                    continue
+                _markers = [
+                    r"\d{4}", r"\d+%", r"\d+\.\d+",
+                    r"(?:research|study|report|data|according to|shows|found)",
+                    r"(?:研究|数据显示|统计|报告|发现|增长|下降)",
+                ]
+                if any(_re.search(m, _t, flags=_re.IGNORECASE) for m in _markers):
+                    _claim_like.append(_t)
+            if _claim_like:
+                _cite_pat = _re.compile(
+                    r"\[(?:S\d+-\d+|\d+)\]|\[来源[：:].*?\]|https?://\S+", _re.IGNORECASE
+                )
+                _uncited = [s for s in _claim_like if not _cite_pat.search(s)]
+                _cov = 1.0 - (len(_uncited) / max(1, len(_claim_like)))
+                quality_summary["citation_coverage"] = max(0.0, min(1.0, _cov))
+            else:
+                quality_summary["citation_coverage"] = 1.0
+        except Exception:
+            pass
+
+        _cv_total = len(claims)
+        _cv_verified = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
+        _cv_unsupported = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
+        _cv_contradicted = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+        quality_summary["claim_verifier_total"] = _cv_total
+        quality_summary["claim_verifier_verified"] = _cv_verified
+        quality_summary["claim_verifier_unsupported"] = _cv_unsupported
+        quality_summary["claim_verifier_contradicted"] = _cv_contradicted
+
         deepsearch_artifacts = {
             "mode": "linear",
             "queries": have_query,
@@ -2065,6 +2104,43 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             ]
         except Exception:
             claims = []
+
+        # ---- Patch quality_summary with citation_coverage & claim_verifier stats ----
+        try:
+            import re as _re
+            _claim_like = []
+            for _sent in _re.split(r"(?<=[。！？.!?])\s+", final_report):
+                _t = _sent.strip()
+                if len(_t) < 15:
+                    continue
+                _markers = [
+                    r"\d{4}", r"\d+%", r"\d+\.\d+",
+                    r"(?:research|study|report|data|according to|shows|found)",
+                    r"(?:研究|数据显示|统计|报告|发现|增长|下降)",
+                ]
+                if any(_re.search(m, _t, flags=_re.IGNORECASE) for m in _markers):
+                    _claim_like.append(_t)
+            if _claim_like:
+                _cite_pat = _re.compile(
+                    r"\[(?:S\d+-\d+|\d+)\]|\[来源[：:].*?\]|https?://\S+", _re.IGNORECASE
+                )
+                _uncited = [s for s in _claim_like if not _cite_pat.search(s)]
+                _cov = 1.0 - (len(_uncited) / max(1, len(_claim_like)))
+                quality_summary["citation_coverage"] = max(0.0, min(1.0, _cov))
+            else:
+                quality_summary["citation_coverage"] = 1.0
+        except Exception:
+            pass
+
+        _cv_total = len(claims)
+        _cv_verified = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
+        _cv_unsupported = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
+        _cv_contradicted = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+        quality_summary["claim_verifier_total"] = _cv_total
+        quality_summary["claim_verifier_verified"] = _cv_verified
+        quality_summary["claim_verifier_unsupported"] = _cv_unsupported
+        quality_summary["claim_verifier_contradicted"] = _cv_contradicted
+
         deepsearch_artifacts = {
             "mode": "tree",
             "queries": have_query,

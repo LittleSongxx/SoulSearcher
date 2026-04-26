@@ -71,7 +71,15 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
       )
 
       if (!response.ok) {
-        throw new Error('Failed to get response')
+        let detail = 'Failed to get response'
+        try {
+          const data = await response.json()
+          if (typeof data?.detail === 'string' && data.detail.trim()) {
+            detail = data.detail
+          }
+        } catch {
+        }
+        throw new Error(detail)
       }
 
       const threadHeader = response.headers.get('X-Thread-ID') || response.headers.get('x-thread-id')
@@ -358,7 +366,10 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
           {
             id: `error-${Date.now()}`,
             role: 'assistant',
-            content: 'Sorry, an error occurred. Please try again.',
+            content:
+              error instanceof Error && error.message
+                ? error.message
+                : 'Sorry, an error occurred. Please try again.',
           },
         ])
       }
@@ -366,7 +377,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
       setIsLoading(false)
       abortControllerRef.current = null
     }
-  }, [selectedModel, searchMode])
+  }, [selectedModel, searchMode, skillId])
 
   const handleApproveInterrupt = useCallback(async () => {
     if (!pendingInterrupt || !threadId) return

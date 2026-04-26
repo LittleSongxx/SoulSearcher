@@ -134,3 +134,49 @@ def test_agent_tools_include_task_list_tools_by_default():
     assert "update_task" in names
     assert "get_next_task" in names
     assert "plan_steps" in names
+
+
+def test_agent_tools_respect_strict_skill_tool_policy_defaults_off():
+    enabled_tools = {
+        "ask_human": False,
+        "bash": False,
+        "browser": False,
+        "browser_use": False,
+        "computer_use": False,
+        "crawl": False,
+        "mcp": False,
+        "planning": False,
+        "presentation_outline": False,
+        "presentation_v2": False,
+        "python": True,
+        "rag": False,
+        "sandbox_browser": False,
+        "sandbox_daytona": False,
+        "sandbox_files": False,
+        "sandbox_image_edit": False,
+        "sandbox_presentation": False,
+        "sandbox_sheets": False,
+        "sandbox_shell": False,
+        "sandbox_vision": False,
+        "sandbox_web_dev": False,
+        "sandbox_web_search": False,
+        "str_replace": False,
+        "task_list": False,
+        "web_search": False,
+    }
+    cfg = {
+        "configurable": {
+            "thread_id": "t_strict_skill",
+            "agent_profile": {"enabled_tools": enabled_tools},
+        }
+    }
+    names = _names(build_agent_tools(cfg))
+    assert "execute_python_code" in names
+    assert "chart_visualize" in names
+    assert "create_tasks" not in names
+    assert "view_tasks" not in names
+    assert "plan_steps" not in names
+    assert "ask_human" not in names
+    assert "str_replace" not in names
+    assert "tavily_search" not in names
+    assert "fallback_search" not in names

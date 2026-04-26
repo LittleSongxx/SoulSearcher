@@ -12,6 +12,13 @@ api_key = ""
 max_tokens = 8192
 temperature = 0.6
 
+[llm."deepseek-v4-pro"]
+model = "deepseek-v4-pro"
+base_url = "https://api.deepseek.com"
+api_key = ""
+max_tokens = 8192
+temperature = 0.6
+
 [llm."qwen3-max-2026-01-23"]
 model = "qwen3-max-2026-01-23"
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"

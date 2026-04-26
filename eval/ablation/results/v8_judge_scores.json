@@ -1,0 +1,990 @@
+{
+  "summary": {
+    "baseline": {
+      "scored": 10,
+      "avg_scores": {
+        "coverage": 8.2,
+        "depth": 7.47,
+        "structure": 9.0,
+        "citations": 6.4,
+        "overall": 7.6
+      }
+    },
+    "optimized": {
+      "scored": 10,
+      "avg_scores": {
+        "coverage": 8.43,
+        "depth": 7.5,
+        "structure": 9.07,
+        "citations": 6.63,
+        "overall": 7.53
+      }
+    }
+  },
+  "details": {
+    "baseline": [
+      {
+        "case_id": "v7_001",
+        "domain": "financial",
+        "query": "2025年全球半导体行业并购交易分析：主要交易、估值趋势与监管审批情况",
+        "status": "scored",
+        "report_chars": 12064,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 7.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了主要交易、估值趋势和监管审批，结构清晰，但部分数据缺乏具体来源，深度分析可进一步加强。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告覆盖了主要交易、估值趋势和监管审批等核心维度，结构清晰，但部分数据缺乏具体来源，深度分析可进一步加强。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了2025年全球半导体并购的主要交易、估值趋势和监管审批，结构清晰，但部分数据来源引用不够具体，深度分析可进一步加强。"
+            }
+          ],
+          "rationales": [
+            "报告全面覆盖了主要交易、估值趋势和监管审批，结构清晰，但部分数据缺乏具体来源，深度分析可进一步加强。",
+            "报告覆盖了主要交易、估值趋势和监管审批等核心维度，结构清晰，但部分数据缺乏具体来源，深度分析可进一步加强。",
+            "报告全面覆盖了2025年全球半导体并购的主要交易、估值趋势和监管审批，结构清晰，但部分数据来源引用不够具体，深度分析可进一步加强。"
+          ]
+        },
+        "judge_time_s": 4.5
+      },
+      {
+        "case_id": "v7_002",
+        "domain": "financial",
+        "query": "东南亚数字银行盈利现状与未来展望：主要玩家、监管环境与市场渗透率对比",
+        "status": "scored",
+        "report_chars": 11307,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了主要玩家、监管、渗透率等关键维度，结构清晰，但深度上依赖单一来源，数据点不够丰富，且部分引用未直接对应正文内容。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了主要玩家、监管、渗透率等关键维度，结构清晰，但深度上依赖单一来源，数据点不够丰富，且部分引用未直接对应正文内容。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了主要玩家、监管、渗透率等关键维度，结构清晰，但深度分析依赖单一来源，数据点不够丰富，部分引用未直接对应正文内容。"
+            }
+          ],
+          "rationales": [
+            "报告覆盖了主要玩家、监管、渗透率等关键维度，结构清晰，但深度上依赖单一来源，数据点不够丰富，且部分引用未直接对应正文内容。",
+            "报告覆盖了主要玩家、监管、渗透率等关键维度，结构清晰，但深度上依赖单一来源，数据点不够丰富，且部分引用未直接对应正文内容。",
+            "报告覆盖了主要玩家、监管、渗透率等关键维度，结构清晰，但深度分析依赖单一来源，数据点不够丰富，部分引用未直接对应正文内容。"
+          ]
+        },
+        "judge_time_s": 5.1
+      },
+      {
+        "case_id": "v7_003",
+        "domain": "technical",
+        "query": "大规模分布式训练框架对比：DeepSpeed、Megatron-LM、FSDP 的架构差异、扩展性与实际部署经验",
+        "status": "scored",
+        "report_chars": 14807,
+        "judge_scores": {
+          "coverage": 9.0,
+          "depth": 8.0,
+          "structure": 9.0,
+          "citations": 7.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers all key aspects of the three frameworks, including architecture, memory-communication trade-offs, scalability, and deployment, with a clear structure and logical flow. Depth is strong with specific data and comparisons, though some sections could benefit from more granular technical details; citations are numerous but lack explicit in-text attribution for many claims."
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers all key aspects of the three frameworks, including architecture, memory-communication trade-offs, scalability, and deployment, with a clear structure and logical flow. Depth is strong with specific data and comparisons, though some citations are generic and lack direct page/line references, slightly reducing trustworthiness."
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers architecture, scalability, and deployment for all three frameworks with detailed comparisons and quantitative data, though some citations are auto-generated and lack direct source verification."
+            }
+          ],
+          "rationales": [
+            "The report thoroughly covers all key aspects of the three frameworks, including architecture, memory-communication trade-offs, scalability, and deployment, with a clear structure and logical flow. Depth is strong with specific data and comparisons, though some sections could benefit from more granular technical details; citations are numerous but lack explicit in-text attribution for many claims.",
+            "The report thoroughly covers all key aspects of the three frameworks, including architecture, memory-communication trade-offs, scalability, and deployment, with a clear structure and logical flow. Depth is strong with specific data and comparisons, though some citations are generic and lack direct page/line references, slightly reducing trustworthiness.",
+            "The report thoroughly covers architecture, scalability, and deployment for all three frameworks with detailed comparisons and quantitative data, though some citations are auto-generated and lack direct source verification."
+          ]
+        },
+        "judge_time_s": 5.3
+      },
+      {
+        "case_id": "v7_004",
+        "domain": "technical",
+        "query": "WebAssembly 在边缘计算和 Serverless 场景中的应用进展、性能基准与生态系统成熟度",
+        "status": "scored",
+        "report_chars": 14093,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 5.67,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 5,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了查询要求的应用进展、性能基准和生态系统成熟度，结构清晰逻辑流畅，但深度上多为定性描述，缺乏具体数据支撑，且引用来源多为自动生成，可信度不足。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report thoroughly covers the query's key aspects (application progress, performance benchmarks, ecosystem maturity) with a clear structure and logical flow, but lacks deep, specific data points and expert insights, and the citations are numerous but not always directly tied to the claims made."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告全面覆盖了查询要求的应用进展、性能基准和生态成熟度，结构清晰逻辑流畅，但深度上多为定性描述和已知结论，缺乏具体实验数据或最新案例支撑，且引用来源多为中文博客和二手资料，权威性和时效性不足。"
+            }
+          ],
+          "rationales": [
+            "报告覆盖了查询要求的应用进展、性能基准和生态系统成熟度，结构清晰逻辑流畅，但深度上多为定性描述，缺乏具体数据支撑，且引用来源多为自动生成，可信度不足。",
+            "The report thoroughly covers the query's key aspects (application progress, performance benchmarks, ecosystem maturity) with a clear structure and logical flow, but lacks deep, specific data points and expert insights, and the citations are numerous but not always directly tied to the claims made.",
+            "报告全面覆盖了查询要求的应用进展、性能基准和生态成熟度，结构清晰逻辑流畅，但深度上多为定性描述和已知结论，缺乏具体实验数据或最新案例支撑，且引用来源多为中文博客和二手资料，权威性和时效性不足。"
+          ]
+        },
+        "judge_time_s": 5.3
+      },
+      {
+        "case_id": "v7_005",
+        "domain": "legal",
+        "query": "中国《生成式人工智能服务管理暂行办法》实施一年后的执法案例、企业合规实践与行业影响评估",
+        "status": "scored",
+        "report_chars": 11770,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.67,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.67,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 8,
+              "brief_rationale": "报告覆盖了执法案例、企业合规和行业影响等核心维度，结构清晰、分析深入，但部分数据来源单一且引用格式不规范，影响了可信度。"
+            },
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 8,
+              "brief_rationale": "报告覆盖了执法案例、企业合规和行业影响等关键维度，分析深入且有具体数据支撑，结构清晰逻辑连贯，但部分引用来源为自动生成或非官方渠道，可信度有待提升。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了执法、合规和行业影响等核心维度，结构清晰、逻辑连贯，但部分数据（如罚款中位数、案件数量）缺乏明确来源，且引用多为自动生成链接，可信度不足。"
+            }
+          ],
+          "rationales": [
+            "报告覆盖了执法案例、企业合规和行业影响等核心维度，结构清晰、分析深入，但部分数据来源单一且引用格式不规范，影响了可信度。",
+            "报告覆盖了执法案例、企业合规和行业影响等关键维度，分析深入且有具体数据支撑，结构清晰逻辑连贯，但部分引用来源为自动生成或非官方渠道，可信度有待提升。",
+            "报告覆盖了执法、合规和行业影响等核心维度，结构清晰、逻辑连贯，但部分数据（如罚款中位数、案件数量）缺乏明确来源，且引用多为自动生成链接，可信度不足。"
+          ]
+        },
+        "judge_time_s": 4.8
+      },
+      {
+        "case_id": "v7_006",
+        "domain": "legal",
+        "query": "全球数据跨境传输规制比较：GDPR 充分性认定、中国数据出境安全评估与美国行政令的异同与企业应对策略",
+        "status": "scored",
+        "report_chars": 12660,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 7.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report comprehensively covers the three major regulatory frameworks and provides a structured comparison, but depth is slightly limited by reliance on secondary sources and some surface-level analysis, while citations are numerous but not always directly tied to specific data points."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers the three regulatory frameworks and provides a structured comparison with practical enterprise strategies, though depth is occasionally limited by reliance on secondary sources and some citations lack direct data points."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report comprehensively covers the three major regulatory frameworks and provides a structured comparison, but depth is slightly limited by reliance on secondary sources and some surface-level analysis, while citations are numerous but not always directly linked to specific data points."
+            }
+          ],
+          "rationales": [
+            "The report comprehensively covers the three major regulatory frameworks and provides a structured comparison, but depth is slightly limited by reliance on secondary sources and some surface-level analysis, while citations are numerous but not always directly tied to specific data points.",
+            "The report thoroughly covers the three regulatory frameworks and provides a structured comparison with practical enterprise strategies, though depth is occasionally limited by reliance on secondary sources and some citations lack direct data points.",
+            "The report comprehensively covers the three major regulatory frameworks and provides a structured comparison, but depth is slightly limited by reliance on secondary sources and some surface-level analysis, while citations are numerous but not always directly linked to specific data points."
+          ]
+        },
+        "judge_time_s": 4.6
+      },
+      {
+        "case_id": "v7_007",
+        "domain": "medical",
+        "query": "CAR-T 细胞疗法在实体瘤治疗中的最新临床试验进展、技术瓶颈与未来方向",
+        "status": "scored",
+        "report_chars": 12714,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 8.0,
+          "structure": 9.0,
+          "citations": 6.33,
+          "overall": 7.33,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers key challenges, recent trials, and future directions with a logical structure and specific examples, though some citations are from secondary sources and the depth of clinical data could be stronger."
+            },
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report thoroughly covers key challenges, recent trials, and future directions for CAR-T in solid tumors, with strong structure and depth. However, citation quality is limited as most references are secondary sources or news articles rather than primary clinical trial data, and some claims lack direct attribution."
+            },
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report thoroughly covers key challenges, recent trials, and future directions for CAR-T in solid tumors, with strong structure and depth. However, citation quality is limited as most references are secondary sources or news articles rather than primary clinical trial data or peer-reviewed studies."
+            }
+          ],
+          "rationales": [
+            "The report thoroughly covers key challenges, recent trials, and future directions with a logical structure and specific examples, though some citations are from secondary sources and the depth of clinical data could be stronger.",
+            "The report thoroughly covers key challenges, recent trials, and future directions for CAR-T in solid tumors, with strong structure and depth. However, citation quality is limited as most references are secondary sources or news articles rather than primary clinical trial data, and some claims lack direct attribution.",
+            "The report thoroughly covers key challenges, recent trials, and future directions for CAR-T in solid tumors, with strong structure and depth. However, citation quality is limited as most references are secondary sources or news articles rather than primary clinical trial data or peer-reviewed studies."
+          ]
+        },
+        "judge_time_s": 4.7
+      },
+      {
+        "case_id": "v7_008",
+        "domain": "medical",
+        "query": "2024-2025 年全球抗菌药物耐药性（AMR）趋势：新型抗生素管线、各国行动计划与经济负担评估",
+        "status": "scored",
+        "report_chars": 12607,
+        "judge_scores": {
+          "coverage": 9.0,
+          "depth": 8.0,
+          "structure": 9.0,
+          "citations": 7.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了AMR趋势、新型抗生素、各国行动和经济负担，结构清晰，数据详实，但部分引用来源为自动生成或间接引用，削弱了权威性。"
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了AMR趋势、新型抗生素、各国行动和经济负担，分析深入且数据详实，结构清晰，但部分引用来源为自动生成或间接引用，影响了可信度。"
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了AMR趋势、新型抗生素、各国行动和经济负担，结构清晰，数据详实，但部分引用来源为自动生成或间接引用，影响了可信度。"
+            }
+          ],
+          "rationales": [
+            "报告全面覆盖了AMR趋势、新型抗生素、各国行动和经济负担，结构清晰，数据详实，但部分引用来源为自动生成或间接引用，削弱了权威性。",
+            "报告全面覆盖了AMR趋势、新型抗生素、各国行动和经济负担，分析深入且数据详实，结构清晰，但部分引用来源为自动生成或间接引用，影响了可信度。",
+            "报告全面覆盖了AMR趋势、新型抗生素、各国行动和经济负担，结构清晰，数据详实，但部分引用来源为自动生成或间接引用，影响了可信度。"
+          ]
+        },
+        "judge_time_s": 4.7
+      },
+      {
+        "case_id": "v7_009",
+        "domain": "scientific",
+        "query": "室温超导研究争议与进展：LK-99 后续验证、替代材料路线与理论模型的最新发展",
+        "status": "scored",
+        "report_chars": 10339,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告全面覆盖了LK-99和镥氮氢争议、替代材料路线及理论模型，结构清晰逻辑流畅，但深度上对具体数据和分析的挖掘稍显不足，且部分引用来源权威性一般或与内容关联度不高。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告全面覆盖了LK-99和镥氮氢争议、替代材料路线及理论模型，结构清晰，但部分分析偏重事件描述而非深入机理，且引用来源多为新闻和综述，缺乏原始研究论文的支撑。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了LK-99和镥氮氢争议、替代材料路线及理论模型等核心主题，结构清晰逻辑连贯，但部分分析偏重事件描述而非深入机理，且引用来源多为新闻或综述，缺乏一手实验数据或专家访谈支撑。"
+            }
+          ],
+          "rationales": [
+            "报告全面覆盖了LK-99和镥氮氢争议、替代材料路线及理论模型，结构清晰逻辑流畅，但深度上对具体数据和分析的挖掘稍显不足，且部分引用来源权威性一般或与内容关联度不高。",
+            "报告全面覆盖了LK-99和镥氮氢争议、替代材料路线及理论模型，结构清晰，但部分分析偏重事件描述而非深入机理，且引用来源多为新闻和综述，缺乏原始研究论文的支撑。",
+            "报告覆盖了LK-99和镥氮氢争议、替代材料路线及理论模型等核心主题，结构清晰逻辑连贯，但部分分析偏重事件描述而非深入机理，且引用来源多为新闻或综述，缺乏一手实验数据或专家访谈支撑。"
+          ]
+        },
+        "judge_time_s": 5.2
+      },
+      {
+        "case_id": "v7_010",
+        "domain": "scientific",
+        "query": "人工光合作用与太阳能燃料：催化材料突破、能量转换效率里程碑与商业化路径",
+        "status": "scored",
+        "report_chars": 12728,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 8.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers key aspects of artificial photosynthesis with strong depth in materials and efficiency, but citations are often generic or lack direct linkage to specific claims, reducing trustworthiness."
+            },
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers key aspects of artificial photosynthesis with strong depth in materials and efficiency milestones, but citations are often vague or lack direct source attribution, reducing trustworthiness."
+            },
+            {
+              "coverage": 8,
+              "depth": 8,
+              "structure": 9,
+              "citations": 6,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers key aspects of artificial photosynthesis with strong depth in materials and efficiency milestones, but citations are often generic or misattributed, reducing trustworthiness for decision-making."
+            }
+          ],
+          "rationales": [
+            "The report thoroughly covers key aspects of artificial photosynthesis with strong depth in materials and efficiency, but citations are often generic or lack direct linkage to specific claims, reducing trustworthiness.",
+            "The report thoroughly covers key aspects of artificial photosynthesis with strong depth in materials and efficiency milestones, but citations are often vague or lack direct source attribution, reducing trustworthiness.",
+            "The report thoroughly covers key aspects of artificial photosynthesis with strong depth in materials and efficiency milestones, but citations are often generic or misattributed, reducing trustworthiness for decision-making."
+          ]
+        },
+        "judge_time_s": 4.5
+      }
+    ],
+    "optimized": [
+      {
+        "case_id": "v7_001",
+        "domain": "financial",
+        "query": "2025年全球半导体行业并购交易分析：主要交易、估值趋势与监管审批情况",
+        "status": "scored",
+        "report_chars": 12004,
+        "judge_scores": {
+          "coverage": 8.33,
+          "depth": 7.33,
+          "structure": 9.0,
+          "citations": 6.33,
+          "overall": 7.33,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了交易、估值、监管等核心维度，结构清晰，数据详实，但部分引用来源为自动生成或非一手资料，深度上对个别案例的分析可进一步细化。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了市场格局、驱动力、估值和监管等关键维度，结构清晰，但部分数据来源为自动生成且缺乏一手专家访谈，深度和引用可信度有提升空间。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了主要交易、估值和监管等关键维度，结构清晰，但部分数据引用不够具体，深度分析可进一步加强，且参考来源多为自动生成，可信度有限。"
+            }
+          ],
+          "rationales": [
+            "报告全面覆盖了交易、估值、监管等核心维度，结构清晰，数据详实，但部分引用来源为自动生成或非一手资料，深度上对个别案例的分析可进一步细化。",
+            "报告覆盖了市场格局、驱动力、估值和监管等关键维度，结构清晰，但部分数据来源为自动生成且缺乏一手专家访谈，深度和引用可信度有提升空间。",
+            "报告覆盖了主要交易、估值和监管等关键维度，结构清晰，但部分数据引用不够具体，深度分析可进一步加强，且参考来源多为自动生成，可信度有限。"
+          ]
+        },
+        "judge_time_s": 4.7
+      },
+      {
+        "case_id": "v7_002",
+        "domain": "financial",
+        "query": "东南亚数字银行盈利现状与未来展望：主要玩家、监管环境与市场渗透率对比",
+        "status": "scored",
+        "report_chars": 13250,
+        "judge_scores": {
+          "coverage": 9.0,
+          "depth": 8.0,
+          "structure": 9.0,
+          "citations": 7.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了盈利现状、监管环境、市场渗透率和主要玩家，分析深入且有具体数据支撑，结构清晰，但部分引用来源不够权威或未直接对应正文，整体质量较高，可用于决策参考。"
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了盈利现状、监管环境、市场渗透率及主要玩家，分析深入且结构清晰，但部分数据点缺乏直接引用，且对马来西亚等市场的覆盖稍显不足。"
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了盈利现状、监管环境、市场渗透率和主要玩家，结构清晰，分析有深度，但部分数据来源单一，且未涵盖马来西亚等市场细节。"
+            }
+          ],
+          "rationales": [
+            "报告全面覆盖了盈利现状、监管环境、市场渗透率和主要玩家，分析深入且有具体数据支撑，结构清晰，但部分引用来源不够权威或未直接对应正文，整体质量较高，可用于决策参考。",
+            "报告全面覆盖了盈利现状、监管环境、市场渗透率及主要玩家，分析深入且结构清晰，但部分数据点缺乏直接引用，且对马来西亚等市场的覆盖稍显不足。",
+            "报告全面覆盖了盈利现状、监管环境、市场渗透率和主要玩家，结构清晰，分析有深度，但部分数据来源单一，且未涵盖马来西亚等市场细节。"
+          ]
+        },
+        "judge_time_s": 4.9
+      },
+      {
+        "case_id": "v7_003",
+        "domain": "technical",
+        "query": "大规模分布式训练框架对比：DeepSpeed、Megatron-LM、FSDP 的架构差异、扩展性与实际部署经验",
+        "status": "scored",
+        "report_chars": 14751,
+        "judge_scores": {
+          "coverage": 8.67,
+          "depth": 7.67,
+          "structure": 9.0,
+          "citations": 7.67,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 8,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers the query with detailed comparisons, specific data, and a clear structure, though some citations are auto-generated and lack direct source verification."
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 8,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly addresses the query with detailed comparisons of architecture, scalability, and deployment scenarios, though some sections rely on a single primary source and could benefit from more diverse expert insights."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers the query's key aspects with clear structure and comparative tables, but depth is slightly limited by reliance on a few secondary sources and lacks original performance benchmarks or detailed deployment case studies."
+            }
+          ],
+          "rationales": [
+            "The report thoroughly covers the query with detailed comparisons, specific data, and a clear structure, though some citations are auto-generated and lack direct source verification.",
+            "The report thoroughly addresses the query with detailed comparisons of architecture, scalability, and deployment scenarios, though some sections rely on a single primary source and could benefit from more diverse expert insights.",
+            "The report thoroughly covers the query's key aspects with clear structure and comparative tables, but depth is slightly limited by reliance on a few secondary sources and lacks original performance benchmarks or detailed deployment case studies."
+          ]
+        },
+        "judge_time_s": 4.9
+      },
+      {
+        "case_id": "v7_004",
+        "domain": "technical",
+        "query": "WebAssembly 在边缘计算和 Serverless 场景中的应用进展、性能基准与生态系统成熟度",
+        "status": "scored",
+        "report_chars": 11132,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report covers key aspects of WebAssembly in edge and serverless contexts with good structure and logical flow, but lacks specific, verifiable data points and expert insights, and citations are generic rather than precisely attributed."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report comprehensively covers the query's key aspects (application progress, performance benchmarks, ecosystem maturity) with a clear structure and logical flow, but lacks deep, specific data points and expert insights, and citations are numerous but not always directly tied to specific claims."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report covers key aspects of WebAssembly in edge and serverless contexts with good structure and logical flow, but lacks specific, verifiable data points and expert insights, and citations are generic without direct source attribution."
+            }
+          ],
+          "rationales": [
+            "The report covers key aspects of WebAssembly in edge and serverless contexts with good structure and logical flow, but lacks specific, verifiable data points and expert insights, and citations are generic rather than precisely attributed.",
+            "The report comprehensively covers the query's key aspects (application progress, performance benchmarks, ecosystem maturity) with a clear structure and logical flow, but lacks deep, specific data points and expert insights, and citations are numerous but not always directly tied to specific claims.",
+            "The report covers key aspects of WebAssembly in edge and serverless contexts with good structure and logical flow, but lacks specific, verifiable data points and expert insights, and citations are generic without direct source attribution."
+          ]
+        },
+        "judge_time_s": 5.0
+      },
+      {
+        "case_id": "v7_005",
+        "domain": "legal",
+        "query": "中国《生成式人工智能服务管理暂行办法》实施一年后的执法案例、企业合规实践与行业影响评估",
+        "status": "scored",
+        "report_chars": 15373,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了执法案例、企业合规和行业影响等核心维度，结构清晰，但部分数据来源单一（主要依赖一篇网络文章），且缺乏对具体法规条款的深入引用和第三方验证，影响了可信度。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了执法案例、企业合规和行业影响等主要方面，结构清晰，但部分数据来源单一（主要依赖[1]），且缺乏对具体法规条款的深入引用，深度和证据支撑有待加强。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了执法案例、企业合规和行业影响等核心维度，结构清晰，但部分数据来源单一（主要依赖一篇网络文章），且缺乏对具体法规条款的深入引用和第三方验证，影响了可信度。"
+            }
+          ],
+          "rationales": [
+            "报告覆盖了执法案例、企业合规和行业影响等核心维度，结构清晰，但部分数据来源单一（主要依赖一篇网络文章），且缺乏对具体法规条款的深入引用和第三方验证，影响了可信度。",
+            "报告覆盖了执法案例、企业合规和行业影响等主要方面，结构清晰，但部分数据来源单一（主要依赖[1]），且缺乏对具体法规条款的深入引用，深度和证据支撑有待加强。",
+            "报告覆盖了执法案例、企业合规和行业影响等核心维度，结构清晰，但部分数据来源单一（主要依赖一篇网络文章），且缺乏对具体法规条款的深入引用和第三方验证，影响了可信度。"
+          ]
+        },
+        "judge_time_s": 4.9
+      },
+      {
+        "case_id": "v7_006",
+        "domain": "legal",
+        "query": "全球数据跨境传输规制比较：GDPR 充分性认定、中国数据出境安全评估与美国行政令的异同与企业应对策略",
+        "status": "scored",
+        "report_chars": 18742,
+        "judge_scores": {
+          "coverage": 9.0,
+          "depth": 8.67,
+          "structure": 9.67,
+          "citations": 8.0,
+          "overall": 8.67,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 8,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly covers the three major regulatory regimes with detailed analysis, specific examples, and a clear comparative framework, though some sections could benefit from more granular data and the citations are auto-generated rather than directly sourced."
+            },
+            {
+              "coverage": 9,
+              "depth": 9,
+              "structure": 10,
+              "citations": 8,
+              "overall": 9,
+              "brief_rationale": "The report thoroughly addresses the query with deep analysis, specific examples, and a well-organized structure, though some citations are generic and lack direct page references."
+            },
+            {
+              "coverage": 9,
+              "depth": 9,
+              "structure": 10,
+              "citations": 8,
+              "overall": 9,
+              "brief_rationale": "The report thoroughly addresses the query with deep analysis, specific data, and a well-organized structure, though some citations lack direct page references."
+            }
+          ],
+          "rationales": [
+            "The report thoroughly covers the three major regulatory regimes with detailed analysis, specific examples, and a clear comparative framework, though some sections could benefit from more granular data and the citations are auto-generated rather than directly sourced.",
+            "The report thoroughly addresses the query with deep analysis, specific examples, and a well-organized structure, though some citations are generic and lack direct page references.",
+            "The report thoroughly addresses the query with deep analysis, specific data, and a well-organized structure, though some citations lack direct page references."
+          ]
+        },
+        "judge_time_s": 4.6
+      },
+      {
+        "case_id": "v7_007",
+        "domain": "medical",
+        "query": "CAR-T 细胞疗法在实体瘤治疗中的最新临床试验进展、技术瓶颈与未来方向",
+        "status": "scored",
+        "report_chars": 11464,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report comprehensively covers key aspects of CAR-T in solid tumors, with a clear structure and logical flow. However, depth is somewhat limited by reliance on secondary Chinese sources rather than primary clinical data, and citations lack specific page numbers or direct links to original studies."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report comprehensively covers key aspects of CAR-T in solid tumors, with a clear structure and logical flow. However, depth is somewhat limited by reliance on secondary Chinese sources rather than primary clinical data, and citations are numerous but lack specific page numbers or direct quotes."
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "The report comprehensively covers key aspects of CAR-T in solid tumors, with good structure and logical flow, but depth is somewhat limited by reliance on secondary Chinese sources and lacks specific clinical trial data (e.g., response rates, patient numbers). Citations are numerous but mostly from news aggregators and review articles, not primary sources."
+            }
+          ],
+          "rationales": [
+            "The report comprehensively covers key aspects of CAR-T in solid tumors, with a clear structure and logical flow. However, depth is somewhat limited by reliance on secondary Chinese sources rather than primary clinical data, and citations lack specific page numbers or direct links to original studies.",
+            "The report comprehensively covers key aspects of CAR-T in solid tumors, with a clear structure and logical flow. However, depth is somewhat limited by reliance on secondary Chinese sources rather than primary clinical data, and citations are numerous but lack specific page numbers or direct quotes.",
+            "The report comprehensively covers key aspects of CAR-T in solid tumors, with good structure and logical flow, but depth is somewhat limited by reliance on secondary Chinese sources and lacks specific clinical trial data (e.g., response rates, patient numbers). Citations are numerous but mostly from news aggregators and review articles, not primary sources."
+          ]
+        },
+        "judge_time_s": 5.0
+      },
+      {
+        "case_id": "v7_008",
+        "domain": "medical",
+        "query": "2024-2025 年全球抗菌药物耐药性（AMR）趋势：新型抗生素管线、各国行动计划与经济负担评估",
+        "status": "scored",
+        "report_chars": 11716,
+        "judge_scores": {
+          "coverage": 8.0,
+          "depth": 7.0,
+          "structure": 9.0,
+          "citations": 6.0,
+          "overall": 7.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了AMR的主要维度，结构清晰，但部分数据缺乏直接来源支撑，且对新型抗生素管线的分析不够深入，引用来源多为间接或自动生成，可信度有限。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了AMR的主要维度，结构清晰，但部分数据缺乏直接来源，且对新型抗生素管线的分析可更深入。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告覆盖了AMR的主要维度，结构清晰，但部分数据缺乏具体来源，且对新型抗生素管线的分析深度不足，引用来源多为自动生成，可信度有限。"
+            }
+          ],
+          "rationales": [
+            "报告覆盖了AMR的主要维度，结构清晰，但部分数据缺乏直接来源支撑，且对新型抗生素管线的分析不够深入，引用来源多为间接或自动生成，可信度有限。",
+            "报告覆盖了AMR的主要维度，结构清晰，但部分数据缺乏直接来源，且对新型抗生素管线的分析可更深入。",
+            "报告覆盖了AMR的主要维度，结构清晰，但部分数据缺乏具体来源，且对新型抗生素管线的分析深度不足，引用来源多为自动生成，可信度有限。"
+          ]
+        },
+        "judge_time_s": 4.7
+      },
+      {
+        "case_id": "v7_009",
+        "domain": "scientific",
+        "query": "室温超导研究争议与进展：LK-99 后续验证、替代材料路线与理论模型的最新发展",
+        "status": "scored",
+        "report_chars": 14609,
+        "judge_scores": {
+          "coverage": 8.33,
+          "depth": 7.33,
+          "structure": 9.0,
+          "citations": 6.33,
+          "overall": 7.33,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告全面覆盖了LK-99争议、Dias造假、替代材料路线和理论模型，结构清晰逻辑流畅，但深度上部分分析偏概述，引用来源多为新闻和预印本，缺乏顶级期刊原文和具体数据支撑，整体可信度中等。"
+            },
+            {
+              "coverage": 8,
+              "depth": 7,
+              "structure": 9,
+              "citations": 6,
+              "overall": 7,
+              "brief_rationale": "报告全面覆盖了LK-99争议、Dias造假、替代材料路线和理论模型，结构清晰逻辑流畅，但深度上部分分析偏概述，引用来源多为新闻和中文综述，缺乏顶级期刊原始论文和具体数据支撑，整体可信度中等。"
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "报告全面覆盖了LK-99争议、Dias造假、替代材料路线和理论模型，结构清晰，分析深入，但部分引用来源为自动生成或非原始文献，且对理论模型的整合稍显简略。"
+            }
+          ],
+          "rationales": [
+            "报告全面覆盖了LK-99争议、Dias造假、替代材料路线和理论模型，结构清晰逻辑流畅，但深度上部分分析偏概述，引用来源多为新闻和预印本，缺乏顶级期刊原文和具体数据支撑，整体可信度中等。",
+            "报告全面覆盖了LK-99争议、Dias造假、替代材料路线和理论模型，结构清晰逻辑流畅，但深度上部分分析偏概述，引用来源多为新闻和中文综述，缺乏顶级期刊原始论文和具体数据支撑，整体可信度中等。",
+            "报告全面覆盖了LK-99争议、Dias造假、替代材料路线和理论模型，结构清晰，分析深入，但部分引用来源为自动生成或非原始文献，且对理论模型的整合稍显简略。"
+          ]
+        },
+        "judge_time_s": 5.2
+      },
+      {
+        "case_id": "v7_010",
+        "domain": "scientific",
+        "query": "人工光合作用与太阳能燃料：催化材料突破、能量转换效率里程碑与商业化路径",
+        "status": "scored",
+        "report_chars": 12157,
+        "judge_scores": {
+          "coverage": 9.0,
+          "depth": 8.0,
+          "structure": 9.0,
+          "citations": 7.0,
+          "overall": 8.0,
+          "rounds_completed": 3,
+          "rounds_attempted": 3,
+          "per_round_scores": [
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly addresses the query with strong coverage of catalytic materials, efficiency milestones, and commercialization pathways, supported by specific examples and data. Depth is high with detailed case studies, though some sections could benefit from more critical analysis. Structure is logical and well-organized. Citations are numerous but lack full attribution details (e.g., authors, dates), slightly reducing trustworthiness for decision-making."
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly addresses the query with strong coverage of catalytic materials, efficiency milestones, and commercialization paths, supported by specific examples and data. Depth is high with detailed case studies, though some sections could benefit from more critical analysis. Structure is logical and well-organized. Citations are numerous but lack formal formatting and some sources are not directly linked to claims, slightly reducing trustworthiness."
+            },
+            {
+              "coverage": 9,
+              "depth": 8,
+              "structure": 9,
+              "citations": 7,
+              "overall": 8,
+              "brief_rationale": "The report thoroughly addresses the query with strong coverage of catalytic materials, efficiency milestones, and commercialization paths, supported by specific examples and data. Depth is high with detailed case studies, though some sections could benefit from more critical analysis. Structure is logical and well-organized. Citations are numerous but lack full attribution details (e.g., authors, dates), slightly reducing trustworthiness for decision-making."
+            }
+          ],
+          "rationales": [
+            "The report thoroughly addresses the query with strong coverage of catalytic materials, efficiency milestones, and commercialization pathways, supported by specific examples and data. Depth is high with detailed case studies, though some sections could benefit from more critical analysis. Structure is logical and well-organized. Citations are numerous but lack full attribution details (e.g., authors, dates), slightly reducing trustworthiness for decision-making.",
+            "The report thoroughly addresses the query with strong coverage of catalytic materials, efficiency milestones, and commercialization paths, supported by specific examples and data. Depth is high with detailed case studies, though some sections could benefit from more critical analysis. Structure is logical and well-organized. Citations are numerous but lack formal formatting and some sources are not directly linked to claims, slightly reducing trustworthiness.",
+            "The report thoroughly addresses the query with strong coverage of catalytic materials, efficiency milestones, and commercialization paths, supported by specific examples and data. Depth is high with detailed case studies, though some sections could benefit from more critical analysis. Structure is logical and well-organized. Citations are numerous but lack full attribution details (e.g., authors, dates), slightly reducing trustworthiness for decision-making."
+          ]
+        },
+        "judge_time_s": 6.5
+      }
+    ]
+  }
+}

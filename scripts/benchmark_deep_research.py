@@ -283,7 +283,7 @@ async def _execute_research_case(
     else:
         client_ctx = AsyncClient(base_url=base_url.rstrip("/"))
 
-    async with client_ctx as client:
+    async def _execute_with_client(client: AsyncClient) -> Dict[str, Any]:
         try:
             await asyncio.wait_for(_run(client), timeout=max(1.0, float(timeout_s)))
         except asyncio.TimeoutError:
@@ -319,6 +319,7 @@ async def _execute_research_case(
             "thread_id": thread_id,
             "duration_ms": duration_ms,
             "final_report_chars": len(final_report),
+            "final_report": final_report if isinstance(final_report, str) else "",
             "final_report_preview": (
                 final_report[:600] if isinstance(final_report, str) else ""
             ),
@@ -327,6 +328,17 @@ async def _execute_research_case(
             "run_metrics": run_metrics,
             "evidence_summary": evidence_summary,
         }
+
+    if str(os.getenv("BENCHMARK_SKIP_CLIENT_CLOSE", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return await _execute_with_client(client_ctx)
+
+    async with client_ctx as client:
+        return await _execute_with_client(client)
 
 
 def _evaluate_case_quality(

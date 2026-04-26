@@ -56,6 +56,8 @@ const getModelProviders = (t: (key: any) => string): ModelProvider[] => [
     id: 'deepseek',
     name: t('deepseek'),
     models: [
+      { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash' },
+      { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro' },
       { id: 'deepseek-chat', name: 'deepseek-chat' },
       { id: 'deepseek-reasoner', name: 'deepseek-reasoner' },
     ]

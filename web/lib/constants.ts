@@ -12,4 +12,4 @@ export const SEARCH_MODES = {
   ULTRA: 'ultra',
 }
 
-export const DEFAULT_MODEL = 'deepseek-chat'
+export const DEFAULT_MODEL = 'deepseek-v4-flash'

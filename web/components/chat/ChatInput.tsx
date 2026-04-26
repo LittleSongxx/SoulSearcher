@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createFilePreview } from '@/lib/file-utils'
 import { getApiBaseUrl } from '@/lib/api'
+import { SkillsManagerDialog } from '@/components/chat/SkillsManagerDialog'
 
 interface SkillOption {
   id: string
@@ -59,20 +60,32 @@ export function ChatInput({
   const [showCommandMenu, setShowCommandMenu] = useState(false)
   const [isMcpOpen, setIsMcpOpen] = useState(false)
   const [isSkillsOpen, setIsSkillsOpen] = useState(false)
+  const [isSkillsManagerOpen, setIsSkillsManagerOpen] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [selectedMcp, setSelectedMcp] = useState('filesystem') // Default MCP
   const [skillOptions, setSkillOptions] = useState<SkillOption[]>([])
   const [previews, setPreviews] = useState<AttachmentPreview[]>([])
 
-  // Fetch skills on mount
-  useEffect(() => {
-    fetch(`${getApiBaseUrl()}/api/skills`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.skills) setSkillOptions(data.skills)
-      })
-      .catch(() => {})
+  const loadSkills = useCallback(async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/skills`)
+      if (!response.ok) return
+      const data = await response.json()
+      if (Array.isArray(data.skills)) {
+        setSkillOptions(data.skills)
+      }
+    } catch {
+    }
   }, [])
+
+  useEffect(() => {
+    void loadSkills()
+  }, [loadSkills])
+
+  const clearSelectedSkill = useCallback(() => {
+    setSelectedSkill(null)
+    setSearchMode('')
+  }, [setSearchMode, setSelectedSkill])
 
   // Manage Previews
   useEffect(() => {
@@ -463,8 +476,7 @@ export function ChatInput({
             <button
               onClick={() => {
                 if (selectedSkill) {
-                  setSelectedSkill(null)
-                  setSearchMode('')
+                  clearSelectedSkill()
                   setIsSkillsOpen(false)
                 } else {
                   setIsSkillsOpen(!isSkillsOpen)
@@ -487,33 +499,56 @@ export function ChatInput({
             {isSkillsOpen && (
               <div className="absolute bottom-full left-0 mb-2 w-52 bg-popover border rounded-xl shadow-lg animate-in fade-in zoom-in-95 z-50 overflow-hidden">
                 <div className="p-1 max-h-64 overflow-y-auto">
-                  {skillOptions.map(skill => (
-                    <button
-                      key={skill.id}
-                      onClick={() => {
-                        setSelectedSkill(skill.id)
-                        setSearchMode(skill.mode === 'direct' ? '' : skill.mode)
-                        setIsSkillsOpen(false)
-                        setIsMcpOpen(false)
-                      }}
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs transition-colors hover:bg-muted text-left",
-                        selectedSkill === skill.id && "bg-muted font-medium text-amber-500"
-                      )}
-                    >
-                      <span className="text-base leading-none">{skill.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">{skill.name}</div>
-                        <div className="text-[10px] text-muted-foreground truncate">{skill.description}</div>
-                      </div>
-                      {selectedSkill === skill.id && <Check className="h-3 w-3 flex-shrink-0" />}
-                    </button>
-                  ))}
+                  {skillOptions.length === 0 ? (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">No enabled skills</div>
+                  ) : (
+                    skillOptions.map(skill => (
+                      <button
+                        key={skill.id}
+                        onClick={() => {
+                          setSelectedSkill(skill.id)
+                          setSearchMode(skill.mode === 'direct' ? '' : skill.mode)
+                          setIsSkillsOpen(false)
+                          setIsMcpOpen(false)
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs transition-colors hover:bg-muted text-left",
+                          selectedSkill === skill.id && "bg-muted font-medium text-amber-500"
+                        )}
+                      >
+                        <span className="text-base leading-none">{skill.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate">{skill.name}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{skill.description}</div>
+                        </div>
+                        {selectedSkill === skill.id && <Check className="h-3 w-3 flex-shrink-0" />}
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="border-t p-1">
+                  <button
+                    onClick={() => {
+                      setIsSkillsOpen(false)
+                      setIsSkillsManagerOpen(true)
+                    }}
+                    className="flex w-full items-center justify-center rounded-lg px-2 py-2 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-500/10"
+                  >
+                    Manage Skills
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </div>
+
+        <SkillsManagerDialog
+          open={isSkillsManagerOpen}
+          onOpenChange={setIsSkillsManagerOpen}
+          selectedSkillId={selectedSkill}
+          onSelectableSkillsChange={setSkillOptions}
+          onInvalidateSelectedSkill={clearSelectedSkill}
+        />
 
         {/* Input Container */}
         <div

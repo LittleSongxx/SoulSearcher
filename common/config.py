@@ -290,7 +290,7 @@ class Settings(BaseSettings):
 
     # Model Config
     primary_model: str = "deepseek-v4-flash"
-    reasoning_model: str = "o1-mini"  # For planning
+    reasoning_model: str = "deepseek-v4-pro"  # For planning
 
     # Multi-Model Research Config (Task-specific models)
     planner_model: str = ""  # Model for research planning (defaults to reasoning_model)
@@ -558,7 +558,7 @@ class Settings(BaseSettings):
     search_engines: str = "tavily"  # comma-separated engines in order
 
     # Context Offloading
-    context_offloading: bool = True  # offload large tool results to filesystem
+    context_offloading: bool = False  # offload large tool results to filesystem
     context_offloading_threshold: int = 2000  # chars above which content is offloaded
     context_offloading_dir: str = ""  # empty = /tmp/weaver_offload
 
@@ -574,7 +574,7 @@ class Settings(BaseSettings):
     tree_backtrack_max_retries: int = 1  # max retries per branch
 
     # Dynamic tool pruning
-    dynamic_tool_pruning: bool = True  # prune tools by route to reduce token overhead
+    dynamic_tool_pruning: bool = False  # prune tools by route to reduce token overhead
 
     # Prompt Optimization (Prompt 优化)
     prompt_optimizer_model: str = "gpt-4o"  # 用于优化 Prompt 的模型
