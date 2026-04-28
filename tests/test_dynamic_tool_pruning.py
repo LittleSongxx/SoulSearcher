@@ -1,9 +1,8 @@
 """Tests for dynamic tool pruning by route."""
 
-import pytest
 from unittest.mock import MagicMock
 
-from agent.workflows.agent_tools import _prune_tools_by_route
+from agent.workflows.agent_tools import _prune_tools_by_route, _resolve_pruning_route
 
 
 def _make_tool(name: str) -> MagicMock:
@@ -82,3 +81,20 @@ class TestPruneToolsByRoute:
         tools = [_make_tool("tavily_search") for _ in range(20)]
         result = _prune_tools_by_route(tools, "web")
         assert len(result) <= 10
+
+
+class TestResolvePruningRoute:
+    def test_prefers_resolved_route(self):
+        route = _resolve_pruning_route({}, {"resolved_route": "deep"})
+
+        assert route == "deep"
+
+    def test_falls_back_to_search_mode_route(self):
+        route = _resolve_pruning_route({}, {"search_mode": {"route": "web"}})
+
+        assert route == "web"
+
+    def test_falls_back_to_search_mode_mode(self):
+        route = _resolve_pruning_route({}, {"search_mode": {"mode": "agent"}})
+
+        assert route == "agent"

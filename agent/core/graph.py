@@ -2,9 +2,15 @@ import asyncio
 import logging
 from pathlib import Path
 
-import psycopg
-from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, StateGraph
+
+try:
+    import psycopg
+except ModuleNotFoundError:
+    psycopg = None
+
+if psycopg is not None:
+    from langgraph.checkpoint.postgres import PostgresSaver
 
 from agent.workflows.nodes import (
     agent_node,
@@ -34,39 +40,49 @@ from .state import AgentState, QueryState
 logger = logging.getLogger(__name__)
 
 
-class AsyncCompatPostgresSaver(PostgresSaver):
-    """Add async checkpoint methods to the sync Postgres saver used by this app."""
+if psycopg is not None:
 
-    async def aget_tuple(self, config):
-        return await asyncio.to_thread(self.get_tuple, config)
+    class AsyncCompatPostgresSaver(PostgresSaver):
+        """Add async checkpoint methods to the sync Postgres saver used by this app."""
 
-    async def alist(self, config, *, filter=None, before=None, limit=None):
-        items = await asyncio.to_thread(
-            lambda: list(self.list(config, filter=filter, before=before, limit=limit))
-        )
-        for item in items:
-            yield item
+        async def aget_tuple(self, config):
+            return await asyncio.to_thread(self.get_tuple, config)
 
-    async def aput(self, config, checkpoint, metadata, new_versions):
-        return await asyncio.to_thread(
-            self.put,
-            config,
-            checkpoint,
-            metadata,
-            new_versions,
-        )
+        async def alist(self, config, *, filter=None, before=None, limit=None):
+            items = await asyncio.to_thread(
+                lambda: list(
+                    self.list(config, filter=filter, before=before, limit=limit)
+                )
+            )
+            for item in items:
+                yield item
 
-    async def aput_writes(self, config, writes, task_id, task_path=""):
-        return await asyncio.to_thread(
-            self.put_writes,
-            config,
-            writes,
-            task_id,
-            task_path,
-        )
+        async def aput(self, config, checkpoint, metadata, new_versions):
+            return await asyncio.to_thread(
+                self.put,
+                config,
+                checkpoint,
+                metadata,
+                new_versions,
+            )
 
-    async def adelete_thread(self, thread_id: str):
-        return await asyncio.to_thread(self.delete_thread, thread_id)
+        async def aput_writes(self, config, writes, task_id, task_path=""):
+            return await asyncio.to_thread(
+                self.put_writes,
+                config,
+                writes,
+                task_id,
+                task_path,
+            )
+
+        async def adelete_thread(self, thread_id: str):
+            return await asyncio.to_thread(self.delete_thread, thread_id)
+
+else:
+
+    class AsyncCompatPostgresSaver:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("psycopg is required for PostgreSQL checkpointing")
 
 
 def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
@@ -337,6 +353,10 @@ def create_checkpointer(database_url: str):
     if not database_url:
         raise ValueError(
             "database_url is required to initialize the Postgres checkpointer."
+        )
+    if psycopg is None:
+        raise RuntimeError(
+            "psycopg is required to initialize the Postgres checkpointer."
         )
 
     # Create connection (psycopg3)

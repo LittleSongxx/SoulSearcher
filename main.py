@@ -15,7 +15,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import psycopg
 from fastapi import (
     FastAPI,
     File,
@@ -31,13 +30,43 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
-from prometheus_client import (
-    CONTENT_TYPE_LATEST,
-    REGISTRY,
-    Counter,
-    Gauge,
-    generate_latest,
-)
+
+try:
+    from prometheus_client import (
+        CONTENT_TYPE_LATEST,
+        REGISTRY,
+        Counter,
+        Gauge,
+        generate_latest,
+    )
+except ModuleNotFoundError:
+    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+
+    class _NoopMetric:
+        def labels(self, *args, **kwargs):
+            return self
+
+        def inc(self, *args, **kwargs):
+            return None
+
+        def dec(self, *args, **kwargs):
+            return None
+
+    class _NoopRegistry:
+        _names_to_collectors = {}
+
+    REGISTRY = _NoopRegistry()
+
+    def Counter(*args, **kwargs):
+        return _NoopMetric()
+
+    def Gauge(*args, **kwargs):
+        return _NoopMetric()
+
+    def generate_latest():
+        return b""
+
+
 from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
@@ -109,6 +138,11 @@ from triggers import (
     init_trigger_manager,
     shutdown_trigger_manager,
 )
+
+try:
+    import psycopg
+except ModuleNotFoundError:
+    psycopg = None
 
 # Initialize logging
 setup_logging()
@@ -489,6 +523,8 @@ def _init_store():
             raise ValueError(
                 "memory_store_url is required when memory_store_backend=postgres"
             )
+        if psycopg is None:
+            raise RuntimeError("psycopg is required when memory_store_backend=postgres")
         from langgraph.store.postgres import PostgresStore
 
         conn = psycopg.connect(url, autocommit=True)
@@ -1385,7 +1421,9 @@ async def list_skills(
     )
     registry = get_skill_registry()
     return {
-        "skills": [s.to_summary_dict(include_diagnostics=include_invalid) for s in skills],
+        "skills": [
+            s.to_summary_dict(include_diagnostics=include_invalid) for s in skills
+        ],
         "count": len(skills),
         "registry": registry.to_dict(include_skills=False),
     }
@@ -2020,7 +2058,9 @@ async def stream_agent_events(
     if skill_id:
         _active_skill = _resolve_requested_skill(skill_id)
         if _active_skill:
-            logger.info(f"Skill activated: {_active_skill.id} (mode={_active_skill.mode})")
+            logger.info(
+                f"Skill activated: {_active_skill.id} (mode={_active_skill.mode})"
+            )
             # Override agent_profile with skill-derived profile
             agent_profile = AgentProfile(
                 id=_active_skill.id,

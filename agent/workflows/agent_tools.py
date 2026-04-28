@@ -79,6 +79,35 @@ def _enabled(profile: Dict[str, Any], key: str, default: bool = False) -> bool:
     return default
 
 
+def _normalize_pruning_route(value: Any) -> str:
+    route = str(value or "").strip().lower()
+    if route in {"web", "deep", "agent"}:
+        return route
+    return ""
+
+
+def _resolve_pruning_route(profile: Dict[str, Any], cfg: Dict[str, Any]) -> str:
+    candidates = [
+        profile.get("route"),
+        cfg.get("route"),
+        cfg.get("resolved_route"),
+    ]
+    search_mode = cfg.get("search_mode") or {}
+    if isinstance(search_mode, dict):
+        candidates.extend(
+            [
+                search_mode.get("route"),
+                search_mode.get("mode"),
+            ]
+        )
+
+    for candidate in candidates:
+        route = _normalize_pruning_route(candidate)
+        if route:
+            return route
+    return ""
+
+
 def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
     """
     Build the toolset for "agent" mode based on `configurable.agent_profile.enabled_tools`.
@@ -275,7 +304,7 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
 
     # Dynamic tool pruning: reduce tool set based on route to cut token overhead
     if settings.dynamic_tool_pruning:
-        route = str(profile.get("route", "") or cfg.get("route", "")).strip().lower()
+        route = _resolve_pruning_route(profile, cfg)
         tool_list = _prune_tools_by_route(tool_list, route)
 
     # Event wrapping for front-end visibility

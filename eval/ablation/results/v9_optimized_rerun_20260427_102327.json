@@ -1,0 +1,13 @@
+[
+  {
+    "status": "error",
+    "error": "[Errno 32] Broken pipe",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_001",
+    "query": "2025年全球半导体行业并购交易分析：主要交易、估值趋势与监管审批情况",
+    "variant": "optimized",
+    "wall_time_s": 69.0,
+    "domain": "financial"
+  }
+]

@@ -63,7 +63,7 @@ sys.path.insert(0, "{root}")
 {env_overrides}
 from scripts.benchmark_deep_research import _execute_research_case
 result = asyncio.run(_execute_research_case(
-    sys.argv[1], mode="auto", base_url="asgi", model="", timeout_s=7200,
+    sys.argv[1], mode="auto", base_url="asgi", model="", timeout_s={client_timeout_s},
 ))
 print(json.dumps(result, ensure_ascii=False), flush=True)
 os._exit(0)
@@ -72,6 +72,8 @@ os._exit(0)
 DEFAULT_CASE_TIMEOUT_S = 900
 DEFAULT_MONITOR_INTERVAL_S = 60
 CASE_TIMEOUT_RETRY_COUNT = 1
+BENCHMARK_DEEPSEARCH_BUFFER_S = 120
+BENCHMARK_CLIENT_TIMEOUT_BUFFER_S = 20
 ENV_SNAPSHOT_KEYS = (
     "PRIMARY_MODEL",
     "REASONING_MODEL",
@@ -121,13 +123,31 @@ def env_snapshot() -> Dict[str, str]:
     return snapshot
 
 
-def build_runner_code(variant: str) -> str:
+def _benchmark_deepsearch_budget_seconds(case_timeout_s: int) -> int:
+    return max(60, int(case_timeout_s) - BENCHMARK_DEEPSEARCH_BUFFER_S)
+
+
+def _benchmark_client_timeout_seconds(case_timeout_s: int) -> int:
+    return max(30, int(case_timeout_s) - BENCHMARK_CLIENT_TIMEOUT_BUFFER_S)
+
+
+def build_runner_code(variant: str, case_timeout_s: int) -> str:
     env_lines = []
-    merged = {**RUNNER_ENV, **VARIANTS[variant]}
+    merged = {
+        **RUNNER_ENV,
+        **VARIANTS[variant],
+        "DEEPSEARCH_MAX_SECONDS": str(
+            _benchmark_deepsearch_budget_seconds(case_timeout_s)
+        ),
+    }
     for k, v in merged.items():
         env_lines.append(f'os.environ["{k}"] = {json.dumps(v)}')
     env_block = "\n".join(env_lines)
-    return RUNNER_TEMPLATE.format(root=ROOT, env_overrides=env_block)
+    return RUNNER_TEMPLATE.format(
+        root=ROOT,
+        env_overrides=env_block,
+        client_timeout_s=_benchmark_client_timeout_seconds(case_timeout_s),
+    )
 
 
 def _parse_child_result(stdout: str, stderr: str, returncode: int) -> dict:
@@ -251,10 +271,7 @@ def _load_existing_completed(out_file: Path) -> Tuple[List[dict], set]:
     if not out_file.exists():
         return [], set()
     existing = json.loads(out_file.read_text(encoding="utf-8"))
-    completed_or_terminal = [
-        r for r in existing
-        if r.get("status") == "completed"
-    ]
+    completed_or_terminal = [r for r in existing if r.get("status") == "completed"]
     done_ids = {r["case_id"] for r in completed_or_terminal if r.get("case_id")}
     return completed_or_terminal, done_ids
 
@@ -276,11 +293,18 @@ def run_variant(variant: str, case_timeout_s: int, monitor_interval_s: int):
     print(f"  OFF: {', '.join(off_flags) or '(none)'}")
     print(f"  Cases: {len(remaining)} remaining / {len(TASKS)} total")
     print("  Parameters: current .env + variant toggles")
-    print(f"  Hard cap: {case_timeout_s}s/case, retry on timeout: {CASE_TIMEOUT_RETRY_COUNT}")
-    print("  Benchmark-only override: DEEPSEARCH_VISUALIZE_BROWSER=false")
+    print(
+        f"  Hard cap: {case_timeout_s}s/case, retry on timeout: {CASE_TIMEOUT_RETRY_COUNT}"
+    )
+    print(
+        "  Benchmark-only overrides: "
+        f"DEEPSEARCH_VISUALIZE_BROWSER=false, "
+        f"DEEPSEARCH_MAX_SECONDS={_benchmark_deepsearch_budget_seconds(case_timeout_s)}, "
+        f"client_timeout={_benchmark_client_timeout_seconds(case_timeout_s)}s"
+    )
     print(f"{'=' * 60}")
 
-    runner_code = build_runner_code(variant)
+    runner_code = build_runner_code(variant, case_timeout_s)
     results = list(existing_results)
     total_idx = len(done_ids)
     for task in remaining:
@@ -325,7 +349,9 @@ def run_variant(variant: str, case_timeout_s: int, monitor_interval_s: int):
             f"    -> {status} in {wall:.0f}s, report={chars} chars{retry_suffix}",
             flush=True,
         )
-        out_file.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+        out_file.write_text(
+            json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     print(f"  [{variant}] Done: {len(results)} cases saved to {out_file}")
     return results
