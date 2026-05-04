@@ -393,6 +393,10 @@ def test_deepsearch_supervisor_workers_returns_p2_artifacts(monkeypatch):
                 "deepsearch_supervisor_parallel_workers": 2,
                 "deepsearch_sectioned_report": True,
                 "deepsearch_sectioned_report_requires_approval": True,
+                "deepsearch_sectioned_report_review": {"action": "approve"},
+                "deepsearch_sectioned_report_max_sections": 2,
+                "deepsearch_section_min_chars": 1,
+                "deepsearch_section_min_evidence": 0,
                 "worker_model": "worker-model",
                 "search_summary_model": "summary-model",
                 "writer_model": "writer-model",
@@ -406,6 +410,8 @@ def test_deepsearch_supervisor_workers_returns_p2_artifacts(monkeypatch):
     thinking_events = [data for name, data in emitted if name == "thinking"]
     research_start_events = [data for name, data in emitted if name == "research_node_start"]
     research_complete_events = [data for name, data in emitted if name == "research_node_complete"]
+    section_start_events = [data for name, data in emitted if name == "section_start"]
+    section_complete_events = [data for name, data in emitted if name == "section_complete"]
 
     assert result["deepsearch_mode"] == "supervisor_workers"
     assert artifacts["mode"] == "supervisor_workers"
@@ -428,8 +434,14 @@ def test_deepsearch_supervisor_workers_returns_p2_artifacts(monkeypatch):
     assert artifacts["report_plan"]["section_count"] >= 4
     assert artifacts["sectioned_report"]["enabled"] is True
     assert artifacts["sectioned_report"]["review_required"] is True
+    assert artifacts["sectioned_report"]["review_status"] == "approved"
+    assert artifacts["sectioned_report"]["execution_mode"] == "section_level"
+    assert artifacts["sectioned_report"]["status"] == "completed"
     assert artifacts["sectioned_report"]["section_count"] == artifacts["report_plan"]["section_count"]
+    assert artifacts["sectioned_report"]["section_results"]
+    assert artifacts["sectioned_report"]["search_run_count"] >= 1
     assert artifacts["quality_summary"]["sectioned_report_enabled"] is True
+    assert artifacts["quality_summary"]["sectioned_report_status"] == "completed"
     assert [stage["name"] for stage in artifacts["research_pipeline"]["stages"]] == [
         "research_brief",
         "supervisor",
@@ -451,6 +463,8 @@ def test_deepsearch_supervisor_workers_returns_p2_artifacts(monkeypatch):
     assert task_create_events[0]["worker_count"] == len(artifacts["worker_runs"])
     assert research_start_events[0]["subtask"]["status"] == "running"
     assert research_complete_events[0]["subtask"]["status"] == "completed"
+    assert section_start_events
+    assert section_complete_events
 
 
 def test_deepsearch_supervisor_workers_builds_passages_and_claim_ledger(monkeypatch):

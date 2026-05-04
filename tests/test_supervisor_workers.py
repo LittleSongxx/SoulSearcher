@@ -8,6 +8,11 @@ from agent.workflows.deepsearch_model_profile import build_deepsearch_model_prof
 from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_artifact
 from agent.workflows.research_task_runtime import ResearchTaskRuntime
 from agent.workflows.report_plan import build_sectioned_report_artifact, build_sectioned_report_plan
+from agent.workflows.sectioned_report import (
+    apply_sectioned_report_review,
+    compile_sectioned_report,
+    grade_section_content,
+)
 from agent.workflows.supervisor_workers import (
     build_intermediate_steps,
     build_worker_run,
@@ -297,3 +302,53 @@ def test_build_sectioned_report_artifact_is_feature_flagged():
     assert enabled["enabled"] is True
     assert enabled["review_required"] is True
     assert enabled["section_count"] == report_plan["section_count"]
+
+
+def test_sectioned_report_review_edit_grade_and_compile():
+    report_plan = build_sectioned_report_plan(
+        research_brief={"original_query": "q", "expected_fields": ["architecture"]},
+        worker_runs=[{"worker_id": "w1", "focus": "architecture"}],
+        evidence_items=[{"id": "ev1"}],
+    )
+    edited = apply_sectioned_report_review(
+        report_plan,
+        {
+            "action": "edit",
+            "sections": [
+                {
+                    "section_id": report_plan["sections"][1]["section_id"],
+                    "title": "Architecture Deep Dive",
+                    "focus": "architecture",
+                }
+            ],
+        },
+        approval_required=True,
+    )
+    pending = apply_sectioned_report_review(report_plan, None, approval_required=True)
+    grade = grade_section_content(
+        edited["sections"][0],
+        "This section explains the architecture with enough supporting details.",
+        [{"id": "ev1"}],
+        min_chars=20,
+        min_evidence=1,
+    )
+    failed_grade = grade_section_content(
+        edited["sections"][0],
+        "short",
+        [],
+        min_chars=20,
+        min_evidence=1,
+    )
+    compiled = compile_sectioned_report(
+        [{"title": "Architecture Deep Dive", "content": "Architecture body."}]
+    )
+
+    assert pending["review_status"] == "pending_approval"
+    assert pending["should_execute"] is False
+    assert edited["review_status"] == "edited"
+    assert edited["should_execute"] is True
+    assert edited["sections"][0]["title"] == "Architecture Deep Dive"
+    assert grade["status"] == "pass"
+    assert failed_grade["status"] == "fail"
+    assert failed_grade["follow_up_queries"]
+    assert "## Architecture Deep Dive" in compiled

@@ -74,6 +74,12 @@ from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_
 from agent.workflows.research_task_runtime import ResearchTaskRuntime
 from agent.workflows.research_tree import TreeExplorationBudgetExceeded, TreeExplorer
 from agent.workflows.report_plan import build_sectioned_report_artifact, build_sectioned_report_plan
+from agent.workflows.sectioned_report import (
+    apply_sectioned_report_review,
+    build_section_search_query,
+    compile_sectioned_report,
+    grade_section_content,
+)
 from agent.workflows.source_curator import curate_sources
 from agent.workflows.source_url_utils import canonicalize_source_url, compact_unique_sources
 from agent.workflows.strategy_selector import select_deepsearch_strategy
@@ -907,6 +913,242 @@ def _revise_report_for_claim_failures(
     )
     revised = getattr(response, "content", "") or ""
     return revised.strip() or report
+
+
+def _write_section_content(
+    llm: ChatOpenAI,
+    *,
+    topic: str,
+    section: Dict[str, Any],
+    summary_notes: List[str],
+    section_results: List[Dict[str, Any]],
+    sources: str,
+    config: Dict[str, Any],
+) -> str:
+    title = str(section.get("title") or "Section").strip()
+    focus = str(section.get("focus") or title).strip()
+    evidence_text = _format_results(section_results[:8]) if section_results else ""
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "user",
+                "请为深度研究报告撰写一个章节。"
+                "\n主题：{topic}"
+                "\n章节标题：{title}"
+                "\n章节重点：{focus}"
+                "\n已有研究摘要：\n{summary_notes}"
+                "\n本章节检索证据：\n{evidence}"
+                "\n可引用来源：\n{sources}"
+                "\n要求：只输出章节正文；结构清晰；关键事实尽量带来源编号；如证据不足，明确说明不确定性。",
+            )
+        ]
+    )
+    try:
+        response = llm.invoke(
+            prompt.format_messages(
+                topic=topic,
+                title=title,
+                focus=focus,
+                summary_notes="\n\n".join(summary_notes[-8:]) or "暂无",
+                evidence=evidence_text or "暂无",
+                sources=sources or "暂无",
+            ),
+            config=config,
+        )
+        content = getattr(response, "content", "") or ""
+        if content.strip():
+            return content.strip()
+    except Exception:
+        pass
+    fallback_parts = [f"{focus}："]
+    if evidence_text:
+        fallback_parts.append(evidence_text)
+    elif summary_notes:
+        fallback_parts.append("\n\n".join(summary_notes[-3:]))
+    else:
+        fallback_parts.append("当前资料不足，无法形成可靠章节结论。")
+    return "\n\n".join(fallback_parts).strip()
+
+
+def _execute_sectioned_report_flow(
+    *,
+    report_plan: Dict[str, Any],
+    topic: str,
+    config: Dict[str, Any],
+    evidence_providers: List[Any],
+    writer_llm: ChatOpenAI,
+    summary_notes: List[str],
+    sources_block: str,
+    per_query_results: int,
+    emitter: Any,
+) -> Tuple[Dict[str, Any], str, List[Dict[str, Any]], List[Dict[str, Any]]]:
+    sectioned_report = build_sectioned_report_artifact(report_plan, config)
+    if not sectioned_report.get("enabled"):
+        return sectioned_report, "", [], []
+    review_payload = _configurable_value(config, "deepsearch_sectioned_report_review")
+    if review_payload is None:
+        review_payload = _configurable_value(config, "sectioned_report_review")
+    review_state = apply_sectioned_report_review(
+        report_plan,
+        review_payload if isinstance(review_payload, dict) else None,
+        approval_required=bool(sectioned_report.get("review_required")),
+    )
+    sectioned_report.update(
+        {
+            "review_status": review_state.get("review_status"),
+            "review_notes": review_state.get("review_notes", ""),
+            "sections": review_state.get("sections", []),
+            "section_count": review_state.get("section_count", 0),
+        }
+    )
+    if not review_state.get("should_execute"):
+        sectioned_report["status"] = review_state.get("review_status") or "pending_approval"
+        sectioned_report["execution_mode"] = "pending_review"
+        return sectioned_report, "", [], []
+
+    max_sections = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_sectioned_report_max_sections",
+            int(getattr(settings, "deepsearch_sectioned_report_max_sections", 8) or 8),
+        ),
+    )
+    max_followups = max(
+        0,
+        _configurable_int(
+            config,
+            "deepsearch_section_followups",
+            int(getattr(settings, "deepsearch_section_followups", 1) or 1),
+        ),
+    )
+    min_chars = max(1, _configurable_int(config, "deepsearch_section_min_chars", 120))
+    min_evidence = max(0, _configurable_int(config, "deepsearch_section_min_evidence", 1))
+    section_results: List[Dict[str, Any]] = []
+    section_search_runs: List[Dict[str, Any]] = []
+    section_evidence_items: List[Dict[str, Any]] = []
+    for order, section in enumerate((review_state.get("sections") or [])[:max_sections], 1):
+        if not isinstance(section, dict):
+            continue
+        section_id = str(section.get("section_id") or f"section_{order}")
+        title = str(section.get("title") or section_id)
+        _emit_event(
+            emitter,
+            "section_start",
+            {"section_id": section_id, "title": title, "order": order, "mode": "sectioned_report"},
+        )
+        search_queries: List[str] = []
+        results: List[Dict[str, Any]] = []
+        evidence: List[Dict[str, Any]] = []
+        if bool(section.get("research_required", True)):
+            query = build_section_search_query(topic, section)
+            search_queries.append(query)
+            provider_outputs = search_with_evidence_providers(
+                providers=evidence_providers,
+                query=query,
+                max_results=per_query_results,
+                config=config,
+            )
+            results.extend(merge_provider_results(provider_outputs))
+            evidence.extend(merge_provider_evidence(provider_outputs))
+            section_search_runs.append(
+                {
+                    "query": query,
+                    "results": results,
+                    "timestamp": datetime.now().isoformat(),
+                    "strategy": "sectioned_report",
+                    "section_id": section_id,
+                    "section_title": title,
+                    "follow_up": False,
+                }
+            )
+        content = _write_section_content(
+            writer_llm,
+            topic=topic,
+            section=section,
+            summary_notes=summary_notes,
+            section_results=results,
+            sources=sources_block,
+            config=config,
+        )
+        grade = grade_section_content(section, content, evidence, min_chars=min_chars, min_evidence=min_evidence)
+        follow_up_queries: List[str] = []
+        followups_used = 0
+        while grade.get("status") == "fail" and followups_used < max_followups:
+            followups_used += 1
+            reason = ",".join(grade.get("reasons") or ["insufficient_section_quality"])
+            follow_query = build_section_search_query(topic, section, follow_up_reason=reason)
+            follow_up_queries.append(follow_query)
+            provider_outputs = search_with_evidence_providers(
+                providers=evidence_providers,
+                query=follow_query,
+                max_results=per_query_results,
+                config=config,
+            )
+            follow_results = merge_provider_results(provider_outputs)
+            follow_evidence = merge_provider_evidence(provider_outputs)
+            results.extend(follow_results)
+            evidence.extend(follow_evidence)
+            section_search_runs.append(
+                {
+                    "query": follow_query,
+                    "results": follow_results,
+                    "timestamp": datetime.now().isoformat(),
+                    "strategy": "sectioned_report",
+                    "section_id": section_id,
+                    "section_title": title,
+                    "follow_up": True,
+                    "follow_up_reason": reason,
+                }
+            )
+            content = _write_section_content(
+                writer_llm,
+                topic=topic,
+                section=section,
+                summary_notes=summary_notes,
+                section_results=results,
+                sources=sources_block,
+                config=config,
+            )
+            grade = grade_section_content(section, content, evidence, min_chars=min_chars, min_evidence=min_evidence)
+        section_evidence_items.extend(evidence)
+        section_payload = {
+            "section_id": section_id,
+            "title": title,
+            "focus": section.get("focus", ""),
+            "content": content,
+            "status": "completed" if grade.get("status") == "pass" else "needs_review",
+            "grade": grade,
+            "search_queries": search_queries,
+            "follow_up_queries": follow_up_queries,
+            "followups_used": followups_used,
+            "result_count": len(results),
+            "evidence_item_count": len(evidence),
+        }
+        section_results.append(section_payload)
+        _emit_event(
+            emitter,
+            "section_complete",
+            {
+                "section_id": section_id,
+                "title": title,
+                "status": section_payload["status"],
+                "grade": grade,
+                "mode": "sectioned_report",
+            },
+        )
+    compiled_report = compile_sectioned_report(section_results)
+    sectioned_report.update(
+        {
+            "status": "completed" if compiled_report else "no_content",
+            "execution_mode": "section_level",
+            "section_results": section_results,
+            "search_run_count": len(section_search_runs),
+            "evidence_item_count": len(section_evidence_items),
+            "compiled_report_chars": len(compiled_report),
+        }
+    )
+    return sectioned_report, compiled_report, section_search_runs, section_evidence_items
 
 
 def _hydrate_with_crawler(results: List[Dict[str, Any]]) -> None:
@@ -3448,8 +3690,39 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             search_runs,
             limit=report_sources_limit,
         )
+        report_plan = build_sectioned_report_plan(
+            research_brief=brief.to_dict(),
+            worker_runs=worker_runs,
+            evidence_items=evidence_items,
+        )
+        (
+            sectioned_report,
+            sectioned_compiled_report,
+            section_search_runs,
+            section_evidence_items,
+        ) = _execute_sectioned_report_flow(
+            report_plan=report_plan,
+            topic=topic,
+            config=config,
+            evidence_providers=evidence_providers,
+            writer_llm=writer_llm,
+            summary_notes=summary_notes_for_writer,
+            sources_block=sources_block,
+            per_query_results=per_query_results,
+            emitter=emitter,
+        )
+        if section_search_runs:
+            search_runs.extend(section_search_runs)
+            for run in section_search_runs:
+                query = run.get("query") if isinstance(run, dict) else ""
+                if query and query not in have_query:
+                    have_query.append(query)
+        if section_evidence_items:
+            evidence_items = _merge_evidence_item_payloads(evidence_items, section_evidence_items)
         draft_report = (
-            _final_report(writer_llm, topic, summary_notes_for_writer, config, sources=sources_block)
+            sectioned_compiled_report
+            if sectioned_compiled_report
+            else _final_report(writer_llm, topic, summary_notes_for_writer, config, sources=sources_block)
             if summary_notes_for_writer
             else "未找到足够资料生成报告。"
         )
@@ -3535,6 +3808,10 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "context_policy_stage_count": context_policy.get("stage_count", 0),
             "model_profile_stage_count": model_profile.get("stage_count", 0),
             "evidence_provider_count": provider_capabilities.get("provider_count", 0),
+            "sectioned_report_enabled": bool(sectioned_report.get("enabled")),
+            "sectioned_report_status": sectioned_report.get("status", "disabled"),
+            "sectioned_report_section_count": sectioned_report.get("section_count", 0),
+            "sectioned_report_search_run_count": sectioned_report.get("search_run_count", 0),
             "summary_count": len(summary_notes),
             "source_count": len(all_sources),
             "selected_source_count": len(report_sources),
@@ -3599,13 +3876,6 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             worker_runs=worker_runs,
             supervisor_decisions=supervisor_decisions,
         )
-        report_plan = build_sectioned_report_plan(
-            research_brief=brief.to_dict(),
-            worker_runs=worker_runs,
-            evidence_items=evidence_items,
-        )
-        sectioned_report = build_sectioned_report_artifact(report_plan, config)
-        quality_summary["sectioned_report_enabled"] = bool(sectioned_report.get("enabled"))
         research_pipeline = build_supervisor_workers_pipeline_artifact(
             research_brief=brief.to_dict(),
             task_runtime=task_runtime.to_artifact(),
