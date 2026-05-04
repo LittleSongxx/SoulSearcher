@@ -21,6 +21,7 @@ import logging
 import re
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -34,15 +35,54 @@ from agent.core.search_cache import get_search_cache
 from agent.workflows.domain_router import ResearchDomain, build_provider_profile
 from agent.workflows.evidence_passages import split_into_passages
 from agent.workflows.knowledge_gap import KnowledgeGapAnalyzer
+from agent.workflows.citation_artifacts import (
+    build_citation_annotations,
+    build_timeline_artifacts,
+)
+from agent.workflows.claim_ledger import (
+    build_claim_ledger,
+    format_claim_ledger_for_writer,
+    serialize_claim_checks,
+    summarize_claim_checks,
+)
+from agent.workflows.evidence import build_evidence_items
+from agent.workflows.evidence_providers import (
+    build_evidence_providers,
+    build_provider_capability_artifact,
+    merge_provider_evidence,
+    merge_provider_results,
+    search_with_evidence_providers,
+)
+from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
+from agent.workflows.model_context_policy import build_deepsearch_context_policy
 from agent.workflows.parsing_utils import format_search_results, parse_list_output
+from agent.workflows.quality_gates import (
+    default_policy,
+    evaluate_quality_gates,
+    missing_topics_from_gates,
+    serialize_gate_results,
+)
 from agent.workflows.query_strategy import (
     analyze_query_coverage,
     backfill_diverse_queries,
     is_time_sensitive_topic,
     summarize_freshness,
 )
+from agent.workflows.research_reflection import gap_queries_from_quality_gates
+from agent.workflows.research_brief import ResearchBrief, brief_topic, build_research_brief
+from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_artifact
+from agent.workflows.research_task_runtime import ResearchTaskRuntime
 from agent.workflows.research_tree import TreeExplorationBudgetExceeded, TreeExplorer
+from agent.workflows.report_plan import build_sectioned_report_artifact, build_sectioned_report_plan
+from agent.workflows.source_curator import curate_sources
 from agent.workflows.source_url_utils import canonicalize_source_url, compact_unique_sources
+from agent.workflows.strategy_selector import select_deepsearch_strategy
+from agent.workflows.supervisor_workers import (
+    build_intermediate_steps,
+    build_worker_run,
+    build_worker_tasks,
+    decide_supervisor_next_step,
+)
 from common.cancellation import check_cancellation as _check_cancel_token
 from common.config import settings
 from prompts.templates.deepsearch import (
@@ -64,7 +104,7 @@ _chat_model = create_chat_model
 _parse_list_output = parse_list_output
 _format_results = format_search_results
 
-_DEEPSEARCH_MODES = {"auto", "tree", "linear"}
+_DEEPSEARCH_MODES = {"auto", "tree", "linear", "reflection_loop", "supervisor_workers"}
 _SIMPLE_FACT_PATTERNS = (
     r"\bwhat\s+is\b",
     r"\bwho\s+is\b",
@@ -142,8 +182,12 @@ def _check_cancel(state: Dict[str, Any]) -> None:
 
 
 def _normalize_deepsearch_mode(value: Any) -> str:
-    """Normalize deepsearch mode to one of: auto, tree, linear."""
-    mode = str(value or "").strip().lower()
+    """Normalize deepsearch mode to one of: auto, tree, linear, reflection_loop."""
+    mode = str(value or "").strip().lower().replace("-", "_")
+    if mode == "reflection":
+        mode = "reflection_loop"
+    if mode in {"supervisor", "workers", "supervisor_worker"}:
+        mode = "supervisor_workers"
     if mode in _DEEPSEARCH_MODES:
         return mode
     return "auto"
@@ -189,6 +233,15 @@ def _configurable_float(config: Dict[str, Any], key: str, default: float) -> flo
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _configurable_bool(config: Dict[str, Any], key: str, default: bool) -> bool:
+    value = _configurable_value(config, key)
+    if value is None:
+        return bool(default)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _browser_visualization_enabled(config: Dict[str, Any]) -> bool:
@@ -732,6 +785,130 @@ def _append_auto_references(
     return report.rstrip() + "\n\n" + block + "\n"
 
 
+def _source_urls_for_fetch(sources: List[Dict[str, Any]], *, limit: int) -> List[str]:
+    urls: List[str] = []
+    seen = set()
+    for source in sources or []:
+        if not isinstance(source, dict):
+            continue
+        raw = str(source.get("rawUrl") or source.get("url") or "").strip()
+        canonical = canonicalize_source_url(raw) or raw
+        if not canonical or canonical in seen:
+            continue
+        seen.add(canonical)
+        urls.append(raw or canonical)
+        if len(urls) >= max(1, int(limit or 1)):
+            break
+    return urls
+
+
+def _estimate_citation_coverage(report: str) -> Tuple[List[str], float]:
+    if not report:
+        return [], 1.0
+    body = report.split("## 参考来源（自动生成）", 1)[0]
+    sentences = re.split(r"(?<=[。！？.!?])\s+|\n+", body)
+    markers = (
+        r"\d{4}",
+        r"\d+%",
+        r"\d+\.\d+",
+        r"according to|report|study|data|shows|found|announced",
+        r"报告|研究|数据显示|统计|公告|监管|增长|下降|发布",
+    )
+    citation_pattern = re.compile(r"\[(?:S?\d+)\]")
+    claim_like: List[str] = []
+    for sentence in sentences:
+        text = re.sub(r"\s+", " ", sentence).strip()
+        if len(text) < 20:
+            continue
+        if any(re.search(marker, text, flags=re.IGNORECASE) for marker in markers):
+            claim_like.append(text)
+    if not claim_like:
+        return [], 1.0
+    uncited = [sentence for sentence in claim_like if not citation_pattern.search(sentence)]
+    coverage = 1.0 - (len(uncited) / max(1, len(claim_like)))
+    return uncited[:5], round(max(0.0, min(1.0, coverage)), 4)
+
+
+def _verify_report_claims(
+    report: str,
+    search_runs: List[Dict[str, Any]],
+    *,
+    passages: Optional[List[Dict[str, Any]]] = None,
+    config: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Any], List[Dict[str, Any]], Dict[str, int]]:
+    config = config or {}
+    from agent.workflows.claim_verifier import ClaimVerifier
+
+    verifier = ClaimVerifier(
+        min_overlap_tokens=_configurable_int(
+            config,
+            "deepsearch_claim_verifier_min_overlap_tokens",
+            int(getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2),
+        ),
+        max_evidence_per_claim=_configurable_int(
+            config,
+            "deepsearch_claim_verifier_max_evidence_per_claim",
+            int(getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3),
+        ),
+    )
+    use_passages = _configurable_bool(
+        config,
+        "deepsearch_claim_verifier_use_passages",
+        bool(getattr(settings, "deepsearch_claim_verifier_use_passages", True)),
+    )
+    checks = verifier.verify_report(
+        report,
+        search_runs,
+        passages=passages if use_passages and passages else None,
+    )
+    return checks, serialize_claim_checks(checks), summarize_claim_checks(checks)
+
+
+def _revise_report_for_claim_failures(
+    llm: ChatOpenAI,
+    *,
+    topic: str,
+    report: str,
+    claims: List[Dict[str, Any]],
+    sources: str,
+    config: Dict[str, Any],
+) -> str:
+    failing = [
+        claim
+        for claim in claims or []
+        if isinstance(claim, dict) and claim.get("status") in {"unsupported", "contradicted"}
+    ]
+    if not failing:
+        return report
+    lines = []
+    for claim in failing[:8]:
+        lines.append(f"- status={claim.get('status')}; claim={claim.get('claim')}")
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "user",
+                "请修订下面研究报告，目标是降低未支撑声明。"
+                "\n主题：{topic}"
+                "\n问题声明：\n{claims}"
+                "\n可引用来源：\n{sources}"
+                "\n原报告：\n{report}"
+                "\n要求：保留 Markdown 结构；删除、弱化或标注资料不足的未支撑/矛盾声明；所有事实、数据、时间点、比较结论句末保留或补充已有编号引用；不要新增参考来源列表。",
+            )
+        ]
+    )
+    response = llm.invoke(
+        prompt.format_messages(
+            topic=topic,
+            claims="\n".join(lines),
+            sources=sources or "暂无",
+            report=report,
+        ),
+        config=config,
+    )
+    revised = getattr(response, "content", "") or ""
+    return revised.strip() or report
+
+
 def _hydrate_with_crawler(results: List[Dict[str, Any]]) -> None:
     """Enrich results in-place with crawled content when Tavily lacks body text."""
     if not settings.deepsearch_enable_crawler or not results:
@@ -758,8 +935,16 @@ def _hydrate_with_crawler(results: List[Dict[str, Any]]) -> None:
                 r["summary"] = content[:400]
 
 
-def _build_fetcher_evidence(urls: List[str]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    if not bool(getattr(settings, "deepsearch_enable_research_fetcher", False)):
+def _build_fetcher_evidence(
+    urls: List[str],
+    config: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    config = config or {}
+    if not _configurable_bool(
+        config,
+        "deepsearch_enable_research_fetcher",
+        bool(getattr(settings, "deepsearch_enable_research_fetcher", False)),
+    ):
         return [], []
 
     def _looks_like_cookie_banner(text: str) -> bool:
@@ -926,6 +1111,96 @@ def _build_quality_diagnostics(topic: str, queries: List[str], search_runs: List
     }
 
 
+def _record_quality_gates(
+    *,
+    diagnostics: Dict[str, Any],
+    quality_gate_history: List[Dict[str, Any]],
+    emitter: Any,
+    epoch: int,
+    stage: str,
+    quality_summary: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    gates = evaluate_quality_gates(
+        diagnostics,
+        quality_summary=quality_summary or {},
+        epoch=epoch,
+        policy=default_policy(settings),
+    )
+    serialized = serialize_gate_results(gates)
+    record = {"epoch": epoch, "stage": stage, "gates": serialized}
+    quality_gate_history.append(record)
+    _emit_event(emitter, "quality_gate_evaluated", record)
+    gaps = missing_topics_from_gates(gates)
+    if gaps:
+        _emit_event(
+            emitter,
+            "gap_detected",
+            {"epoch": epoch, "stage": stage, "missing_topics": gaps},
+        )
+    return serialized
+
+
+def _missing_topics_from_gate_payload(gates: List[Dict[str, Any]]) -> List[str]:
+    topics: List[str] = []
+    seen = set()
+    for gate in gates or []:
+        if not isinstance(gate, dict):
+            continue
+        if gate.get("status") != "fail" or gate.get("action") != "add_gap_queries":
+            continue
+        details = gate.get("details") if isinstance(gate.get("details"), dict) else {}
+        missing = details.get("missing_dimensions")
+        if not isinstance(missing, list):
+            continue
+        for item in missing:
+            text = str(item or "").strip()
+            if text and text not in seen:
+                seen.add(text)
+                topics.append(text)
+    return topics
+
+
+def _merge_evidence_item_payloads(*groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for group in groups:
+        for item in group or []:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id") or "").strip()
+            if not key:
+                key = "|".join(
+                    [
+                        str(item.get("source_type") or ""),
+                        str(item.get("url") or ""),
+                        str(item.get("document_id") or ""),
+                        str(item.get("content_ref") or ""),
+                        str(item.get("snippet") or "")[:120],
+                    ]
+                )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+    return merged
+
+
+def _strategy_payload(
+    state: Dict[str, Any],
+    *,
+    fallback_strategy: str,
+    fallback_reason: str,
+) -> Dict[str, Any]:
+    decision = state.get("deepsearch_strategy_decision")
+    if isinstance(decision, dict):
+        payload = dict(decision)
+    else:
+        payload = {"strategy": fallback_strategy, "reason": fallback_reason}
+    payload.setdefault("strategy", fallback_strategy)
+    payload.setdefault("reason", fallback_reason)
+    return payload
+
+
 def _resolve_event_emitter(state: Dict[str, Any], config: Dict[str, Any]) -> Any:
     """Resolve thread-scoped emitter if available (best effort)."""
     cfg = config.get("configurable") if isinstance(config, dict) else {}
@@ -1019,7 +1294,10 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
     4. Better cancellation support
     5. Maintains all_searched_urls and selected_urls
     """
-    topic = state.get("input", "")
+    brief = build_research_brief(state, config)
+    state["research_brief"] = brief.to_dict()
+    topic = brief.clarified_goal or state.get("input", "")
+    topic_for_planning = brief_topic(brief)
     _check_cancel(state)
 
     max_epochs = _configurable_int(
@@ -1067,7 +1345,14 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
     have_query: List[str] = []
     summary_notes: List[str] = []
     search_runs: List[Dict[str, Any]] = []
+    provider_evidence_items: List[Dict[str, Any]] = []
     provider_profile = _resolve_provider_profile(state)
+    evidence_providers = build_evidence_providers(
+        brief=brief,
+        config=config,
+        search_func=_search_query,
+        provider_profile=provider_profile,
+    )
 
     # URL deduplication mechanism - use set for O(1) lookup
     all_searched_urls: List[str] = []  # Ordered list for logging
@@ -1085,6 +1370,21 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
     budget_stop_reason = ""
     emitter = _resolve_event_emitter(state, config)
     visualize_browser = _browser_visualization_enabled(config)
+    quality_gate_history: List[Dict[str, Any]] = []
+    strategy_payload = _strategy_payload(
+        state,
+        fallback_strategy="linear",
+        fallback_reason="explicit linear pipeline or auto fallback",
+    )
+    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "linear"})
+    _emit_event(
+        emitter,
+        "strategy_selected",
+        {
+            **strategy_payload,
+            "research_brief": brief.to_dict(),
+        },
+    )
 
     try:
         for epoch in range(max_epochs):
@@ -1118,7 +1418,7 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                 query_start = time.time()
                 missing_topics = state.get("missing_topics", []) if epoch > 0 else []
                 queries = _generate_queries(
-                    planner_llm, topic, have_query, summary_notes, query_num, config,
+                    planner_llm, topic_for_planning, have_query, summary_notes, query_num, config,
                     missing_topics=missing_topics,
                 )
                 if epoch == 0 and query_num > 1 and topic not in queries:
@@ -1164,12 +1464,14 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                         except Exception:
                             pass
 
-                    results = _search_query(
-                        q,
-                        per_query_results,
-                        config,
-                        provider_profile=provider_profile,
+                    provider_outputs = search_with_evidence_providers(
+                        providers=evidence_providers,
+                        query=q,
+                        max_results=per_query_results,
+                        config=config,
                     )
+                    results = merge_provider_results(provider_outputs)
+                    provider_evidence_items.extend(merge_provider_evidence(provider_outputs))
                     tokens_used += _estimate_tokens_from_results(results)
                     combined_results.extend(results)
                     search_runs.append(
@@ -1233,6 +1535,16 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                 if not combined_results:
                     logger.info(f"[deepsearch] Epoch {epoch + 1}: 无搜索结果，跳过本轮")
                     epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+                    gate_results = _record_quality_gates(
+                        diagnostics=epoch_diagnostics,
+                        quality_gate_history=quality_gate_history,
+                        emitter=emitter,
+                        epoch=epoch + 1,
+                        stage="epoch",
+                    )
+                    gate_missing_topics = _missing_topics_from_gate_payload(gate_results)
+                    if gate_missing_topics:
+                        state["missing_topics"] = gate_missing_topics
                     _emit_event(
                         emitter,
                         "quality_update",
@@ -1280,11 +1592,29 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                     normalized_chosen_set.add(canonical_url)
                 chosen_urls = normalized_chosen_urls
 
-                if not chosen_urls:
+                non_url_results = [
+                    r
+                    for r in combined_results
+                    if isinstance(r, dict)
+                    and not canonicalize_source_url(r.get("url"))
+                    and str(r.get("source_type") or r.get("provider") or "").lower() in {"rag", "local"}
+                ]
+
+                if not chosen_urls and not non_url_results:
                     logger.warning(
                         f"[deepsearch] Epoch {epoch + 1}: No new URLs available, skipping"
                     )
                     epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+                    gate_results = _record_quality_gates(
+                        diagnostics=epoch_diagnostics,
+                        quality_gate_history=quality_gate_history,
+                        emitter=emitter,
+                        epoch=epoch + 1,
+                        stage="epoch",
+                    )
+                    gate_missing_topics = _missing_topics_from_gate_payload(gate_results)
+                    if gate_missing_topics:
+                        state["missing_topics"] = gate_missing_topics
                     _emit_event(
                         emitter,
                         "quality_update",
@@ -1326,7 +1656,7 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                     except Exception:
                         pass
 
-                new_pages, new_passages = _build_fetcher_evidence(chosen_urls)
+                new_pages, new_passages = _build_fetcher_evidence(chosen_urls, config)
                 fetched_pages.extend(new_pages)
                 passages.extend(new_passages)
 
@@ -1336,6 +1666,8 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                     for r in combined_results
                     if canonicalize_source_url(r.get("url")) in chosen_urls_set
                 ]
+                if non_url_results:
+                    chosen_results.extend(non_url_results[:top_urls])
                 if not chosen_results:
                     chosen_results = sorted(
                         combined_results, key=lambda r: r.get("score", 0), reverse=True
@@ -1421,6 +1753,16 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                 epoch_duration = time.time() - epoch_start
                 logger.info(f"[deepsearch] Epoch {epoch + 1}: 总耗时 {epoch_duration:.2f}s")
                 epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+                gate_results = _record_quality_gates(
+                    diagnostics=epoch_diagnostics,
+                    quality_gate_history=quality_gate_history,
+                    emitter=emitter,
+                    epoch=epoch + 1,
+                    stage="epoch",
+                )
+                gate_missing_topics = _missing_topics_from_gate_payload(gate_results)
+                if gate_missing_topics and not enough:
+                    state["missing_topics"] = gate_missing_topics
                 _emit_event(
                     emitter,
                     "quality_update",
@@ -1493,6 +1835,15 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
             final_report,
             report_sources,
             limit=report_sources_limit,
+        )
+        _emit_event(
+            emitter,
+            "report_written",
+            {
+                "mode": "linear",
+                "length": len(final_report),
+                "source_count": len(report_sources),
+            },
         )
         logger.info(
             f"[deepsearch] 最终报告生成完成"
@@ -1598,14 +1949,53 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
         quality_summary["claim_verifier_verified"] = _cv_verified
         quality_summary["claim_verifier_unsupported"] = _cv_unsupported
         quality_summary["claim_verifier_contradicted"] = _cv_contradicted
+        _record_quality_gates(
+            diagnostics=diagnostics,
+            quality_summary=quality_summary,
+            quality_gate_history=quality_gate_history,
+            emitter=emitter,
+            epoch=epoch + 1,
+            stage="final",
+        )
+        evidence_items = _merge_evidence_item_payloads(
+            provider_evidence_items,
+            build_evidence_items(
+                search_runs=citation_runs,
+                sources=all_sources,
+                fetched_pages=fetched_pages,
+                passages=passages,
+            ),
+        )
+        citation_annotations = build_citation_annotations(
+            report=final_report,
+            sources=all_sources,
+            evidence_items=evidence_items,
+        )
+        timeline = build_timeline_artifacts(
+            search_runs=citation_runs,
+            sources=all_sources,
+            evidence_items=evidence_items,
+            quality_gates=quality_gate_history,
+        )
+        _emit_event(
+            emitter,
+            "evidence_selected",
+            {"mode": "linear", "count": len(evidence_items)},
+        )
 
         deepsearch_artifacts = {
             "mode": "linear",
+            "research_brief": brief.to_dict(),
+            "strategy_decision": strategy_payload,
             "queries": have_query,
             "research_tree": None,
             "quality_summary": quality_summary,
+            "quality_gates": quality_gate_history,
             "query_coverage": diagnostics.get("query_coverage", {}),
             "freshness_summary": diagnostics.get("freshness_summary", {}),
+            "evidence_items": evidence_items,
+            "citation_annotations": citation_annotations,
+            "timeline": timeline,
             "fetched_pages": fetched_pages,
             "passages": passages,
             "sources": all_sources,
@@ -1676,7 +2066,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
 
     Inspired by GPT Researcher's tree exploration approach.
     """
-    topic = state.get("input", "")
+    brief = build_research_brief(state, config)
+    state["research_brief"] = brief.to_dict()
+    topic = brief.clarified_goal or state.get("input", "")
     _check_cancel(state)
 
     # Use multi-model routing for different task types
@@ -1726,6 +2118,21 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     emitter = _resolve_event_emitter(state, config)
     search_runs: List[Dict[str, Any]] = []
     live_search_events_emitted = 0
+    quality_gate_history: List[Dict[str, Any]] = []
+    strategy_payload = _strategy_payload(
+        state,
+        fallback_strategy="tree",
+        fallback_reason="explicit tree pipeline or auto broad research selection",
+    )
+    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "tree"})
+    _emit_event(
+        emitter,
+        "strategy_selected",
+        {
+            **strategy_payload,
+            "research_brief": brief.to_dict(),
+        },
+    )
     _emit_event(
         emitter,
         "research_node_start",
@@ -2004,6 +2411,15 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             report_sources,
             limit=report_sources_limit,
         )
+        _emit_event(
+            emitter,
+            "report_written",
+            {
+                "mode": "tree",
+                "length": len(final_report),
+                "source_count": len(report_sources),
+            },
+        )
 
         elapsed = time.time() - start_ts
         tokens_used += _estimate_tokens_from_text(merged_summary)
@@ -2066,7 +2482,7 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "elapsed_seconds": elapsed,
             **diagnostics,
         }
-        fetched_pages, passages = _build_fetcher_evidence(all_sources[:10])
+        fetched_pages, passages = _build_fetcher_evidence(all_sources[:10], config)
 
         claims = []
         try:
@@ -2140,14 +2556,50 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
         quality_summary["claim_verifier_verified"] = _cv_verified
         quality_summary["claim_verifier_unsupported"] = _cv_unsupported
         quality_summary["claim_verifier_contradicted"] = _cv_contradicted
+        _record_quality_gates(
+            diagnostics=diagnostics,
+            quality_summary=quality_summary,
+            quality_gate_history=quality_gate_history,
+            emitter=emitter,
+            epoch=1,
+            stage="final",
+        )
+        evidence_items = build_evidence_items(
+            search_runs=search_runs,
+            sources=extracted_sources,
+            fetched_pages=fetched_pages,
+            passages=passages,
+        )
+        citation_annotations = build_citation_annotations(
+            report=final_report,
+            sources=extracted_sources,
+            evidence_items=evidence_items,
+        )
+        timeline = build_timeline_artifacts(
+            search_runs=search_runs,
+            sources=extracted_sources,
+            evidence_items=evidence_items,
+            quality_gates=quality_gate_history,
+        )
+        _emit_event(
+            emitter,
+            "evidence_selected",
+            {"mode": "tree", "count": len(evidence_items)},
+        )
 
         deepsearch_artifacts = {
             "mode": "tree",
+            "research_brief": brief.to_dict(),
+            "strategy_decision": strategy_payload,
             "queries": have_query,
             "research_tree": tree.to_dict(),
             "quality_summary": quality_summary,
+            "quality_gates": quality_gate_history,
             "query_coverage": diagnostics.get("query_coverage", {}),
             "freshness_summary": diagnostics.get("freshness_summary", {}),
+            "evidence_items": evidence_items,
+            "citation_annotations": citation_annotations,
+            "timeline": timeline,
             "fetched_pages": fetched_pages,
             "passages": passages,
             "sources": extracted_sources,
@@ -2218,6 +2670,1030 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
         return run_deepsearch_optimized(state, config)
 
 
+def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+    brief = build_research_brief(state, config)
+    state["research_brief"] = brief.to_dict()
+    topic = brief.clarified_goal or state.get("input", "")
+    topic_for_planning = brief_topic(brief)
+    _check_cancel(state)
+
+    max_loops = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_reflection_loops",
+            _configurable_int(
+                config,
+                "deepsearch_max_epochs",
+                int(getattr(settings, "deepsearch_max_epochs", 3)),
+            ),
+        ),
+    )
+    per_query_results = _configurable_int(
+        config,
+        "deepsearch_results_per_query",
+        int(getattr(settings, "deepsearch_results_per_query", 5)),
+    )
+    planning_model = _model_for_task("planning", config)
+    research_model = _model_for_task("research", config)
+    writing_model = _model_for_task("writing", config)
+    planner_llm = _chat_model(planning_model, temperature=0.4)
+    critic_llm = _chat_model(research_model, temperature=0.2)
+    writer_llm = _chat_model(writing_model, temperature=0.4)
+
+    provider_profile = _resolve_provider_profile(state)
+    evidence_providers = build_evidence_providers(
+        brief=brief,
+        config=config,
+        search_func=_search_query,
+        provider_profile=provider_profile,
+    )
+    emitter = _resolve_event_emitter(state, config)
+    strategy_payload = _strategy_payload(
+        state,
+        fallback_strategy="reflection_loop",
+        fallback_reason="low cost iterative reflection strategy",
+    )
+    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "reflection_loop"})
+    _emit_event(
+        emitter,
+        "strategy_selected",
+        {**strategy_payload, "research_brief": brief.to_dict()},
+    )
+
+    start_ts = time.time()
+    have_query: List[str] = []
+    summary_notes: List[str] = []
+    search_runs: List[Dict[str, Any]] = []
+    provider_evidence_items: List[Dict[str, Any]] = []
+    quality_gate_history: List[Dict[str, Any]] = []
+    current_query = topic
+    loops_completed = 0
+
+    try:
+        for loop_idx in range(max_loops):
+            _check_cancel(state)
+            loops_completed = loop_idx + 1
+            node_id = f"deepsearch_reflection_{loops_completed}"
+            _emit_event(
+                emitter,
+                "research_node_start",
+                {
+                    "node_id": node_id,
+                    "topic": current_query,
+                    "depth": 1,
+                    "parent_id": "deepsearch",
+                    "epoch": loops_completed,
+                },
+            )
+
+            if current_query not in have_query:
+                have_query.append(current_query)
+            provider_outputs = search_with_evidence_providers(
+                providers=evidence_providers,
+                query=current_query,
+                max_results=per_query_results,
+                config=config,
+            )
+            results = merge_provider_results(provider_outputs)
+            provider_evidence_items.extend(merge_provider_evidence(provider_outputs))
+            search_runs.append(
+                {
+                    "query": current_query,
+                    "results": results,
+                    "timestamp": datetime.now().isoformat(),
+                    "strategy": "reflection_loop",
+                }
+            )
+            provider_breakdown = _provider_breakdown(results)
+            provider_name = "multi" if len(provider_breakdown) > 1 else (next(iter(provider_breakdown)) if provider_breakdown else "unknown")
+            _emit_event(
+                emitter,
+                "search",
+                {
+                    "query": current_query,
+                    "provider": provider_name,
+                    "provider_breakdown": provider_breakdown,
+                    "results": _compact_search_results(results, limit=_event_results_limit()),
+                    "count": len(results),
+                    "mode": "reflection_loop",
+                    "epoch": loops_completed,
+                },
+            )
+
+            enough, summary_text = _summarize_new_knowledge(
+                critic_llm,
+                topic,
+                summary_notes,
+                results[: max(1, per_query_results)],
+                config,
+            )
+            if summary_text:
+                summary_notes.append(summary_text)
+
+            diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+            gate_results = _record_quality_gates(
+                diagnostics=diagnostics,
+                quality_gate_history=quality_gate_history,
+                emitter=emitter,
+                epoch=loops_completed,
+                stage="reflection",
+            )
+            gate_missing_topics = _missing_topics_from_gate_payload(gate_results)
+            if gate_missing_topics:
+                state["missing_topics"] = gate_missing_topics
+            _emit_event(
+                emitter,
+                "quality_update",
+                {"epoch": loops_completed, "stage": "reflection", **diagnostics},
+            )
+            _emit_event(
+                emitter,
+                "research_node_complete",
+                {
+                    "node_id": node_id,
+                    "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
+                    "sources": _compact_search_results(results, limit=_event_results_limit()),
+                    "quality": diagnostics,
+                    "epoch": loops_completed,
+                },
+            )
+            if enough or loop_idx >= max_loops - 1:
+                break
+            next_queries = _generate_queries(
+                planner_llm,
+                topic_for_planning,
+                have_query,
+                summary_notes,
+                1,
+                config,
+                missing_topics=state.get("missing_topics", []),
+            )
+            current_query = next_queries[0] if next_queries else topic
+
+        report_sources_limit = int(getattr(settings, "deepsearch_report_sources_limit", 20) or 20)
+        all_sources: List[Dict[str, Any]] = []
+        try:
+            from agent.workflows.evidence_extractor import extract_message_sources
+
+            all_sources = extract_message_sources(search_runs)
+        except Exception:
+            all_sources = []
+        report_sources = all_sources[: max(1, report_sources_limit)]
+        sources_block = _format_sources_for_writer(
+            report_sources,
+            search_runs,
+            limit=report_sources_limit,
+        )
+        final_report = (
+            _final_report(writer_llm, topic, summary_notes, config, sources=sources_block)
+            if summary_notes
+            else "未找到足够资料生成报告。"
+        )
+        final_report = _append_auto_references(final_report, report_sources, limit=report_sources_limit)
+        _emit_event(
+            emitter,
+            "report_written",
+            {
+                "mode": "reflection_loop",
+                "length": len(final_report),
+                "source_count": len(report_sources),
+            },
+        )
+
+        elapsed = time.time() - start_ts
+        diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+        quality_summary = {
+            "epochs_completed": loops_completed,
+            "summary_count": len(summary_notes),
+            "source_count": len(all_sources),
+            "selected_url_count": 0,
+            "budget_stop_reason": "",
+            "tokens_used": _estimate_tokens_from_text(topic + "\n".join(summary_notes) + final_report),
+            "elapsed_seconds": elapsed,
+            **diagnostics,
+        }
+        claims = []
+        try:
+            from agent.workflows.claim_verifier import ClaimVerifier
+
+            verifier = ClaimVerifier(
+                min_overlap_tokens=int(getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2),
+                max_evidence_per_claim=int(getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3),
+            )
+            checks = verifier.verify_report(final_report, search_runs)
+            claims = [
+                {
+                    "claim": c.claim,
+                    "status": c.status.value,
+                    "evidence_urls": c.evidence_urls,
+                    "evidence_passages": c.evidence_passages,
+                    "score": c.score,
+                    "notes": c.notes,
+                }
+                for c in checks
+            ]
+        except Exception:
+            claims = []
+        quality_summary["claim_verifier_total"] = len(claims)
+        quality_summary["claim_verifier_verified"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
+        quality_summary["claim_verifier_unsupported"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
+        quality_summary["claim_verifier_contradicted"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+
+        _record_quality_gates(
+            diagnostics=diagnostics,
+            quality_summary=quality_summary,
+            quality_gate_history=quality_gate_history,
+            emitter=emitter,
+            epoch=loops_completed,
+            stage="final",
+        )
+        evidence_items = _merge_evidence_item_payloads(
+            provider_evidence_items,
+            build_evidence_items(search_runs=search_runs, sources=all_sources),
+        )
+        citation_annotations = build_citation_annotations(
+            report=final_report,
+            sources=all_sources,
+            evidence_items=evidence_items,
+        )
+        timeline = build_timeline_artifacts(
+            search_runs=search_runs,
+            sources=all_sources,
+            evidence_items=evidence_items,
+            quality_gates=quality_gate_history,
+        )
+        _emit_event(
+            emitter,
+            "evidence_selected",
+            {"mode": "reflection_loop", "count": len(evidence_items)},
+        )
+        deepsearch_artifacts = {
+            "mode": "reflection_loop",
+            "research_brief": brief.to_dict(),
+            "strategy_decision": strategy_payload,
+            "queries": have_query,
+            "research_tree": None,
+            "quality_summary": quality_summary,
+            "quality_gates": quality_gate_history,
+            "query_coverage": diagnostics.get("query_coverage", {}),
+            "freshness_summary": diagnostics.get("freshness_summary", {}),
+            "evidence_items": evidence_items,
+            "citation_annotations": citation_annotations,
+            "timeline": timeline,
+            "fetched_pages": [],
+            "passages": [],
+            "sources": all_sources,
+            "claims": claims,
+        }
+        return {
+            "research_plan": have_query,
+            "scraped_content": search_runs,
+            "draft_report": final_report,
+            "final_report": final_report,
+            "quality_summary": quality_summary,
+            "sources": all_sources,
+            "deepsearch_artifacts": deepsearch_artifacts,
+            "deepsearch_mode": "reflection_loop",
+            "messages": [AIMessage(content=final_report)],
+            "is_complete": False,
+            "budget_stop_reason": "",
+            "deepsearch_tokens_used": quality_summary["tokens_used"],
+            "deepsearch_elapsed_seconds": elapsed,
+        }
+    except asyncio.CancelledError:
+        logger.warning("[deepsearch-reflection] 收到取消信号，停止任务")
+        return {
+            "is_cancelled": True,
+            "is_complete": True,
+            "errors": ["DeepSearch was cancelled"],
+            "final_report": "任务已被取消",
+        }
+
+
+def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+    brief = build_research_brief(state, config)
+    state["research_brief"] = brief.to_dict()
+    topic = brief.clarified_goal or state.get("input", "")
+    _check_cancel(state)
+
+    max_rounds = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_supervisor_rounds",
+            int(getattr(settings, "deepsearch_supervisor_rounds", 2)),
+        ),
+    )
+    max_workers = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_supervisor_max_workers",
+            int(getattr(settings, "deepsearch_supervisor_max_workers", 4)),
+        ),
+    )
+    queries_per_worker = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_supervisor_queries_per_worker",
+            int(getattr(settings, "deepsearch_supervisor_queries_per_worker", 2)),
+        ),
+    )
+    parallel_workers = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_supervisor_parallel_workers",
+            int(getattr(settings, "deepsearch_supervisor_parallel_workers", 2)),
+        ),
+    )
+    per_query_results = _configurable_int(
+        config,
+        "deepsearch_results_per_query",
+        int(getattr(settings, "deepsearch_results_per_query", 5)),
+    )
+    max_seconds = max(
+        0.0,
+        _configurable_float(
+            config,
+            "deepsearch_max_seconds",
+            float(getattr(settings, "deepsearch_max_seconds", 0.0)),
+        ),
+    )
+    max_tokens = max(
+        0,
+        _configurable_int(
+            config,
+            "deepsearch_max_tokens",
+            int(getattr(settings, "deepsearch_max_tokens", 0)),
+        ),
+    )
+
+    model_profile = build_deepsearch_model_profile(config, _model_for_task)
+    model_map = model_profile.get("models", {})
+    planning_model = str(model_map.get("supervisor_model") or _model_for_task("planning", config))
+    research_model = str(model_map.get("worker_model") or _model_for_task("research", config))
+    search_summary_model = str(model_map.get("search_summary_model") or research_model)
+    compression_model = str(model_map.get("compression_model") or search_summary_model)
+    writing_model = str(model_map.get("writer_model") or _model_for_task("writing", config))
+    verifier_model = str(model_map.get("verifier_model") or research_model)
+    context_policy = build_deepsearch_context_policy(
+        {
+            "planning": planning_model,
+            "research": research_model,
+            "compression": compression_model,
+            "writing": writing_model,
+            "verifier": verifier_model,
+        }
+    )
+    critic_llm = _chat_model(search_summary_model, temperature=0.2)
+    writer_llm = _chat_model(writing_model, temperature=0.4)
+
+    provider_profile = _resolve_provider_profile(state)
+    evidence_providers = build_evidence_providers(
+        brief=brief,
+        config=config,
+        search_func=_search_query,
+        provider_profile=provider_profile,
+    )
+    provider_capabilities = build_provider_capability_artifact(evidence_providers, config)
+    emitter = _resolve_event_emitter(state, config)
+    strategy_payload = _strategy_payload(
+        state,
+        fallback_strategy="supervisor_workers",
+        fallback_reason="explicit supervisor-workers multi-agent strategy",
+    )
+    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "supervisor_workers"})
+    _emit_event(
+        emitter,
+        "strategy_selected",
+        {**strategy_payload, "research_brief": brief.to_dict()},
+    )
+
+    start_ts = time.time()
+    tokens_used = _estimate_tokens_from_text(topic)
+    budget_stop_reason = ""
+    have_query: List[str] = []
+    summary_notes: List[str] = []
+    search_runs: List[Dict[str, Any]] = []
+    provider_evidence_items: List[Dict[str, Any]] = []
+    quality_gate_history: List[Dict[str, Any]] = []
+    worker_runs: List[Dict[str, Any]] = []
+    supervisor_decisions: List[Dict[str, Any]] = []
+    decision_log: List[Dict[str, Any]] = []
+    task_runtime = ResearchTaskRuntime(mode="supervisor_workers", parent_id="deepsearch_supervisor")
+    missing_topics = list(state.get("missing_topics", []) or [])
+    rounds_completed = 0
+
+    try:
+        for round_index in range(1, max_rounds + 1):
+            _check_cancel(state)
+            rounds_completed = round_index
+            budget_stop_reason = _budget_stop_reason(
+                start_ts=start_ts,
+                tokens_used=tokens_used,
+                max_seconds=max_seconds,
+                max_tokens=max_tokens,
+            )
+            if budget_stop_reason:
+                break
+
+            tasks = build_worker_tasks(
+                brief=brief,
+                round_index=round_index,
+                max_workers=max_workers,
+                queries_per_worker=queries_per_worker,
+                historical_queries=have_query,
+                missing_topics=missing_topics,
+            )
+            task_runtime.register_tasks(tasks, metadata={"round": round_index})
+            _emit_event(
+                emitter,
+                "task_create",
+                {
+                    "mode": "supervisor_workers",
+                    "round": round_index,
+                    "worker_count": len(tasks),
+                    "tasks": [task.to_dict() for task in tasks],
+                },
+            )
+
+            round_worker_runs: List[Dict[str, Any]] = []
+            task_order = {task.worker_id: idx for idx, task in enumerate(tasks)}
+            for task in tasks:
+                started_subtask = task_runtime.start_task(task.worker_id)
+                _emit_event(
+                    emitter,
+                    "research_node_start",
+                    {
+                        "node_id": task.worker_id,
+                        "topic": task.topic,
+                        "depth": 1,
+                        "parent_id": "deepsearch_supervisor",
+                        "round": round_index,
+                        "context_id": task.context_id,
+                        "subtask": started_subtask,
+                    },
+                )
+
+            def _collect_worker_payload(task):
+                worker_started_at = datetime.now().isoformat()
+                task_results: List[Dict[str, Any]] = []
+                task_evidence: List[Dict[str, Any]] = []
+                task_search_runs: List[Dict[str, Any]] = []
+                errors: List[str] = []
+                for query in task.queries:
+                    try:
+                        provider_outputs = search_with_evidence_providers(
+                            providers=evidence_providers,
+                            query=query,
+                            max_results=per_query_results,
+                            config=config,
+                        )
+                        results = merge_provider_results(provider_outputs)
+                        evidence_payload = merge_provider_evidence(provider_outputs)
+                    except Exception as exc:
+                        results = []
+                        evidence_payload = []
+                        errors.append(str(exc))
+                    task_results.extend(results)
+                    task_evidence.extend(evidence_payload)
+                    task_search_runs.append(
+                        {
+                            "query": query,
+                            "results": results,
+                            "timestamp": datetime.now().isoformat(),
+                            "strategy": "supervisor_workers",
+                            "round": round_index,
+                            "worker_id": task.worker_id,
+                            "context_id": task.context_id,
+                            "worker_topic": task.topic,
+                            "worker_focus": task.focus,
+                        }
+                    )
+                return {
+                    "task": task,
+                    "started_at": worker_started_at,
+                    "results": task_results,
+                    "evidence": task_evidence,
+                    "search_runs": task_search_runs,
+                    "errors": errors,
+                }
+
+            if parallel_workers > 1 and len(tasks) > 1:
+                with ThreadPoolExecutor(max_workers=min(parallel_workers, len(tasks))) as executor:
+                    task_payloads = list(executor.map(_collect_worker_payload, tasks))
+            else:
+                task_payloads = [_collect_worker_payload(task) for task in tasks]
+            task_payloads.sort(key=lambda payload: task_order.get(payload["task"].worker_id, 0))
+
+            for payload in task_payloads:
+                _check_cancel(state)
+                task = payload["task"]
+                task_results = payload["results"]
+                task_evidence = payload["evidence"]
+                errors = payload["errors"]
+                provider_evidence_items.extend(task_evidence)
+                for search_run in payload["search_runs"]:
+                    query = search_run.get("query", "")
+                    if query and query not in have_query:
+                        have_query.append(query)
+                    results = search_run.get("results", [])
+                    tokens_used += _estimate_tokens_from_results(results)
+                    search_runs.append(search_run)
+                    provider_breakdown = _provider_breakdown(results)
+                    provider_name = "multi" if len(provider_breakdown) > 1 else (next(iter(provider_breakdown)) if provider_breakdown else "unknown")
+                    _emit_event(
+                        emitter,
+                        "search",
+                        {
+                            "query": query,
+                            "provider": provider_name,
+                            "provider_breakdown": provider_breakdown,
+                            "results": _compact_search_results(results, limit=_event_results_limit()),
+                            "count": len(results),
+                            "mode": "supervisor_workers",
+                            "round": round_index,
+                            "worker_id": task.worker_id,
+                            "context_id": task.context_id,
+                        },
+                    )
+
+                enough, summary_text = _summarize_new_knowledge(
+                    critic_llm,
+                    task.topic,
+                    summary_notes,
+                    task_results[: max(1, per_query_results)],
+                    config,
+                )
+                if summary_text:
+                    summary_notes.append(f"{task.focus}: {summary_text}")
+                    tokens_used += _estimate_tokens_from_text(summary_text)
+                worker_run = build_worker_run(
+                    task=task,
+                    results=task_results,
+                    evidence_items=task_evidence,
+                    summary=summary_text,
+                    errors=errors,
+                    started_at=payload["started_at"],
+                ).to_dict()
+                completed_subtask = task_runtime.complete_task(
+                    task.worker_id,
+                    result_count=len(task_results),
+                    evidence_count=len(task_evidence),
+                    compressed_summary=summary_text,
+                    raw_notes=[summary_text] if summary_text else [],
+                    errors=errors,
+                    completed_at=worker_run.get("completed_at"),
+                )
+                worker_runs.append(worker_run)
+                round_worker_runs.append(worker_run)
+                decision_log.append(
+                    {
+                        "type": "worker_reflection",
+                        "round_index": round_index,
+                        "worker_id": task.worker_id,
+                        "context_id": task.context_id,
+                        "focus": task.focus,
+                        "topic": task.topic,
+                        "result_count": len(task_results),
+                        "evidence_count": len(task_evidence),
+                        "errors": errors,
+                        "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
+                        "timestamp": worker_run.get("completed_at"),
+                    }
+                )
+                _emit_event(
+                    emitter,
+                    "thinking",
+                    {
+                        "text": f"Worker {task.focus} found {len(task_results)} results and {len(task_evidence)} evidence items.",
+                        "node": "supervisor_workers",
+                        "type": "worker_reflection",
+                        "round": round_index,
+                        "worker_id": task.worker_id,
+                        "context_id": task.context_id,
+                    },
+                )
+                _emit_event(
+                    emitter,
+                    "research_node_complete",
+                    {
+                        "node_id": task.worker_id,
+                        "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
+                        "sources": _compact_search_results(task_results, limit=_event_results_limit()),
+                        "round": round_index,
+                        "context_id": task.context_id,
+                        "quality": {"enough": bool(enough), "errors": errors},
+                        "subtask": completed_subtask,
+                    },
+                )
+
+            diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+            gate_payload = _record_quality_gates(
+                diagnostics=diagnostics,
+                quality_gate_history=quality_gate_history,
+                emitter=emitter,
+                epoch=round_index,
+                stage="supervisor_round",
+            )
+            decision = decide_supervisor_next_step(
+                round_index=round_index,
+                max_rounds=max_rounds,
+                worker_runs=round_worker_runs,
+                gate_payload=gate_payload,
+                diagnostics=diagnostics,
+            )
+            decision_payload = decision.to_dict()
+            supervisor_decisions.append(decision_payload)
+            decision_log.append(
+                {
+                    "type": "supervisor_decision",
+                    "round_index": round_index,
+                    "action": decision.action,
+                    "reason": decision.reason,
+                    "missing_topics": missing_topics,
+                    "failed_gates": decision.failed_gates,
+                    "quality_snapshot": decision.quality_snapshot,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            _emit_event(
+                emitter,
+                "thinking",
+                {
+                    "text": f"Supervisor decision: {decision.action} because {decision.reason}.",
+                    "node": "supervisor_workers",
+                    "type": "supervisor_decision",
+                    "round": round_index,
+                    "action": decision.action,
+                },
+            )
+            missing_topics = decision.missing_topics or []
+            state["missing_topics"] = missing_topics
+            _emit_event(
+                emitter,
+                "quality_update",
+                {
+                    "epoch": round_index,
+                    "stage": "supervisor_round",
+                    "supervisor_decision": decision_payload,
+                    **diagnostics,
+                },
+            )
+            _emit_event(
+                emitter,
+                "task_update",
+                {
+                    "mode": "supervisor_workers",
+                    "round": round_index,
+                    "action": decision.action,
+                    "reason": decision.reason,
+                    "missing_topics": missing_topics,
+                },
+            )
+            if decision.action == "synthesize":
+                break
+
+        if not summary_notes and search_runs:
+            flat_results = []
+            for run in search_runs:
+                results = run.get("results") if isinstance(run, dict) else []
+                if isinstance(results, list):
+                    flat_results.extend([item for item in results if isinstance(item, dict)])
+            formatted = _format_results(flat_results[:10]) if flat_results else ""
+            if formatted:
+                summary_notes.append(formatted)
+
+        report_sources_limit = _configurable_int(
+            config,
+            "deepsearch_report_sources_limit",
+            int(getattr(settings, "deepsearch_report_sources_limit", 20) or 20),
+        )
+        fetch_source_limit = _configurable_int(
+            config,
+            "deepsearch_supervisor_fetch_source_limit",
+            int(getattr(settings, "deepsearch_supervisor_fetch_source_limit", 8) or 8),
+        )
+        all_sources: List[Dict[str, Any]] = []
+        try:
+            from agent.workflows.evidence_extractor import extract_message_sources
+
+            all_sources = extract_message_sources(search_runs)
+        except Exception:
+            all_sources = []
+        if _configurable_bool(
+            config,
+            "deepsearch_source_curator_enabled",
+            bool(getattr(settings, "deepsearch_source_curator_enabled", False)),
+        ):
+            all_sources = curate_sources(all_sources, brief=brief)
+        report_sources = all_sources[: max(1, report_sources_limit)]
+        fetched_pages: List[Dict[str, Any]] = []
+        passages: List[Dict[str, Any]] = []
+        if _configurable_bool(
+            config,
+            "deepsearch_supervisor_fetch_passages",
+            bool(getattr(settings, "deepsearch_supervisor_fetch_passages", False)),
+        ):
+            fetched_pages, passages = _build_fetcher_evidence(
+                _source_urls_for_fetch(report_sources, limit=fetch_source_limit),
+                config,
+            )
+        evidence_items = _merge_evidence_item_payloads(
+            provider_evidence_items,
+            build_evidence_items(
+                search_runs=search_runs,
+                sources=all_sources,
+                fetched_pages=fetched_pages,
+                passages=passages,
+            ),
+        )
+        claim_ledger: List[Dict[str, Any]] = []
+        summary_notes_for_writer = list(summary_notes)
+        if _configurable_bool(
+            config,
+            "deepsearch_enable_claim_ledger",
+            bool(getattr(settings, "deepsearch_enable_claim_ledger", False)),
+        ):
+            claim_ledger = build_claim_ledger(
+                summary_notes=summary_notes,
+                search_runs=search_runs,
+                sources=report_sources,
+                evidence_items=evidence_items,
+                passages=passages,
+                max_claims=_configurable_int(
+                    config,
+                    "deepsearch_claim_ledger_max_claims",
+                    int(getattr(settings, "deepsearch_claim_ledger_max_claims", 24) or 24),
+                ),
+                min_overlap_tokens=_configurable_int(
+                    config,
+                    "deepsearch_claim_verifier_min_overlap_tokens",
+                    int(getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2),
+                ),
+                max_evidence_per_claim=_configurable_int(
+                    config,
+                    "deepsearch_claim_verifier_max_evidence_per_claim",
+                    int(getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3),
+                ),
+            )
+            ledger_text = format_claim_ledger_for_writer(claim_ledger)
+            if ledger_text:
+                summary_notes_for_writer.append(ledger_text)
+        sources_block = _format_sources_for_writer(
+            report_sources,
+            search_runs,
+            limit=report_sources_limit,
+        )
+        draft_report = (
+            _final_report(writer_llm, topic, summary_notes_for_writer, config, sources=sources_block)
+            if summary_notes_for_writer
+            else "未找到足够资料生成报告。"
+        )
+        try:
+            _checks, claims, claim_stats = _verify_report_claims(
+                draft_report,
+                search_runs,
+                passages=passages,
+                config=config,
+            )
+        except Exception:
+            claims = []
+            claim_stats = {
+                "claim_verifier_total": 0,
+                "claim_verifier_verified": 0,
+                "claim_verifier_unsupported": 0,
+                "claim_verifier_contradicted": 0,
+            }
+        final_revision_count = 0
+        if _configurable_bool(
+            config,
+            "deepsearch_final_verifier_revise",
+            bool(getattr(settings, "deepsearch_final_verifier_revise", False)),
+        ):
+            max_revisions = max(
+                0,
+                _configurable_int(
+                    config,
+                    "deepsearch_final_verifier_max_revisions",
+                    int(getattr(settings, "deepsearch_final_verifier_max_revisions", 1) or 1),
+                ),
+            )
+            while (
+                final_revision_count < max_revisions
+                and (
+                    int(claim_stats.get("claim_verifier_unsupported") or 0) > 0
+                    or int(claim_stats.get("claim_verifier_contradicted") or 0) > 0
+                )
+            ):
+                draft_report = _revise_report_for_claim_failures(
+                    writer_llm,
+                    topic=topic,
+                    report=draft_report,
+                    claims=claims,
+                    sources=sources_block,
+                    config=config,
+                )
+                final_revision_count += 1
+                try:
+                    _checks, claims, claim_stats = _verify_report_claims(
+                        draft_report,
+                        search_runs,
+                        passages=passages,
+                        config=config,
+                    )
+                except Exception:
+                    break
+        final_report = _append_auto_references(draft_report, report_sources, limit=report_sources_limit)
+        missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report)
+        _emit_event(
+            emitter,
+            "report_written",
+            {
+                "mode": "supervisor_workers",
+                "length": len(final_report),
+                "source_count": len(report_sources),
+                "claim_ledger_count": len(claim_ledger),
+                "final_revision_count": final_revision_count,
+            },
+        )
+
+        elapsed = time.time() - start_ts
+        diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+        quality_summary = {
+            "epochs_completed": rounds_completed,
+            "supervisor_rounds_completed": rounds_completed,
+            "worker_count": len(worker_runs),
+            "subtask_count": task_runtime.to_artifact().get("subtask_count", 0),
+            "subtask_status_counts": task_runtime.to_artifact().get("status_counts", {}),
+            "decision_log_count": len(decision_log),
+            "parallel_workers": parallel_workers,
+            "worker_dispatch": "parallel" if parallel_workers > 1 else "sequential",
+            "context_policy_stage_count": context_policy.get("stage_count", 0),
+            "model_profile_stage_count": model_profile.get("stage_count", 0),
+            "evidence_provider_count": provider_capabilities.get("provider_count", 0),
+            "summary_count": len(summary_notes),
+            "source_count": len(all_sources),
+            "selected_source_count": len(report_sources),
+            "fetched_page_count": len(fetched_pages),
+            "passage_count": len(passages),
+            "evidence_item_count": len(evidence_items),
+            "claim_ledger_count": len(claim_ledger),
+            "final_revision_count": final_revision_count,
+            "citation_coverage": citation_coverage,
+            "citation_coverage_score": citation_coverage,
+            "missing_citation_claims": missing_citation_claims,
+            "budget_stop_reason": budget_stop_reason or "",
+            "tokens_used": _estimate_tokens_from_text(topic + "\n".join(summary_notes) + final_report) + tokens_used,
+            "elapsed_seconds": elapsed,
+            **diagnostics,
+        }
+        quality_summary.update(claim_stats)
+
+        final_gate_payload = _record_quality_gates(
+            diagnostics=diagnostics,
+            quality_summary=quality_summary,
+            quality_gate_history=quality_gate_history,
+            emitter=emitter,
+            epoch=rounds_completed,
+            stage="final",
+        )
+        continue_requests: List[Dict[str, Any]] = []
+        if _configurable_bool(
+            config,
+            "deepsearch_reflection_gap_queries",
+            bool(getattr(settings, "deepsearch_reflection_gap_queries", False)),
+        ):
+            for idx, query in enumerate(
+                gap_queries_from_quality_gates(
+                    brief=brief,
+                    quality_gates=final_gate_payload,
+                    claims=claims,
+                    max_queries=4,
+                ),
+                1,
+            ):
+                continue_requests.append(
+                    {
+                        "request_id": f"auto_gap_{rounds_completed}_{idx}",
+                        "target_type": "gap",
+                        "target_text": query,
+                        "strategy": "supervisor_workers",
+                    }
+                )
+        citation_annotations = build_citation_annotations(
+            report=final_report,
+            sources=all_sources,
+            evidence_items=evidence_items,
+        )
+        timeline = build_timeline_artifacts(
+            search_runs=search_runs,
+            sources=all_sources,
+            evidence_items=evidence_items,
+            quality_gates=quality_gate_history,
+        )
+        intermediate_steps = build_intermediate_steps(
+            worker_runs=worker_runs,
+            supervisor_decisions=supervisor_decisions,
+        )
+        report_plan = build_sectioned_report_plan(
+            research_brief=brief.to_dict(),
+            worker_runs=worker_runs,
+            evidence_items=evidence_items,
+        )
+        sectioned_report = build_sectioned_report_artifact(report_plan, config)
+        quality_summary["sectioned_report_enabled"] = bool(sectioned_report.get("enabled"))
+        research_pipeline = build_supervisor_workers_pipeline_artifact(
+            research_brief=brief.to_dict(),
+            task_runtime=task_runtime.to_artifact(),
+            worker_runs=worker_runs,
+            supervisor_decisions=supervisor_decisions,
+            decision_log=decision_log,
+            summary_notes=summary_notes,
+            evidence_items=evidence_items,
+            claim_ledger=claim_ledger,
+            quality_summary=quality_summary,
+            final_report=final_report,
+        )
+        _emit_event(
+            emitter,
+            "evidence_selected",
+            {"mode": "supervisor_workers", "count": len(evidence_items)},
+        )
+        deepsearch_artifacts = {
+            "mode": "supervisor_workers",
+            "research_brief": brief.to_dict(),
+            "strategy_decision": strategy_payload,
+            "queries": have_query,
+            "research_tree": None,
+            "quality_summary": quality_summary,
+            "quality_gates": quality_gate_history,
+            "query_coverage": diagnostics.get("query_coverage", {}),
+            "freshness_summary": diagnostics.get("freshness_summary", {}),
+            "evidence_items": evidence_items,
+            "citation_annotations": citation_annotations,
+            "timeline": timeline,
+            "supervisor_decisions": supervisor_decisions,
+            "worker_runs": worker_runs,
+            "research_task_runtime": task_runtime.to_artifact(),
+            "decision_log": decision_log,
+            "research_pipeline": research_pipeline,
+            "report_plan": report_plan,
+            "sectioned_report": sectioned_report,
+            "context_policy": context_policy,
+            "model_profile": model_profile,
+            "provider_capabilities": provider_capabilities,
+            "intermediate_steps": intermediate_steps,
+            "supervisor_policy": {
+                "max_rounds": max_rounds,
+                "max_workers": max_workers,
+                "queries_per_worker": queries_per_worker,
+                "parallel_workers": parallel_workers,
+            },
+            "continue_requests": continue_requests,
+            "claim_ledger": claim_ledger,
+            "fetched_pages": fetched_pages,
+            "passages": passages,
+            "sources": all_sources,
+            "claims": claims,
+        }
+        return {
+            "research_plan": have_query,
+            "scraped_content": search_runs,
+            "draft_report": final_report,
+            "final_report": final_report,
+            "quality_summary": quality_summary,
+            "sources": all_sources,
+            "deepsearch_artifacts": deepsearch_artifacts,
+            "deepsearch_mode": "supervisor_workers",
+            "messages": [AIMessage(content=final_report)],
+            "is_complete": False,
+            "budget_stop_reason": budget_stop_reason or "",
+            "deepsearch_tokens_used": quality_summary["tokens_used"],
+            "deepsearch_elapsed_seconds": elapsed,
+        }
+    except asyncio.CancelledError:
+        logger.warning("[deepsearch-supervisor] 收到取消信号，停止任务")
+        task_runtime.finish_open_tasks(status="cancelled", error="DeepSearch was cancelled")
+        return {
+            "is_cancelled": True,
+            "is_complete": True,
+            "errors": ["DeepSearch was cancelled"],
+            "final_report": "任务已被取消",
+            "deepsearch_artifacts": {
+                "mode": "supervisor_workers",
+                "research_task_runtime": task_runtime.to_artifact(),
+                "decision_log": decision_log,
+            },
+        }
+    except Exception as exc:
+        logger.error(f"[deepsearch-supervisor] Failed: {exc}", exc_info=True)
+        return run_deepsearch_optimized(state, config)
+
+
 def run_deepsearch_auto(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Auto-select between tree and linear deep search based on settings.
@@ -2225,37 +3701,51 @@ def run_deepsearch_auto(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     Uses tree-based exploration if enabled in settings, otherwise falls back
     to the optimized linear approach.
     """
-    mode = _resolve_deepsearch_mode(config)
+    brief = build_research_brief(state, config)
+    state["research_brief"] = brief.to_dict()
+    decision = select_deepsearch_strategy(
+        brief=brief,
+        config=config,
+        settings=settings,
+        simple_query_detector=_auto_mode_prefers_linear,
+    )
+    state["deepsearch_strategy_decision"] = decision.to_dict()
+    strategy = decision.strategy
 
     def _with_event_marker(result: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(result, dict) and not bool(result.get("is_cancelled")):
             result.setdefault("_deepsearch_events_emitted", True)
         return result
 
-    if mode == "tree":
+    if strategy == "tree":
         logger.info("[deepsearch] Using tree-based exploration mode (override)")
         return _with_event_marker(run_deepsearch_tree(state, config))
 
-    if mode == "linear":
+    if strategy == "linear":
         logger.info("[deepsearch] Using linear exploration mode (override)")
         return _with_event_marker(run_deepsearch_optimized(state, config))
 
-    use_tree = getattr(settings, "tree_exploration_enabled", True)
-    topic = str(state.get("input") or state.get("topic") or "").strip()
-    if use_tree and _auto_mode_prefers_linear(topic):
-        logger.info("[deepsearch] Auto mode selected linear exploration for simple factual query")
+    if strategy == "reflection_loop":
+        logger.info("[deepsearch] Using reflection loop exploration mode")
+        return _with_event_marker(run_deepsearch_reflection_loop(state, config))
+
+    if strategy == "supervisor_workers":
+        logger.info("[deepsearch] Using supervisor-workers exploration mode")
+        return _with_event_marker(run_deepsearch_supervisor_workers(state, config))
+
+    if strategy == "linear_light":
+        logger.info("[deepsearch] Auto strategy selected light linear exploration")
         simple_config = dict(config) if isinstance(config, dict) else {"configurable": {}}
         existing_cfg = simple_config.get("configurable")
         simple_cfg = dict(existing_cfg) if isinstance(existing_cfg, dict) else {}
         simple_config["configurable"] = simple_cfg
-        simple_cfg.setdefault("deepsearch_max_epochs", 1)
-        simple_cfg.setdefault("deepsearch_query_num", 1)
-        simple_cfg.setdefault("deepsearch_results_per_query", 5)
-        simple_cfg.setdefault("deepsearch_visualize_browser", False)
+        for key, value in (decision.parameters or {}).items():
+            simple_cfg.setdefault(key, value)
         return _with_event_marker(run_deepsearch_optimized(state, simple_config))
-    if use_tree:
-        logger.info("[deepsearch] Using tree-based exploration mode")
-        return _with_event_marker(run_deepsearch_tree(state, config))
+
+    if strategy == "hybrid_private_web":
+        logger.info("[deepsearch] Using hybrid private/web linear exploration")
+        return _with_event_marker(run_deepsearch_optimized(state, config))
 
     logger.info("[deepsearch] Using linear exploration mode")
     return _with_event_marker(run_deepsearch_optimized(state, config))

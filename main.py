@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import inspect
 import json
 import logging
 import re
@@ -1000,6 +1001,45 @@ class SearchCacheClearResponse(BaseModel):
     cleared: bool
 
 
+class MemoryStatusResponse(BaseModel):
+    backend: str
+    url_configured: bool
+    checkpointer: bool
+    mem0_enabled: bool
+
+
+class ExportTemplateItem(BaseModel):
+    id: str
+    name: str
+    description: str
+
+
+class ExportTemplatesResponse(BaseModel):
+    templates: List[ExportTemplateItem]
+
+
+class DocumentUploadResponse(BaseModel):
+    success: bool
+    filename: str
+    chunks: int
+    message: str
+
+
+class DocumentListResponse(BaseModel):
+    total_chunks: int
+    documents: List[Dict[str, Any]]
+
+
+class DocumentDeleteResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class DocumentSearchResponse(BaseModel):
+    query: str
+    results: List[Dict[str, Any]]
+
+
 class ImagePayload(BaseModel):
     name: Optional[str] = None
     data: str
@@ -1034,11 +1074,63 @@ class ResearchRequest(BaseModel):
     skill_id: Optional[str] = None
     user_id: Optional[str] = None
     images: Optional[List[ImagePayload]] = None
+    deepsearch_config: Dict[str, Any] = Field(default_factory=dict)
+    research_brief: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("search_mode", mode="before")
     @classmethod
     def _coerce_search_mode(cls, value: Any) -> SearchMode | None:
         return _coerce_search_mode_input(value)
+
+
+_RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
+    "deepsearch_strategy",
+    "strategy",
+    "deepsearch_mode",
+    "deepsearch_max_epochs",
+    "deepsearch_query_num",
+    "deepsearch_results_per_query",
+    "deepsearch_max_seconds",
+    "deepsearch_max_tokens",
+    "deepsearch_reflection_loops",
+    "deepsearch_tree_max_searches",
+    "deepsearch_supervisor_rounds",
+    "deepsearch_supervisor_max_workers",
+    "deepsearch_supervisor_queries_per_worker",
+    "deepsearch_supervisor_parallel_workers",
+    "deepsearch_report_sources_limit",
+    "deepsearch_event_results_limit",
+    "deepsearch_visualize_browser",
+    "deepsearch_enable_research_fetcher",
+    "deepsearch_supervisor_fetch_passages",
+    "deepsearch_supervisor_fetch_source_limit",
+    "deepsearch_enable_claim_ledger",
+    "deepsearch_claim_ledger_max_claims",
+    "deepsearch_final_verifier_revise",
+    "deepsearch_final_verifier_max_revisions",
+    "deepsearch_source_curator_enabled",
+    "deepsearch_reflection_gap_queries",
+    "source_policy",
+    "evidence_providers",
+    "source_providers",
+    "use_rag",
+    "use_reflection_loop",
+}
+
+
+def _safe_research_deepsearch_config(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: Dict[str, Any] = {}
+    for key, item in value.items():
+        key_text = str(key or "").strip()
+        if key_text not in _RESEARCH_DEEPSEARCH_CONFIG_KEYS:
+            continue
+        if isinstance(item, (str, int, float, bool)) or item is None:
+            cleaned[key_text] = item
+        elif isinstance(item, list):
+            cleaned[key_text] = [str(part).strip() for part in item if str(part).strip()]
+    return cleaned
 
 
 class ChatResponse(BaseModel):
@@ -1094,7 +1186,7 @@ class SupportChatResponse(BaseModel):
 
 
 class CancelRequest(BaseModel):
-    """鍙栨秷浠诲姟璇锋眰"""
+    """Request body for cancelling a running task."""
 
     reason: Optional[str] = "User requested cancellation"
 
@@ -1451,7 +1543,7 @@ async def get_skill_detail(
     return skill.to_full_dict()
 
 
-# ==================== 鍙栨秷浠诲姟 API ====================
+# ==================== Task Cancellation API ====================
 
 
 @app.post("/api/chat/cancel/{thread_id}")
@@ -1459,10 +1551,10 @@ async def cancel_chat(
     thread_id: str, request: Request, payload: CancelRequest | None = None
 ):
     """
-    鍙栨秷姝ｅ湪杩涜鐨勮亰澶╀换鍔?
+    Cancel a running chat task.
     Args:
-        thread_id: 浠诲姟绾跨▼ ID
-        request: 鍙€夌殑鍙栨秷鍘熷洜
+        thread_id: Task thread ID
+        request: Optional cancellation reason payload
     """
     _require_thread_owner(request, thread_id)
 
@@ -1510,7 +1602,7 @@ def _task_is_visible_to_principal(
 
 @app.post("/api/chat/cancel-all")
 async def cancel_all_chats(request: Request):
-    """鍙栨秷鎵€鏈夋鍦ㄨ繘琛岀殑浠诲姟"""
+    """Cancel all currently running tasks."""
     logger.info("Cancel all tasks requested")
 
     reason = "Batch cancellation requested"
@@ -1592,7 +1684,7 @@ async def get_active_tasks(request: Request):
     }
 
 
-# ==================== 娴佸紡浜嬩欢鏍煎紡鍖?====================
+# ==================== Stream Event Formatting ====================
 
 
 async def format_stream_event(event_type: str, data: Any) -> str:
@@ -1996,6 +2088,9 @@ async def stream_agent_events(
     skill_id: str | None = None,
     images: Optional[List[Dict[str, Any]]] = None,
     user_id: Optional[str] = None,
+    request: Optional[Request] = None,
+    deepsearch_config: Optional[Dict[str, Any]] = None,
+    research_brief: Optional[Dict[str, Any]] = None,
 ):
     """
     Stream agent execution events in real-time.
@@ -2073,7 +2168,7 @@ async def stream_agent_events(
         except Exception as e:
             logger.warning(f"Failed to attach thread log handler: {e}")
 
-    # 鍒涘缓鍙栨秷浠ょ墝
+    # Create cancellation token
     cancel_token = await cancellation_manager.create_token(
         thread_id,
         metadata={
@@ -2126,10 +2221,12 @@ async def stream_agent_events(
             "tool_call_count": 0,
             "is_complete": False,
             "errors": [],
-            # 鍙栨秷鎺у埗瀛楁
+            # Cancellation control fields
             "cancel_token_id": thread_id,
             "is_cancelled": False,
         }
+        if isinstance(research_brief, dict) and research_brief:
+            initial_state["research_brief"] = research_brief
 
         # Load long-term memories (store) and Mem0 (optional) and inject deep prompt if needed
         messages: list[Any] = []
@@ -2173,9 +2270,18 @@ async def stream_agent_events(
                 "tool_approval": settings.tool_approval or False,
                 "human_review": settings.human_review or False,
                 "max_revisions": settings.max_revisions,
+                "rag_collection_name": (
+                    _rag_collection_for_request(request)
+                    if request is not None
+                    else (
+                        (getattr(settings, "rag_collection_name", "") or "weaver_documents").strip()
+                        or "weaver_documents"
+                    )
+                ),
             },
             "recursion_limit": 50,
         }
+        config["configurable"].update(_safe_research_deepsearch_config(deepsearch_config or {}))
 
         async def _drain_pending_tool_events() -> None:
             while not event_queue.empty():
@@ -2203,6 +2309,14 @@ async def stream_agent_events(
                 elif tool_event.type == ToolEvent.TASK_UPDATE:
                     yield_event = await format_stream_event(
                         "task_update", tool_event.data
+                    )
+                elif tool_event.type == ToolEvent.TASK_CREATE:
+                    yield_event = await format_stream_event(
+                        "task_create", tool_event.data
+                    )
+                elif tool_event.type == ToolEvent.THINKING:
+                    yield_event = await format_stream_event(
+                        "thinking", tool_event.data
                     )
                 elif tool_event.type == ToolEvent.RESEARCH_NODE_START:
                     yield_event = await format_stream_event(
@@ -2637,6 +2751,20 @@ async def stream_agent_events(
                         pass
 
 
+def _stream_agent_events_call(input_text: str, **kwargs: Any):
+    try:
+        signature = inspect.signature(stream_agent_events)
+        params = signature.parameters
+        accepts_var_kwargs = any(
+            param.kind == inspect.Parameter.VAR_KEYWORD for param in params.values()
+        )
+        if not accepts_var_kwargs:
+            kwargs = {key: value for key, value in kwargs.items() if key in params}
+    except (TypeError, ValueError):
+        pass
+    return stream_agent_events(input_text, **kwargs)
+
+
 @app.post("/api/chat/sse")
 async def chat_sse(request: Request, payload: ChatRequest):
     """
@@ -2704,7 +2832,7 @@ async def chat_sse(request: Request, payload: ChatRequest):
                 return
 
             source = iter_with_sse_keepalive(
-                stream_agent_events(
+                _stream_agent_events_call(
                     last_message,
                     thread_id=thread_id,
                     model=model,
@@ -2713,6 +2841,7 @@ async def chat_sse(request: Request, payload: ChatRequest):
                     skill_id=payload.skill_id,
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
+                    request=request,
                 ),
                 interval_s=15.0,
             )
@@ -2823,7 +2952,7 @@ async def chat(request: Request, payload: ChatRequest):
 
             # Return streaming response with thread_id in header for cancellation
             return StreamingResponse(
-                stream_agent_events(
+                _stream_agent_events_call(
                     last_message,
                     thread_id=thread_id,
                     model=model,
@@ -2832,6 +2961,7 @@ async def chat(request: Request, payload: ChatRequest):
                     skill_id=payload.skill_id,
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
+                    request=request,
                 ),
                 media_type="text/event-stream",
                 headers={
@@ -2906,6 +3036,7 @@ async def chat(request: Request, payload: ChatRequest):
                     "tool_approval": settings.tool_approval or False,
                     "human_review": settings.human_review or False,
                     "max_revisions": settings.max_revisions,
+                    "rag_collection_name": _rag_collection_for_request(request),
                 },
                 "recursion_limit": 50,
             }
@@ -2928,7 +3059,7 @@ async def chat(request: Request, payload: ChatRequest):
 
     except Exception as e:
         logger.error(
-            f"鉁?Chat error | Thread: {thread_id or 'N/A'} | "
+            f"Chat error | Thread: {thread_id or 'N/A'} | "
             f"Model: {model if 'model' in locals() else (payload.model if 'payload' in locals() else 'N/A')} | "
             f"Error: {str(e)}",
             exc_info=True,
@@ -2971,6 +3102,7 @@ async def resume_interrupt(request: Request, payload: GraphInterruptResumeReques
             "tool_approval": settings.tool_approval or False,
             "human_review": settings.human_review or False,
             "max_revisions": settings.max_revisions,
+            "rag_collection_name": _rag_collection_for_request(request),
         },
         "recursion_limit": 50,
     }
@@ -3439,7 +3571,7 @@ async def metrics():
     return StreamingResponse(iter([data]), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/api/memory/status")
+@app.get("/api/memory/status", response_model=MemoryStatusResponse)
 async def memory_status():
     """Return memory backend status and configuration."""
     backend = settings.memory_store_backend
@@ -3761,7 +3893,7 @@ class ExportRequest(BaseModel):
     title: Optional[str] = None
 
 
-@app.get("/api/export/templates")
+@app.get("/api/export/templates", response_model=ExportTemplatesResponse)
 async def list_export_templates():
     """
     List available export templates.
@@ -3907,9 +4039,18 @@ async def export_report_endpoint(
                     "thread_id": thread_id,
                     "title": report_title,
                     "report": final_report,
+                    "research_brief": deepsearch_artifacts.get("research_brief", {}),
                     "sources": sources_payload,
+                    "evidence_items": deepsearch_artifacts.get("evidence_items", []),
+                    "citation_annotations": deepsearch_artifacts.get("citation_annotations", []),
+                    "timeline": deepsearch_artifacts.get("timeline", []),
+                    "supervisor_decisions": deepsearch_artifacts.get("supervisor_decisions", []),
+                    "worker_runs": deepsearch_artifacts.get("worker_runs", []),
+                    "intermediate_steps": deepsearch_artifacts.get("intermediate_steps", []),
+                    "continue_requests": deepsearch_artifacts.get("continue_requests", []),
                     "claims": claims_payload,
                     "quality": quality_payload,
+                    "quality_gates": deepsearch_artifacts.get("quality_gates", []),
                     "exported_at": datetime.now().isoformat(),
                 },
                 headers={
@@ -4043,7 +4184,7 @@ def _rag_collection_for_request(request: Request) -> str:
     return f"{base}__u_{suffix}"
 
 
-@app.post("/api/documents/upload")
+@app.post("/api/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(request: Request, file: UploadFile = File(...)):
     """
     Upload a document to the RAG knowledge base.
@@ -4103,7 +4244,7 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/documents/list")
+@app.get("/api/documents/list", response_model=DocumentListResponse)
 async def list_documents(request: Request, limit: int = 100):
     """
     List all documents in the RAG knowledge base.
@@ -4131,7 +4272,7 @@ async def list_documents(request: Request, limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/api/documents/{source:path}")
+@app.delete("/api/documents/{source:path}", response_model=DocumentDeleteResponse)
 async def delete_document(source: str, request: Request):
     """
     Delete a document from the RAG knowledge base by source path.
@@ -4161,7 +4302,7 @@ async def delete_document(source: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/documents/search")
+@app.post("/api/documents/search", response_model=DocumentSearchResponse)
 async def search_documents(request: Request, query: str, n_results: int = 5):
     """
     Search the RAG knowledge base.
@@ -4261,10 +4402,123 @@ class EvidencePassageItem(BaseModel):
     snippet_hash: Optional[str] = None
 
 
+class EvidenceItemResponse(BaseModel):
+    id: str
+    source_type: str
+    provider: Optional[str] = None
+    url: Optional[str] = None
+    document_id: Optional[str] = None
+    title: Optional[str] = None
+    snippet: Optional[str] = None
+    content_ref: Optional[str] = None
+    published_date: Optional[str] = None
+    retrieved_at: Optional[str] = None
+    query: Optional[str] = None
+    quality_score: Optional[float] = None
+    freshness_score: Optional[float] = None
+    citation_id: Optional[str] = None
+    metadata: Dict[str, Any] = {}
+
+
+class CitationAnnotationResponse(BaseModel):
+    id: str
+    citation_id: str
+    marker: str
+    source_index: Optional[int] = None
+    start_char: int
+    end_char: int
+    section: str = ""
+    title: Optional[str] = None
+    url: Optional[str] = None
+    rawUrl: Optional[str] = None
+    domain: Optional[str] = None
+    provider: Optional[str] = None
+    publishedDate: Optional[str] = None
+    evidence_ids: List[str] = []
+    occurrence: int = 0
+
+
+class TimelineEventResponse(BaseModel):
+    id: str
+    order: int
+    event_type: str
+    title: str
+    timestamp: Optional[str] = None
+    query: Optional[str] = None
+    result_count: Optional[int] = None
+    providers: List[str] = []
+    run_index: Optional[int] = None
+    url: Optional[str] = None
+    rawUrl: Optional[str] = None
+    provider: Optional[str] = None
+    publishedDate: Optional[str] = None
+    citation_id: Optional[str] = None
+    source_index: Optional[int] = None
+    evidence_id: Optional[str] = None
+    source_type: Optional[str] = None
+    document_id: Optional[str] = None
+    stage: Optional[str] = None
+    epoch: Optional[int] = None
+    gate_count: Optional[int] = None
+    failed_count: Optional[int] = None
+
+
+class SupervisorDecisionResponse(BaseModel):
+    round_index: int
+    action: str
+    reason: str = ""
+    missing_topics: List[str] = []
+    next_worker_topics: List[str] = []
+    failed_gates: List[str] = []
+    quality_snapshot: Dict[str, Any] = {}
+
+
+class WorkerRunResponse(BaseModel):
+    worker_id: str
+    context_id: str
+    topic: str
+    focus: str = ""
+    queries: List[str] = []
+    round_index: int = 0
+    result_count: int = 0
+    evidence_count: int = 0
+    summary: str = ""
+    provider_breakdown: Dict[str, int] = {}
+    status: str = ""
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    errors: List[str] = []
+
+
+class IntermediateStepResponse(BaseModel):
+    id: str
+    order: int
+    type: str
+    title: Optional[str] = None
+    status: Optional[str] = None
+    worker_id: Optional[str] = None
+    context_id: Optional[str] = None
+    round_index: Optional[int] = None
+    result_count: Optional[int] = None
+    evidence_count: Optional[int] = None
+    timestamp: Optional[str] = None
+    reason: Optional[str] = None
+    missing_topics: List[str] = []
+
+
 class EvidenceResponse(BaseModel):
     sources: List[EvidenceSource] = []
     claims: List[EvidenceClaim] = []
     quality_summary: Dict[str, Any] = {}
+    research_brief: Dict[str, Any] = {}
+    quality_gates: List[Dict[str, Any]] = []
+    evidence_items: List[EvidenceItemResponse] = []
+    citation_annotations: List[CitationAnnotationResponse] = []
+    timeline: List[TimelineEventResponse] = []
+    supervisor_decisions: List[SupervisorDecisionResponse] = []
+    worker_runs: List[WorkerRunResponse] = []
+    intermediate_steps: List[IntermediateStepResponse] = []
+    continue_requests: List[Dict[str, Any]] = []
     fetched_pages: List[FetchedPageItem] = []
     passages: List[EvidencePassageItem] = []
 
@@ -4432,6 +4686,15 @@ async def get_session_evidence(thread_id: str, request: Request):
         sources = artifacts.get("sources", [])
         claims = artifacts.get("claims", [])
         quality_summary = artifacts.get("quality_summary", {})
+        research_brief = artifacts.get("research_brief", {})
+        quality_gates = artifacts.get("quality_gates", [])
+        evidence_items = artifacts.get("evidence_items", [])
+        citation_annotations = artifacts.get("citation_annotations", [])
+        timeline = artifacts.get("timeline", [])
+        supervisor_decisions = artifacts.get("supervisor_decisions", [])
+        worker_runs = artifacts.get("worker_runs", [])
+        intermediate_steps = artifacts.get("intermediate_steps", [])
+        continue_requests = artifacts.get("continue_requests", [])
         fetched_pages = artifacts.get("fetched_pages", [])
         passages = artifacts.get("passages", [])
 
@@ -4440,6 +4703,23 @@ async def get_session_evidence(thread_id: str, request: Request):
             "claims": claims if isinstance(claims, list) else [],
             "quality_summary": (
                 quality_summary if isinstance(quality_summary, dict) else {}
+            ),
+            "research_brief": research_brief if isinstance(research_brief, dict) else {},
+            "quality_gates": quality_gates if isinstance(quality_gates, list) else [],
+            "evidence_items": evidence_items if isinstance(evidence_items, list) else [],
+            "citation_annotations": (
+                citation_annotations if isinstance(citation_annotations, list) else []
+            ),
+            "timeline": timeline if isinstance(timeline, list) else [],
+            "supervisor_decisions": (
+                supervisor_decisions if isinstance(supervisor_decisions, list) else []
+            ),
+            "worker_runs": worker_runs if isinstance(worker_runs, list) else [],
+            "intermediate_steps": (
+                intermediate_steps if isinstance(intermediate_steps, list) else []
+            ),
+            "continue_requests": (
+                continue_requests if isinstance(continue_requests, list) else []
             ),
             "fetched_pages": fetched_pages if isinstance(fetched_pages, list) else [],
             "passages": passages if isinstance(passages, list) else [],
@@ -4457,6 +4737,119 @@ class SessionResumeRequest(BaseModel):
 
     additional_input: Optional[str] = None
     update_state: Optional[Dict[str, Any]] = None
+
+
+class ContinueResearchRequest(BaseModel):
+    target_type: str = Field(..., description="section | claim | source | gap")
+    target_id: Optional[str] = None
+    target_index: Optional[int] = None
+    target_text: Optional[str] = None
+    instruction: Optional[str] = None
+    strategy: str = "supervisor_workers"
+
+
+class ContinueResearchResponse(BaseModel):
+    success: bool
+    thread_id: str
+    status: str
+    continue_request: Dict[str, Any]
+    resume_input: str
+    update_state: Dict[str, Any]
+    stream_payload: Dict[str, Any]
+    resume_state: Dict[str, Any]
+
+
+@app.post(
+    "/api/sessions/{thread_id}/continue-research",
+    response_model=ContinueResearchResponse,
+)
+async def continue_research_session(
+    thread_id: str,
+    request: Request,
+    payload: ContinueResearchRequest,
+):
+    if not checkpointer:
+        raise HTTPException(status_code=400, detail="No checkpointer configured")
+
+    try:
+        from agent.workflows.interactive_continue import build_continue_research_plan
+        from common.session_manager import get_session_manager
+
+        _require_thread_owner(request, thread_id)
+
+        manager = get_session_manager(checkpointer)
+        session_state = manager.get_session_state(thread_id)
+        if not session_state:
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
+
+        artifacts = dict(session_state.deepsearch_artifacts or {})
+        plan = build_continue_research_plan(
+            artifacts=artifacts,
+            target_type=payload.target_type,
+            target_id=payload.target_id or "",
+            target_index=payload.target_index,
+            target_text=payload.target_text or "",
+            instruction=payload.instruction or "",
+            strategy=payload.strategy or "supervisor_workers",
+        )
+        plan_payload = plan.to_dict()
+        continue_requests = artifacts.get("continue_requests", [])
+        if not isinstance(continue_requests, list):
+            continue_requests = []
+        continue_requests.append(plan_payload)
+        artifacts["continue_requests"] = continue_requests
+        update_state = dict(plan.update_state)
+        update_state["deepsearch_artifacts"] = artifacts
+        restored_state = manager.build_resume_state(
+            thread_id=thread_id,
+            additional_input=plan.resume_input,
+            update_state=update_state,
+        )
+        if restored_state is None:
+            raise HTTPException(
+                status_code=404, detail=f"Session not found: {thread_id}"
+            )
+
+        stream_payload = {
+            "messages": [{"role": "user", "content": plan.resume_input}],
+            "stream": True,
+            "search_mode": {
+                "useWebSearch": True,
+                "useAgent": True,
+                "useDeepSearch": True,
+            },
+            "thread_id": thread_id,
+            "deepsearch_strategy": payload.strategy or "supervisor_workers",
+        }
+
+        return {
+            "success": True,
+            "thread_id": thread_id,
+            "status": "ready_to_continue",
+            "continue_request": plan_payload,
+            "resume_input": plan.resume_input,
+            "update_state": update_state,
+            "stream_payload": stream_payload,
+            "resume_state": {
+                "route": restored_state.get("route"),
+                "research_plan_count": len(restored_state.get("research_plan") or []),
+                "has_deepsearch_artifacts": bool(
+                    restored_state.get("deepsearch_artifacts")
+                ),
+                "resumed_from_checkpoint": bool(
+                    restored_state.get("resumed_from_checkpoint")
+                ),
+            },
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Continue research error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/sessions/{thread_id}/resume")
@@ -5064,7 +5457,7 @@ async def resume_from_interrupt(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== ASR 璇煶璇嗗埆 API ====================
+# ==================== ASR Speech Recognition API ====================
 
 
 class ASRRequest(BaseModel):
@@ -5107,7 +5500,7 @@ async def recognize_speech(request: ASRRequest):
                 },
             )
 
-        # 璋冪敤 ASR 鏈嶅姟
+        # Call ASR service
         result = await run_in_threadpool(
             asr_service.recognize_bytes,
             audio_data=audio_bytes,
@@ -5229,14 +5622,14 @@ async def get_asr_status():
     }
 
 
-# ==================== TTS 鏂囧瓧杞闊?API ====================
+# ==================== TTS Text-to-Speech API ====================
 
 
 class TTSRequest(BaseModel):
     """TTS request payload."""
 
     text: str
-    voice: str = "longxiaochun"  # 榛樿濂冲０
+    voice: str = "longxiaochun"
 
 
 @app.post("/api/tts/synthesize")
@@ -5322,7 +5715,12 @@ async def research(request: Request, query: str):
     set_thread_owner(thread_id, principal_id or "anonymous")
 
     return StreamingResponse(
-        stream_agent_events(query, thread_id=thread_id, user_id=user_id),
+        _stream_agent_events_call(
+            query,
+            thread_id=thread_id,
+            user_id=user_id,
+            request=request,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -5396,7 +5794,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
                 return
 
             source = iter_with_sse_keepalive(
-                stream_agent_events(
+                _stream_agent_events_call(
                     query,
                     thread_id=thread_id,
                     model=model,
@@ -5405,6 +5803,9 @@ async def research_sse(request: Request, payload: ResearchRequest):
                     skill_id=payload.skill_id,
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
+                    request=request,
+                    deepsearch_config=payload.deepsearch_config,
+                    research_brief=payload.research_brief,
                 ),
                 interval_s=15.0,
             )
@@ -5986,6 +6387,37 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
         )
         page.set_content(html)
 
+    def _live_placeholder_frame_payload(*, detail: str) -> Dict[str, Any]:
+        safe_detail = (detail or "").strip()[:180]
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#f5f5f4"/>
+    <stop offset="55%" stop-color="#ffffff"/>
+    <stop offset="100%" stop-color="#ecfdf5"/>
+  </linearGradient>
+</defs>
+<rect width="1280" height="720" fill="url(#bg)"/>
+<rect x="260" y="244" width="760" height="232" rx="28" fill="rgba(255,255,255,0.88)" stroke="rgba(0,0,0,0.08)"/>
+<circle cx="332" cy="326" r="20" fill="#10b981"/>
+<text x="380" y="316" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="30" font-weight="700" fill="#1c1917">Weaver live view is starting</text>
+<text x="380" y="362" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#57534e">{safe_detail}</text>
+<rect x="380" y="406" width="520" height="12" rx="6" fill="rgba(16,185,129,0.18)"/>
+<rect x="380" y="406" width="210" height="12" rx="6" fill="#10b981"/>
+</svg>"""
+        return {
+            "type": "frame",
+            "source": "placeholder",
+            "data": base64.b64encode(svg.encode("utf-8")).decode("ascii"),
+            "timestamp": time.time(),
+            "metadata": {
+                "url": "about:blank",
+                "title": "Weaver live view",
+                "mime_type": "image/svg+xml",
+                "placeholder": True,
+            },
+        }
+
     async def capture_frame(*, quality: int = 70) -> Dict[str, Any]:
         """Capture a single JPEG frame from the sandbox browser session."""
         q = max(1, min(100, int(quality or 70)))
@@ -6095,151 +6527,185 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
     async def stream_frames(*, quality: int, max_fps: int):
         nonlocal streaming, init_task
         interval = 1.0 / max(1, int(max_fps or 5))
+        stream_started_at = time.perf_counter()
         next_frame_due = time.perf_counter()
         last_frame_payload: Optional[Dict[str, Any]] = None
         last_screenshot_capture_at: float = 0.0
+        capture_task: Optional[asyncio.Task] = None
         screenshot_refresh_s = 1.0
+        screenshot_bootstrap_delay_s = 1.0
         consecutive_failures = 0
         max_failures = 5
         frame_send_timeout_s = 1.0
-        while streaming:
-            try:
-                now_perf = time.perf_counter()
-                if now_perf < next_frame_due:
-                    await asyncio.sleep(next_frame_due - now_perf)
+        try:
+            while streaming:
+                try:
+                    now_perf = time.perf_counter()
+                    if now_perf < next_frame_due:
+                        await asyncio.sleep(next_frame_due - now_perf)
 
-                # Prefer CDP screencast frames (smooth, low overhead). Fall back to screenshots.
-                cdp_frame = _peek_cdp_frame()
-                if cdp_frame and cdp_frame.get("data"):
-                    now = time.time()
-                    try:
-                        browser_ws_frames_total.labels("cdp").inc()
-                    except Exception:
-                        pass
-                    payload = {
-                        "type": "frame",
-                        "source": "cdp",
-                        "data": cdp_frame["data"],
-                        "timestamp": float(cdp_frame.get("timestamp") or now),
-                        "metadata": cdp_frame.get("metadata") or {},
-                    }
-                    if not await _safe_send_json(
-                        payload, timeout_s=frame_send_timeout_s
-                    ):
-                        streaming = False
-                        break
-                    last_frame_payload = payload
-                else:
-                    now = time.time()
-                    should_capture = (
-                        last_frame_payload is None
-                        or last_frame_payload.get("source") != "screenshot"
-                        or (now - last_screenshot_capture_at) >= screenshot_refresh_s
-                    )
-
-                    if should_capture:
-                        frame = await capture_frame(quality=quality)
+                    # Prefer CDP screencast frames (smooth, low overhead). Fall back to screenshots.
+                    cdp_frame = _peek_cdp_frame()
+                    if cdp_frame and cdp_frame.get("data"):
+                        now = time.time()
+                        try:
+                            browser_ws_frames_total.labels("cdp").inc()
+                        except Exception:
+                            pass
                         payload = {
                             "type": "frame",
-                            "source": "screenshot",
-                            "data": frame["data"],
-                            "timestamp": now,
-                            "metadata": frame.get("metadata") or {},
+                            "source": "cdp",
+                            "data": cdp_frame["data"],
+                            "timestamp": float(cdp_frame.get("timestamp") or now),
+                            "metadata": cdp_frame.get("metadata") or {},
                         }
+                        if not await _safe_send_json(
+                            payload, timeout_s=frame_send_timeout_s
+                        ):
+                            streaming = False
+                            break
                         last_frame_payload = payload
-                        last_screenshot_capture_at = now
                     else:
-                        payload = dict(last_frame_payload)
-                        payload["timestamp"] = now
+                        now = time.time()
+                        should_capture = (
+                            last_frame_payload is None
+                            or last_frame_payload.get("source") != "screenshot"
+                            or (now - last_screenshot_capture_at) >= screenshot_refresh_s
+                        )
 
-                    try:
-                        browser_ws_frames_total.labels("screenshot").inc()
-                    except Exception:
-                        pass
-                    if not await _safe_send_json(
-                        payload, timeout_s=frame_send_timeout_s
-                    ):
+                        if capture_task is not None and capture_task.done():
+                            try:
+                                frame = capture_task.result()
+                            finally:
+                                capture_task = None
+                            payload = {
+                                "type": "frame",
+                                "source": "screenshot",
+                                "data": frame["data"],
+                                "timestamp": now,
+                                "metadata": frame.get("metadata") or {},
+                            }
+                            last_frame_payload = payload
+                            last_screenshot_capture_at = now
+                        can_capture_screenshot = (
+                            time.perf_counter() - stream_started_at
+                        ) >= screenshot_bootstrap_delay_s
+                        if should_capture and capture_task is None and can_capture_screenshot:
+                            capture_task = asyncio.create_task(
+                                capture_frame(quality=quality),
+                                name=f"weaver-browser-capture-{thread_id}",
+                            )
+                            if last_frame_payload is None:
+                                payload = _live_placeholder_frame_payload(
+                                    detail="Starting sandbox browser and waiting for the first real frame…"
+                                )
+                            else:
+                                payload = dict(last_frame_payload)
+                                payload["timestamp"] = now
+                        else:
+                            payload = (
+                                dict(last_frame_payload)
+                                if last_frame_payload is not None
+                                else _live_placeholder_frame_payload(
+                                    detail="Waiting for sandbox browser frame…"
+                                )
+                            )
+                            payload["timestamp"] = now
+
+                        try:
+                            browser_ws_frames_total.labels(
+                                str(payload.get("source") or "screenshot")
+                            ).inc()
+                        except Exception:
+                            pass
+                        if not await _safe_send_json(
+                            payload, timeout_s=frame_send_timeout_s
+                        ):
+                            streaming = False
+                            break
+                        last_frame_payload = payload
+                    if str(payload.get("source") or "") != "placeholder":
+                        consecutive_failures = 0
+                except Exception as e:
+                    consecutive_failures += 1
+                    if isinstance(e, TimeoutError) and last_frame_payload is None:
+                        # Special-case startup timeouts: don't leave the UI stuck in "LIVE" with
+                        # zero frames. Stop immediately with an actionable error.
                         streaming = False
+                        if init_task:
+                            init_task.cancel()
+                            init_task = None
+                        await _stop_cdp_screencast()
+                        await _safe_send_json(
+                            {
+                                "type": "error",
+                                "message": str(e),
+                                "hint": (
+                                    "If this happens repeatedly, verify your sandbox config and dependencies via "
+                                    "GET /api/sandbox/browser/diagnose?deep=1."
+                                ),
+                            },
+                            timeout_s=1.0,
+                        )
+                        await _safe_send_json(
+                            {
+                                "type": "status",
+                                "message": "Screencast stopped",
+                                "reason": "startup_timeout",
+                            },
+                            timeout_s=1.0,
+                        )
                         break
-                    last_frame_payload = payload
-                consecutive_failures = 0
-            except Exception as e:
-                consecutive_failures += 1
-                if isinstance(e, TimeoutError) and last_frame_payload is None:
-                    # Special-case startup timeouts: don't leave the UI stuck in "LIVE" with
-                    # zero frames. Stop immediately with an actionable error.
-                    streaming = False
-                    if init_task:
-                        init_task.cancel()
-                        init_task = None
-                    await _stop_cdp_screencast()
                     await _safe_send_json(
                         {
                             "type": "error",
-                            "message": str(e),
-                            "hint": (
-                                "If this happens repeatedly, verify your sandbox config and dependencies via "
-                                "GET /api/sandbox/browser/diagnose?deep=1."
-                            ),
-                        },
-                        timeout_s=1.0,
-                    )
-                    await _safe_send_json(
-                        {
-                            "type": "status",
-                            "message": "Screencast stopped",
-                            "reason": "startup_timeout",
-                        },
-                        timeout_s=1.0,
-                    )
-                    break
-                await _safe_send_json(
-                    {
-                        "type": "error",
-                        "message": f"Capture failed: {e}",
-                        "consecutive_failures": consecutive_failures,
-                    },
-                    timeout_s=1.0,
-                )
-                if consecutive_failures >= max_failures:
-                    # The stream is unhealthy; stop the screencast so the frontend
-                    # doesn't stay stuck in "LIVE" while frames are no longer flowing.
-                    streaming = False
-                    if init_task:
-                        init_task.cancel()
-                        init_task = None
-                    await _stop_cdp_screencast()
-                    await _safe_send_json(
-                        {
-                            "type": "error",
-                            "message": (
-                                "Browser stream stopped after consecutive capture failures. "
-                                f"Last error: {e}"
-                            ),
-                            "consecutive_failures": consecutive_failures,
-                            "hint": (
-                                "Check GET /api/sandbox/browser/diagnose (and ?deep=1) for "
-                                "missing config/dependencies, then retry."
-                            ),
-                        },
-                        timeout_s=1.0,
-                    )
-                    await _safe_send_json(
-                        {
-                            "type": "status",
-                            "message": "Screencast stopped",
-                            "reason": "capture_failed",
+                            "message": f"Capture failed: {e}",
                             "consecutive_failures": consecutive_failures,
                         },
                         timeout_s=1.0,
                     )
-                    break
-                # Exponential backoff to avoid a tight error loop when the sandbox/browser is unhealthy.
-                backoff_s = min(2.0, 0.25 * (2 ** (consecutive_failures - 1)))
-                await asyncio.sleep(backoff_s)
-                next_frame_due = time.perf_counter() + interval
-                continue
-            next_frame_due = max(next_frame_due + interval, time.perf_counter())
+                    if consecutive_failures >= max_failures:
+                        # The stream is unhealthy; stop the screencast so the frontend
+                        # doesn't stay stuck in "LIVE" while frames are no longer flowing.
+                        streaming = False
+                        if init_task:
+                            init_task.cancel()
+                            init_task = None
+                        await _stop_cdp_screencast()
+                        await _safe_send_json(
+                            {
+                                "type": "error",
+                                "message": (
+                                    "Browser stream stopped after consecutive capture failures. "
+                                    f"Last error: {e}"
+                                ),
+                                "consecutive_failures": consecutive_failures,
+                                "hint": (
+                                    "Check GET /api/sandbox/browser/diagnose (and ?deep=1) for "
+                                    "missing config/dependencies, then retry."
+                                ),
+                            },
+                            timeout_s=1.0,
+                        )
+                        await _safe_send_json(
+                            {
+                                "type": "status",
+                                "message": "Screencast stopped",
+                                "reason": "capture_failed",
+                                "consecutive_failures": consecutive_failures,
+                            },
+                            timeout_s=1.0,
+                        )
+                        break
+                    # Exponential backoff to avoid a tight error loop when the sandbox/browser is unhealthy.
+                    backoff_s = min(2.0, 0.25 * (2 ** (consecutive_failures - 1)))
+                    await asyncio.sleep(backoff_s)
+                    next_frame_due = time.perf_counter() + interval
+                    continue
+                next_frame_due = max(next_frame_due + interval, time.perf_counter())
+        finally:
+            if capture_task is not None and not capture_task.done():
+                capture_task.cancel()
 
     try:
         await _safe_send_json(
@@ -6386,8 +6852,21 @@ async def browser_stream_websocket(websocket: WebSocket, thread_id: str):
 
                     # Do not block start on sandbox initialization; run best-effort init in
                     # the background. If CDP fails, the stream will fall back to screenshots.
+                    cdp_already_available = False
+                    try:
+                        first_cdp_frame = _peek_cdp_frame()
+                        cdp_already_available = bool(
+                            first_cdp_frame and first_cdp_frame.get("data")
+                        )
+                    except Exception:
+                        cdp_already_available = False
+
                     async def _init_screencast(q: int = quality_int) -> None:
                         try:
+                            if not cdp_already_available:
+                                await asyncio.sleep(0.25)
+                                if not streaming:
+                                    return
                             try:
                                 await asyncio.wait_for(
                                     sandbox_browser_sessions.run_async(

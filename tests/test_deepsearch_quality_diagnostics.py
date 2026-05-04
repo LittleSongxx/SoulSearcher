@@ -70,6 +70,11 @@ def test_quality_summary_exposes_query_and_freshness_diagnostics(monkeypatch):
     assert "freshness_summary" in quality
     assert quality["freshness_summary"]["total_results"] == 3
     assert quality["freshness_warning"] == ""
+    assert result["deepsearch_artifacts"]["research_brief"]["original_query"] == "enterprise knowledge management"
+    assert result["deepsearch_artifacts"]["evidence_items"]
+    assert result["deepsearch_artifacts"]["quality_gates"]
+    assert result["deepsearch_artifacts"]["citation_annotations"]
+    assert result["deepsearch_artifacts"]["timeline"]
     assert result["deepsearch_artifacts"]["query_coverage"]["score"] == quality["query_coverage_score"]
 
 
@@ -204,6 +209,11 @@ def test_deepsearch_emits_search_and_quality_update_events(monkeypatch):
     assert result["quality_summary"]["time_sensitive_query"] is True
     assert "search" in event_types
     assert "quality_update" in event_types
+    assert "brief_created" in event_types
+    assert "strategy_selected" in event_types
+    assert "quality_gate_evaluated" in event_types
+    assert "evidence_selected" in event_types
+    assert "report_written" in event_types
     assert search_events
     assert search_events[0]["count"] == len(search_results)
     assert search_events[0]["provider"] == "serper"
@@ -276,6 +286,243 @@ def test_deepsearch_emits_quality_update_even_when_epoch_has_no_results(monkeypa
     assert quality_events[0]["epoch"] == 1
 
 
+def test_deepsearch_rag_only_results_are_summarized_as_evidence(monkeypatch):
+    rag_result = {
+        "content": "Local document evidence about private strategy.",
+        "score": 0.81,
+        "source": "private.md",
+        "filename": "private.md",
+        "chunk_index": 0,
+    }
+
+    _patch_basics(monkeypatch, [])
+    monkeypatch.setattr(
+        deepsearch_optimized,
+        "_summarize_new_knowledge",
+        lambda *args, **kwargs: (True, "summary from rag"),
+    )
+
+    class FakeRAG:
+        def search(self, query, n_results=5):
+            return [rag_result]
+
+    monkeypatch.setattr("tools.rag.rag_tool.get_rag_tool", lambda collection_name=None: FakeRAG())
+
+    result = deepsearch_optimized.run_deepsearch_optimized(
+        {"input": "private strategy", "source_policy": "local"},
+        config={},
+    )
+
+    artifacts = result["deepsearch_artifacts"]
+    rag_items = [item for item in artifacts["evidence_items"] if item.get("source_type") == "rag"]
+
+    assert result["final_report"] == "final report"
+    assert rag_items
+    assert rag_items[0]["title"] == "private.md"
+    assert artifacts["sources"] == []
+
+
+def test_deepsearch_reflection_loop_returns_strategy_artifacts(monkeypatch):
+    search_results = [
+        {
+            "title": "Reflection source",
+            "url": "https://example.com/reflection",
+            "summary": "reflection evidence",
+            "score": 0.9,
+        }
+    ]
+
+    _patch_basics(monkeypatch, search_results)
+
+    result = deepsearch_optimized.run_deepsearch_reflection_loop(
+        {"input": "reflection topic"},
+        config={"configurable": {"deepsearch_reflection_loops": 1}},
+    )
+
+    artifacts = result["deepsearch_artifacts"]
+
+    assert result["deepsearch_mode"] == "reflection_loop"
+    assert artifacts["mode"] == "reflection_loop"
+    assert artifacts["strategy_decision"]["strategy"] == "reflection_loop"
+    assert artifacts["evidence_items"]
+    assert artifacts["citation_annotations"]
+    assert artifacts["timeline"]
+    assert "final report" in result["final_report"]
+    assert "Reflection source" in result["final_report"]
+    assert "https://example.com/reflection" in result["final_report"]
+
+
+def test_deepsearch_supervisor_workers_returns_p2_artifacts(monkeypatch):
+    search_results = [
+        {
+            "title": "Supervisor source",
+            "url": "https://example.com/supervisor",
+            "summary": "Supervisor worker evidence.",
+            "score": 0.9,
+        }
+    ]
+
+    _patch_basics(monkeypatch, search_results)
+    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_report_sources_limit", 5, raising=False)
+    emitted = []
+
+    class DummyEmitter:
+        def emit_sync(self, event_type, data):
+            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            emitted.append((event_name, data))
+
+    monkeypatch.setattr(
+        deepsearch_optimized, "_resolve_event_emitter", lambda state, config: DummyEmitter()
+    )
+
+    result = deepsearch_optimized.run_deepsearch_auto(
+        {
+            "input": "compare agent frameworks",
+            "research_brief": {
+                "original_query": "compare agent frameworks",
+                "clarified_goal": "compare agent frameworks",
+                "expected_fields": ["architecture"],
+            },
+        },
+        config={
+            "configurable": {
+                "deepsearch_strategy": "supervisor_workers",
+                "deepsearch_supervisor_rounds": 1,
+                "deepsearch_supervisor_max_workers": 2,
+                "deepsearch_supervisor_queries_per_worker": 1,
+                "deepsearch_supervisor_parallel_workers": 2,
+                "deepsearch_sectioned_report": True,
+                "deepsearch_sectioned_report_requires_approval": True,
+                "worker_model": "worker-model",
+                "search_summary_model": "summary-model",
+                "writer_model": "writer-model",
+                "verifier_model": "verifier-model",
+            }
+        },
+    )
+
+    artifacts = result["deepsearch_artifacts"]
+    task_create_events = [data for name, data in emitted if name == "task_create"]
+    thinking_events = [data for name, data in emitted if name == "thinking"]
+    research_start_events = [data for name, data in emitted if name == "research_node_start"]
+    research_complete_events = [data for name, data in emitted if name == "research_node_complete"]
+
+    assert result["deepsearch_mode"] == "supervisor_workers"
+    assert artifacts["mode"] == "supervisor_workers"
+    assert artifacts["strategy_decision"]["strategy"] == "supervisor_workers"
+    assert artifacts["worker_runs"]
+    assert artifacts["research_task_runtime"]["subtask_count"] == len(artifacts["worker_runs"])
+    assert artifacts["research_task_runtime"]["status_counts"]["completed"] == len(artifacts["worker_runs"])
+    assert artifacts["quality_summary"]["subtask_count"] == len(artifacts["worker_runs"])
+    assert artifacts["decision_log"]
+    assert artifacts["quality_summary"]["decision_log_count"] == len(artifacts["decision_log"])
+    assert artifacts["research_pipeline"]["stage_count"] == 6
+    assert artifacts["context_policy"]["stage_count"] == 5
+    assert artifacts["quality_summary"]["context_policy_stage_count"] == 5
+    assert artifacts["model_profile"]["stage_count"] == 7
+    assert artifacts["model_profile"]["models"]["worker_model"] == "worker-model"
+    assert artifacts["quality_summary"]["model_profile_stage_count"] == 7
+    assert artifacts["provider_capabilities"]["provider_count"] >= 1
+    assert artifacts["quality_summary"]["evidence_provider_count"] == artifacts["provider_capabilities"]["provider_count"]
+    assert artifacts["report_plan"]["status"] == "planned"
+    assert artifacts["report_plan"]["section_count"] >= 4
+    assert artifacts["sectioned_report"]["enabled"] is True
+    assert artifacts["sectioned_report"]["review_required"] is True
+    assert artifacts["sectioned_report"]["section_count"] == artifacts["report_plan"]["section_count"]
+    assert artifacts["quality_summary"]["sectioned_report_enabled"] is True
+    assert [stage["name"] for stage in artifacts["research_pipeline"]["stages"]] == [
+        "research_brief",
+        "supervisor",
+        "researcher",
+        "compression",
+        "writer",
+        "verifier",
+    ]
+    assert artifacts["supervisor_decisions"]
+    assert artifacts["intermediate_steps"]
+    assert artifacts["supervisor_policy"]["parallel_workers"] == 2
+    assert artifacts["quality_summary"]["worker_dispatch"] == "parallel"
+    assert artifacts["evidence_items"]
+    assert artifacts["citation_annotations"]
+    assert artifacts["timeline"]
+    assert task_create_events
+    assert any(event.get("type") == "worker_reflection" for event in thinking_events)
+    assert any(event.get("type") == "supervisor_decision" for event in thinking_events)
+    assert task_create_events[0]["worker_count"] == len(artifacts["worker_runs"])
+    assert research_start_events[0]["subtask"]["status"] == "running"
+    assert research_complete_events[0]["subtask"]["status"] == "completed"
+
+
+def test_deepsearch_supervisor_workers_builds_passages_and_claim_ledger(monkeypatch):
+    search_results = [
+        {
+            "title": "Supervisor source",
+            "url": "https://example.com/supervisor",
+            "summary": "The benchmark improved 20% in 2025 according to the official report.",
+            "score": 0.9,
+        }
+    ]
+
+    _patch_basics(monkeypatch, search_results)
+    monkeypatch.setattr(
+        deepsearch_optimized,
+        "_summarize_new_knowledge",
+        lambda *args, **kwargs: (
+            True,
+            "The benchmark improved 20% in 2025 according to the official report.",
+        ),
+    )
+    monkeypatch.setattr(
+        deepsearch_optimized,
+        "_final_report",
+        lambda *args, **kwargs: "The benchmark improved 20% in 2025 according to the official report [1].",
+    )
+    monkeypatch.setattr(
+        deepsearch_optimized,
+        "_build_fetcher_evidence",
+        lambda *args, **kwargs: (
+            [{"url": "https://example.com/supervisor", "title": "Supervisor source"}],
+            [
+                {
+                    "url": "https://example.com/supervisor",
+                    "page_title": "Supervisor source",
+                    "text": "The benchmark improved 20% in 2025 according to the official report.",
+                    "quote": "The benchmark improved 20% in 2025 according to the official report.",
+                    "snippet_hash": "hash1",
+                }
+            ],
+        ),
+    )
+
+    result = deepsearch_optimized.run_deepsearch_auto(
+        {"input": "compare agent frameworks"},
+        config={
+            "configurable": {
+                "deepsearch_strategy": "supervisor_workers",
+                "deepsearch_supervisor_rounds": 1,
+                "deepsearch_supervisor_max_workers": 1,
+                "deepsearch_supervisor_queries_per_worker": 1,
+                "deepsearch_supervisor_fetch_passages": True,
+                "deepsearch_enable_research_fetcher": True,
+                "deepsearch_enable_claim_ledger": True,
+                "deepsearch_final_verifier_revise": False,
+                "deepsearch_reflection_gap_queries": True,
+            }
+        },
+    )
+
+    artifacts = result["deepsearch_artifacts"]
+    quality = result["quality_summary"]
+
+    assert artifacts["passages"]
+    assert artifacts["fetched_pages"]
+    assert artifacts["claim_ledger"]
+    assert artifacts["claim_ledger"][0]["status"] == "verified"
+    assert quality["passage_count"] == 1
+    assert quality["claim_ledger_count"] >= 1
+    assert quality["citation_coverage"] == 1.0
+
+
 def test_deepsearch_tree_emits_search_quality_and_tree_events(monkeypatch):
     _patch_basics(monkeypatch, [])
     monkeypatch.setattr(deepsearch_optimized.settings, "tree_parallel_branches", 0, raising=False)
@@ -343,6 +590,12 @@ def test_deepsearch_tree_emits_search_quality_and_tree_events(monkeypatch):
     assert "search" in event_types
     assert "quality_update" in event_types
     assert "research_tree_update" in event_types
+    assert "brief_created" in event_types
+    assert "strategy_selected" in event_types
+    assert "evidence_selected" in event_types
+    assert result["deepsearch_artifacts"]["research_brief"]["original_query"] == "latest ai policy updates"
+    assert result["deepsearch_artifacts"]["evidence_items"]
+    assert result["deepsearch_artifacts"]["quality_gates"]
 
 
 def test_deepsearch_tree_emits_search_during_tree_execution(monkeypatch):

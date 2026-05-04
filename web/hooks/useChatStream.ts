@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Message, Artifact, ToolInvocation, ImageAttachment, ProcessEvent, RunMetrics, MessageSource } from '@/types/chat'
 import { getApiBaseUrl } from '@/lib/api'
-import { createLegacyChatStreamState, consumeLegacyChatStreamChunk } from '@/lib/chatStreamProtocol'
+import { createChatStreamState, consumeChatStreamChunk, getChatStreamPath, getChatStreamProtocol } from '@/lib/chatStreamProtocol'
 
 interface UseChatStreamProps {
   selectedModel: string
@@ -45,14 +45,16 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
   const processChat = useCallback(async (messageHistory: Message[], images?: ImageAttachment[]) => {
     setIsLoading(true)
     abortControllerRef.current = new AbortController()
+    const streamProtocol = getChatStreamProtocol()
 
     try {
       const response = await fetch(
-        `${getApiBaseUrl()}/api/chat`,
+        `${getApiBaseUrl()}${getChatStreamPath(streamProtocol)}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
           },
           body: JSON.stringify({
             messages: messageHistory.map(m => ({ role: m.role, content: m.content })),
@@ -163,12 +165,12 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
         )
       }
 
-      const streamState = createLegacyChatStreamState()
+      const streamState = createChatStreamState(streamProtocol)
       let interrupted = false
       while (true) {
         const { done, value } = await reader.read()
         const chunk = done ? decoder.decode() : decoder.decode(value, { stream: true })
-        const events = consumeLegacyChatStreamChunk(streamState, chunk, { flush: done })
+        const events = consumeChatStreamChunk(streamProtocol, streamState, chunk, { flush: done })
 
         for (const data of events) {
           if (data.type === 'status') {
@@ -303,6 +305,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
               'tool_result',
               'tool_error',
               'screenshot',
+              'task_create',
               'task_update',
             ].includes(data.type)
           ) {
