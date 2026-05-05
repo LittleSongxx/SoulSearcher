@@ -185,6 +185,8 @@ def test_run_config_defaults_to_heavy_supervisor():
     assert config.deepsearch_config["deepsearch_passage_cap"] == 40
     assert config.deepsearch_config["deepsearch_sectioned_report_adaptive"] is True
     assert config.deepsearch_config["deepsearch_source_curator_enabled"] is True
+    assert config.deepsearch_config["deepsearch_fact_card_cap"] == 80
+    assert config.deepsearch_config["deepsearch_prewrite_gap_followup_enabled"] is True
     assert config.deepsearch_config == DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG
 
 
@@ -239,6 +241,9 @@ def test_research_deepsearch_config_whitelist():
             "deepsearch_claim_grounding_gate_enabled": True,
             "deepsearch_citation_repair_enabled": True,
             "deepsearch_evidence_item_cap": 120,
+            "deepsearch_fact_card_cap": 60,
+            "deepsearch_prewrite_gap_followup_queries": 1,
+            "deepsearch_stage_warn_after_s": 30.0,
             "deepsearch_section_evidence_cap": 6,
             "writer_model": "deepseek-v4-pro",
             "search_summary_model": "deepseek-v4-flash",
@@ -258,6 +263,9 @@ def test_research_deepsearch_config_whitelist():
         "deepsearch_claim_grounding_gate_enabled": True,
         "deepsearch_citation_repair_enabled": True,
         "deepsearch_evidence_item_cap": 120,
+        "deepsearch_fact_card_cap": 60,
+        "deepsearch_prewrite_gap_followup_queries": 1,
+        "deepsearch_stage_warn_after_s": 30.0,
         "deepsearch_section_evidence_cap": 6,
         "writer_model": "deepseek-v4-pro",
         "search_summary_model": "deepseek-v4-flash",

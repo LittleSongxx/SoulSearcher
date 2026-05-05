@@ -59,6 +59,7 @@ _LOW_QUALITY_HINTS = (
     "x.com",
     "linkedin.com/posts",
 )
+_QUANTITATIVE_RE = re.compile(r"\d{4}|\d+%|\d+\.\d+|\b(?:data|statistics|benchmark|survey|report)\b|数据|统计|基准|报告", re.IGNORECASE)
 
 
 def _text(value: Any) -> str:
@@ -140,6 +141,9 @@ def score_source(source: Dict[str, Any], *, brief: Optional[ResearchBrief] = Non
     if any(hint in domain or hint in url.lower() for hint in _LOW_QUALITY_HINTS):
         score -= 0.2
         reasons.append("low_quality_hint")
+    if _QUANTITATIVE_RE.search(source_text):
+        score += 0.1
+        reasons.append("quantitative_signal")
 
     if brief is not None:
         goal_tokens = _tokens(" ".join([brief.clarified_goal, brief.original_query, " ".join(brief.expected_fields)]))
