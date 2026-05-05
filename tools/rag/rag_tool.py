@@ -7,7 +7,8 @@ Provides a LangChain-compatible tool for searching local documents.
 import logging
 from typing import Any, Dict, List, Optional
 
-from langchain_core.tools import tool
+from langchain_core.tools import BaseTool, tool
+from pydantic import BaseModel, Field
 
 from tools.rag.document_loader import DocumentLoader
 from tools.rag.embedder import Embedder
@@ -214,22 +215,34 @@ def get_rag_tool(*, collection_name: Optional[str] = None) -> Optional[RAGTool]:
         return None
 
 
-@tool
-def rag_search(query: str, n_results: int = 5) -> str:
-    """
-    Search local documents for information relevant to the query.
+class RAGSearchInput(BaseModel):
+    query: str = Field(min_length=1)
+    n_results: int = Field(default=5, ge=1, le=20)
 
-    Use this tool when you need to find information from uploaded documents,
-    PDFs, or other local files that have been added to the knowledge base.
 
-    Args:
-        query: The search query describing what information you need
-        n_results: Number of results to return (default 5)
+class RAGSearchTool(BaseTool):
+    name: str = "rag_search"
+    description: str = (
+        "Search local uploaded RAG documents for information relevant to the query."
+    )
+    args_schema: type[BaseModel] = RAGSearchInput
+    collection_name: Optional[str] = None
 
-    Returns:
-        Relevant excerpts from local documents with source information
-    """
-    rag = get_rag_tool()
+    def _run(self, query: str, n_results: int = 5) -> str:
+        from common.config import settings
+
+        if (getattr(settings, "internal_api_key", "") or "").strip() and not self.collection_name:
+            return "RAG search requires a scoped collection in internal-auth mode."
+
+        return _run_rag_search(
+            query=query, n_results=n_results, collection_name=self.collection_name
+        )
+
+
+def _run_rag_search(
+    query: str, n_results: int = 5, *, collection_name: Optional[str] = None
+) -> str:
+    rag = get_rag_tool(collection_name=collection_name)
     if rag is None:
         return "RAG search is not enabled. Please enable it in settings."
 
@@ -246,3 +259,30 @@ def rag_search(query: str, n_results: int = 5) -> str:
         )
 
     return "\n\n---\n\n".join(output_parts)
+
+
+def build_rag_search_tool(collection_name: Optional[str] = None) -> BaseTool:
+    return RAGSearchTool(collection_name=collection_name)
+
+
+@tool
+def rag_search(query: str, n_results: int = 5) -> str:
+    """
+    Search local documents for information relevant to the query.
+
+    Use this tool when you need to find information from uploaded documents,
+    PDFs, or other local files that have been added to the knowledge base.
+
+    Args:
+        query: The search query describing what information you need
+        n_results: Number of results to return (default 5)
+
+    Returns:
+        Relevant excerpts from local documents with source information
+    """
+    from common.config import settings
+
+    if (getattr(settings, "internal_api_key", "") or "").strip():
+        return "RAG search requires a scoped collection in internal-auth mode."
+
+    return _run_rag_search(query=query, n_results=n_results)

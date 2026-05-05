@@ -22,6 +22,14 @@ import { MetricsDashboard } from './MetricsDashboard'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { BrowserViewer } from './BrowserViewer'
 import { useI18n } from '@/lib/i18n/i18n-context'
+import { getApiBaseUrl } from '@/lib/api'
+
+interface ContinueResearchTarget {
+  target_type: 'claim' | 'source' | 'gap' | 'section'
+  target_index?: number
+  target_text?: string
+  instruction?: string
+}
 
 export function Chat() {
   const { t } = useI18n()
@@ -215,6 +223,30 @@ export function Chat() {
     setSearchMode(mode)
   }
 
+  const handleContinueResearch = async (target: ContinueResearchTarget) => {
+    if (!threadId) return
+    setCurrentStatus('正在准备继续研究...')
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/sessions/${threadId}/continue-research`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(target)
+      })
+      if (!response.ok) {
+        throw new Error(`Continue research failed: ${response.status}`)
+      }
+      const data = await response.json()
+      setInput(String(data?.resume_input || target.target_text || '').trim())
+      setSearchMode('ultra')
+      setCurrentStatus('继续研究提示已生成，发送即可继续')
+      setTimeout(() => setCurrentStatus(''), 3000)
+    } catch (error) {
+      console.error('Continue research failed', error)
+      setCurrentStatus('继续研究准备失败')
+      setTimeout(() => setCurrentStatus(''), 3000)
+    }
+  }
+
   const handleAtBottomChange = (atBottom: boolean) => {
     // Prevent state churn loops from repeated identical callbacks
     if (lastAtBottom.current === atBottom) return
@@ -309,7 +341,7 @@ export function Chat() {
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           onToggleArtifacts={() => setShowMobileArtifacts(!showMobileArtifacts)}
-          hasArtifacts={artifacts.length > 0}
+          hasArtifacts={artifacts.length > 0 || !!threadId}
         />
 
         {/* Dynamic Content Area */}
@@ -372,15 +404,17 @@ export function Chat() {
       </div>
 
       {/* Desktop Artifacts Panel */}
-      {artifacts.length > 0 && (
+      {(artifacts.length > 0 || threadId) && (
         <div className={cn(
           "border-l hidden xl:flex flex-col bg-card animate-in slide-in-from-right duration-500 shadow-2xl z-20 transition-all",
           isArtifactsOpen ? "w-[400px]" : "w-[50px]"
         )}>
           <ArtifactsPanel
             artifacts={artifacts}
+            threadId={threadId}
             isOpen={isArtifactsOpen}
             onToggle={() => setIsArtifactsOpen(!isArtifactsOpen)}
+            onContinueResearch={handleContinueResearch}
           />
         </div>
       )}
@@ -425,7 +459,11 @@ export function Chat() {
             </Button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <ArtifactsPanel artifacts={artifacts} />
+            <ArtifactsPanel
+              artifacts={artifacts}
+              threadId={threadId}
+              onContinueResearch={handleContinueResearch}
+            />
           </div>
         </div>
       )}

@@ -72,6 +72,13 @@ class ToolEventType(str, Enum):
     RESEARCH_TREE_UPDATE = "research_tree_update"  # Research tree structure updated
     SEARCH = "search"  # Search query executed with results
     QUALITY_UPDATE = "quality_update"  # Research quality/coverage metrics updated
+    BRIEF_CREATED = "brief_created"  # Structured research brief created
+    STRATEGY_SELECTED = "strategy_selected"  # Deep research strategy selected
+    EVIDENCE_SELECTED = "evidence_selected"  # Evidence selected/normalized
+    QUALITY_GATE_EVALUATED = "quality_gate_evaluated"  # Quality gate evaluated
+    GAP_DETECTED = "gap_detected"  # Knowledge or coverage gap detected
+    REPORT_WRITTEN = "report_written"  # Final report written
+    EXPORT_READY = "export_ready"  # Export artifact ready
 
     # System events
     ERROR = "error"  # General error

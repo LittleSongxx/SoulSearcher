@@ -178,7 +178,12 @@ def test_run_config_defaults_to_heavy_supervisor():
     assert config.deepsearch_config["deepsearch_max_seconds"] == 840
     assert config.deepsearch_config["deepsearch_supervisor_fetch_passages"] is True
     assert config.deepsearch_config["deepsearch_enable_claim_ledger"] is True
+    assert config.deepsearch_config["deepsearch_claim_grounding_gate_enabled"] is True
     assert config.deepsearch_config["deepsearch_final_verifier_revise"] is True
+    assert config.deepsearch_config["deepsearch_citation_repair_enabled"] is True
+    assert config.deepsearch_config["deepsearch_evidence_item_cap"] == 160
+    assert config.deepsearch_config["deepsearch_passage_cap"] == 40
+    assert config.deepsearch_config["deepsearch_sectioned_report_adaptive"] is True
     assert config.deepsearch_config["deepsearch_source_curator_enabled"] is True
     assert config.deepsearch_config == DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG
 
@@ -231,6 +236,14 @@ def test_research_deepsearch_config_whitelist():
             "deepsearch_supervisor_rounds": 3,
             "deepsearch_enable_claim_ledger": True,
             "deepsearch_supervisor_fetch_passages": True,
+            "deepsearch_claim_grounding_gate_enabled": True,
+            "deepsearch_citation_repair_enabled": True,
+            "deepsearch_evidence_item_cap": 120,
+            "deepsearch_section_evidence_cap": 6,
+            "writer_model": "deepseek-v4-pro",
+            "search_summary_model": "deepseek-v4-flash",
+            "verifier_model": "deepseek-v4-flash",
+            "deepsearch_sectioned_report_review": {"action": "approve"},
             "source_providers": ["web", "mcp"],
             "unknown_key": "drop",
             "agent_profile": {"unsafe": True},
@@ -242,6 +255,14 @@ def test_research_deepsearch_config_whitelist():
         "deepsearch_supervisor_rounds": 3,
         "deepsearch_enable_claim_ledger": True,
         "deepsearch_supervisor_fetch_passages": True,
+        "deepsearch_claim_grounding_gate_enabled": True,
+        "deepsearch_citation_repair_enabled": True,
+        "deepsearch_evidence_item_cap": 120,
+        "deepsearch_section_evidence_cap": 6,
+        "writer_model": "deepseek-v4-pro",
+        "search_summary_model": "deepseek-v4-flash",
+        "verifier_model": "deepseek-v4-flash",
+        "deepsearch_sectioned_report_review": {"action": "approve"},
         "source_providers": ["web", "mcp"],
     }
 

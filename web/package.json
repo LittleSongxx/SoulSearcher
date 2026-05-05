@@ -1,5 +1,5 @@
 {
-  "name": "manus-frontend",
+  "name": "weaver-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "api:types": "bash ../scripts/check_openapi_ts_types.sh",
+    "e2e": "node -e \"console.log('No frontend e2e suite configured; skipping')\"",
+    "e2e:headed": "node -e \"console.log('No headed frontend e2e suite configured; skipping')\""
   },
   "dependencies": {
     "@ai-sdk/react": "^0.0.62",

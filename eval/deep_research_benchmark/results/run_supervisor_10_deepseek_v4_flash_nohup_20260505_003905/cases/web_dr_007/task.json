@@ -1,0 +1,28 @@
+{
+  "id": "web_dr_007",
+  "query": "研究 AI 数据中心扩张对电力需求、可再生能源采购和地方电网规划的影响，并比较中美欧主要政策与企业披露差异。",
+  "domain": "energy_climate",
+  "task_type": "policy_and_market_analysis",
+  "difficulty": "hard",
+  "expected_dimensions": [
+    "电力需求",
+    "数据中心约束",
+    "可再生能源采购",
+    "地区政策差异",
+    "企业披露",
+    "企业买方指标"
+  ],
+  "freshness_requirement": "recent",
+  "must_cite": true,
+  "judge_rubric": {
+    "requires_current_data": true,
+    "requires_policy_comparison": true,
+    "requires_metric_recommendations": true
+  },
+  "source_constraints": {
+    "prefer_sustainability_reports_policy_sources_and_independent_analysis": true
+  },
+  "metadata": {
+    "language": "zh"
+  }
+}

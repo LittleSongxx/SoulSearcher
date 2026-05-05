@@ -1,0 +1,907 @@
+[
+  {
+    "case_id": "web_dr_001",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 8.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 8.0,
+        "depth": 9.0,
+        "structure": 9.0,
+        "evidence_quality": 8.0,
+        "freshness": 9.0,
+        "overall": 8.0
+      },
+      "missing_dimensions": [],
+      "rationale": "报告全面覆盖了企业级代理编码助手的架构、安全控制、评估方法和部署权衡，进行了多个供应商的比较和详细的贸易分析。limitations维度虽然没有单独章节，但在各小节和引言中多次提及数据来源局限性和某些工具的公开信息不足，基本满足要求。所有关键主张均附有引用，来源包括学术论文、NIST文件和供应商博客，整体证据质量良好。结构清晰，分析有深度，满足任务核心要求。"
+    },
+    "raw_response": "{\n  \"coverage\": 8,\n  \"depth\": 9,\n  \"structure\": 9,\n  \"evidence_quality\": 8,\n  \"freshness\": 9,\n  \"overall\": 8,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"报告全面覆盖了企业级代理编码助手的架构、安全控制、评估方法和部署权衡，进行了多个供应商的比较和详细的贸易分析。limitations维度虽然没有单独章节，但在各小节和引言中多次提及数据来源局限性和某些工具的公开信息不足，基本满足要求。所有关键主张均附有引用，来源包括学术论文、NIST文件和供应商博客，整体证据质量良好。结构清晰，分析有深度，满足任务核心要求。\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:05:47.813193+00:00"
+  },
+  {
+    "case_id": "web_dr_001",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:07:48.160618+00:00"
+  },
+  {
+    "case_id": "web_dr_001",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 1.0,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 0,
+      "unsupported_claims": 5,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "GitHub Copilot 在 Agentic.ai 的报告中的自主能力评分为 16/32",
+          "status": "unsupported",
+          "reason": "报告中引用 [9]，但提供的 6 个来源中均不包含该引用编号的内容，且现有来源标题与 evidence 片段未涉及此评分，无法找到任何支撑。",
+          "source_urls": []
+        },
+        {
+          "claim": "Cursor 在 Agentic.ai 报告中的自主能力评分为 13/32",
+          "status": "unsupported",
+          "reason": "同样引用 [9]，提供的来源均未出现该评分，无法从现有材料中得到证实。",
+          "source_urls": []
+        },
+        {
+          "claim": "Amazon Q Developer 在 SWE-bench Verified 基准测试中获得 49% 的通过率",
+          "status": "unsupported",
+          "reason": "引用 [4][15]，其中 [15] 不在提供的来源之中；虽然 [4] 可能是 augmentcode.com 的文章，但该来源的实际内容未提供，无法确认其包含这一具体数据。",
+          "source_urls": []
+        },
+        {
+          "claim": "Augment Code 配备 200k-token 上下文引擎",
+          "status": "unsupported",
+          "reason": "引用 [4][15]，[15] 缺失；尽管 augmentcode.com 的文章可能提及自身产品规格，但我们无法确认该来源确实包含此数据，缺乏可验证的证据。",
+          "source_urls": []
+        },
+        {
+          "claim": "架构优先方法论的核心逻辑是‘代码生成速度快于验证速度’",
+          "status": "unsupported",
+          "reason": "引用 [4][6]，其中 source 6 （blog.kilo.ai） 的标题涉及架构与评估，但未提供内容片段，无法判定该来源是否包含这一确切陈述。",
+          "source_urls": []
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 0,\n  \"unsupported_claims\": 5,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 1.0,\n  \"claims\": [\n    {\n      \"claim\": \"GitHub Copilot 在 Agentic.ai 的报告中的自主能力评分为 16/32\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告中引用 [9]，但提供的 6 个来源中均不包含该引用编号的内容，且现有来源标题与 evidence 片段未涉及此评分，无法找到任何支撑。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"Cursor 在 Agentic.ai 报告中的自主能力评分为 13/32\",\n      \"status\": \"unsupported\",\n      \"reason\": \"同样引用 [9]，提供的来源均未出现该评分，无法从现有材料中得到证实。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"Amazon Q Developer 在 SWE-bench Verified 基准测试中获得 49% 的通过率\",\n      \"status\": \"unsupported\",\n      \"reason\": \"引用 [4][15]，其中 [15] 不在提供的来源之中；虽然 [4] 可能是 augmentcode.com 的文章，但该来源的实际内容未提供，无法确认其包含这一具体数据。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"Augment Code 配备 200k-token 上下文引擎\",\n      \"status\": \"unsupported\",\n      \"reason\": \"引用 [4][15]，[15] 缺失；尽管 augmentcode.com 的文章可能提及自身产品规格，但我们无法确认该来源确实包含此数据，缺乏可验证的证据。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"架构优先方法论的核心逻辑是‘代码生成速度快于验证速度’\",\n      \"status\": \"unsupported\",\n      \"reason\": \"引用 [4][6]，其中 source 6 （blog.kilo.ai） 的标题涉及架构与评估，但未提供内容片段，无法判定该来源是否包含这一确切陈述。\",\n      \"source_urls\": []\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:09:43.142571+00:00"
+  },
+  {
+    "case_id": "web_dr_002",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 9.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 9.0,
+        "depth": 9.0,
+        "structure": 9.0,
+        "evidence_quality": 8.0,
+        "freshness": 9.0,
+        "overall": 9.0
+      },
+      "missing_dimensions": [],
+      "rationale": "Covers all required dimensions (high-risk definition, vendor obligations, timeline, penalties, SaaS impact, compliance actions) with thorough analysis. Provides non-trivial synthesis, trade-offs, and strategic insights. Structure is clear with headings and tables. Cites provided sources for key claims, acknowledges information gaps. Handles recent timeline adjustments precisely. Overall, the report is professionally trustworthy for decision-making."
+    },
+    "raw_response": "{\n  \"coverage\": 9,\n  \"depth\": 9,\n  \"structure\": 9,\n  \"evidence_quality\": 8,\n  \"freshness\": 9,\n  \"overall\": 9,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"Covers all required dimensions (high-risk definition, vendor obligations, timeline, penalties, SaaS impact, compliance actions) with thorough analysis. Provides non-trivial synthesis, trade-offs, and strategic insights. Structure is clear with headings and tables. Cites provided sources for key claims, acknowledges information gaps. Handles recent timeline adjustments precisely. Overall, the report is professionally trustworthy for decision-making.\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:10:24.160422+00:00"
+  },
+  {
+    "case_id": "web_dr_002",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:12:24.628918+00:00"
+  },
+  {
+    "case_id": "web_dr_002",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.4,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 3,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "2026年3月25日欧盟公布实施期限调整，独立高风险AI系统监管延至2027年12月2日，产品内嵌高风险AI系统延至2028年8月2日。",
+          "status": "supported",
+          "reason": "Evidence items ev_web_29e05f62b999b68a and ev_web_5c438ed9f92138aa both confirm these exact dates and categories.",
+          "source_urls": [
+            "https://ccpit.nanjing.gov.cn/jmzx/202604/t20260401_5816633.html",
+            "https://news.qq.com/rain/a/20260327A06CDW00"
+          ]
+        },
+        {
+          "claim": "高风险AI系统涵盖生物识别、关键基础设施、教育、就业、公共服务、执法、司法、边境管理等领域。",
+          "status": "supported",
+          "reason": "Evidence snippet ev_web_5c438ed9f92138aa explicitly lists '用于生物识别、关键基础设施、教育、就业、公共服务、执法、司法以及边境管理等领域的AI应用' as high-risk.",
+          "source_urls": [
+            "https://news.qq.com/rain/a/20260327A06CDW00"
+          ]
+        },
+        {
+          "claim": "最严重罚款可达3500万欧元或全球年营业额的7%（取较高者）。",
+          "status": "unsupported",
+          "reason": "No evidence snippet or source provided in the materials contains this penalty amount. The referenced source [3] is not included in the available evidence.",
+          "source_urls": []
+        },
+        {
+          "claim": "AI法案具有域外适用性，非欧盟SaaS供应商只要其输出在欧盟使用或用户位于欧盟，便落入管辖范围。",
+          "status": "unsupported",
+          "reason": "The claim references [7][8], which are not among the provided sources, and no evidence snippet confirms extraterritorial application.",
+          "source_urls": []
+        },
+        {
+          "claim": "企业不应将延期视为暂停行动的理由（Gartner分析师Nader Henein指出）。",
+          "status": "supported",
+          "reason": "Evidence ev_web_5c438ed9f92138aa directly quotes Nader Henein saying '企业不应将延期视为暂停行动的理由'.",
+          "source_urls": [
+            "https://news.qq.com/rain/a/20260327A06CDW00"
+          ]
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 3,\n  \"unsupported_claims\": 2,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.4,\n  \"claims\": [\n    {\n      \"claim\": \"2026年3月25日欧盟公布实施期限调整，独立高风险AI系统监管延至2027年12月2日，产品内嵌高风险AI系统延至2028年8月2日。\",\n      \"status\": \"supported\",\n      \"reason\": \"Evidence items ev_web_29e05f62b999b68a and ev_web_5c438ed9f92138aa both confirm these exact dates and categories.\",\n      \"source_urls\": [\n        \"https://ccpit.nanjing.gov.cn/jmzx/202604/t20260401_5816633.html\",\n        \"https://news.qq.com/rain/a/20260327A06CDW00\"\n      ]\n    },\n    {\n      \"claim\": \"高风险AI系统涵盖生物识别、关键基础设施、教育、就业、公共服务、执法、司法、边境管理等领域。\",\n      \"status\": \"supported\",\n      \"reason\": \"Evidence snippet ev_web_5c438ed9f92138aa explicitly lists '用于生物识别、关键基础设施、教育、就业、公共服务、执法、司法以及边境管理等领域的AI应用' as high-risk.\",\n      \"source_urls\": [\n        \"https://news.qq.com/rain/a/20260327A06CDW00\"\n      ]\n    },\n    {\n      \"claim\": \"最严重罚款可达3500万欧元或全球年营业额的7%（取较高者）。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"No evidence snippet or source provided in the materials contains this penalty amount. The referenced source [3] is not included in the available evidence.\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"AI法案具有域外适用性，非欧盟SaaS供应商只要其输出在欧盟使用或用户位于欧盟，便落入管辖范围。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"The claim references [7][8], which are not among the provided sources, and no evidence snippet confirms extraterritorial application.\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"企业不应将延期视为暂停行动的理由（Gartner分析师Nader Henein指出）。\",\n      \"status\": \"supported\",\n      \"reason\": \"Evidence ev_web_5c438ed9f92138aa directly quotes Nader Henein saying '企业不应将延期视为暂停行动的理由'.\",\n      \"source_urls\": [\n        \"https://news.qq.com/rain/a/20260327A06CDW00\"\n      ]\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:13:37.029262+00:00"
+  },
+  {
+    "case_id": "web_dr_003",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 8.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 9.0,
+        "depth": 9.0,
+        "structure": 9.0,
+        "evidence_quality": 8.0,
+        "freshness": 9.0,
+        "overall": 8.0
+      },
+      "missing_dimensions": [],
+      "rationale": "The report comprehensively addresses all required dimensions: supply chain risks (capacity, HBM, capex), major vendors (Nvidia, TSMC, AMD, etc.), geopolitical factors (export controls, Taiwan, helium), capacity constraints (CoWoS, power/cooling), export controls (policy evolution, IaaS extension, enforcement), and mitigation strategies (diversification, self-developed chips, compliance). Analysis is deep with specific bottlenecks, trade-offs, and a synthesized multi-layer framework. Structure is clear and logical. Evidence is well-cited using a mix of primary (DoD) and reputable analysis (CMU, Berkeley, law firms, industry outlets), and freshness is excellent, covering 2025–2026 developments. The mitigation section is honest about deriving strategies from risk logic, which is acceptable. Implicit risk prioritization (e.g., naming CoWoS as the true bottleneck) meets the requirement. Overall, the report is professionally trustworthy for decision-making."
+    },
+    "raw_response": "{\n  \"coverage\": 9,\n  \"depth\": 9,\n  \"structure\": 9,\n  \"evidence_quality\": 8,\n  \"freshness\": 9,\n  \"overall\": 8,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"The report comprehensively addresses all required dimensions: supply chain risks (capacity, HBM, capex), major vendors (Nvidia, TSMC, AMD, etc.), geopolitical factors (export controls, Taiwan, helium), capacity constraints (CoWoS, power/cooling), export controls (policy evolution, IaaS extension, enforcement), and mitigation strategies (diversification, self-developed chips, compliance). Analysis is deep with specific bottlenecks, trade-offs, and a synthesized multi-layer framework. Structure is clear and logical. Evidence is well-cited using a mix of primary (DoD) and reputable analysis (CMU, Berkeley, law firms, industry outlets), and freshness is excellent, covering 2025–2026 developments. The mitigation section is honest about deriving strategies from risk logic, which is acceptable. Implicit risk prioritization (e.g., naming CoWoS as the true bottleneck) meets the requirement. Overall, the report is professionally trustworthy for decision-making.\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:14:53.157401+00:00"
+  },
+  {
+    "case_id": "web_dr_003",
+    "judge_type": "citation",
+    "status": "scored",
+    "score": 0.8,
+    "passed": true,
+    "details": {
+      "prompt_version": "citation-v1",
+      "total_citation_checks": 5,
+      "supported_citation_checks": 4,
+      "effective_unique_sources": 2,
+      "checks": [
+        {
+          "claim": "台积电的先进封装技术（尤其是CoWoS）才是当前最大的产能限制因素",
+          "source_url": "https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide",
+          "supported": true,
+          "reason": "Source snippet directly states: 'TSMC identified advanced packaging, not wafer production, as the industry’s true bottleneck, directly limiting high-margin GPU supply from Nvidia and Broadcom.'"
+        },
+        {
+          "claim": "美光预计，这种短缺状况将持续至2026年之后",
+          "source_url": "https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide",
+          "supported": true,
+          "reason": "Source snippet states: 'Micron stated the shortage is expected to last beyond 2026'."
+        },
+        {
+          "claim": "设计商普遍依赖ARM的CPU处理器架构和Synopsys的EDA工具链",
+          "source_url": "https://www.linkedin.com/posts/iam-suhail_ai-is-scaling-faster-than-almost-any-technology-activity-7413137267059470336-5HHQ",
+          "supported": true,
+          "reason": "LinkedIn post snippet mentions: 'Companies like Nvidia, AMD, and Google are fabless. They design chips... using tools and IP from firms like ARM and Synopsys.' Supports the claim of dependency on ARM and Synopsys."
+        },
+        {
+          "claim": "ASML的极紫外线（EUV）光刻机是生产7纳米及更先进制程芯片的必备设备，ASML是全球唯一供应商",
+          "source_url": "https://www.linkedin.com/posts/iam-suhail_ai-is-scaling-faster-than-almost-any-technology-activity-7413137267059470336-5HHQ",
+          "supported": true,
+          "reason": "LinkedIn post snippet says: 'The biggest bottleneck is EUV lithography. ASML is the only company capable of producing these machines.' Supports the uniqueness claim."
+        },
+        {
+          "claim": "全球约90%的氦气供应来自中东",
+          "source_url": null,
+          "supported": false,
+          "reason": "No evidence provided in the source snippets supports this claim. The enkiai and LinkedIn sources do not mention helium supply or the 90% figure."
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_citation_checks\": 5,\n  \"supported_citation_checks\": 4,\n  \"effective_unique_sources\": 2,\n  \"citation_accuracy\": 0.8,\n  \"checks\": [\n    {\n      \"claim\": \"台积电的先进封装技术（尤其是CoWoS）才是当前最大的产能限制因素\",\n      \"source_url\": \"https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide\",\n      \"supported\": true,\n      \"reason\": \"Source snippet directly states: 'TSMC identified advanced packaging, not wafer production, as the industry’s true bottleneck, directly limiting high-margin GPU supply from Nvidia and Broadcom.'\"\n    },\n    {\n      \"claim\": \"美光预计，这种短缺状况将持续至2026年之后\",\n      \"source_url\": \"https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide\",\n      \"supported\": true,\n      \"reason\": \"Source snippet states: 'Micron stated the shortage is expected to last beyond 2026'.\"\n    },\n    {\n      \"claim\": \"设计商普遍依赖ARM的CPU处理器架构和Synopsys的EDA工具链\",\n      \"source_url\": \"https://www.linkedin.com/posts/iam-suhail_ai-is-scaling-faster-than-almost-any-technology-activity-7413137267059470336-5HHQ\",\n      \"supported\": true,\n      \"reason\": \"LinkedIn post snippet mentions: 'Companies like Nvidia, AMD, and Google are fabless. They design chips... using tools and IP from firms like ARM and Synopsys.' Supports the claim of dependency on ARM and Synopsys.\"\n    },\n    {\n      \"claim\": \"ASML的极紫外线（EUV）光刻机是生产7纳米及更先进制程芯片的必备设备，ASML是全球唯一供应商\",\n      \"source_url\": \"https://www.linkedin.com/posts/iam-suhail_ai-is-scaling-faster-than-almost-any-technology-activity-7413137267059470336-5HHQ\",\n      \"supported\": true,\n      \"reason\": \"LinkedIn post snippet says: 'The biggest bottleneck is EUV lithography. ASML is the only company capable of producing these machines.' Supports the uniqueness claim.\"\n    },\n    {\n      \"claim\": \"全球约90%的氦气供应来自中东\",\n      \"source_url\": null,\n      \"supported\": false,\n      \"reason\": \"No evidence provided in the source snippets supports this claim. The enkiai and LinkedIn sources do not mention helium supply or the 90% figure.\"\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:16:29.023673+00:00"
+  },
+  {
+    "case_id": "web_dr_003",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.4,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 3,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "台积电的先进封装技术（尤其是CoWoS）才是当前AI芯片供应链最大的产能限制因素",
+          "status": "supported",
+          "reason": "证据源 ev_web_b49979049a146943 明确指出 “By 2025, TSMC identified advanced packaging, not wafer production, as the industry’s true bottleneck, directly limiting high-margin GPU supply”，直接支撑该声明。",
+          "source_urls": [
+            "https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide"
+          ]
+        },
+        {
+          "claim": "美光预计高带宽内存（HBM）短缺状况将持续至2026年之后",
+          "status": "supported",
+          "reason": "证据源 ev_web_b49979049a146943 明确提到 “Micron stated the shortage is expected to last beyond 2026”，完全吻合该声明。",
+          "source_urls": [
+            "https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide"
+          ]
+        },
+        {
+          "claim": "美国政府在2025年5月撤销了先前的“AI扩散规则”",
+          "status": "unsupported",
+          "reason": "报告中引用了 [9][10]，但所提供的证据源中不包含相关内容，无任何片段可证实这一具体时间点与政策变动。",
+          "source_urls": []
+        },
+        {
+          "claim": "英伟达、AMD、谷歌等芯片设计商普遍依赖ARM的CPU处理器架构和Synopsys的EDA工具链",
+          "status": "supported",
+          "reason": "证据源 ev_web_5a48941b2ac2d1fc 的片段中记载 “Companies like Nvidia, AMD, and Google are fabless. They design chips … using tools and IP from firms like ARM and Synopsys”，提供了直接支撑。",
+          "source_urls": [
+            "https://www.linkedin.com/posts/iam-suhail_ai-is-scaling-faster-than-almost-any-technology-activity-7413137267059470336-5HHQ"
+          ]
+        },
+        {
+          "claim": "全球约90%的氦气供应来自中东，且目前没有可行的替代品",
+          "status": "unsupported",
+          "reason": "报告中引用了 [5][7]，但提供的证据源中无任何片段涉及氦气供应比例或替代品情况，无法证实。",
+          "source_urls": []
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 3,\n  \"unsupported_claims\": 2,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.4,\n  \"claims\": [\n    {\n      \"claim\": \"台积电的先进封装技术（尤其是CoWoS）才是当前AI芯片供应链最大的产能限制因素\",\n      \"status\": \"supported\",\n      \"reason\": \"证据源 ev_web_b49979049a146943 明确指出 “By 2025, TSMC identified advanced packaging, not wafer production, as the industry’s true bottleneck, directly limiting high-margin GPU supply”，直接支撑该声明。\",\n      \"source_urls\": [\"https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide\"]\n    },\n    {\n      \"claim\": \"美光预计高带宽内存（HBM）短缺状况将持续至2026年之后\",\n      \"status\": \"supported\",\n      \"reason\": \"证据源 ev_web_b49979049a146943 明确提到 “Micron stated the shortage is expected to last beyond 2026”，完全吻合该声明。\",\n      \"source_urls\": [\"https://enkiai.com/ai-market-intelligence/ai-chip-supply-chain-risk-2026-your-essential-guide\"]\n    },\n    {\n      \"claim\": \"美国政府在2025年5月撤销了先前的“AI扩散规则”\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告中引用了 [9][10]，但所提供的证据源中不包含相关内容，无任何片段可证实这一具体时间点与政策变动。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"英伟达、AMD、谷歌等芯片设计商普遍依赖ARM的CPU处理器架构和Synopsys的EDA工具链\",\n      \"status\": \"supported\",\n      \"reason\": \"证据源 ev_web_5a48941b2ac2d1fc 的片段中记载 “Companies like Nvidia, AMD, and Google are fabless. They design chips … using tools and IP from firms like ARM and Synopsys”，提供了直接支撑。\",\n      \"source_urls\": [\"https://www.linkedin.com/posts/iam-suhail_ai-is-scaling-faster-than-almost-any-technology-activity-7413137267059470336-5HHQ\"]\n    },\n    {\n      \"claim\": \"全球约90%的氦气供应来自中东，且目前没有可行的替代品\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告中引用了 [5][7]，但提供的证据源中无任何片段涉及氦气供应比例或替代品情况，无法证实。\",\n      \"source_urls\": []\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:17:55.312831+00:00"
+  },
+  {
+    "case_id": "web_dr_004",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 8.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 9.0,
+        "depth": 8.0,
+        "structure": 9.0,
+        "evidence_quality": 8.0,
+        "freshness": 9.0,
+        "overall": 8.0
+      },
+      "missing_dimensions": [],
+      "rationale": "The report covers all required dimensions: recent results, institutions, technical methods, error rates/qubit counts (qualitative and quantitative mentions like ε² suppression, scaling behavior), fault-tolerance significance, and remaining bottlenecks. It provides non-trivial analysis, synthesis, and detailed trade-offs. The structure is clear with logical sections. Evidence relies on credible institutional and paper sources (Nature, MIT, QuEra, etc.) and citations are provided. Freshness is high, featuring 2023-2026 breakthroughs. Overall, it is a trustworthy and professional technical survey."
+    },
+    "raw_response": "{\n  \"coverage\": 9,\n  \"depth\": 8,\n  \"structure\": 9,\n  \"evidence_quality\": 8,\n  \"freshness\": 9,\n  \"overall\": 8,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"The report covers all required dimensions: recent results, institutions, technical methods, error rates/qubit counts (qualitative and quantitative mentions like ε² suppression, scaling behavior), fault-tolerance significance, and remaining bottlenecks. It provides non-trivial analysis, synthesis, and detailed trade-offs. The structure is clear with logical sections. Evidence relies on credible institutional and paper sources (Nature, MIT, QuEra, etc.) and citations are provided. Freshness is high, featuring 2023-2026 breakthroughs. Overall, it is a trustworthy and professional technical survey.\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:18:29.138049+00:00"
+  },
+  {
+    "case_id": "web_dr_004",
+    "judge_type": "citation",
+    "status": "scored",
+    "score": 0.6666666666666666,
+    "passed": false,
+    "details": {
+      "prompt_version": "citation-v1",
+      "total_citation_checks": 3,
+      "supported_citation_checks": 2,
+      "effective_unique_sources": 3,
+      "checks": [
+        {
+          "claim": "量子纠错码（QECCs）可以消除量子噪声的负面影响，但实用化面临资源开销巨大、精度阈值较低、量子比特连接性受限以及态泄漏等严峻挑战 [1]",
+          "source_url": "https://qzc.tsinghua.edu.cn/en/info/1122/1982.htm",
+          "supported": true,
+          "reason": "提供的片段明确指出“Quantum error-correcting codes (QECCs) can eliminate the negative effects of quantum noise”并列出资源开销、低准确度阈值、低连接性、态泄漏等挑战，与声明完全一致。"
+        },
+        {
+          "claim": "实验利用长重复码和表面码，在超导量子处理器上展示了表面码阈值以下的量子纠错 [2]",
+          "source_url": "https://research.ibm.com/topics/quantum-error-correction",
+          "supported": false,
+          "reason": "该来源片段仅描述 IBM 的量子错误修正路线图和动态电路，未提及 Nature 论文中的表面码阈值实验，故无法支持声明。"
+        },
+        {
+          "claim": "科学家利用 Quantinuum 的 H2 量子计算机在计算过程中反复修复自身错误，并改善了计算结果 [3]",
+          "source_url": "https://www.sciencenews.org/article/quantum-computer-error-correction",
+          "supported": true,
+          "reason": "片段明确提到“A quantum computer corrected its own errors, improving its calculations”并指出使用了 Quantinuum 的 H2 量子计算机，直接支持该声明。"
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_citation_checks\": 3,\n  \"supported_citation_checks\": 2,\n  \"effective_unique_sources\": 3,\n  \"citation_accuracy\": null,\n  \"checks\": [\n    {\n      \"claim\": \"量子纠错码（QECCs）可以消除量子噪声的负面影响，但实用化面临资源开销巨大、精度阈值较低、量子比特连接性受限以及态泄漏等严峻挑战 [1]\",\n      \"source_url\": \"https://qzc.tsinghua.edu.cn/en/info/1122/1982.htm\",\n      \"supported\": true,\n      \"reason\": \"提供的片段明确指出“Quantum error-correcting codes (QECCs) can eliminate the negative effects of quantum noise”并列出资源开销、低准确度阈值、低连接性、态泄漏等挑战，与声明完全一致。\"\n    },\n    {\n      \"claim\": \"实验利用长重复码和表面码，在超导量子处理器上展示了表面码阈值以下的量子纠错 [2]\",\n      \"source_url\": \"https://research.ibm.com/topics/quantum-error-correction\",\n      \"supported\": false,\n      \"reason\": \"该来源片段仅描述 IBM 的量子错误修正路线图和动态电路，未提及 Nature 论文中的表面码阈值实验，故无法支持声明。\"\n    },\n    {\n      \"claim\": \"科学家利用 Quantinuum 的 H2 量子计算机在计算过程中反复修复自身错误，并改善了计算结果 [3]\",\n      \"source_url\": \"https://www.sciencenews.org/article/quantum-computer-error-correction\",\n      \"supported\": true,\n      \"reason\": \"片段明确提到“A quantum computer corrected its own errors, improving its calculations”并指出使用了 Quantinuum 的 H2 量子计算机，直接支持该声明。\"\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:20:12.253283+00:00"
+  },
+  {
+    "case_id": "web_dr_004",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.2,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 2,
+      "unsupported_claims": 1,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "量子纠错码（Quantum Error-Correcting Codes, QECCs）被理论证明可以消除量子噪声的负面影响",
+          "status": "supported",
+          "reason": "清华大学相关讲座摘要明确指出 'Quantum error-correcting codes (QECCs) can eliminate the negative effects of quantum noise'，与报告 [1] 处的声明完全一致。",
+          "source_urls": [
+            "https://qzc.tsinghua.edu.cn/en/info/1122/1982.htm"
+          ]
+        },
+        {
+          "claim": "科学家利用 Quantinuum 的 H2 量子计算机，在计算过程中反复修复自身错误，并改善了计算结果的质量",
+          "status": "supported",
+          "reason": "ScienceNews 文章标题和摘要明确指出 'A quantum computer corrected its own errors, improving its calculations'，内容提及 Quantinuum H2 量子计算机首次实现计算过程中的自我纠错并提升计算结果。",
+          "source_urls": [
+            "https://www.sciencenews.org/article/quantum-computer-error-correction"
+          ]
+        },
+        {
+          "claim": "包括 Google、IBM 在内的公司正通过展示逻辑错误率随物理量子比特增加而下降、容错操作及多逻辑量子比特协作来推进关键里程碑",
+          "status": "unsupported",
+          "reason": "报告引用 [20]，但提供的 IBM Research 页面片段仅提及 'IBM Quantum has a clear roadmap to practical quantum advantage' 和动态电路等，未包含该声明所描述的具体里程碑进展；Google 相关内容无任何证据片段。因此该声明缺乏来源支撑。",
+          "source_urls": []
+        },
+        {
+          "claim": "表面码阈值以下的量子纠错实验观察到逻辑错误率随纠错码距离增加而下降",
+          "status": "not_checkable",
+          "reason": "该声明引用《Nature》论文 [2]，但提供的来源列表中虽有该论文标题，未提供摘要或片段，无法核实具体实验细节。",
+          "source_urls": []
+        },
+        {
+          "claim": "悉尼大学与 IBM 合作提出的 'gauging logical operators' 技术有望降低构建大型容错量子计算机所需的物理量子比特数量",
+          "status": "not_checkable",
+          "reason": "声明引用 [13]，但未提供该论文或相关报道的证据片段，无法判断其真实性。",
+          "source_urls": []
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 2,\n  \"unsupported_claims\": 1,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.2,\n  \"claims\": [\n    {\n      \"claim\": \"量子纠错码（Quantum Error-Correcting Codes, QECCs）被理论证明可以消除量子噪声的负面影响\",\n      \"status\": \"supported\",\n      \"reason\": \"清华大学相关讲座摘要明确指出 'Quantum error-correcting codes (QECCs) can eliminate the negative effects of quantum noise'，与报告 [1] 处的声明完全一致。\",\n      \"source_urls\": [\"https://qzc.tsinghua.edu.cn/en/info/1122/1982.htm\"]\n    },\n    {\n      \"claim\": \"科学家利用 Quantinuum 的 H2 量子计算机，在计算过程中反复修复自身错误，并改善了计算结果的质量\",\n      \"status\": \"supported\",\n      \"reason\": \"ScienceNews 文章标题和摘要明确指出 'A quantum computer corrected its own errors, improving its calculations'，内容提及 Quantinuum H2 量子计算机首次实现计算过程中的自我纠错并提升计算结果。\",\n      \"source_urls\": [\"https://www.sciencenews.org/article/quantum-computer-error-correction\"]\n    },\n    {\n      \"claim\": \"包括 Google、IBM 在内的公司正通过展示逻辑错误率随物理量子比特增加而下降、容错操作及多逻辑量子比特协作来推进关键里程碑\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告引用 [20]，但提供的 IBM Research 页面片段仅提及 'IBM Quantum has a clear roadmap to practical quantum advantage' 和动态电路等，未包含该声明所描述的具体里程碑进展；Google 相关内容无任何证据片段。因此该声明缺乏来源支撑。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"表面码阈值以下的量子纠错实验观察到逻辑错误率随纠错码距离增加而下降\",\n      \"status\": \"not_checkable\",\n      \"reason\": \"该声明引用《Nature》论文 [2]，但提供的来源列表中虽有该论文标题，未提供摘要或片段，无法核实具体实验细节。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"悉尼大学与 IBM 合作提出的 'gauging logical operators' 技术有望降低构建大型容错量子计算机所需的物理量子比特数量\",\n      \"status\": \"not_checkable\",\n      \"reason\": \"声明引用 [13]，但未提供该论文或相关报道的证据片段，无法判断其真实性。\",\n      \"source_urls\": []\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:21:42.610272+00:00"
+  },
+  {
+    "case_id": "web_dr_005",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 5.0,
+    "passed": false,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 9.0,
+        "depth": 8.0,
+        "structure": 6.0,
+        "evidence_quality": 3.0,
+        "freshness": 8.0,
+        "overall": 5.0
+      },
+      "missing_dimensions": [],
+      "rationale": "Covers all required dimensions, but lacks the required comparison table and relies almost entirely on blog posts and generic comparison guides rather than official documentation or credible benchmarks, violating the source constraints and weakening trustworthiness."
+    },
+    "raw_response": "{\n  \"coverage\": 9,\n  \"depth\": 8,\n  \"structure\": 6,\n  \"evidence_quality\": 3,\n  \"freshness\": 8,\n  \"overall\": 5,\n  \"rubric_pass\": false,\n  \"missing_dimensions\": [],\n  \"rationale\": \"Covers all required dimensions, but lacks the required comparison table and relies almost entirely on blog posts and generic comparison guides rather than official documentation or credible benchmarks, violating the source constraints and weakening trustworthiness.\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:22:38.470577+00:00"
+  },
+  {
+    "case_id": "web_dr_005",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:24:38.741680+00:00"
+  },
+  {
+    "case_id": "web_dr_005",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.6,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 2,
+      "unsupported_claims": 3,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "Pinecone提供免费层，付费计划从约50美元/月起",
+          "status": "supported",
+          "reason": "The ZenML blog snippet (ev_web_627b04663ef85e0a) includes a pricing table showing Pinecone: 'Free tier, plans start at a $50/month minimum.'",
+          "source_urls": [
+            "https://www.zenml.io/blog/vector-databases-for-rag"
+          ]
+        },
+        {
+          "claim": "pgvector支持ANN搜索，使用HNSW和IVF索引算法",
+          "status": "unsupported",
+          "reason": "No source snippet mentions that pgvector supports HNSW and IVF; the provided evidence does not confirm this specific indexing capability.",
+          "source_urls": []
+        },
+        {
+          "claim": "Turbopuffer的定价从约64美元/月起",
+          "status": "supported",
+          "reason": "The ZenML blog snippet states Turbopuffer: 'Plans start at $64/month.'",
+          "source_urls": [
+            "https://www.zenml.io/blog/vector-databases-for-rag"
+          ]
+        },
+        {
+          "claim": "MongoDB Atlas Vector Search可以通过专用搜索节点实现独立扩展，将向量搜索工作负载与事务工作负载隔离",
+          "status": "unsupported",
+          "reason": "No source snippet mentions dedicated search nodes, independent scaling, or workload isolation for MongoDB Atlas Vector Search.",
+          "source_urls": []
+        },
+        {
+          "claim": "Milvus支持包括IVF、HNSW、DiskANN和GPU索引在内的丰富索引类型",
+          "status": "unsupported",
+          "reason": "The provided snippets do not mention DiskANN or GPU index support for Milvus; only Firecrawl's snippet generally lists Milvus among compared databases, without technical specifics.",
+          "source_urls": []
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 2,\n  \"unsupported_claims\": 3,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.6,\n  \"claims\": [\n    {\n      \"claim\": \"Pinecone提供免费层，付费计划从约50美元/月起\",\n      \"status\": \"supported\",\n      \"reason\": \"The ZenML blog snippet (ev_web_627b04663ef85e0a) includes a pricing table showing Pinecone: 'Free tier, plans start at a $50/month minimum.'\",\n      \"source_urls\": [\"https://www.zenml.io/blog/vector-databases-for-rag\"]\n    },\n    {\n      \"claim\": \"pgvector支持ANN搜索，使用HNSW和IVF索引算法\",\n      \"status\": \"unsupported\",\n      \"reason\": \"No source snippet mentions that pgvector supports HNSW and IVF; the provided evidence does not confirm this specific indexing capability.\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"Turbopuffer的定价从约64美元/月起\",\n      \"status\": \"supported\",\n      \"reason\": \"The ZenML blog snippet states Turbopuffer: 'Plans start at $64/month.'\",\n      \"source_urls\": [\"https://www.zenml.io/blog/vector-databases-for-rag\"]\n    },\n    {\n      \"claim\": \"MongoDB Atlas Vector Search可以通过专用搜索节点实现独立扩展，将向量搜索工作负载与事务工作负载隔离\",\n      \"status\": \"unsupported\",\n      \"reason\": \"No source snippet mentions dedicated search nodes, independent scaling, or workload isolation for MongoDB Atlas Vector Search.\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"Milvus支持包括IVF、HNSW、DiskANN和GPU索引在内的丰富索引类型\",\n      \"status\": \"unsupported\",\n      \"reason\": \"The provided snippets do not mention DiskANN or GPU index support for Milvus; only Firecrawl's snippet generally lists Milvus among compared databases, without technical specifics.\",\n      \"source_urls\": []\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:26:06.893234+00:00"
+  },
+  {
+    "case_id": "web_dr_006",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 6.0,
+    "passed": false,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 6.0,
+        "depth": 6.0,
+        "structure": 8.0,
+        "evidence_quality": 4.0,
+        "freshness": 8.0,
+        "overall": 6.0
+      },
+      "missing_dimensions": [
+        "合规建议"
+      ],
+      "rationale": "报告覆盖了监管政策变化、时间线、私募基金影响、券商系统影响和中小投资者影响，但缺少独立的合规建议维度，仅在总结中笼统提及。券商系统影响部分因资料不足未展开（4.3节）。分析有一定深度但整体偏归纳，深度一般。结构清晰。证据主要来自财经媒体、自媒体等非官方来源，缺少证监会或交易所直接公告，官方来源要求未满足，证据质量较低。时效性较好，包含2026年初传闻。总体可信度不足，无法作为决策依据。"
+    },
+    "raw_response": "{\n  \"coverage\": 6,\n  \"depth\": 6,\n  \"structure\": 8,\n  \"evidence_quality\": 4,\n  \"freshness\": 8,\n  \"overall\": 6,\n  \"rubric_pass\": false,\n  \"missing_dimensions\": [\"合规建议\"],\n  \"rationale\": \"报告覆盖了监管政策变化、时间线、私募基金影响、券商系统影响和中小投资者影响，但缺少独立的合规建议维度，仅在总结中笼统提及。券商系统影响部分因资料不足未展开（4.3节）。分析有一定深度但整体偏归纳，深度一般。结构清晰。证据主要来自财经媒体、自媒体等非官方来源，缺少证监会或交易所直接公告，官方来源要求未满足，证据质量较低。时效性较好，包含2026年初传闻。总体可信度不足，无法作为决策依据。\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:26:55.800956+00:00"
+  },
+  {
+    "case_id": "web_dr_006",
+    "judge_type": "citation",
+    "status": "scored",
+    "score": 1.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "citation-v1",
+      "total_citation_checks": 5,
+      "supported_citation_checks": 5,
+      "effective_unique_sources": 3,
+      "checks": [
+        {
+          "claim": "2026年1月27日晚间，市场出现一则引发广泛关注的消息：传闻称“监管机构计划对主要量化基金的程序化交易实施‘T+3’制度”。",
+          "source_url": "https://m.163.com/dy/article/KKC1T22Q05198CJN.html",
+          "supported": true,
+          "reason": "证据片段明确记载1月27日晚间传出“监管机构计划对主要量化基金的程序化交易实施‘T+3’制度”的消息，完全吻合。"
+        },
+        {
+          "claim": "多家百亿级量化私募负责人随后向媒体回应称“目前并未收到任何与之相关的要求”。",
+          "source_url": "https://m.163.com/dy/article/KKC1T22Q05198CJN.html",
+          "supported": true,
+          "reason": "证据中多位百亿级量化私募负责人明确表示“目前并未收到任何与之相关的要求”，与声明一致。"
+        },
+        {
+          "claim": "上海某百亿私募负责人明确表示“完全没有听到类似规则要求”，并强调“股票交易规则最重要是公平性，并且很难界定发送到交易所的交易委托单，哪个是量化哪个是主观”。",
+          "source_url": "https://m.163.com/dy/article/KKC1T22Q05198CJN.html",
+          "supported": true,
+          "reason": "证据中上海某百亿私募负责人原话为“完全没有听到类似规则要求，‘股票交易规则最重要是公平性，并且很难界定发送到交易所的交易委托单，哪个是量化哪个是主观’”，完全支持。"
+        },
+        {
+          "claim": "另一头部量化私募负责人也回应称“完全不知道所谓的‘新要求’”，同时表示“只要面向所有投资者群体的规则公平，市场是可以接受的”。",
+          "source_url": "https://fund.eastmoney.com/a/202601283633411632.html",
+          "supported": true,
+          "reason": "证据记载某头部量化私募负责人回应“完全不知道所谓的‘新要求’，不过，只要面向所有投资者群体的规则公平，市场是可以接受的”，印证了声明。"
+        },
+        {
+          "claim": "有量化业内人士指出，年初以来A股题材炒作升温，部分游资受到较多关注，“不排除行业消息有相关立场驱动的可能”。",
+          "source_url": "https://finance.sina.com.cn/stock/roll/2026-01-28/doc-inhivrta5019335.shtml",
+          "supported": true,
+          "reason": "证据中量化业内人士表示“年初以来A股一些题材炒作升温，部分游资群体近期受到较多关注，‘不排除行业消息有相关立场驱动的可能’”，直接支持该声明。"
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_citation_checks\": 5,\n  \"supported_citation_checks\": 5,\n  \"effective_unique_sources\": 3,\n  \"citation_accuracy\": 1.0,\n  \"checks\": [\n    {\n      \"claim\": \"2026年1月27日晚间，市场出现一则引发广泛关注的消息：传闻称“监管机构计划对主要量化基金的程序化交易实施‘T+3’制度”。\",\n      \"source_url\": \"https://m.163.com/dy/article/KKC1T22Q05198CJN.html\",\n      \"supported\": true,\n      \"reason\": \"证据片段明确记载1月27日晚间传出“监管机构计划对主要量化基金的程序化交易实施‘T+3’制度”的消息，完全吻合。\"\n    },\n    {\n      \"claim\": \"多家百亿级量化私募负责人随后向媒体回应称“目前并未收到任何与之相关的要求”。\",\n      \"source_url\": \"https://m.163.com/dy/article/KKC1T22Q05198CJN.html\",\n      \"supported\": true,\n      \"reason\": \"证据中多位百亿级量化私募负责人明确表示“目前并未收到任何与之相关的要求”，与声明一致。\"\n    },\n    {\n      \"claim\": \"上海某百亿私募负责人明确表示“完全没有听到类似规则要求”，并强调“股票交易规则最重要是公平性，并且很难界定发送到交易所的交易委托单，哪个是量化哪个是主观”。\",\n      \"source_url\": \"https://m.163.com/dy/article/KKC1T22Q05198CJN.html\",\n      \"supported\": true,\n      \"reason\": \"证据中上海某百亿私募负责人原话为“完全没有听到类似规则要求，‘股票交易规则最重要是公平性，并且很难界定发送到交易所的交易委托单，哪个是量化哪个是主观’”，完全支持。\"\n    },\n    {\n      \"claim\": \"另一头部量化私募负责人也回应称“完全不知道所谓的‘新要求’”，同时表示“只要面向所有投资者群体的规则公平，市场是可以接受的”。\",\n      \"source_url\": \"https://fund.eastmoney.com/a/202601283633411632.html\",\n      \"supported\": true,\n      \"reason\": \"证据记载某头部量化私募负责人回应“完全不知道所谓的‘新要求’，不过，只要面向所有投资者群体的规则公平，市场是可以接受的”，印证了声明。\"\n    },\n    {\n      \"claim\": \"有量化业内人士指出，年初以来A股题材炒作升温，部分游资受到较多关注，“不排除行业消息有相关立场驱动的可能”。\",\n      \"source_url\": \"https://finance.sina.com.cn/stock/roll/2026-01-28/doc-inhivrta5019335.shtml\",\n      \"supported\": true,\n      \"reason\": \"证据中量化业内人士表示“年初以来A股一些题材炒作升温，部分游资群体近期受到较多关注，‘不排除行业消息有相关立场驱动的可能’”，直接支持该声明。\"\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:28:41.361541+00:00"
+  },
+  {
+    "case_id": "web_dr_006",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.4,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 3,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "2026年1月27日晚间，市场传闻称“监管机构计划对主要量化基金的程序化交易实施‘T+3’制度”。",
+          "status": "supported",
+          "reason": "证据片段中明确提到“1月27日晚间，一则关于量化股票交易规则变化的消息……即‘监管机构计划对主要量化基金的程序化交易实施‘T+3’制度’。”",
+          "source_urls": [
+            "https://m.163.com/dy/article/KKC1T22Q05198CJN.html",
+            "https://fund.eastmoney.com/a/202601283633411632.html"
+          ]
+        },
+        {
+          "claim": "多家百亿级量化私募负责人回应称，目前并未收到任何与T+3相关的要求。",
+          "status": "supported",
+          "reason": "多个证据片段均包含“多家百亿级量化私募负责人向记者回应称，目前并未收到任何与之相关的要求”。",
+          "source_urls": [
+            "https://m.163.com/dy/article/KKC1T22Q05198CJN.html",
+            "https://finance.sina.com.cn/stock/roll/2026-01-28/doc-inhivrta5019335.shtml"
+          ]
+        },
+        {
+          "claim": "量化投资机构在A股市场每日成交量占比已从高峰期的约30%下降至20%左右。",
+          "status": "supported",
+          "reason": "证据片段原文为“目前各类量化投资机构在A股市场每日成交量的占比已有所下降，预计已从高峰期的30%左右下降至20%左右。”",
+          "source_urls": [
+            "https://m.163.com/dy/article/KKC1T22Q05198CJN.html",
+            "https://fund.eastmoney.com/a/202601283633411632.html"
+          ]
+        },
+        {
+          "claim": "《程序化交易管理实施细则》明确高频交易认定标准为：单个账户每秒申报、撤单最高笔数达到300笔以上，或单日申报、撤单最高笔数达到20000笔以上。",
+          "status": "unsupported",
+          "reason": "报告中该声明引用来源[2]，但提供的证据片段中未包含该来源的具体内容，无法验证其准确性。",
+          "source_urls": [
+            "https://www.sohu.com/a/911594624_114986"
+          ]
+        },
+        {
+          "claim": "2025年10月27日，证监会公布《关于加强资本市场中小投资者保护的若干意见》，明确提出进一步加强程序化交易监管。",
+          "status": "unsupported",
+          "reason": "报告中引用来源[3][7]，但提供的证据片段中未包含该政策文件的具体内容，仅从标题无法完全验证声明细节。",
+          "source_urls": [
+            "https://stock.jrj.com.cn/2025/10/27201553855384.shtml",
+            "https://m.163.com/dy/article/KCTDJIHA0512B07B.html"
+          ]
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 3,\n  \"unsupported_claims\": 2,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.4,\n  \"claims\": [\n    {\n      \"claim\": \"2026年1月27日晚间，市场传闻称“监管机构计划对主要量化基金的程序化交易实施‘T+3’制度”。\",\n      \"status\": \"supported\",\n      \"reason\": \"证据片段中明确提到“1月27日晚间，一则关于量化股票交易规则变化的消息……即‘监管机构计划对主要量化基金的程序化交易实施‘T+3’制度’。”\",\n      \"source_urls\": [\n        \"https://m.163.com/dy/article/KKC1T22Q05198CJN.html\",\n        \"https://fund.eastmoney.com/a/202601283633411632.html\"\n      ]\n    },\n    {\n      \"claim\": \"多家百亿级量化私募负责人回应称，目前并未收到任何与T+3相关的要求。\",\n      \"status\": \"supported\",\n      \"reason\": \"多个证据片段均包含“多家百亿级量化私募负责人向记者回应称，目前并未收到任何与之相关的要求”。\",\n      \"source_urls\": [\n        \"https://m.163.com/dy/article/KKC1T22Q05198CJN.html\",\n        \"https://finance.sina.com.cn/stock/roll/2026-01-28/doc-inhivrta5019335.shtml\"\n      ]\n    },\n    {\n      \"claim\": \"量化投资机构在A股市场每日成交量占比已从高峰期的约30%下降至20%左右。\",\n      \"status\": \"supported\",\n      \"reason\": \"证据片段原文为“目前各类量化投资机构在A股市场每日成交量的占比已有所下降，预计已从高峰期的30%左右下降至20%左右。”\",\n      \"source_urls\": [\n        \"https://m.163.com/dy/article/KKC1T22Q05198CJN.html\",\n        \"https://fund.eastmoney.com/a/202601283633411632.html\"\n      ]\n    },\n    {\n      \"claim\": \"《程序化交易管理实施细则》明确高频交易认定标准为：单个账户每秒申报、撤单最高笔数达到300笔以上，或单日申报、撤单最高笔数达到20000笔以上。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告中该声明引用来源[2]，但提供的证据片段中未包含该来源的具体内容，无法验证其准确性。\",\n      \"source_urls\": [\n        \"https://www.sohu.com/a/911594624_114986\"\n      ]\n    },\n    {\n      \"claim\": \"2025年10月27日，证监会公布《关于加强资本市场中小投资者保护的若干意见》，明确提出进一步加强程序化交易监管。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告中引用来源[3][7]，但提供的证据片段中未包含该政策文件的具体内容，仅从标题无法完全验证声明细节。\",\n      \"source_urls\": [\n        \"https://stock.jrj.com.cn/2025/10/27201553855384.shtml\",\n        \"https://m.163.com/dy/article/KCTDJIHA0512B07B.html\"\n      ]\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:29:53.386147+00:00"
+  },
+  {
+    "case_id": "web_dr_007",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 8.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 8.0,
+        "depth": 8.0,
+        "structure": 9.0,
+        "evidence_quality": 8.0,
+        "freshness": 9.0,
+        "overall": 8.0
+      },
+      "missing_dimensions": [],
+      "rationale": "报告覆盖了电力需求、数据中心约束、可再生能源采购、地区政策差异、企业披露及买方指标等所有预期维度，对中美欧政策进行了清晰比较，并指出企业披露细节暂时缺乏。结构清晰，引用了近期来源，对资料不足部分保持诚实，可用于决策参考。"
+    },
+    "raw_response": "{\n  \"coverage\": 8,\n  \"depth\": 8,\n  \"structure\": 9,\n  \"evidence_quality\": 8,\n  \"freshness\": 9,\n  \"overall\": 8,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"报告覆盖了电力需求、数据中心约束、可再生能源采购、地区政策差异、企业披露及买方指标等所有预期维度，对中美欧政策进行了清晰比较，并指出企业披露细节暂时缺乏。结构清晰，引用了近期来源，对资料不足部分保持诚实，可用于决策参考。\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:30:30.652643+00:00"
+  },
+  {
+    "case_id": "web_dr_007",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:32:30.864498+00:00"
+  },
+  {
+    "case_id": "web_dr_007",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.4,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 3,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "到2030年全球数据中心用电量将接近翻倍。",
+          "status": "supported",
+          "reason": "IMF文章明确提及“国际能源署预测到2030年将翻倍以上”，与声明一致。",
+          "source_urls": [
+            "https://www.imf.org/zh/publications/fandd/issues/2025/12/inside-the-ai-led-resource-race-thijs-van-de-graaf"
+          ]
+        },
+        {
+          "claim": "全球数据中心用电量将从2025年的约485.4太瓦时（TWh）攀升至2030年的945 TWh。",
+          "status": "unsupported",
+          "reason": "提供的来源中没有包含这些具体数字，仅找到定性翻倍预测，无法验证IEA的具体TWh数据。",
+          "source_urls": []
+        },
+        {
+          "claim": "从现在到2030年，数据中心的电力消耗预计将占美国电力需求增长的近一半。",
+          "status": "supported",
+          "reason": "IMF文章提到“美国、日本约一半新增电力可能被数据中心占用”，直接支撑该声明。",
+          "source_urls": [
+            "https://www.imf.org/zh/publications/fandd/issues/2025/12/inside-the-ai-led-resource-race-thijs-van-de-graaf"
+          ]
+        },
+        {
+          "claim": "一个满载运行的AI机柜在峰值负荷时的耗电量，相当于约100个普通家庭的用电量。",
+          "status": "unsupported",
+          "reason": "所有提供的证据片段均未出现此比较数据，无法确认其出处。",
+          "source_urls": []
+        },
+        {
+          "claim": "美国弗吉尼亚州数据中心已占该州用电五分之一。",
+          "status": "supported",
+          "reason": "华尔街见闻文章明确记载“数据中心已占弗吉尼亚州总用电量的五分之一以上”，支持该陈述。",
+          "source_urls": [
+            "https://wallstreetcn.com/articles/3769494"
+          ]
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 3,\n  \"unsupported_claims\": 2,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.4,\n  \"claims\": [\n    {\n      \"claim\": \"到2030年全球数据中心用电量将接近翻倍。\",\n      \"status\": \"supported\",\n      \"reason\": \"IMF文章明确提及“国际能源署预测到2030年将翻倍以上”，与声明一致。\",\n      \"source_urls\": [\n        \"https://www.imf.org/zh/publications/fandd/issues/2025/12/inside-the-ai-led-resource-race-thijs-van-de-graaf\"\n      ]\n    },\n    {\n      \"claim\": \"全球数据中心用电量将从2025年的约485.4太瓦时（TWh）攀升至2030年的945 TWh。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"提供的来源中没有包含这些具体数字，仅找到定性翻倍预测，无法验证IEA的具体TWh数据。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"从现在到2030年，数据中心的电力消耗预计将占美国电力需求增长的近一半。\",\n      \"status\": \"supported\",\n      \"reason\": \"IMF文章提到“美国、日本约一半新增电力可能被数据中心占用”，直接支撑该声明。\",\n      \"source_urls\": [\n        \"https://www.imf.org/zh/publications/fandd/issues/2025/12/inside-the-ai-led-resource-race-thijs-van-de-graaf\"\n      ]\n    },\n    {\n      \"claim\": \"一个满载运行的AI机柜在峰值负荷时的耗电量，相当于约100个普通家庭的用电量。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"所有提供的证据片段均未出现此比较数据，无法确认其出处。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"美国弗吉尼亚州数据中心已占该州用电五分之一。\",\n      \"status\": \"supported\",\n      \"reason\": \"华尔街见闻文章明确记载“数据中心已占弗吉尼亚州总用电量的五分之一以上”，支持该陈述。\",\n      \"source_urls\": [\n        \"https://wallstreetcn.com/articles/3769494\"\n      ]\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:33:57.009476+00:00"
+  },
+  {
+    "case_id": "web_dr_008",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 8.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 9.0,
+        "depth": 8.0,
+        "structure": 9.0,
+        "evidence_quality": 7.0,
+        "freshness": 9.0,
+        "overall": 8.0
+      },
+      "missing_dimensions": [],
+      "rationale": "报告全面覆盖了威胁模型、提示注入防御、工具权限控制、沙箱隔离、监控审计和策略执行等要求维度，并给出了方案分类与对比分析。深度较好，包含成本、性能、对抗新型攻击等维度的权衡讨论。结构清晰，修订后引用支撑更充分，但部分来源仍非权威安全研究或厂商文档，证据质量中等。时效性良好，满足了近期信息的需求。综合来看具备专业参考价值。"
+    },
+    "raw_response": "{\n  \"coverage\": 9,\n  \"depth\": 8,\n  \"structure\": 9,\n  \"evidence_quality\": 7,\n  \"freshness\": 9,\n  \"overall\": 8,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"报告全面覆盖了威胁模型、提示注入防御、工具权限控制、沙箱隔离、监控审计和策略执行等要求维度，并给出了方案分类与对比分析。深度较好，包含成本、性能、对抗新型攻击等维度的权衡讨论。结构清晰，修订后引用支撑更充分，但部分来源仍非权威安全研究或厂商文档，证据质量中等。时效性良好，满足了近期信息的需求。综合来看具备专业参考价值。\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:34:43.417087+00:00"
+  },
+  {
+    "case_id": "web_dr_008",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:36:43.751073+00:00"
+  },
+  {
+    "case_id": "web_dr_008",
+    "judge_type": "claim",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:38:44.049661+00:00"
+  },
+  {
+    "case_id": "web_dr_009",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 8.0,
+    "passed": true,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 8.0,
+        "depth": 7.0,
+        "structure": 9.0,
+        "evidence_quality": 7.0,
+        "freshness": 9.0,
+        "overall": 8.0
+      },
+      "missing_dimensions": [],
+      "rationale": "报告覆盖了公共卫生、医保支付、供应链、长期安全性及监管立场等全部要求维度，并对争议和证据进行了系统梳理。分析有一定深度，结构清晰。证据主要来自新闻报道和行业分析，虽非顶级临床期刊但来源可识别、相关性强，基本满足引用要求。时效性很好，整体具备决策参考价值。"
+    },
+    "raw_response": "{\n  \"coverage\": 8,\n  \"depth\": 7,\n  \"structure\": 9,\n  \"evidence_quality\": 7,\n  \"freshness\": 9,\n  \"overall\": 8,\n  \"rubric_pass\": true,\n  \"missing_dimensions\": [],\n  \"rationale\": \"报告覆盖了公共卫生、医保支付、供应链、长期安全性及监管立场等全部要求维度，并对争议和证据进行了系统梳理。分析有一定深度，结构清晰。证据主要来自新闻报道和行业分析，虽非顶级临床期刊但来源可识别、相关性强，基本满足引用要求。时效性很好，整体具备决策参考价值。\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:39:20.081763+00:00"
+  },
+  {
+    "case_id": "web_dr_009",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:41:20.376337+00:00"
+  },
+  {
+    "case_id": "web_dr_009",
+    "judge_type": "claim",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:43:20.623306+00:00"
+  },
+  {
+    "case_id": "web_dr_010",
+    "judge_type": "report",
+    "status": "scored",
+    "score": 6.0,
+    "passed": false,
+    "details": {
+      "prompt_version": "report-rubric-v1",
+      "dimensions": {
+        "coverage": 6.0,
+        "depth": 6.0,
+        "structure": 9.0,
+        "evidence_quality": 7.0,
+        "freshness": 8.0,
+        "overall": 6.0
+      },
+      "missing_dimensions": [
+        "风险情景",
+        "稀土政策详细分析"
+      ],
+      "rationale": "报告覆盖了关键矿产政策、供应链重构、国家比较、产业影响和企业策略，但缺少明确的风险情景分析，且稀土政策部分因资料不足基本未展开，未能充分满足‘稀土政策’维度。其他维度分析有一定深度，结构清晰，证据来源尚可，时效性较好。整体因关键维度缺失导致决策参考价值下降。"
+    },
+    "raw_response": "{\n  \"coverage\": 6,\n  \"depth\": 6,\n  \"structure\": 9,\n  \"evidence_quality\": 7,\n  \"freshness\": 8,\n  \"overall\": 6,\n  \"rubric_pass\": false,\n  \"missing_dimensions\": [\"风险情景\", \"稀土政策详细分析\"],\n  \"rationale\": \"报告覆盖了关键矿产政策、供应链重构、国家比较、产业影响和企业策略，但缺少明确的风险情景分析，且稀土政策部分因资料不足基本未展开，未能充分满足‘稀土政策’维度。其他维度分析有一定深度，结构清晰，证据来源尚可，时效性较好。整体因关键维度缺失导致决策参考价值下降。\"\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:44:09.247143+00:00"
+  },
+  {
+    "case_id": "web_dr_010",
+    "judge_type": "citation",
+    "status": "failed",
+    "score": null,
+    "passed": null,
+    "details": {},
+    "raw_response": "",
+    "error": "TimeoutError: judge subprocess exceeded 120s",
+    "judged_at": "2026-05-04T18:46:09.499205+00:00"
+  },
+  {
+    "case_id": "web_dr_010",
+    "judge_type": "claim",
+    "status": "scored",
+    "score": 0.4,
+    "passed": false,
+    "details": {
+      "prompt_version": "claim-support-v1",
+      "total_claims": 5,
+      "supported_claims": 3,
+      "unsupported_claims": 2,
+      "contradicted_claims": 0,
+      "claims": [
+        {
+          "claim": "新能源汽车补贴政策倒逼车企进一步推广高续航里程车型，从而在原材料端增加了对高能量密度电池的需求，进而带动了对锂的需求增长[1][7]。",
+          "status": "supported",
+          "reason": "源[7]（搜狐2018年纪要）明确指出补贴新政执行后车企推广高续航里程车型，原材料端需求增加，排序包括锂，间接支撑需求增长的逻辑。",
+          "source_urls": [
+            "https://www.sohu.com/a/231565818_619392"
+          ]
+        },
+        {
+          "claim": "钴价保持反弹势头，嘉能可旗下Katanga项目的复产进度可能因此延迟[7]。",
+          "status": "supported",
+          "reason": "源[7]详细提及嘉能可Katanga项目因与刚果（金）政府纠纷及法律诉讼导致复产延迟的风险，并认为中期钴供需结构优质、钴价反弹，支持该论断。",
+          "source_urls": [
+            "https://www.sohu.com/a/231565818_619392"
+          ]
+        },
+        {
+          "claim": "上游原料涨价对中国新能源乘用车销量影响有限[8][9]。",
+          "status": "supported",
+          "reason": "源[8][9]（道客巴巴报告截图）明确列出“上游原料涨价对中国新能源乘用车销量影响有限”，与报告声明一致。",
+          "source_urls": [
+            "https://www.doc88.com/p-68361582725947.html"
+          ]
+        },
+        {
+          "claim": "中国对镍的对外依赖度高达90%，锂的对外依赖度为75%，钴、锰、铬的对外依赖度更是达到96%[14]。",
+          "status": "unsupported",
+          "reason": "报告中引用[14]号来源，但提供的证据资料中未找到该来源或包含相应依赖度数据，无法验证。",
+          "source_urls": []
+        },
+        {
+          "claim": "欧盟电池产能方面，下游投资与上游的差距达800亿美元，若矿产价格飙升（例如锂价上涨2倍、钴价上涨3倍），电池成本可能上涨36%，电动汽车均价将上涨3000美元[16]。",
+          "status": "unsupported",
+          "reason": "引用来源[16]不在提供的证据资料中，无法核实这些具体数字是否属实。",
+          "source_urls": []
+        }
+      ]
+    },
+    "raw_response": "{\n  \"total_claims\": 5,\n  \"supported_claims\": 3,\n  \"unsupported_claims\": 2,\n  \"contradicted_claims\": 0,\n  \"unsupported_claim_rate\": 0.4,\n  \"claims\": [\n    {\n      \"claim\": \"新能源汽车补贴政策倒逼车企进一步推广高续航里程车型，从而在原材料端增加了对高能量密度电池的需求，进而带动了对锂的需求增长[1][7]。\",\n      \"status\": \"supported\",\n      \"reason\": \"源[7]（搜狐2018年纪要）明确指出补贴新政执行后车企推广高续航里程车型，原材料端需求增加，排序包括锂，间接支撑需求增长的逻辑。\",\n      \"source_urls\": [\n        \"https://www.sohu.com/a/231565818_619392\"\n      ]\n    },\n    {\n      \"claim\": \"钴价保持反弹势头，嘉能可旗下Katanga项目的复产进度可能因此延迟[7]。\",\n      \"status\": \"supported\",\n      \"reason\": \"源[7]详细提及嘉能可Katanga项目因与刚果（金）政府纠纷及法律诉讼导致复产延迟的风险，并认为中期钴供需结构优质、钴价反弹，支持该论断。\",\n      \"source_urls\": [\n        \"https://www.sohu.com/a/231565818_619392\"\n      ]\n    },\n    {\n      \"claim\": \"上游原料涨价对中国新能源乘用车销量影响有限[8][9]。\",\n      \"status\": \"supported\",\n      \"reason\": \"源[8][9]（道客巴巴报告截图）明确列出“上游原料涨价对中国新能源乘用车销量影响有限”，与报告声明一致。\",\n      \"source_urls\": [\n        \"https://www.doc88.com/p-68361582725947.html\"\n      ]\n    },\n    {\n      \"claim\": \"中国对镍的对外依赖度高达90%，锂的对外依赖度为75%，钴、锰、铬的对外依赖度更是达到96%[14]。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"报告中引用[14]号来源，但提供的证据资料中未找到该来源或包含相应依赖度数据，无法验证。\",\n      \"source_urls\": []\n    },\n    {\n      \"claim\": \"欧盟电池产能方面，下游投资与上游的差距达800亿美元，若矿产价格飙升（例如锂价上涨2倍、钴价上涨3倍），电池成本可能上涨36%，电动汽车均价将上涨3000美元[16]。\",\n      \"status\": \"unsupported\",\n      \"reason\": \"引用来源[16]不在提供的证据资料中，无法核实这些具体数字是否属实。\",\n      \"source_urls\": []\n    }\n  ]\n}",
+    "error": "",
+    "judged_at": "2026-05-04T18:47:50.473555+00:00"
+  }
+]

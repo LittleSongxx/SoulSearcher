@@ -23,6 +23,62 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
         "sources": [],
         "claims": [],
         "quality_summary": {"summary_count": 1},
+        "research_brief": {"original_query": "q", "clarified_goal": "q"},
+        "quality_gates": [{"epoch": 1, "stage": "final", "gates": []}],
+        "evidence_items": [
+            {
+                "id": "ev1",
+                "source_type": "web",
+                "url": "https://example.com/",
+                "title": "Example",
+                "snippet": "hello",
+            }
+        ],
+        "citation_annotations": [
+            {
+                "id": "cite1",
+                "citation_id": "1",
+                "marker": "[1]",
+                "source_index": 1,
+                "start_char": 0,
+                "end_char": 3,
+                "section": "body",
+                "url": "https://example.com/",
+                "evidence_ids": ["ev1"],
+                "occurrence": 1,
+            }
+        ],
+        "timeline": [
+            {
+                "id": "tl1",
+                "order": 1,
+                "event_type": "source",
+                "title": "Example",
+                "url": "https://example.com/",
+            }
+        ],
+        "supervisor_decisions": [
+            {"round_index": 1, "action": "synthesize", "reason": "enough"}
+        ],
+        "worker_runs": [
+            {
+                "worker_id": "worker_1",
+                "context_id": "ctx_worker_1",
+                "topic": "q",
+                "focus": "evidence",
+                "queries": ["q evidence"],
+                "round_index": 1,
+                "result_count": 1,
+                "evidence_count": 1,
+                "status": "completed",
+            }
+        ],
+        "intermediate_steps": [
+            {"id": "step1", "order": 1, "type": "worker_run", "worker_id": "worker_1"}
+        ],
+        "continue_requests": [
+            {"request_id": "continue_1", "target_type": "claim", "target_text": "claim"}
+        ],
         "fetched_pages": [
             {
                 "url": "https://example.com/",
@@ -74,6 +130,15 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
     assert resp.status_code == 200
     data = resp.json() or {}
     assert data.get("quality_summary", {}).get("summary_count") == 1
+    assert data.get("research_brief", {}).get("original_query") == "q"
+    assert data.get("quality_gates", [{}])[0].get("stage") == "final"
+    assert data.get("evidence_items", [{}])[0].get("id") == "ev1"
+    assert data.get("citation_annotations", [{}])[0].get("id") == "cite1"
+    assert data.get("timeline", [{}])[0].get("event_type") == "source"
+    assert data.get("supervisor_decisions", [{}])[0].get("action") == "synthesize"
+    assert data.get("worker_runs", [{}])[0].get("worker_id") == "worker_1"
+    assert data.get("intermediate_steps", [{}])[0].get("type") == "worker_run"
+    assert data.get("continue_requests", [{}])[0].get("request_id") == "continue_1"
     assert len(data.get("fetched_pages", [])) == 1
     assert len(data.get("passages", [])) == 1
     passage = (data.get("passages", []) or [None])[0] or {}

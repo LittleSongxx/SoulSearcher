@@ -8,7 +8,7 @@ import { MessageItem } from './MessageItem'
 import { SearchModeSelector, SearchMode } from './SearchModeSelector'
 import { Send, Loader2, Sparkles } from 'lucide-react'
 import { getApiBaseUrl } from '@/lib/api'
-import { createLegacyChatStreamState, consumeLegacyChatStreamChunk } from '@/lib/chatStreamProtocol'
+import { createChatStreamState, consumeChatStreamChunk, getChatStreamPath, getChatStreamProtocol } from '@/lib/chatStreamProtocol'
 
 interface Message {
   id: string
@@ -53,14 +53,16 @@ export function ChatInterface({ selectedModel }: ChatInterfaceProps) {
     setMessages((prev) => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
+    const streamProtocol = getChatStreamProtocol()
 
     try {
       const response = await fetch(
-        `${getApiBaseUrl()}/api/chat`,
+        `${getApiBaseUrl()}${getChatStreamPath(streamProtocol)}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
           },
           body: JSON.stringify({
             messages: [{ role: 'user', content: userMessage.content }],
@@ -91,11 +93,11 @@ export function ChatInterface({ selectedModel }: ChatInterfaceProps) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      const streamState = createLegacyChatStreamState()
+      const streamState = createChatStreamState(streamProtocol)
       while (true) {
         const { done, value } = await reader.read()
         const chunk = done ? decoder.decode() : decoder.decode(value, { stream: true })
-        const events = consumeLegacyChatStreamChunk(streamState, chunk, { flush: done })
+        const events = consumeChatStreamChunk(streamProtocol, streamState, chunk, { flush: done })
 
         for (const data of events) {
           if (data.type === 'status') {
@@ -174,7 +176,7 @@ export function ChatInterface({ selectedModel }: ChatInterfaceProps) {
                 </div>
               </div>
               <h2 className="text-2xl font-semibold">
-                欢迎使用 Manus AI
+                欢迎使用 Weaver AI
               </h2>
               <p className="text-muted-foreground">
                 我是你的 AI 研究助手，可以进行深度搜索、代码执行和生成式 UI。
@@ -276,7 +278,7 @@ export function ChatInterface({ selectedModel }: ChatInterfaceProps) {
           <div className="text-center text-xs text-muted-foreground">
             使用模型: <span className="font-medium">{selectedModel}</span>
             {' · '}
-            <span>Manus AI 可能会出错，请验证重要信息</span>
+            <span>Weaver AI 可能会出错，请验证重要信息</span>
           </div>
         </div>
       </div>

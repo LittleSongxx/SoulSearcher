@@ -64,9 +64,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         {!isCollapsed && (
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <span className="text-lg font-bold">M</span>
+              <span className="text-lg font-bold">W</span>
             </div>
-            <span className="text-lg font-semibold">Manus</span>
+            <span className="text-lg font-semibold">Weaver</span>
           </div>
         )}
         <Button

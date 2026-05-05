@@ -1,0 +1,262 @@
+'use client'
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { AlertCircle, CheckCircle2, ExternalLink, RefreshCw, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getApiBaseUrl } from '@/lib/api'
+import { EvidenceClaim, EvidenceResponse, EvidenceSource } from '@/types/evidence'
+
+interface ContinueTarget {
+  target_type: 'claim' | 'source' | 'gap' | 'section'
+  target_index?: number
+  target_text?: string
+  instruction?: string
+}
+
+interface EvidencePanelProps {
+  threadId?: string | null
+  onContinueResearch?: (target: ContinueTarget) => void
+}
+
+function shortUrl(url?: string) {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    return `${parsed.hostname}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  } catch {
+    return url
+  }
+}
+
+function claimTone(status?: string) {
+  const value = String(status || '').toLowerCase()
+  if (value.includes('support')) return 'text-emerald-600 bg-emerald-500/10'
+  if (value.includes('contradict')) return 'text-red-600 bg-red-500/10'
+  if (value.includes('unsupported')) return 'text-amber-600 bg-amber-500/10'
+  return 'text-muted-foreground bg-muted'
+}
+
+function collectQualityGaps(data: EvidenceResponse | null): string[] {
+  const seen = new Set<string>()
+  const gaps: string[] = []
+  for (const record of data?.quality_gates || []) {
+    for (const gate of record.gates || []) {
+      if (gate.status !== 'fail') continue
+      const missing = gate.details?.missing_dimensions
+      if (!Array.isArray(missing)) continue
+      for (const item of missing) {
+        const text = String(item || '').trim()
+        if (!text || seen.has(text)) continue
+        seen.add(text)
+        gaps.push(text)
+      }
+    }
+  }
+  return gaps
+}
+
+export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelProps) {
+  const [data, setData] = useState<EvidenceResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadEvidence = useCallback(async () => {
+    if (!threadId) {
+      setData(null)
+      setError('')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/sessions/${threadId}/evidence`)
+      if (response.status === 404) {
+        setData(null)
+        return
+      }
+      if (!response.ok) throw new Error(`Evidence request failed: ${response.status}`)
+      setData(await response.json())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load evidence')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [threadId])
+
+  useEffect(() => {
+    void loadEvidence()
+  }, [loadEvidence])
+
+  const sources = useMemo(() => data?.sources || data?.evidence_items || [], [data])
+  const claims = useMemo(() => data?.claims || [], [data])
+  const passages = useMemo(() => data?.passages || [], [data])
+  const gaps = useMemo(() => collectQualityGaps(data), [data])
+  const quality = data?.quality_summary || {}
+
+  if (!threadId) {
+    return (
+      <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+        Evidence will appear after a research session starts.
+      </div>
+    )
+  }
+
+  if (isLoading && !data) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground">
+        <RefreshCw className="h-4 w-4 animate-spin" />
+        Loading evidence...
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold">Evidence Inspector</h3>
+          <p className="text-xs text-muted-foreground">Sources, claims, passages, and quality gaps for this thread.</p>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void loadEvidence()} disabled={isLoading}>
+          <RefreshCw className={isLoading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+        </Button>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4" />
+          {error}
+        </div>
+      )}
+
+      {!data && !error && (
+        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          No evidence artifacts are available yet. Run Deep Research to populate this inspector.
+        </div>
+      )}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <Metric label="Sources" value={sources.length} />
+            <Metric label="Claims" value={claims.length} />
+            <Metric label="Passages" value={passages.length} />
+          </div>
+
+          {Object.keys(quality).length > 0 && (
+            <Card className="border-none shadow-sm ring-1 ring-border/50">
+              <CardHeader className="p-3">
+                <CardTitle className="text-xs">Quality Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 p-3 pt-0 text-xs text-muted-foreground">
+                {Object.entries(quality).slice(0, 8).map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-3">
+                    <span className="truncate">{key}</span>
+                    <span className="font-medium text-foreground">{String(value)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {gaps.length > 0 && (
+            <Section title="Quality Gaps">
+              {gaps.slice(0, 5).map((gap, index) => (
+                <div key={`${gap}-${index}`} className="rounded-lg border p-3 text-xs">
+                  <div className="font-medium">{gap}</div>
+                  {onContinueResearch && (
+                    <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'gap', target_index: index + 1, target_text: gap })}>
+                      <Search className="mr-1 h-3 w-3" /> Continue
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {claims.length > 0 && (
+            <Section title="Claims">
+              {claims.slice(0, 8).map((claim, index) => (
+                <ClaimCard key={`${claim.claim}-${index}`} claim={claim} index={index} onContinueResearch={onContinueResearch} />
+              ))}
+            </Section>
+          )}
+
+          {sources.length > 0 && (
+            <Section title="Sources">
+              {(sources as EvidenceSource[]).slice(0, 10).map((source, index) => (
+                <div key={`${source.url || source.title}-${index}`} className="rounded-lg border p-3 text-xs">
+                  <div className="font-medium leading-relaxed">{source.title || shortUrl(source.url) || `Source ${index + 1}`}</div>
+                  {source.url && (
+                    <a className="mt-1 flex items-center gap-1 text-muted-foreground hover:text-primary" href={source.url} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-3 w-3" /> {shortUrl(source.url)}
+                    </a>
+                  )}
+                  {(source.snippet || source.summary) && <p className="mt-2 text-muted-foreground line-clamp-3">{source.snippet || source.summary}</p>}
+                  {onContinueResearch && (
+                    <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'source', target_index: index + 1, target_text: source.title || source.url })}>
+                      <Search className="mr-1 h-3 w-3" /> Continue
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {passages.length > 0 && (
+            <Section title="Passages">
+              {passages.slice(0, 6).map((passage, index) => (
+                <div key={`${passage.snippet_hash || passage.url}-${index}`} className="rounded-lg bg-muted/40 p-3 text-xs">
+                  <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3" /> {passage.heading || passage.page_title || shortUrl(passage.url)}
+                  </div>
+                  <p className="line-clamp-4 leading-relaxed">{passage.quote || passage.text}</p>
+                </div>
+              ))}
+            </Section>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function Metric({ label, value }: { label: string, value: number }) {
+  return (
+    <div className="rounded-lg bg-muted/50 p-2">
+      <div className="text-base font-semibold text-foreground">{value}</div>
+      <div className="text-muted-foreground">{label}</div>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string, children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
+      <div className="space-y-2">{children}</div>
+    </div>
+  )
+}
+
+function ClaimCard({ claim, index, onContinueResearch }: { claim: EvidenceClaim, index: number, onContinueResearch?: (target: ContinueTarget) => void }) {
+  return (
+    <div className="rounded-lg border p-3 text-xs">
+      <div className="flex items-start justify-between gap-2">
+        <div className="font-medium leading-relaxed">{claim.claim || `Claim ${index + 1}`}</div>
+        {claim.status && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${claimTone(claim.status)}`}>{claim.status}</span>}
+      </div>
+      {claim.notes && <p className="mt-2 text-muted-foreground">{claim.notes}</p>}
+      {claim.evidence_passages && claim.evidence_passages.length > 0 && (
+        <div className="mt-2 text-muted-foreground">{claim.evidence_passages.length} passage evidence items</div>
+      )}
+      {onContinueResearch && (
+        <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'claim', target_index: index + 1, target_text: claim.claim })}>
+          <Search className="mr-1 h-3 w-3" /> Continue
+        </Button>
+      )}
+    </div>
+  )
+}

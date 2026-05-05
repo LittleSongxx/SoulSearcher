@@ -110,7 +110,9 @@ export function BrowserViewer({
 
   // Determine what to display
   const displayScreenshot = selectedScreenshot || latestScreenshot
-  const liveImageUrl = currentFrame ? `data:image/jpeg;base64,${currentFrame.data}` : null
+  const liveImageMimeRaw = (currentFrame?.metadata?.mime_type || currentFrame?.metadata?.mime || 'image/jpeg') as string
+  const liveImageMime = typeof liveImageMimeRaw === 'string' && liveImageMimeRaw ? liveImageMimeRaw : 'image/jpeg'
+  const liveImageUrl = currentFrame ? `data:${liveImageMime};base64,${currentFrame.data}` : null
   const liveMetaUrlRaw = (currentFrame?.metadata?.url || currentFrame?.metadata?.page_url || '') as string
   const liveMetaTitleRaw = (currentFrame?.metadata?.title || '') as string
   const liveMetaUrl = typeof liveMetaUrlRaw === 'string' ? liveMetaUrlRaw : ''

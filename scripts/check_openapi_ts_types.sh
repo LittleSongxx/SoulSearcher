@@ -41,8 +41,13 @@ if [[ ! -f "$OPENAPI_JSON" ]]; then
   exit 1
 fi
 
-pnpm -C "$ROOT_DIR/web" exec openapi-typescript "$OPENAPI_JSON" -o "$ROOT_DIR/web/lib/api-types.ts"
-pnpm -C "$ROOT_DIR/web" exec openapi-typescript "$OPENAPI_JSON" -o "$ROOT_DIR/sdk/typescript/src/openapi-types.ts"
+if pnpm -C "$ROOT_DIR/web" exec openapi-typescript --version >/dev/null 2>&1; then
+  pnpm -C "$ROOT_DIR/web" exec openapi-typescript "$OPENAPI_JSON" -o "$ROOT_DIR/web/lib/api-types.ts"
+  pnpm -C "$ROOT_DIR/web" exec openapi-typescript "$OPENAPI_JSON" -o "$ROOT_DIR/sdk/typescript/src/openapi-types.ts"
+else
+  pnpm dlx openapi-typescript "$OPENAPI_JSON" -o "$ROOT_DIR/web/lib/api-types.ts"
+  pnpm dlx openapi-typescript "$OPENAPI_JSON" -o "$ROOT_DIR/sdk/typescript/src/openapi-types.ts"
+fi
 
 # Fail if generation changed the committed file.
 git -C "$ROOT_DIR" diff --exit-code -- web/lib/api-types.ts sdk/typescript/src/openapi-types.ts

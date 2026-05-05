@@ -1,0 +1,29 @@
+{
+  "id": "web_dr_001",
+  "query": "Compare current agentic coding assistants for large enterprise software teams, focusing on architecture, security controls, evaluation methods, and deployment tradeoffs.",
+  "domain": "ai_agents",
+  "task_type": "comparative_research",
+  "difficulty": "hard",
+  "expected_dimensions": [
+    "agent_architecture",
+    "security_controls",
+    "enterprise_deployment",
+    "evaluation_methods",
+    "limitations",
+    "vendor_comparison"
+  ],
+  "freshness_requirement": "recent",
+  "must_cite": true,
+  "judge_rubric": {
+    "requires_security_tradeoffs": true,
+    "requires_vendor_comparison": true,
+    "requires_citations_for_claims": true
+  },
+  "source_constraints": {
+    "prefer_official_docs_and_independent_benchmarks": true
+  },
+  "metadata": {
+    "language": "en",
+    "notes": "Avoid promotional claims without source support."
+  }
+}

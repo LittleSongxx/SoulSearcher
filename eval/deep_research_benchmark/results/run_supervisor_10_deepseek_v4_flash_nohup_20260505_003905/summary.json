@@ -1,0 +1,102 @@
+{
+  "total_cases": 10,
+  "completed_cases": 10,
+  "failed_cases": 0,
+  "timeout_cases": 0,
+  "stable_completion_rate": 1.0,
+  "rubric_pass_rate": 0.7,
+  "citation_accuracy": 0.7267,
+  "unsupported_claim_rate": 0.46,
+  "avg_effective_citations": 2.6,
+  "judge_scores_total": 30,
+  "report_judge_scored": 10,
+  "citation_judge_scored": 10,
+  "claim_judge_scored": 10,
+  "avg_report_evidence_quality": 6.8,
+  "avg_report_depth": 7.8,
+  "avg_sources": 24.4,
+  "avg_evidence_items": 284.4,
+  "avg_passages": 97.1,
+  "avg_claims_checked": 10.0,
+  "avg_claims_supported": 0.5,
+  "avg_claims_unsupported": 8.2,
+  "by_language": {
+    "en": {
+      "total_cases": 5,
+      "completed_cases": 5,
+      "rubric_pass_rate": 0.8,
+      "unsupported_claim_rate": 0.52
+    },
+    "zh": {
+      "total_cases": 5,
+      "completed_cases": 5,
+      "rubric_pass_rate": 0.6,
+      "unsupported_claim_rate": 0.4
+    }
+  },
+  "by_domain": {
+    "ai_agents": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 1.0
+    },
+    "energy_climate": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 0.4
+    },
+    "finance": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 0.0,
+      "unsupported_claim_rate": 0.4
+    },
+    "geopolitics_industrial_policy": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 0.0,
+      "unsupported_claim_rate": 0.4
+    },
+    "healthcare": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 0.6
+    },
+    "legal_regulation": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 0.4
+    },
+    "quantum_science": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 0.2
+    },
+    "security": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 0.2
+    },
+    "software_infrastructure": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 0.0,
+      "unsupported_claim_rate": 0.6
+    },
+    "supply_chain": {
+      "total_cases": 1,
+      "completed_cases": 1,
+      "rubric_pass_rate": 1.0,
+      "unsupported_claim_rate": 0.4
+    }
+  },
+  "p50_duration_s": 443.326,
+  "p90_duration_s": 676.477,
+  "mean_duration_s": 495.827
+}

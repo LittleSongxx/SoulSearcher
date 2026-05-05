@@ -1,0 +1,37 @@
+{
+  "run_id": "thread_341ea2ae3baa414c9b1b724daba407b8",
+  "model": "deepseek-v4-flash",
+  "route": "deep",
+  "started_at": "2026-05-04T17:38:55.475258",
+  "ended_at": "2026-05-04T17:44:03.758424",
+  "duration_ms": 308283.17,
+  "event_count": 10,
+  "nodes_started": {
+    "langgraph": 1,
+    "router": 1,
+    "route_decision": 1,
+    "deepsearch": 1,
+    "human_review": 1
+  },
+  "nodes_completed": {
+    "route_decision": 1,
+    "router": 1,
+    "deepsearch": 1,
+    "human_review": 1,
+    "langgraph": 1
+  },
+  "errors": [],
+  "cancelled": false,
+  "evidence_summary": {
+    "sources_count": 25,
+    "unsupported_claims_count": 10,
+    "freshness_ratio_30d": 0.0,
+    "citation_coverage": 0.4419,
+    "query_coverage_score": 0.8,
+    "freshness_warning": null,
+    "claim_verifier_total": 10,
+    "claim_verifier_verified": 0,
+    "claim_verifier_unsupported": 10,
+    "claim_verifier_contradicted": 0
+  }
+}

@@ -1104,17 +1104,71 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "deepsearch_enable_research_fetcher",
     "deepsearch_supervisor_fetch_passages",
     "deepsearch_supervisor_fetch_source_limit",
+    "deepsearch_passage_cap",
+    "deepsearch_evidence_item_cap",
+    "deepsearch_min_evidence_snippet_chars",
     "deepsearch_enable_claim_ledger",
     "deepsearch_claim_ledger_max_claims",
+    "deepsearch_claim_verifier_max_claims",
+    "deepsearch_claim_grounding_gate_enabled",
     "deepsearch_final_verifier_revise",
     "deepsearch_final_verifier_max_revisions",
+    "deepsearch_citation_repair_enabled",
+    "deepsearch_citation_repair_min_coverage",
     "deepsearch_source_curator_enabled",
     "deepsearch_reflection_gap_queries",
+    "deepsearch_model_profile",
+    "deepsearch_supervisor_model",
+    "supervisor_model",
+    "planner_model",
+    "planning_model",
+    "deepsearch_query_model",
+    "query_model",
+    "query_gen_model",
+    "deepsearch_search_summary_model",
+    "search_summary_model",
+    "summary_model",
+    "synthesis_model",
+    "deepsearch_worker_model",
+    "worker_model",
+    "researcher_model",
+    "research_model",
+    "deepsearch_compression_model",
+    "compression_model",
+    "deepsearch_writer_model",
+    "writer_model",
+    "final_report_model",
+    "writing_model",
+    "deepsearch_verifier_model",
+    "verifier_model",
+    "evaluator_model",
+    "evaluation_model",
+    "reasoning_model",
+    "deepsearch_sectioned_report",
+    "sectioned_report",
+    "deepsearch_sectioned_report_requires_approval",
+    "sectioned_report_requires_approval",
+    "deepsearch_sectioned_report_review",
+    "sectioned_report_review",
+    "deepsearch_sectioned_report_max_sections",
+    "deepsearch_sectioned_report_adaptive",
+    "deepsearch_sectioned_report_adaptive_max_sections",
+    "deepsearch_section_followups",
+    "deepsearch_section_min_chars",
+    "deepsearch_section_min_evidence",
+    "deepsearch_section_results_cap",
+    "deepsearch_section_evidence_cap",
     "source_policy",
     "evidence_providers",
     "source_providers",
     "use_rag",
     "use_reflection_loop",
+}
+
+
+_RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
+    "deepsearch_sectioned_report_review",
+    "sectioned_report_review",
 }
 
 
@@ -1130,6 +1184,8 @@ def _safe_research_deepsearch_config(value: Any) -> Dict[str, Any]:
             cleaned[key_text] = item
         elif isinstance(item, list):
             cleaned[key_text] = [str(part).strip() for part in item if str(part).strip()]
+        elif key_text in _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS and isinstance(item, dict):
+            cleaned[key_text] = item
     return cleaned
 
 

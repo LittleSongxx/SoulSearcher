@@ -1,0 +1,27 @@
+{
+  "id": "web_dr_009",
+  "query": "评估近年来 GLP-1 类减重药物在公共卫生、医保支付、供应链和长期安全性方面的争议与证据。",
+  "domain": "healthcare",
+  "task_type": "evidence_review",
+  "difficulty": "hard",
+  "expected_dimensions": [
+    "临床证据",
+    "公共卫生影响",
+    "医保支付",
+    "供应链",
+    "长期安全性",
+    "监管立场"
+  ],
+  "freshness_requirement": "recent",
+  "must_cite": true,
+  "judge_rubric": {
+    "requires_clinical_or_regulatory_sources": true,
+    "requires_balanced_risk_benefit_analysis": true
+  },
+  "source_constraints": {
+    "prefer_regulators_clinical_trials_and_medical_journals": true
+  },
+  "metadata": {
+    "language": "zh"
+  }
+}

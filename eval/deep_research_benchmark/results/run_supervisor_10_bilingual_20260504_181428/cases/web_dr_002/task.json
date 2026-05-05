@@ -1,0 +1,28 @@
+{
+  "id": "web_dr_002",
+  "query": "Analyze the latest regulatory obligations for high-risk AI systems under the EU AI Act and their impact on SaaS vendors operating in Europe.",
+  "domain": "legal_regulation",
+  "task_type": "policy_analysis",
+  "difficulty": "hard",
+  "expected_dimensions": [
+    "high_risk_definition",
+    "vendor_obligations",
+    "timeline",
+    "penalties",
+    "saas_impact",
+    "compliance_actions"
+  ],
+  "freshness_requirement": "recent",
+  "must_cite": true,
+  "judge_rubric": {
+    "requires_dates": true,
+    "requires_regulatory_sources": true,
+    "requires_citations_for_claims": true
+  },
+  "source_constraints": {
+    "prefer_official_sources": true
+  },
+  "metadata": {
+    "language": "en"
+  }
+}

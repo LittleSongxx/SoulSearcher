@@ -672,11 +672,246 @@ def _reorder_search_runs_for_citations(
         return list(search_runs)
 
 
+def _inline_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _canonical_text_url(value: Any) -> str:
+    return canonicalize_source_url(value) or str(value or "").strip()
+
+
+def _item_snippet(item: Dict[str, Any]) -> str:
+    if not isinstance(item, dict):
+        return ""
+    for key in ("snippet", "quote", "text", "summary", "content", "raw_excerpt", "markdown"):
+        text = _inline_text(item.get(key))
+        if text:
+            return text
+    return ""
+
+
+def _is_low_value_evidence_text(text: str) -> bool:
+    lowered = str(text or "").lower()
+    if not lowered.strip():
+        return True
+    if "please enable javascript" in lowered:
+        return True
+    if "checking your browser" in lowered:
+        return True
+    if "verify you are human" in lowered:
+        return True
+    if "cookie" in lowered and any(token in lowered for token in ("accept", "consent", "preferences", "manage cookies")):
+        return True
+    return False
+
+
+def _split_claim_sentences(text: str) -> List[str]:
+    sentences: List[str] = []
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = [match.group(0) for match in re.finditer(r".+?(?:[。！？!?]|[.!?](?=\s|$))|.+$", stripped)]
+        if parts:
+            sentences.extend(part.strip() for part in parts if part.strip())
+        else:
+            sentences.append(stripped)
+    return sentences
+
+
+def _is_short_claim_sentence(text: str) -> bool:
+    value = str(text or "").strip()
+    if re.search(r"[\u4e00-\u9fff]", value):
+        return len(value) < 8
+    return len(value) < 20
+
+
+def _evidence_rank(item: Dict[str, Any]) -> float:
+    if not isinstance(item, dict):
+        return -1e9
+    snippet = _item_snippet(item)
+    if _is_low_value_evidence_text(snippet):
+        return -1e9
+    score = 0.0
+    try:
+        score += float(item.get("quality_score") if item.get("quality_score") is not None else item.get("score") or 0.0)
+    except (TypeError, ValueError):
+        pass
+    source_type = str(item.get("source_type") or "").lower()
+    if source_type == "passage":
+        score += 3.0
+    elif source_type == "fetched_page":
+        score += 2.0
+    elif source_type in {"web", "legacy_source"}:
+        score += 1.0
+    if item.get("content_ref") or item.get("snippet_hash"):
+        score += 0.5
+    if item.get("url") or item.get("document_id"):
+        score += 0.5
+    score += min(len(snippet), 900) / 900.0
+    return score
+
+
+def _filter_and_cap_evidence_items(
+    evidence_items: List[Dict[str, Any]],
+    config: Dict[str, Any],
+    *,
+    cap_key: str = "deepsearch_evidence_item_cap",
+    default_cap: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    if not evidence_items:
+        return []
+    cap = _configurable_int(
+        config,
+        cap_key,
+        int(default_cap if default_cap is not None else getattr(settings, cap_key, 160) or 160),
+    )
+    min_chars = max(
+        0,
+        _configurable_int(
+            config,
+            "deepsearch_min_evidence_snippet_chars",
+            int(getattr(settings, "deepsearch_min_evidence_snippet_chars", 40) or 40),
+        ),
+    )
+    ranked: List[Tuple[float, int, Dict[str, Any]]] = []
+    fallback: List[Tuple[float, int, Dict[str, Any]]] = []
+    seen = set()
+    for idx, item in enumerate(evidence_items or []):
+        if not isinstance(item, dict):
+            continue
+        snippet = _item_snippet(item)
+        url = _canonical_text_url(item.get("url"))
+        key = str(item.get("id") or "").strip()
+        if not key:
+            key = "|".join([url, str(item.get("document_id") or ""), str(item.get("content_ref") or ""), snippet[:160]])
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        score = _evidence_rank(item)
+        if score <= -1e8:
+            continue
+        row = (score, idx, item)
+        if len(snippet) < min_chars:
+            fallback.append(row)
+        else:
+            ranked.append(row)
+    rows = sorted(ranked, key=lambda row: (-row[0], row[1]))
+    if cap <= 0:
+        selected = rows
+    else:
+        selected = rows[:cap]
+        if len(selected) < min(cap, 5):
+            selected.extend(sorted(fallback, key=lambda row: (-row[0], row[1]))[: max(0, min(cap, 5) - len(selected))])
+    selected.sort(key=lambda row: row[1])
+    return [item for _score, _idx, item in selected]
+
+
+def _cap_passages(passages: List[Dict[str, Any]], config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not passages:
+        return []
+    cap = _configurable_int(
+        config,
+        "deepsearch_passage_cap",
+        int(getattr(settings, "deepsearch_passage_cap", 40) or 40),
+    )
+    ranked = []
+    for idx, passage in enumerate(passages):
+        if not isinstance(passage, dict):
+            continue
+        text = _inline_text(passage.get("text") or passage.get("quote"))
+        if _is_low_value_evidence_text(text):
+            continue
+        score = min(len(text), 900) / 900.0
+        if passage.get("snippet_hash") or passage.get("content_ref"):
+            score += 0.5
+        ranked.append((score, idx, passage))
+    ranked.sort(key=lambda row: (-row[0], row[1]))
+    selected = ranked if cap <= 0 else ranked[:cap]
+    selected.sort(key=lambda row: row[1])
+    return [item for _score, _idx, item in selected]
+
+
+def _source_index_by_canonical(sources: List[Dict[str, Any]]) -> Dict[str, int]:
+    mapping: Dict[str, int] = {}
+    for idx, source in enumerate(sources or [], 1):
+        if not isinstance(source, dict):
+            continue
+        for value in (source.get("url"), source.get("rawUrl")):
+            key = _canonical_text_url(value)
+            if key and key not in mapping:
+                mapping[key] = idx
+    return mapping
+
+
+def _source_evidence_snippets(
+    *,
+    evidence_items: Optional[List[Dict[str, Any]]] = None,
+    passages: Optional[List[Dict[str, Any]]] = None,
+    max_per_source: int = 2,
+) -> Dict[str, List[str]]:
+    snippets: Dict[str, List[str]] = {}
+    rows: List[Dict[str, Any]] = []
+    rows.extend([item for item in evidence_items or [] if isinstance(item, dict)])
+    rows.extend([item for item in passages or [] if isinstance(item, dict)])
+    for item in rows:
+        url = _canonical_text_url(item.get("url"))
+        if not url:
+            continue
+        snippet = _item_snippet(item)
+        if len(snippet) < 40 or _is_low_value_evidence_text(snippet):
+            continue
+        bucket = snippets.setdefault(url, [])
+        normalized = snippet[:360]
+        if normalized not in bucket and len(bucket) < max(1, max_per_source):
+            bucket.append(normalized)
+    return snippets
+
+
+def _format_grounding_evidence_block(
+    *,
+    results: Optional[List[Dict[str, Any]]] = None,
+    evidence_items: Optional[List[Dict[str, Any]]] = None,
+    sources: Optional[List[Dict[str, Any]]] = None,
+    config: Optional[Dict[str, Any]] = None,
+    limit: int = 8,
+) -> str:
+    config = config or {}
+    source_indices = _source_index_by_canonical(sources or [])
+    rows: List[Tuple[float, int, str]] = []
+    combined: List[Dict[str, Any]] = []
+    combined.extend([item for item in evidence_items or [] if isinstance(item, dict)])
+    combined.extend([item for item in results or [] if isinstance(item, dict)])
+    for idx, item in enumerate(combined):
+        snippet = _item_snippet(item)
+        if len(snippet) < 30 or _is_low_value_evidence_text(snippet):
+            continue
+        url = _canonical_text_url(item.get("url"))
+        ref = source_indices.get(url)
+        title = _inline_text(item.get("title") or item.get("page_title") or item.get("name")) or "Evidence"
+        evidence_id = _inline_text(item.get("id") or item.get("evidence_id") or item.get("content_ref") or item.get("snippet_hash"))
+        prefix = f"[{ref}]" if isinstance(ref, int) else "未编号来源"
+        suffix = f" evidence_id={evidence_id}" if evidence_id else ""
+        rows.append((_evidence_rank(item), idx, f"- {prefix} {title}: {snippet[:420]}{suffix}"))
+    rows.sort(key=lambda row: (-row[0], row[1]))
+    cap = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_section_evidence_cap",
+            int(getattr(settings, "deepsearch_section_evidence_cap", limit) or limit),
+        ),
+    )
+    return "\n".join(line for _score, _idx, line in rows[: min(cap, max(1, limit))]).strip()
+
+
 def _format_sources_for_writer(
     sources: List[Dict[str, Any]],
     search_runs: List[Dict[str, Any]],
     *,
     limit: int,
+    evidence_items: Optional[List[Dict[str, Any]]] = None,
+    passages: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Render sources into a compact, numbered block for the writer prompt.
@@ -724,6 +959,7 @@ def _format_sources_for_writer(
     except Exception:
         snippet_by_canonical = {}
 
+    source_evidence = _source_evidence_snippets(evidence_items=evidence_items, passages=passages)
     lines: List[str] = []
     for idx, src in enumerate(rendered_sources, 1):
         if not isinstance(src, dict):
@@ -753,6 +989,14 @@ def _format_sources_for_writer(
             lines.append(f"URL: {href}")
         if snippet:
             lines.append(f"摘要片段: {snippet}")
+        evidence_snippets = []
+        if canonical_url:
+            evidence_snippets = source_evidence.get(canonical_url, [])
+        if not evidence_snippets and href:
+            evidence_snippets = source_evidence.get(_canonical_text_url(href), [])
+        for snippet_idx, evidence_snippet in enumerate(evidence_snippets[:2], 1):
+            if evidence_snippet and evidence_snippet != snippet:
+                lines.append(f"证据片段{snippet_idx}: {evidence_snippet}")
         lines.append("")  # blank line between sources
 
     return "\n".join(lines).strip() or "暂无可引用来源。"
@@ -812,7 +1056,7 @@ def _estimate_citation_coverage(report: str) -> Tuple[List[str], float]:
     if not report:
         return [], 1.0
     body = report.split("## 参考来源（自动生成）", 1)[0]
-    sentences = re.split(r"(?<=[。！？.!?])\s+|\n+", body)
+    sentences = _split_claim_sentences(body)
     markers = (
         r"\d{4}",
         r"\d+%",
@@ -824,7 +1068,7 @@ def _estimate_citation_coverage(report: str) -> Tuple[List[str], float]:
     claim_like: List[str] = []
     for sentence in sentences:
         text = re.sub(r"\s+", " ", sentence).strip()
-        if len(text) < 20:
+        if _is_short_claim_sentence(text):
             continue
         if any(re.search(marker, text, flags=re.IGNORECASE) for marker in markers):
             claim_like.append(text)
@@ -865,6 +1109,14 @@ def _verify_report_claims(
     checks = verifier.verify_report(
         report,
         search_runs,
+        max_claims=max(
+            1,
+            _configurable_int(
+                config,
+                "deepsearch_claim_verifier_max_claims",
+                int(getattr(settings, "deepsearch_claim_verifier_max_claims", 10) or 10),
+            ),
+        ),
         passages=passages if use_passages and passages else None,
     )
     return checks, serialize_claim_checks(checks), summarize_claim_checks(checks)
@@ -915,6 +1167,127 @@ def _revise_report_for_claim_failures(
     return revised.strip() or report
 
 
+def _claim_match_key(text: Any) -> str:
+    value = re.sub(r"\[(?:S?\d+)\]", "", str(text or ""))
+    value = re.sub(r"^[#>\-\*\s]+", "", value)
+    value = re.sub(r"\s+", " ", value).strip().lower()
+    return value
+
+
+def _claim_text_matches(sentence: str, claim: str) -> bool:
+    sentence_key = _claim_match_key(sentence)
+    claim_key = _claim_match_key(claim)
+    if not sentence_key or not claim_key:
+        return False
+    if claim_key in sentence_key or sentence_key in claim_key:
+        return True
+    claim_tokens = set(re.findall(r"[\w\u4e00-\u9fff]+", claim_key))
+    sentence_tokens = set(re.findall(r"[\w\u4e00-\u9fff]+", sentence_key))
+    if not claim_tokens or not sentence_tokens:
+        return False
+    overlap = len(claim_tokens & sentence_tokens) / max(1, len(claim_tokens))
+    return overlap >= 0.82
+
+
+def _apply_claim_grounding_gate(
+    report: str,
+    claims: List[Dict[str, Any]],
+    config: Dict[str, Any],
+) -> Tuple[str, Dict[str, Any]]:
+    if not _configurable_bool(
+        config,
+        "deepsearch_claim_grounding_gate_enabled",
+        bool(getattr(settings, "deepsearch_claim_grounding_gate_enabled", True)),
+    ):
+        return report, {"enabled": False, "removed_claim_count": 0}
+    failing = [
+        str(claim.get("claim") or "").strip()
+        for claim in claims or []
+        if isinstance(claim, dict) and claim.get("status") in {"unsupported", "contradicted"} and str(claim.get("claim") or "").strip()
+    ]
+    if not failing or not report:
+        return report, {"enabled": True, "removed_claim_count": 0}
+    reference_heading = "## 参考来源（自动生成）"
+    body, sep, refs = report.partition(reference_heading)
+    removed = 0
+    output_lines: List[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            output_lines.append(line)
+            continue
+        sentences = _split_claim_sentences(line)
+        kept: List[str] = []
+        for sentence in sentences:
+            if any(_claim_text_matches(sentence, claim) for claim in failing):
+                removed += 1
+                continue
+            kept.append(sentence)
+        rebuilt = " ".join(part for part in kept if part.strip()).strip()
+        if rebuilt:
+            output_lines.append(rebuilt)
+    revised = "\n".join(output_lines).strip()
+    if removed and not revised:
+        revised = "未保留可验证的声明。"
+    if sep:
+        revised = f"{revised}\n\n{reference_heading}{refs}"
+    return (revised if removed else report), {"enabled": True, "removed_claim_count": removed}
+
+
+def _repair_report_citations(
+    llm: ChatOpenAI,
+    *,
+    topic: str,
+    report: str,
+    sources: str,
+    missing_claims: List[str],
+    citation_coverage: float,
+    config: Dict[str, Any],
+) -> str:
+    if not missing_claims:
+        return report
+    if not _configurable_bool(
+        config,
+        "deepsearch_citation_repair_enabled",
+        bool(getattr(settings, "deepsearch_citation_repair_enabled", True)),
+    ):
+        return report
+    min_coverage = _configurable_float(
+        config,
+        "deepsearch_citation_repair_min_coverage",
+        float(getattr(settings, "deepsearch_citation_repair_min_coverage", 0.85) or 0.85),
+    )
+    if citation_coverage >= min_coverage:
+        return report
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "user",
+                "请修复研究报告中的引用覆盖问题。"
+                "\n主题：{topic}"
+                "\n未带引用的事实性句子：\n{missing_claims}"
+                "\n可引用来源与证据片段：\n{sources}"
+                "\n原报告：\n{report}"
+                "\n要求：只输出修订后的 Markdown 报告正文；仅使用已有编号引用；能由证据片段直接支持的事实句补充对应编号引用；证据不足的事实句改写为不确定表述或删除；不要新增参考来源列表。",
+            )
+        ]
+    )
+    try:
+        response = llm.invoke(
+            prompt.format_messages(
+                topic=topic,
+                missing_claims="\n".join(f"- {claim}" for claim in missing_claims[:10]),
+                sources=sources or "暂无",
+                report=report,
+            ),
+            config=config,
+        )
+        repaired = getattr(response, "content", "") or ""
+        return repaired.strip() or report
+    except Exception:
+        return report
+
+
 def _write_section_content(
     llm: ChatOpenAI,
     *,
@@ -922,12 +1295,33 @@ def _write_section_content(
     section: Dict[str, Any],
     summary_notes: List[str],
     section_results: List[Dict[str, Any]],
+    section_evidence: Optional[List[Dict[str, Any]]] = None,
+    report_sources: Optional[List[Dict[str, Any]]] = None,
     sources: str,
     config: Dict[str, Any],
 ) -> str:
     title = str(section.get("title") or "Section").strip()
     focus = str(section.get("focus") or title).strip()
-    evidence_text = _format_results(section_results[:8]) if section_results else ""
+    section_result_cap = max(
+        1,
+        _configurable_int(
+            config,
+            "deepsearch_section_results_cap",
+            int(getattr(settings, "deepsearch_section_results_cap", 6) or 6),
+        ),
+    )
+    evidence_text = _format_results(section_results[:section_result_cap]) if section_results else ""
+    grounding_text = _format_grounding_evidence_block(
+        results=section_results,
+        evidence_items=section_evidence,
+        sources=report_sources,
+        config=config,
+        limit=_configurable_int(
+            config,
+            "deepsearch_section_evidence_cap",
+            int(getattr(settings, "deepsearch_section_evidence_cap", 8) or 8),
+        ),
+    )
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -938,8 +1332,9 @@ def _write_section_content(
                 "\n章节重点：{focus}"
                 "\n已有研究摘要：\n{summary_notes}"
                 "\n本章节检索证据：\n{evidence}"
+                "\n本章节可直接使用的证据绑定：\n{grounding_evidence}"
                 "\n可引用来源：\n{sources}"
-                "\n要求：只输出章节正文；结构清晰；关键事实尽量带来源编号；如证据不足，明确说明不确定性。",
+                "\n要求：只输出章节正文；结构清晰；每个关键事实、数据、时间点、比较结论必须绑定证据并在句末使用已有编号引用；不得把 unsupported/contradicted 的声明写成确定事实；如证据不足，明确说明不确定性。",
             )
         ]
     )
@@ -951,6 +1346,7 @@ def _write_section_content(
                 focus=focus,
                 summary_notes="\n\n".join(summary_notes[-8:]) or "暂无",
                 evidence=evidence_text or "暂无",
+                grounding_evidence=grounding_text or "暂无",
                 sources=sources or "暂无",
             ),
             config=config,
@@ -979,6 +1375,7 @@ def _execute_sectioned_report_flow(
     writer_llm: ChatOpenAI,
     summary_notes: List[str],
     sources_block: str,
+    report_sources: Optional[List[Dict[str, Any]]] = None,
     per_query_results: int,
     emitter: Any,
 ) -> Tuple[Dict[str, Any], str, List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -1022,6 +1419,22 @@ def _execute_sectioned_report_flow(
             int(getattr(settings, "deepsearch_section_followups", 1) or 1),
         ),
     )
+    if _configurable_bool(
+        config,
+        "deepsearch_sectioned_report_adaptive",
+        bool(getattr(settings, "deepsearch_sectioned_report_adaptive", True)),
+    ) and _configurable_value(config, "deepsearch_sectioned_report_max_sections") is None:
+        max_sections = min(
+            max_sections,
+            max(
+                1,
+                _configurable_int(
+                    config,
+                    "deepsearch_sectioned_report_adaptive_max_sections",
+                    int(getattr(settings, "deepsearch_sectioned_report_adaptive_max_sections", 5) or 5),
+                ),
+            ),
+        )
     min_chars = max(1, _configurable_int(config, "deepsearch_section_min_chars", 120))
     min_evidence = max(0, _configurable_int(config, "deepsearch_section_min_evidence", 1))
     section_results: List[Dict[str, Any]] = []
@@ -1046,11 +1459,28 @@ def _execute_sectioned_report_flow(
             provider_outputs = search_with_evidence_providers(
                 providers=evidence_providers,
                 query=query,
-                max_results=per_query_results,
+                max_results=max(
+                    1,
+                    min(
+                        per_query_results,
+                        _configurable_int(
+                            config,
+                            "deepsearch_section_results_cap",
+                            int(getattr(settings, "deepsearch_section_results_cap", per_query_results) or per_query_results),
+                        ),
+                    ),
+                ),
                 config=config,
             )
             results.extend(merge_provider_results(provider_outputs))
-            evidence.extend(merge_provider_evidence(provider_outputs))
+            evidence.extend(
+                _filter_and_cap_evidence_items(
+                    merge_provider_evidence(provider_outputs),
+                    config,
+                    cap_key="deepsearch_section_evidence_cap",
+                    default_cap=int(getattr(settings, "deepsearch_section_evidence_cap", 8) or 8),
+                )
+            )
             section_search_runs.append(
                 {
                     "query": query,
@@ -1068,6 +1498,8 @@ def _execute_sectioned_report_flow(
             section=section,
             summary_notes=summary_notes,
             section_results=results,
+            section_evidence=evidence,
+            report_sources=report_sources,
             sources=sources_block,
             config=config,
         )
@@ -1082,11 +1514,26 @@ def _execute_sectioned_report_flow(
             provider_outputs = search_with_evidence_providers(
                 providers=evidence_providers,
                 query=follow_query,
-                max_results=per_query_results,
+                max_results=max(
+                    1,
+                    min(
+                        per_query_results,
+                        _configurable_int(
+                            config,
+                            "deepsearch_section_results_cap",
+                            int(getattr(settings, "deepsearch_section_results_cap", per_query_results) or per_query_results),
+                        ),
+                    ),
+                ),
                 config=config,
             )
             follow_results = merge_provider_results(provider_outputs)
-            follow_evidence = merge_provider_evidence(provider_outputs)
+            follow_evidence = _filter_and_cap_evidence_items(
+                merge_provider_evidence(provider_outputs),
+                config,
+                cap_key="deepsearch_section_evidence_cap",
+                default_cap=int(getattr(settings, "deepsearch_section_evidence_cap", 8) or 8),
+            )
             results.extend(follow_results)
             evidence.extend(follow_evidence)
             section_search_runs.append(
@@ -1107,6 +1554,8 @@ def _execute_sectioned_report_flow(
                 section=section,
                 summary_notes=summary_notes,
                 section_results=results,
+                section_evidence=evidence,
+                report_sources=report_sources,
                 sources=sources_block,
                 config=config,
             )
@@ -1124,6 +1573,12 @@ def _execute_sectioned_report_flow(
             "followups_used": followups_used,
             "result_count": len(results),
             "evidence_item_count": len(evidence),
+            "evidence_bindings": _format_grounding_evidence_block(
+                results=results,
+                evidence_items=evidence,
+                sources=report_sources,
+                config=config,
+            ).splitlines(),
         }
         section_results.append(section_payload)
         _emit_event(
@@ -3644,6 +4099,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 _source_urls_for_fetch(report_sources, limit=fetch_source_limit),
                 config,
             )
+            passages = _cap_passages(passages, config)
         evidence_items = _merge_evidence_item_payloads(
             provider_evidence_items,
             build_evidence_items(
@@ -3653,6 +4109,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 passages=passages,
             ),
         )
+        evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
         claim_ledger: List[Dict[str, Any]] = []
         summary_notes_for_writer = list(summary_notes)
         if _configurable_bool(
@@ -3689,6 +4146,8 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             report_sources,
             search_runs,
             limit=report_sources_limit,
+            evidence_items=evidence_items,
+            passages=passages,
         )
         report_plan = build_sectioned_report_plan(
             research_brief=brief.to_dict(),
@@ -3708,6 +4167,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             writer_llm=writer_llm,
             summary_notes=summary_notes_for_writer,
             sources_block=sources_block,
+            report_sources=report_sources,
             per_query_results=per_query_results,
             emitter=emitter,
         )
@@ -3719,6 +4179,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     have_query.append(query)
         if section_evidence_items:
             evidence_items = _merge_evidence_item_payloads(evidence_items, section_evidence_items)
+            evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
         draft_report = (
             sectioned_compiled_report
             if sectioned_compiled_report
@@ -3780,8 +4241,60 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     )
                 except Exception:
                     break
-        final_report = _append_auto_references(draft_report, report_sources, limit=report_sources_limit)
+        claim_grounding_gate = {"enabled": False, "removed_claim_count": 0}
+        draft_report, claim_grounding_gate = _apply_claim_grounding_gate(draft_report, claims, config)
+        if claim_grounding_gate.get("removed_claim_count"):
+            try:
+                _checks, claims, claim_stats = _verify_report_claims(
+                    draft_report,
+                    search_runs,
+                    passages=passages,
+                    config=config,
+                )
+            except Exception:
+                pass
         missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report)
+        repaired_report = _repair_report_citations(
+            writer_llm,
+            topic=topic,
+            report=draft_report,
+            sources=sources_block,
+            missing_claims=missing_citation_claims,
+            citation_coverage=citation_coverage,
+            config=config,
+        )
+        citation_repair_applied = repaired_report != draft_report
+        draft_report = repaired_report
+        if citation_repair_applied:
+            try:
+                _checks, claims, claim_stats = _verify_report_claims(
+                    draft_report,
+                    search_runs,
+                    passages=passages,
+                    config=config,
+                )
+            except Exception:
+                pass
+            repaired_gate_report, repaired_gate = _apply_claim_grounding_gate(draft_report, claims, config)
+            if repaired_gate.get("removed_claim_count"):
+                draft_report = repaired_gate_report
+                claim_grounding_gate = {
+                    **claim_grounding_gate,
+                    "enabled": repaired_gate.get("enabled", claim_grounding_gate.get("enabled", True)),
+                    "removed_claim_count": int(claim_grounding_gate.get("removed_claim_count") or 0)
+                    + int(repaired_gate.get("removed_claim_count") or 0),
+                }
+                try:
+                    _checks, claims, claim_stats = _verify_report_claims(
+                        draft_report,
+                        search_runs,
+                        passages=passages,
+                        config=config,
+                    )
+                except Exception:
+                    pass
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report)
+        final_report = _append_auto_references(draft_report, report_sources, limit=report_sources_limit)
         _emit_event(
             emitter,
             "report_written",
@@ -3791,6 +4304,8 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 "source_count": len(report_sources),
                 "claim_ledger_count": len(claim_ledger),
                 "final_revision_count": final_revision_count,
+                "claim_grounding_removed": claim_grounding_gate.get("removed_claim_count", 0),
+                "citation_repair_applied": citation_repair_applied,
             },
         )
 
@@ -3820,6 +4335,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "evidence_item_count": len(evidence_items),
             "claim_ledger_count": len(claim_ledger),
             "final_revision_count": final_revision_count,
+            "claim_grounding_gate": claim_grounding_gate,
+            "claim_grounding_removed": claim_grounding_gate.get("removed_claim_count", 0),
+            "citation_repair_applied": citation_repair_applied,
             "citation_coverage": citation_coverage,
             "citation_coverage_score": citation_coverage,
             "missing_citation_claims": missing_citation_claims,

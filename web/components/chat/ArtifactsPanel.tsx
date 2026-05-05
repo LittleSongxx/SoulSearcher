@@ -5,22 +5,32 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { FileText, Code, BarChart, Download, Maximize2, Minimize2, ChevronRight, ChevronLeft, PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { FileText, Code, BarChart, Download, Maximize2, Minimize2, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Artifact } from '@/types/chat'
 import { CodeBlock } from './message/CodeBlock'
+import { EvidencePanel } from './EvidencePanel'
+
+interface ContinueResearchTarget {
+  target_type: 'claim' | 'source' | 'gap' | 'section'
+  target_index?: number
+  target_text?: string
+  instruction?: string
+}
 
 interface ArtifactsPanelProps {
   artifacts: Artifact[]
+  threadId?: string | null
   isOpen?: boolean
   onToggle?: () => void
+  onContinueResearch?: (target: ContinueResearchTarget) => void
 }
 
-export function ArtifactsPanel({ artifacts, isOpen = true, onToggle }: ArtifactsPanelProps) {
+export function ArtifactsPanel({ artifacts, threadId, isOpen = true, onToggle, onContinueResearch }: ArtifactsPanelProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
 
-  if (artifacts.length === 0) return null
+  if (artifacts.length === 0 && !threadId) return null
 
   // If collapsed (and not fullscreen), render slim bar
   if (!isOpen && !isFullscreen) {
@@ -31,7 +41,7 @@ export function ArtifactsPanel({ artifacts, isOpen = true, onToggle }: Artifacts
              </Button>
              <div className="flex-1 w-full flex flex-col items-center gap-2 overflow-hidden py-2">
                  <div className="writing-mode-vertical text-xs font-semibold text-muted-foreground tracking-widest uppercase rotate-180 select-none">
-                     Artifacts ({artifacts.length})
+                     Inspector ({artifacts.length})
                  </div>
              </div>
           </div>
@@ -47,7 +57,7 @@ export function ArtifactsPanel({ artifacts, isOpen = true, onToggle }: Artifacts
                     <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">
                         A
                     </div>
-                    <h2 className="text-lg font-bold">Artifacts Viewer</h2>
+                    <h2 className="text-lg font-bold">Research Inspector</h2>
                 </div>
                 <Button variant="ghost" onClick={() => setIsFullscreen(false)}>
                     <Minimize2 className="h-5 w-5 mr-2" />
@@ -59,6 +69,7 @@ export function ArtifactsPanel({ artifacts, isOpen = true, onToggle }: Artifacts
                     {artifacts.map((artifact) => (
                         <ArtifactCard key={artifact.id} artifact={artifact} isFullscreen />
                     ))}
+                    <EvidencePanel threadId={threadId} onContinueResearch={onContinueResearch} />
                 </div>
             </ScrollArea>
         </div>
@@ -75,8 +86,8 @@ export function ArtifactsPanel({ artifacts, isOpen = true, onToggle }: Artifacts
                 </Button>
             )}
             <div>
-                <h2 className="text-sm font-bold tracking-tight">Artifacts</h2>
-                <p className="text-xs text-muted-foreground">Generated assets</p>
+                <h2 className="text-sm font-bold tracking-tight">Research Inspector</h2>
+                <p className="text-xs text-muted-foreground">Artifacts and evidence</p>
             </div>
         </div>
         <div className="flex gap-1">
@@ -91,6 +102,7 @@ export function ArtifactsPanel({ artifacts, isOpen = true, onToggle }: Artifacts
           {artifacts.map((artifact) => (
             <ArtifactCard key={artifact.id} artifact={artifact} />
           ))}
+          <EvidencePanel threadId={threadId} onContinueResearch={onContinueResearch} />
         </div>
       </ScrollArea>
     </div>

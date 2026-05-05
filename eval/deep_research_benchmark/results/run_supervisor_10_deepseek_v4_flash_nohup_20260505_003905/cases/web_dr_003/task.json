@@ -1,0 +1,27 @@
+{
+  "id": "web_dr_003",
+  "query": "Evaluate current global AI chip supply chain risks and mitigation strategies for cloud providers, including capacity constraints, export controls, and supplier concentration.",
+  "domain": "supply_chain",
+  "task_type": "risk_analysis",
+  "difficulty": "hard",
+  "expected_dimensions": [
+    "supply_chain_risks",
+    "major_vendors",
+    "geopolitical_factors",
+    "capacity_constraints",
+    "export_controls",
+    "mitigation_strategies"
+  ],
+  "freshness_requirement": "recent",
+  "must_cite": true,
+  "judge_rubric": {
+    "requires_risk_prioritization": true,
+    "requires_current_supply_chain_evidence": true
+  },
+  "source_constraints": {
+    "prefer_primary_sources_and_reputable_analysis": true
+  },
+  "metadata": {
+    "language": "en"
+  }
+}

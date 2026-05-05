@@ -118,6 +118,52 @@ def test_run_deepsearch_auto_reduces_budget_for_simple_query(monkeypatch):
     cfg = captured["config"]["configurable"]
     assert cfg["deepsearch_query_num"] == 1
     assert cfg["deepsearch_max_epochs"] == 1
+    assert captured["config"]["configurable"]["deepsearch_visualize_browser"] is False
+
+
+def test_run_deepsearch_auto_uses_reflection_strategy_override(monkeypatch):
+    called = {"reflection": False}
+
+    def fake_reflection(state, config):
+        called["reflection"] = True
+        return {"mode": "reflection_loop", "state": state}
+
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_reflection_loop", fake_reflection)
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", lambda *args, **kwargs: {"mode": "linear"})
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_tree", lambda *args, **kwargs: {"mode": "tree"})
+    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+
+    result = deepsearch_optimized.run_deepsearch_auto(
+        {"input": "summarize local notes"},
+        {"configurable": {"deepsearch_strategy": "reflection_loop"}},
+    )
+
+    assert called["reflection"] is True
+    assert result["mode"] == "reflection_loop"
+    assert result["state"]["deepsearch_strategy_decision"]["strategy"] == "reflection_loop"
+
+
+def test_run_deepsearch_auto_uses_supervisor_workers_strategy_override(monkeypatch):
+    called = {"supervisor": False}
+
+    def fake_supervisor(state, config):
+        called["supervisor"] = True
+        return {"mode": "supervisor_workers", "state": state}
+
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_supervisor_workers", fake_supervisor)
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_reflection_loop", lambda *args, **kwargs: {"mode": "reflection_loop"})
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", lambda *args, **kwargs: {"mode": "linear"})
+    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_tree", lambda *args, **kwargs: {"mode": "tree"})
+    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+
+    result = deepsearch_optimized.run_deepsearch_auto(
+        {"input": "compare agent frameworks"},
+        {"configurable": {"deepsearch_strategy": "supervisor"}},
+    )
+
+    assert called["supervisor"] is True
+    assert result["mode"] == "supervisor_workers"
+    assert result["state"]["deepsearch_strategy_decision"]["strategy"] == "supervisor_workers"
 
 
 def test_run_deepsearch_auto_simple_query_preserves_noncopyable_runtime_config(monkeypatch):

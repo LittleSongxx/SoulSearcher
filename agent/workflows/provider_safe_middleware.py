@@ -71,6 +71,8 @@ class ProviderSafeToolSelectorMiddleware(LLMToolSelectorMiddleware):
         method: str,
         is_async: bool,
     ) -> ModelRequest:
+        if self.max_tools is not None and len(request.tools or []) <= self.max_tools:
+            return request
         selection_request = self._prepare_selection_request(request)
         if selection_request is None:
             return request
@@ -105,6 +107,8 @@ class ProviderSafeToolSelectorMiddleware(LLMToolSelectorMiddleware):
         )
 
     async def _aselect_tools_once(self, request: ModelRequest, *, method: str) -> ModelRequest:
+        if self.max_tools is not None and len(request.tools or []) <= self.max_tools:
+            return request
         selection_request = self._prepare_selection_request(request)
         if selection_request is None:
             return request

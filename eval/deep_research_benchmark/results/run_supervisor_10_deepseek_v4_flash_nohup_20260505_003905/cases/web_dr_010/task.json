@@ -1,0 +1,28 @@
+{
+  "id": "web_dr_010",
+  "query": "分析关键矿产供应链重构背景下，锂、镍、钴和稀土政策对新能源车产业竞争格局的影响。",
+  "domain": "geopolitics_industrial_policy",
+  "task_type": "strategic_analysis",
+  "difficulty": "hard",
+  "expected_dimensions": [
+    "关键矿产政策",
+    "供应链重构",
+    "国家或地区比较",
+    "新能源车产业影响",
+    "企业应对策略",
+    "风险情景"
+  ],
+  "freshness_requirement": "recent",
+  "must_cite": true,
+  "judge_rubric": {
+    "requires_geopolitical_context": true,
+    "requires_industry_impact_analysis": true,
+    "requires_current_sources": true
+  },
+  "source_constraints": {
+    "prefer_government_sources_industry_reports_and_reputable_analysis": true
+  },
+  "metadata": {
+    "language": "zh"
+  }
+}

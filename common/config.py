@@ -421,6 +421,35 @@ class Settings(BaseSettings):
     deepsearch_claim_verifier_max_evidence_per_claim: int = (
         3  # max evidence passages/urls stored per claim
     )
+    deepsearch_claim_verifier_max_claims: int = 10
+    deepsearch_evidence_item_cap: int = 160
+    deepsearch_min_evidence_snippet_chars: int = 40
+    deepsearch_passage_cap: int = 40
+    deepsearch_claim_grounding_gate_enabled: bool = True
+    deepsearch_citation_repair_enabled: bool = True
+    deepsearch_citation_repair_min_coverage: float = 0.85
+    deepsearch_supervisor_fetch_passages: bool = False
+    deepsearch_supervisor_fetch_source_limit: int = 8
+    deepsearch_enable_claim_ledger: bool = False
+    deepsearch_claim_ledger_max_claims: int = 24
+    deepsearch_final_verifier_revise: bool = False
+    deepsearch_final_verifier_max_revisions: int = 1
+    deepsearch_source_curator_enabled: bool = False
+    deepsearch_reflection_gap_queries: bool = False
+    deepsearch_supervisor_rounds: int = 2
+    deepsearch_supervisor_max_workers: int = 4
+    deepsearch_supervisor_queries_per_worker: int = 2
+    deepsearch_supervisor_parallel_workers: int = 2
+    deepsearch_sectioned_report: bool = False
+    deepsearch_sectioned_report_requires_approval: bool = False
+    deepsearch_sectioned_report_max_sections: int = 8
+    deepsearch_sectioned_report_adaptive: bool = True
+    deepsearch_sectioned_report_adaptive_max_sections: int = 5
+    deepsearch_section_followups: int = 1
+    deepsearch_section_min_chars: int = 120
+    deepsearch_section_min_evidence: int = 1
+    deepsearch_section_results_cap: int = 6
+    deepsearch_section_evidence_cap: int = 8
 
     # Research Fetcher / Reader Settings
     reader_fallback_mode: str = "both"
@@ -697,8 +726,12 @@ class Settings(BaseSettings):
     @field_validator("deepsearch_mode", mode="before")
     @classmethod
     def normalize_deepsearch_mode(cls, value: str) -> str:
-        mode = str(value or "").strip().lower()
-        if mode in {"auto", "tree", "linear"}:
+        mode = str(value or "").strip().lower().replace("-", "_")
+        if mode == "reflection":
+            mode = "reflection_loop"
+        if mode in {"supervisor", "workers", "supervisor_worker"}:
+            mode = "supervisor_workers"
+        if mode in {"auto", "tree", "linear", "reflection_loop", "supervisor_workers"}:
             return mode
         return "auto"
 

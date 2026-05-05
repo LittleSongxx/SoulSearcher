@@ -1,0 +1,26 @@
+[
+  {
+    "case_id": "web_dr_001",
+    "query": "Compare current agentic coding assistants for large enterprise software teams, focusing on architecture, security controls, evaluation methods, and deployment tradeoffs.",
+    "status": "timeout",
+    "thread_id": null,
+    "started_at": "2026-05-05T05:58:48.439927+00:00",
+    "ended_at": "2026-05-05T06:19:43.303038+00:00",
+    "duration_ms": 1202563.5,
+    "final_report": "",
+    "final_report_chars": 0,
+    "error": "timeout after 1200.0s",
+    "event_count": 0,
+    "events_path": "eval/deep_research_benchmark/results/run_supervisor_10_p0p2_deepseek_v4_pro_nohup_20260505_135800/cases/web_dr_001/events.jsonl",
+    "report_path": "eval/deep_research_benchmark/results/run_supervisor_10_p0p2_deepseek_v4_pro_nohup_20260505_135800/cases/web_dr_001/report.md",
+    "evidence_path": "eval/deep_research_benchmark/results/run_supervisor_10_p0p2_deepseek_v4_pro_nohup_20260505_135800/cases/web_dr_001/evidence.json",
+    "run_metrics_path": "eval/deep_research_benchmark/results/run_supervisor_10_p0p2_deepseek_v4_pro_nohup_20260505_135800/cases/web_dr_001/run_metrics.json",
+    "evidence": {
+      "_collector_error": "missing thread_id"
+    },
+    "run_metrics": {
+      "_collector_error": "missing thread_id"
+    },
+    "raw": {}
+  }
+]

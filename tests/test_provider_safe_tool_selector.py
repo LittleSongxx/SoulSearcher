@@ -67,8 +67,13 @@ def test_provider_safe_tool_selector_falls_back_to_function_calling():
 
     request = ModelRequest(
         model=model,
+        system_prompt=None,
         messages=[HumanMessage("Use the beta tool")],
+        tool_choice=None,
         tools=[alpha_tool, beta_tool],
+        response_format=None,
+        state={},
+        runtime=None,
     )
 
     middleware.wrap_model_call(request, _handler)
@@ -92,8 +97,13 @@ def test_provider_safe_tool_selector_caches_same_request_signature():
 
     request = ModelRequest(
         model=model,
+        system_prompt=None,
         messages=[HumanMessage("Use the beta tool")],
+        tool_choice=None,
         tools=[alpha_tool, beta_tool],
+        response_format=None,
+        state={},
+        runtime=None,
     )
 
     middleware.wrap_model_call(request, _handler)

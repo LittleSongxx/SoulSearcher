@@ -1,0 +1,14 @@
+{
+  "total_cases": 10,
+  "completed_cases": 10,
+  "failed_cases": 0,
+  "timeout_cases": 0,
+  "stable_completion_rate": 1.0,
+  "rubric_pass_rate": 0.6,
+  "citation_accuracy": 0.89,
+  "unsupported_claim_rate": 0.36,
+  "avg_effective_citations": 2.3,
+  "p50_duration_s": 218.215,
+  "p90_duration_s": 235.144,
+  "mean_duration_s": 213.192
+}

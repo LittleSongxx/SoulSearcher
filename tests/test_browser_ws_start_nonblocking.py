@@ -98,3 +98,8 @@ def test_browser_stream_ws_start_is_nonblocking_during_sandbox_cold_start(monkey
         assert started["type"] == "status"
         assert started["message"] == "Screencast started"
 
+        frame = _receive_json_with_timeout(ws, timeout_s=0.75)
+        assert frame["type"] == "frame"
+        assert frame["source"] == "placeholder"
+        assert frame.get("metadata", {}).get("placeholder") is True
+

@@ -126,9 +126,14 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
         getattr(settings, "rag_enabled", False)
     ):
         try:
-            from tools.rag.rag_tool import rag_search
+            from tools.rag.rag_tool import build_rag_search_tool
 
-            tools.append(rag_search)
+            collection_name = cfg.get("rag_collection_name")
+            tools.append(
+                build_rag_search_tool(
+                    str(collection_name).strip() if collection_name else None
+                )
+            )
         except Exception as e:
             logger.warning(f"Failed to load rag_search tool: {e}")
 
