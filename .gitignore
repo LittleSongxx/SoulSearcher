@@ -131,6 +131,12 @@ y/
 data/memory_store.json
 third_party/research_refs/
 
+# Evaluation outputs
+eval/deep_research_benchmark/results/*
+!eval/deep_research_benchmark/results/.gitkeep
+eval/ablation/results/*
+eval/results/*
+
 # Package manager locks (optional, remove if you want to commit them)
 # package-lock.json
 # yarn.lock

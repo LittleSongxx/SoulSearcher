@@ -16,7 +16,7 @@ def test_search_query_prefers_multi_search(module, monkeypatch):
                 "snippet": "snippet text",
                 "content": "full content",
                 "score": 0.72,
-                "published_date": "2026-02-05",
+                "datePublished": "2026-02-05",
                 "provider": "duckduckgo",
             }
         ]
@@ -38,6 +38,7 @@ def test_search_query_prefers_multi_search(module, monkeypatch):
     assert len(results) == 1
     assert results[0]["summary"] == "snippet text"
     assert results[0]["raw_excerpt"] == "full content"
+    assert results[0]["published_date"] == "2026-02-05"
 
 
 @pytest.mark.parametrize("module", [deepsearch, deepsearch_optimized])

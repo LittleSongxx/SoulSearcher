@@ -79,6 +79,25 @@ def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[
     for r in results:
         if not isinstance(r, dict):
             continue
+        published_date = next(
+            (
+                r.get(key)
+                for key in (
+                    "published_date",
+                    "publishedDate",
+                    "datePublished",
+                    "publishedAt",
+                    "published_at",
+                    "date_published",
+                    "pubDate",
+                    "displayDate",
+                    "date",
+                    "timestamp",
+                )
+                if r.get(key)
+            ),
+            None,
+        )
         normalized.append(
             {
                 "title": r.get("title", ""),
@@ -86,7 +105,8 @@ def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[
                 "summary": r.get("summary") or r.get("snippet", ""),
                 "raw_excerpt": r.get("raw_excerpt") or r.get("content", ""),
                 "score": float(r.get("score", 0.5) or 0.5),
-                "published_date": r.get("published_date"),
+                "published_date": published_date,
+                "publishedDate": published_date,
                 "provider": r.get("provider", ""),
             }
         )

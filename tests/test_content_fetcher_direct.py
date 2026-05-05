@@ -98,3 +98,40 @@ def test_content_fetcher_blocks_localhost_without_network(monkeypatch):
     assert called["get"] is False
     assert page.error
     assert "blocked" in page.error.lower()
+
+
+def test_content_fetcher_handles_consumed_response_without_crashing(monkeypatch):
+    import tools.research.content_fetcher as mod
+
+    monkeypatch.setattr(mod.settings, "research_fetch_render_mode", "off", raising=False)
+    monkeypatch.setattr(mod.settings, "reader_fallback_mode", "off", raising=False)
+
+    class FakeResp:
+        status_code = 200
+        headers = _Headers({"Content-Type": "text/plain"})
+
+        def iter_content(self, chunk_size=65536):
+            raise RuntimeError("The content for this response was already consumed")
+            yield b""
+
+        @property
+        def content(self):
+            raise RuntimeError("The content for this response was already consumed")
+
+        @property
+        def text(self):
+            raise RuntimeError("The content for this response was already consumed")
+
+        def close(self):
+            return None
+
+    def fake_get(url, timeout=None, headers=None, **kwargs):
+        return FakeResp()
+
+    monkeypatch.setattr(mod, "requests", types.SimpleNamespace(get=fake_get))
+
+    page = ContentFetcher().fetch("https://example.com/consumed")
+
+    assert page.url == "https://example.com/consumed"
+    assert page.text is None
+    assert page.error is not None

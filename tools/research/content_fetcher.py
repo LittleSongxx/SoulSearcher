@@ -125,7 +125,7 @@ def _is_blocked_fetch_target(url: str) -> bool:
     )
 
 
-def _read_response_bytes(resp: object) -> bytes:
+def _read_response_bytes(resp: object) -> tuple[bytes, Optional[str]]:
     max_bytes = getattr(settings, "research_fetch_max_bytes", 0)
     try:
         limit = int(max_bytes)
@@ -155,19 +155,22 @@ def _read_response_bytes(resp: object) -> bytes:
 
                 chunks.append(chunk_bytes)
                 total += len(chunk_bytes)
-        except Exception:
-            return b""
-        return b"".join(chunks)
+        except Exception as exc:
+            return b"", str(exc)
+        return b"".join(chunks), None
 
-    data = getattr(resp, "content", b"") or b""
+    try:
+        data = getattr(resp, "content", b"") or b""
+    except Exception as exc:
+        return b"", str(exc)
     if isinstance(data, str):
         data = data.encode("utf-8", errors="replace")
     if not isinstance(data, (bytes, bytearray)):
         data = str(data).encode("utf-8", errors="replace")
-    return truncate_bytes(bytes(data), max_bytes=limit)
+    return truncate_bytes(bytes(data), max_bytes=limit), None
 
 
-def _extract_body_from_response(resp: object) -> tuple[str, Optional[str], Optional[str], Optional[int], str]:
+def _extract_body_from_response(resp: object) -> tuple[str, Optional[str], Optional[str], Optional[int], str, Optional[str]]:
     status_code: Optional[int]
     try:
         status_code = int(getattr(resp, "status_code", None))
@@ -177,12 +180,16 @@ def _extract_body_from_response(resp: object) -> tuple[str, Optional[str], Optio
     headers = getattr(resp, "headers", None)
     content_type = _content_type(headers).lower()
 
-    raw_bytes = _read_response_bytes(resp)
+    raw_bytes, read_error = _read_response_bytes(resp)
 
     if raw_bytes:
         decoded = raw_bytes.decode("utf-8", errors="replace")
     else:
-        decoded = str(getattr(resp, "text", "") or "")
+        try:
+            decoded = str(getattr(resp, "text", "") or "")
+        except Exception as exc:
+            decoded = ""
+            read_error = read_error or str(exc)
 
     markdown: Optional[str] = None
     if "html" in content_type:
@@ -191,9 +198,9 @@ def _extract_body_from_response(resp: object) -> tuple[str, Optional[str], Optio
         if bool(getattr(settings, "research_fetch_extract_markdown", True)):
             md = _html_to_markdown(decoded)
             markdown = md or None
-        return text, markdown, title, status_code, content_type
+        return text, markdown, title, status_code, content_type, read_error
 
-    return decoded, None, None, status_code, content_type
+    return decoded, None, None, status_code, content_type, read_error
 
 
 class ContentFetcher:
@@ -247,7 +254,7 @@ class ContentFetcher:
             return None
 
         try:
-            text, markdown, title, status_code, _content_type = _extract_body_from_response(resp)
+            text, markdown, title, status_code, _content_type, _read_error = _extract_body_from_response(resp)
         finally:
             closer = getattr(resp, "close", None)
             if callable(closer):
@@ -377,7 +384,7 @@ class ContentFetcher:
             return final
 
         try:
-            text, markdown, title, status_code, content_type = _extract_body_from_response(resp)
+            text, markdown, title, status_code, content_type, read_error = _extract_body_from_response(resp)
         finally:
             closer = getattr(resp, "close", None)
             if callable(closer):
@@ -387,6 +394,7 @@ class ContentFetcher:
         direct_attempt.title = title
         direct_attempt.markdown = markdown
         direct_attempt.http_status = status_code
+        direct_attempt.error = read_error
         direct_attempt.retrieved_at = _now_iso()
 
         render_mode = str(getattr(settings, "research_fetch_render_mode", "off") or "off").strip().lower()
@@ -445,11 +453,24 @@ class ContentFetcher:
         except Exception:
             per_domain = 2
 
+        def _safe_fetch(target_url: str) -> FetchedPage:
+            try:
+                return self.fetch(target_url)
+            except Exception as exc:
+                return FetchedPage(
+                    url=target_url,
+                    raw_url=target_url,
+                    method="direct_http",
+                    error=str(exc),
+                    attempts=1,
+                    retrieved_at=_now_iso(),
+                )
+
         if per_domain <= 0:
             from concurrent.futures import ThreadPoolExecutor
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                return list(executor.map(self.fetch, candidates))
+                return list(executor.map(_safe_fetch, candidates))
 
         sem_lock = threading.RLock()
         semaphores: dict[str, threading.Semaphore] = {}
@@ -467,7 +488,7 @@ class ContentFetcher:
             sem = _semaphore_for(domain)
             sem.acquire()
             try:
-                return self.fetch(target_url)
+                return _safe_fetch(target_url)
             finally:
                 sem.release()
 

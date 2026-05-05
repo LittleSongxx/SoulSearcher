@@ -15,6 +15,7 @@ def test_has_negation_ignores_substrings():
     assert v._has_negation("Another report showed gains") is False
     assert v._has_negation("Innovation drives progress") is False
     assert v._has_negation("notable increase observed") is False
+    assert v._has_negation("未来市场持续增长") is False
 
 
 def test_trend_direction_ignores_substrings():

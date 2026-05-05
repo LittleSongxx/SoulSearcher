@@ -8,8 +8,35 @@ multiple evidence dimensions instead of relying only on LLM sampling.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
+
+_PUBLISHED_DATE_FIELDS = (
+    "published_date",
+    "publishedDate",
+    "datePublished",
+    "publishedAt",
+    "published_at",
+    "date_published",
+    "pubDate",
+    "displayDate",
+    "date",
+    "timestamp",
+)
+
+_PUBLISHED_DATE_TEXT_FIELDS = (
+    "displayDate",
+    "snippet",
+    "summary",
+    "raw_excerpt",
+    "content",
+    "title",
+)
+
+_MONTH_PATTERN = (
+    r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
+)
 
 _QUERY_DIMENSIONS = (
     "freshness",
@@ -261,34 +288,179 @@ def backfill_diverse_queries(
     return final_queries[:target]
 
 
-def _parse_datetime(value: Any) -> Optional[datetime]:
+def _coerce_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_relative_datetime(text: str, now: Optional[datetime] = None) -> Optional[datetime]:
+    value = str(text or "").strip().lower()
+    if not value:
+        return None
+    base = _coerce_utc(now or datetime.now(timezone.utc))
+
+    if re.search(r"\bjust now\b|\btoday\b|刚刚|今天", value):
+        return base
+    if re.search(r"\byesterday\b|昨天", value):
+        return base - timedelta(days=1)
+    if re.search(r"前天", value):
+        return base - timedelta(days=2)
+
+    match = re.search(
+        r"\b(\d{1,4})\s*(minute|minutes|min|mins|hour|hours|day|days|week|weeks|month|months|year|years)\s+ago\b",
+        value,
+    )
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        if unit.startswith(("minute", "min")):
+            return base - timedelta(minutes=amount)
+        if unit.startswith("hour"):
+            return base - timedelta(hours=amount)
+        if unit.startswith("day"):
+            return base - timedelta(days=amount)
+        if unit.startswith("week"):
+            return base - timedelta(days=amount * 7)
+        if unit.startswith("month"):
+            return base - timedelta(days=amount * 30)
+        if unit.startswith("year"):
+            return base - timedelta(days=amount * 365)
+
+    match = re.search(r"(\d{1,4})\s*(分钟|小时|天|日|周|星期|个月|月|年)前", value)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        if unit == "分钟":
+            return base - timedelta(minutes=amount)
+        if unit == "小时":
+            return base - timedelta(hours=amount)
+        if unit in {"天", "日"}:
+            return base - timedelta(days=amount)
+        if unit in {"周", "星期"}:
+            return base - timedelta(days=amount * 7)
+        if unit in {"个月", "月"}:
+            return base - timedelta(days=amount * 30)
+        if unit == "年":
+            return base - timedelta(days=amount * 365)
+
+    return None
+
+
+def _date_candidates(text: str) -> List[str]:
+    value = str(text or "")
+    candidates: List[str] = []
+    patterns = (
+        r"\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b",
+        r"20\d{2}年\d{1,2}月\d{1,2}日?",
+        rf"\b(?:{_MONTH_PATTERN})\s+\d{{1,2}},?\s+20\d{{2}}\b",
+        rf"\b\d{{1,2}}\s+(?:{_MONTH_PATTERN})\s+20\d{{2}}\b",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, value, flags=re.IGNORECASE):
+            candidates.append(match.group(0))
+    return candidates
+
+
+def _parse_datetime(
+    value: Any,
+    *,
+    now: Optional[datetime] = None,
+    _allow_extract: bool = True,
+) -> Optional[datetime]:
     if value is None:
         return None
 
     if isinstance(value, datetime):
-        dt = value
-    else:
-        text = str(value).strip()
-        if not text:
+        return _coerce_utc(value)
+    if isinstance(value, (int, float)):
+        timestamp = float(value)
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000.0
+        try:
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+    text = str(value).strip()
+    if not text:
+        return None
+
+    relative_dt = _parse_relative_datetime(text, now=now)
+    if relative_dt is not None:
+        return relative_dt
+
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+
+    try:
+        dt = datetime.fromisoformat(normalized)
+        return _coerce_utc(dt)
+    except ValueError:
+        pass
+
+    normalized_date = text.replace(".", "-").replace("/", "-")
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%b %d, %Y",
+        "%B %d, %Y",
+        "%b %d %Y",
+        "%B %d %Y",
+        "%d %b %Y",
+        "%d %B %Y",
+    ):
+        try:
+            dt = datetime.strptime(normalized_date, fmt)
+            return _coerce_utc(dt)
+        except ValueError:
+            continue
+
+    zh_match = re.fullmatch(r"(20\d{2})年(\d{1,2})月(\d{1,2})日?", text)
+    if zh_match:
+        try:
+            return datetime(
+                int(zh_match.group(1)),
+                int(zh_match.group(2)),
+                int(zh_match.group(3)),
+                tzinfo=timezone.utc,
+            )
+        except ValueError:
             return None
 
-        normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    if _allow_extract:
+        for candidate in _date_candidates(text):
+            dt = _parse_datetime(candidate, now=now, _allow_extract=False)
+            if dt is not None:
+                return dt
+    return None
 
-        try:
-            dt = datetime.fromisoformat(normalized)
-        except ValueError:
-            for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S"):
-                try:
-                    dt = datetime.strptime(text, fmt)
-                    break
-                except ValueError:
-                    continue
-            else:
-                return None
 
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+def result_published_datetime(
+    result: Dict[str, Any],
+    *,
+    run: Optional[Dict[str, Any]] = None,
+    now: Optional[datetime] = None,
+) -> Optional[datetime]:
+    containers = [result]
+    if isinstance(run, dict):
+        containers.append(run)
+
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        for key in _PUBLISHED_DATE_FIELDS:
+            if key in container:
+                dt = _parse_datetime(container.get(key), now=now)
+                if dt is not None:
+                    return dt
+
+    if isinstance(result, dict):
+        for key in _PUBLISHED_DATE_TEXT_FIELDS:
+            if key in result:
+                dt = _parse_datetime(result.get(key), now=now)
+                if dt is not None:
+                    return dt
+    return None
 
 
 def summarize_freshness(search_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -309,8 +481,11 @@ def summarize_freshness(search_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         for result in results:
             total_results += 1
-            published_date = result.get("published_date") if isinstance(result, dict) else None
-            dt = _parse_datetime(published_date)
+            dt = (
+                result_published_datetime(result, run=run, now=now)
+                if isinstance(result, dict)
+                else None
+            )
             if dt is None:
                 unknown_count += 1
                 continue

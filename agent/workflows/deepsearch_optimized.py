@@ -78,6 +78,7 @@ from agent.workflows.research_reflection import gap_queries_from_quality_gates
 from agent.workflows.research_brief import ResearchBrief, brief_topic, build_research_brief
 from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_artifact
 from agent.workflows.research_task_runtime import ResearchTaskRuntime
+from agent.workflows.structural_text import is_structural_text
 from agent.workflows.research_tree import TreeExplorationBudgetExceeded, TreeExplorer
 from agent.workflows.report_plan import build_sectioned_report_artifact, build_sectioned_report_plan
 from agent.workflows.sectioned_report import (
@@ -293,6 +294,25 @@ def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[
     for r in results:
         if not isinstance(r, dict):
             continue
+        published_date = next(
+            (
+                r.get(key)
+                for key in (
+                    "published_date",
+                    "publishedDate",
+                    "datePublished",
+                    "publishedAt",
+                    "published_at",
+                    "date_published",
+                    "pubDate",
+                    "displayDate",
+                    "date",
+                    "timestamp",
+                )
+                if r.get(key)
+            ),
+            None,
+        )
         normalized.append(
             {
                 "title": r.get("title", ""),
@@ -300,7 +320,8 @@ def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[
                 "summary": r.get("summary") or r.get("snippet", ""),
                 "raw_excerpt": r.get("raw_excerpt") or r.get("content", ""),
                 "score": float(r.get("score", 0.5) or 0.5),
-                "published_date": r.get("published_date"),
+                "published_date": published_date,
+                "publishedDate": published_date,
                 "provider": r.get("provider", ""),
             }
         )
@@ -733,6 +754,12 @@ def _is_short_claim_sentence(text: str) -> bool:
     return len(value) < 20
 
 
+_CITATION_REF_PATTERN = re.compile(
+    r"\[(?:S?\d+(?:-\d+)?)(?:\s*[,，;；]\s*S?\d+(?:-\d+)?)*\]|\[来源[：:].*?\]|https?://\S+",
+    re.IGNORECASE,
+)
+
+
 def _evidence_rank(item: Dict[str, Any]) -> float:
     if not isinstance(item, dict):
         return -1e9
@@ -1087,31 +1114,47 @@ def _source_urls_for_fetch(sources: List[Dict[str, Any]], *, limit: int) -> List
     return urls
 
 
-def _estimate_citation_coverage(report: str) -> Tuple[List[str], float]:
+def _estimate_citation_coverage(report: str, *, max_missing: Optional[int] = 5) -> Tuple[List[str], float]:
     if not report:
         return [], 1.0
     body = report.split("## 参考来源（自动生成）", 1)[0]
-    sentences = _split_claim_sentences(body)
     markers = (
         r"\d{4}",
         r"\d+%",
         r"\d+\.\d+",
+        r"\d+\s*(?:万|亿)?\s*(?:欧元|美元|人民币|元)",
         r"according to|report|study|data|shows|found|announced",
-        r"报告|研究|数据显示|统计|公告|监管|增长|下降|发布",
+        r"报告显示|研究显示|数据显示|统计显示|公告|发布|罚款|强制执行|义务将|法案规定|法案要求",
     )
-    citation_pattern = re.compile(r"\[(?:S?\d+)\]")
     claim_like: List[str] = []
-    for sentence in sentences:
-        text = re.sub(r"\s+", " ", sentence).strip()
-        if _is_short_claim_sentence(text):
+    uncited: List[str] = []
+    for line in body.splitlines():
+        line_text = re.sub(r"\s+", " ", line).strip()
+        if not line_text or is_structural_text(line, line_text):
             continue
-        if any(re.search(marker, text, flags=re.IGNORECASE) for marker in markers):
-            claim_like.append(text)
+        citation_matches = list(_CITATION_REF_PATTERN.finditer(line_text))
+        line_trailing_citation = False
+        if citation_matches:
+            tail = line_text[citation_matches[-1].end() :].strip()
+            line_trailing_citation = not tail or bool(re.fullmatch(r"[。！？.!?）)]*", tail))
+        for sentence in _split_claim_sentences(line_text):
+            text = re.sub(r"\s+", " ", sentence).strip()
+            if is_structural_text(sentence, text):
+                continue
+            if _is_short_claim_sentence(text):
+                continue
+            if any(re.search(marker, text, flags=re.IGNORECASE) for marker in markers):
+                claim_like.append(text)
+                if not line_trailing_citation and not _CITATION_REF_PATTERN.search(text):
+                    uncited.append(text)
     if not claim_like:
         return [], 1.0
-    uncited = [sentence for sentence in claim_like if not citation_pattern.search(sentence)]
     coverage = 1.0 - (len(uncited) / max(1, len(claim_like)))
-    return uncited[:5], round(max(0.0, min(1.0, coverage)), 4)
+    if max_missing is None:
+        missing = uncited
+    else:
+        missing = uncited[: max(0, int(max_missing))]
+    return missing, round(max(0.0, min(1.0, coverage)), 4)
 
 
 def _verify_report_claims(
@@ -1119,6 +1162,7 @@ def _verify_report_claims(
     search_runs: List[Dict[str, Any]],
     *,
     passages: Optional[List[Dict[str, Any]]] = None,
+    fetched_pages: Optional[List[Dict[str, Any]]] = None,
     config: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Any], List[Dict[str, Any]], Dict[str, int]]:
     config = config or {}
@@ -1141,6 +1185,9 @@ def _verify_report_claims(
         "deepsearch_claim_verifier_use_passages",
         bool(getattr(settings, "deepsearch_claim_verifier_use_passages", True)),
     )
+    verifier_passages = list(passages or [])
+    if fetched_pages:
+        verifier_passages.extend(page for page in fetched_pages if isinstance(page, dict))
     checks = verifier.verify_report(
         report,
         search_runs,
@@ -1152,7 +1199,7 @@ def _verify_report_claims(
                 int(getattr(settings, "deepsearch_claim_verifier_max_claims", 10) or 10),
             ),
         ),
-        passages=passages if use_passages and passages else None,
+        passages=verifier_passages if use_passages and verifier_passages else None,
     )
     return checks, serialize_claim_checks(checks), summarize_claim_checks(checks)
 
@@ -1203,10 +1250,20 @@ def _revise_report_for_claim_failures(
 
 
 def _claim_match_key(text: Any) -> str:
-    value = re.sub(r"\[(?:S?\d+)\]", "", str(text or ""))
+    value = _CITATION_REF_PATTERN.sub("", str(text or ""))
     value = re.sub(r"^[#>\-\*\s]+", "", value)
     value = re.sub(r"\s+", " ", value).strip().lower()
     return value
+
+
+def _claim_match_tokens(text: str) -> set[str]:
+    value = str(text or "").lower()
+    tokens = {t for t in re.findall(r"[a-z0-9]+", value) if len(t) > 1}
+    for seq in re.findall(r"[\u4e00-\u9fff]{2,}", value):
+        tokens.update(seq[i : i + 2] for i in range(0, max(0, len(seq) - 1)))
+        if len(seq) <= 6:
+            tokens.add(seq)
+    return tokens
 
 
 def _claim_text_matches(sentence: str, claim: str) -> bool:
@@ -1216,12 +1273,12 @@ def _claim_text_matches(sentence: str, claim: str) -> bool:
         return False
     if claim_key in sentence_key or sentence_key in claim_key:
         return True
-    claim_tokens = set(re.findall(r"[\w\u4e00-\u9fff]+", claim_key))
-    sentence_tokens = set(re.findall(r"[\w\u4e00-\u9fff]+", sentence_key))
+    claim_tokens = _claim_match_tokens(claim_key)
+    sentence_tokens = _claim_match_tokens(sentence_key)
     if not claim_tokens or not sentence_tokens:
         return False
     overlap = len(claim_tokens & sentence_tokens) / max(1, len(claim_tokens))
-    return overlap >= 0.82
+    return overlap >= 0.72
 
 
 def _apply_claim_grounding_gate(
@@ -1269,6 +1326,59 @@ def _apply_claim_grounding_gate(
     return (revised if removed else report), {"enabled": True, "removed_claim_count": removed}
 
 
+def _citation_refs_from_trailing_line(line_text: str) -> List[str]:
+    citation_matches = list(_CITATION_REF_PATTERN.finditer(line_text))
+    if not citation_matches:
+        return []
+    tail = line_text[citation_matches[-1].end() :].strip()
+    if tail and not re.fullmatch(r"[。！？.!?）)]*", tail):
+        return []
+    return [match.group(0) for match in citation_matches if match.group(0).startswith("[")]
+
+
+def _append_refs_to_uncited_line(line: str, refs: List[str]) -> str:
+    if not refs or _CITATION_REF_PATTERN.search(line):
+        return line
+    marker = "".join(dict.fromkeys(refs))
+    match = re.search(r"([。！？.!?])(\s*)$", line)
+    if match:
+        return f"{line[:match.start()].rstrip()}{marker}{match.group(1)}{match.group(2)}"
+    return f"{line.rstrip()}{marker}"
+
+
+def _repair_citations_from_local_context(report: str, missing_claims: List[str], *, max_context_lines: int = 16) -> str:
+    missing = [str(claim or "").strip() for claim in missing_claims or [] if str(claim or "").strip()]
+    if not report or not missing:
+        return report
+    missing_keys = {re.sub(r"\s+", " ", claim).strip() for claim in missing}
+    output: List[str] = []
+    recent_refs: List[str] = []
+    recent_age = max_context_lines + 1
+    for line in report.splitlines():
+        line_text = re.sub(r"\s+", " ", line).strip()
+        if line_text.startswith("#"):
+            recent_refs = []
+            recent_age = max_context_lines + 1
+            output.append(line)
+            continue
+        current_refs = _citation_refs_from_trailing_line(line_text)
+        should_repair = (
+            line_text
+            and recent_refs
+            and recent_age <= max_context_lines
+            and not _CITATION_REF_PATTERN.search(line_text)
+            and any(claim in line_text for claim in missing_keys)
+        )
+        repaired_line = _append_refs_to_uncited_line(line, recent_refs) if should_repair else line
+        output.append(repaired_line)
+        if current_refs:
+            recent_refs = current_refs[-4:]
+            recent_age = 0
+        elif line_text:
+            recent_age += 1
+    return "\n".join(output)
+
+
 def _repair_report_citations(
     llm: ChatOpenAI,
     *,
@@ -1311,7 +1421,7 @@ def _repair_report_citations(
         response = llm.invoke(
             prompt.format_messages(
                 topic=topic,
-                missing_claims="\n".join(f"- {claim}" for claim in missing_claims[:10]),
+                missing_claims="\n".join(f"- {claim}" for claim in missing_claims[:24]),
                 sources=sources or "暂无",
                 report=report,
             ),
@@ -2708,28 +2818,10 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
         # _build_run_evidence_summary reads these from quality_summary; without them
         # the evidence_summary endpoint returns None for these metrics.
         try:
-            import re as _re
-            _claim_like = []
-            for _sent in _re.split(r"(?<=[。！？.!?])\s+", final_report):
-                _t = _sent.strip()
-                if len(_t) < 15:
-                    continue
-                _markers = [
-                    r"\d{4}", r"\d+%", r"\d+\.\d+",
-                    r"(?:research|study|report|data|according to|shows|found)",
-                    r"(?:研究|数据显示|统计|报告|发现|增长|下降)",
-                ]
-                if any(_re.search(m, _t, flags=_re.IGNORECASE) for m in _markers):
-                    _claim_like.append(_t)
-            if _claim_like:
-                _cite_pat = _re.compile(
-                    r"\[(?:S\d+-\d+|\d+)\]|\[来源[：:].*?\]|https?://\S+", _re.IGNORECASE
-                )
-                _uncited = [s for s in _claim_like if not _cite_pat.search(s)]
-                _cov = 1.0 - (len(_uncited) / max(1, len(_claim_like)))
-                quality_summary["citation_coverage"] = max(0.0, min(1.0, _cov))
-            else:
-                quality_summary["citation_coverage"] = 1.0
+            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(final_report)
+            quality_summary["citation_coverage"] = _citation_coverage
+            quality_summary["citation_coverage_score"] = _citation_coverage
+            quality_summary["missing_citation_claims"] = _missing_citation_claims
         except Exception:
             pass
 
@@ -3297,7 +3389,7 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             checks = verifier.verify_report(
                 final_report,
                 search_runs,
-                passages=passages if use_passages else None,
+                passages=(list(passages or []) + list(fetched_pages or [])) if use_passages else None,
             )
             claims = [
                 {
@@ -3315,28 +3407,10 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
 
         # ---- Patch quality_summary with citation_coverage & claim_verifier stats ----
         try:
-            import re as _re
-            _claim_like = []
-            for _sent in _re.split(r"(?<=[。！？.!?])\s+", final_report):
-                _t = _sent.strip()
-                if len(_t) < 15:
-                    continue
-                _markers = [
-                    r"\d{4}", r"\d+%", r"\d+\.\d+",
-                    r"(?:research|study|report|data|according to|shows|found)",
-                    r"(?:研究|数据显示|统计|报告|发现|增长|下降)",
-                ]
-                if any(_re.search(m, _t, flags=_re.IGNORECASE) for m in _markers):
-                    _claim_like.append(_t)
-            if _claim_like:
-                _cite_pat = _re.compile(
-                    r"\[(?:S\d+-\d+|\d+)\]|\[来源[：:].*?\]|https?://\S+", _re.IGNORECASE
-                )
-                _uncited = [s for s in _claim_like if not _cite_pat.search(s)]
-                _cov = 1.0 - (len(_uncited) / max(1, len(_claim_like)))
-                quality_summary["citation_coverage"] = max(0.0, min(1.0, _cov))
-            else:
-                quality_summary["citation_coverage"] = 1.0
+            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(final_report)
+            quality_summary["citation_coverage"] = _citation_coverage
+            quality_summary["citation_coverage_score"] = _citation_coverage
+            quality_summary["missing_citation_claims"] = _missing_citation_claims
         except Exception:
             pass
 
@@ -3691,6 +3765,13 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
         quality_summary["claim_verifier_verified"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
         quality_summary["claim_verifier_unsupported"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
         quality_summary["claim_verifier_contradicted"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+        try:
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(final_report)
+            quality_summary["citation_coverage"] = citation_coverage
+            quality_summary["citation_coverage_score"] = citation_coverage
+            quality_summary["missing_citation_claims"] = missing_citation_claims
+        except Exception:
+            pass
 
         _record_quality_gates(
             diagnostics=diagnostics,
@@ -4467,6 +4548,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 draft_report,
                 search_runs,
                 passages=passages,
+                fetched_pages=fetched_pages,
                 config=config,
             )
             stage_metrics.finish(stage, claim_count=len(claims))
@@ -4514,23 +4596,53 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                         draft_report,
                         search_runs,
                         passages=passages,
+                        fetched_pages=fetched_pages,
                         config=config,
                     )
                 except Exception:
                     break
         claim_grounding_gate = {"enabled": False, "removed_claim_count": 0}
-        draft_report, claim_grounding_gate = _apply_claim_grounding_gate(draft_report, claims, config)
-        if claim_grounding_gate.get("removed_claim_count"):
+        max_grounding_passes = max(
+            1,
+            _configurable_int(
+                config,
+                "deepsearch_claim_grounding_max_passes",
+                3,
+            ),
+        )
+        for _grounding_pass in range(max_grounding_passes):
+            gated_report, current_gate = _apply_claim_grounding_gate(draft_report, claims, config)
+            claim_grounding_gate = {
+                **claim_grounding_gate,
+                "enabled": current_gate.get("enabled", claim_grounding_gate.get("enabled", True)),
+                "removed_claim_count": int(claim_grounding_gate.get("removed_claim_count") or 0)
+                + int(current_gate.get("removed_claim_count") or 0),
+            }
+            if not current_gate.get("removed_claim_count"):
+                draft_report = gated_report
+                break
+            draft_report = gated_report
             try:
                 _checks, claims, claim_stats = _verify_report_claims(
                     draft_report,
                     search_runs,
                     passages=passages,
+                    fetched_pages=fetched_pages,
                     config=config,
                 )
             except Exception:
-                pass
-        missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report)
+                break
+            if (
+                int(claim_stats.get("claim_verifier_unsupported") or 0) <= 0
+                and int(claim_stats.get("claim_verifier_contradicted") or 0) <= 0
+            ):
+                break
+        missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
+        context_repaired_report = _repair_citations_from_local_context(draft_report, missing_citation_claims)
+        context_citation_repair_applied = context_repaired_report != draft_report
+        if context_citation_repair_applied:
+            draft_report = context_repaired_report
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
         repaired_report, fact_card_repair = repair_citations_with_fact_cards(
             draft_report,
             missing_citation_claims,
@@ -4539,7 +4651,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         fact_card_repair_applied = repaired_report != draft_report
         if fact_card_repair_applied:
             draft_report = repaired_report
-            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report)
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
         repaired_report = _repair_report_citations(
             writer_llm,
             topic=topic,
@@ -4557,29 +4669,39 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     draft_report,
                     search_runs,
                     passages=passages,
+                    fetched_pages=fetched_pages,
                     config=config,
                 )
             except Exception:
                 pass
-            repaired_gate_report, repaired_gate = _apply_claim_grounding_gate(draft_report, claims, config)
-            if repaired_gate.get("removed_claim_count"):
-                draft_report = repaired_gate_report
+            for _grounding_pass in range(max_grounding_passes):
+                repaired_gate_report, repaired_gate = _apply_claim_grounding_gate(draft_report, claims, config)
                 claim_grounding_gate = {
                     **claim_grounding_gate,
                     "enabled": repaired_gate.get("enabled", claim_grounding_gate.get("enabled", True)),
                     "removed_claim_count": int(claim_grounding_gate.get("removed_claim_count") or 0)
                     + int(repaired_gate.get("removed_claim_count") or 0),
                 }
+                if not repaired_gate.get("removed_claim_count"):
+                    draft_report = repaired_gate_report
+                    break
+                draft_report = repaired_gate_report
                 try:
                     _checks, claims, claim_stats = _verify_report_claims(
                         draft_report,
                         search_runs,
                         passages=passages,
+                        fetched_pages=fetched_pages,
                         config=config,
                     )
                 except Exception:
-                    pass
-            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report)
+                    break
+                if (
+                    int(claim_stats.get("claim_verifier_unsupported") or 0) <= 0
+                    and int(claim_stats.get("claim_verifier_contradicted") or 0) <= 0
+                ):
+                    break
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
         final_report = _append_auto_references(draft_report, report_sources, limit=report_sources_limit)
         _emit_event(
             emitter,
@@ -4592,7 +4714,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 "claim_ledger_count": len(claim_ledger),
                 "final_revision_count": final_revision_count,
                 "claim_grounding_removed": claim_grounding_gate.get("removed_claim_count", 0),
-                "citation_repair_applied": citation_repair_applied or fact_card_repair_applied,
+                "citation_repair_applied": citation_repair_applied or fact_card_repair_applied or context_citation_repair_applied,
             },
         )
 
@@ -4637,7 +4759,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "final_revision_count": final_revision_count,
             "claim_grounding_gate": claim_grounding_gate,
             "claim_grounding_removed": claim_grounding_gate.get("removed_claim_count", 0),
-            "citation_repair_applied": citation_repair_applied or fact_card_repair_applied,
+            "citation_repair_applied": citation_repair_applied or fact_card_repair_applied or context_citation_repair_applied,
             "fact_card_citation_repair": fact_card_repair,
             "stage_metrics_stage_count": stage_metrics_artifact.get("stage_count", 0),
             "slow_stage_warning_count": len(slow_stage_warnings),

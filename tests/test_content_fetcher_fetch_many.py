@@ -2,6 +2,7 @@ import threading
 import types
 
 from tools.research.content_fetcher import ContentFetcher
+from tools.research.models import FetchedPage
 
 
 def test_fetch_many_respects_per_domain_concurrency(monkeypatch):
@@ -120,3 +121,23 @@ def test_fetch_many_allows_parallelism_across_domains(monkeypatch):
 
     pages = result.get("pages") or []
     assert len(pages) == 2
+
+
+def test_fetch_many_returns_error_page_when_one_fetch_raises(monkeypatch):
+    import tools.research.content_fetcher as mod
+
+    monkeypatch.setattr(mod.settings, "research_fetch_concurrency", 2, raising=False)
+    monkeypatch.setattr(mod.settings, "research_fetch_concurrency_per_domain", 1, raising=False)
+
+    def fake_fetch(self, url):
+        if url.endswith("/bad"):
+            raise RuntimeError("response consumed")
+        return FetchedPage(url=url, raw_url=url, method="direct_http", text="ok", http_status=200)
+
+    monkeypatch.setattr(ContentFetcher, "fetch", fake_fetch)
+
+    pages = ContentFetcher().fetch_many(["https://example.com/ok", "https://example.com/bad"])
+
+    assert len(pages) == 2
+    assert pages[0].text == "ok"
+    assert pages[1].error == "response consumed"

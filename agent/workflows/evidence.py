@@ -70,6 +70,17 @@ def from_search_result(result: Dict[str, Any], *, query: str = "", citation_id: 
     title = _text(result.get("title"))
     snippet = _text(result.get("summary") or result.get("snippet") or result.get("content") or result.get("raw_excerpt"))
     provider = _text(result.get("provider") or result.get("source") or "web")
+    published_date = _text(
+        result.get("published_date")
+        or result.get("publishedDate")
+        or result.get("datePublished")
+        or result.get("publishedAt")
+        or result.get("published_at")
+        or result.get("date_published")
+        or result.get("pubDate")
+        or result.get("displayDate")
+        or result.get("date")
+    )
     return EvidenceItem(
         id=_stable_id("ev_web", url, title, snippet[:200], query),
         source_type=EvidenceSourceType.WEB.value,
@@ -77,12 +88,12 @@ def from_search_result(result: Dict[str, Any], *, query: str = "", citation_id: 
         url=url,
         title=title,
         snippet=snippet,
-        published_date=_text(result.get("published_date") or result.get("date")),
+        published_date=published_date,
         retrieved_at=_text(result.get("retrieved_at")) or _now(),
         query=query,
         quality_score=_score(result.get("score")),
         citation_id=citation_id,
-        metadata={key: value for key, value in result.items() if key not in {"title", "url", "summary", "snippet", "content", "raw_excerpt", "provider", "source", "published_date", "date", "retrieved_at", "score"}},
+        metadata={key: value for key, value in result.items() if key not in {"title", "url", "summary", "snippet", "content", "raw_excerpt", "provider", "source", "published_date", "publishedDate", "datePublished", "publishedAt", "published_at", "date_published", "pubDate", "displayDate", "date", "retrieved_at", "score"}},
     )
 
 

@@ -136,6 +136,71 @@ def test_chinese_citation_coverage_splits_adjacent_sentences():
     assert missing == ["监管报告显示风险上升。"]
 
 
+def test_citation_coverage_accepts_trailing_line_citation_for_claim_sentences():
+    missing, coverage = deepsearch_optimized._estimate_citation_coverage(
+        "数据显示市场增长20%。监管报告显示风险上升。[S1-1]"
+    )
+
+    assert coverage == 1.0
+    assert missing == []
+
+
+def test_citation_coverage_skips_toc_and_structural_headings():
+    missing, coverage = deepsearch_optimized._estimate_citation_coverage(
+        "\n".join(
+            [
+                "[高风险AI系统的具体监管义务](#4-高风险ai系统的具体监管义务)",
+                "- 4.1 风险管理系统",
+                "- 4.2 数据治理标准",
+                "报告显示监管义务将在2026年全面执行。[S1-1]",
+            ]
+        )
+    )
+
+    assert coverage == 1.0
+    assert missing == []
+
+
+def test_citation_coverage_can_return_all_missing_claims_for_repair():
+    report = "\n".join(f"数据显示第{i}项指标在2026年增长{i}%。" for i in range(1, 8))
+
+    missing, coverage = deepsearch_optimized._estimate_citation_coverage(report, max_missing=None)
+
+    assert coverage == 0.0
+    assert len(missing) == 7
+
+
+def test_citation_context_repair_inherits_nearby_trailing_refs():
+    report = "欧盟AI法案建立了严厉的罚款机制。[S1-1]\n- **不满足高风险AI义务**：最高1500万欧元或全球年营业额的3%。"
+    missing, coverage = deepsearch_optimized._estimate_citation_coverage(report, max_missing=None)
+
+    repaired = deepsearch_optimized._repair_citations_from_local_context(report, missing)
+    repaired_missing, repaired_coverage = deepsearch_optimized._estimate_citation_coverage(repaired, max_missing=None)
+
+    assert coverage == 0.5
+    assert repaired_coverage == 1.0
+    assert repaired_missing == []
+    assert "3%[S1-1]。" in repaired
+
+
+def test_claim_verifier_uses_fetched_pages_for_regulatory_amounts():
+    _checks, claims, stats = deepsearch_optimized._verify_report_claims(
+        "对于违反高风险AI系统义务，罚款金额最高可达1500万欧元或全球年营业额的3%。",
+        [],
+        fetched_pages=[
+            {
+                "url": "https://example.com/eu-ai-act-faq",
+                "text": "Up to €15m or 3% of the total worldwide annual turnover for non-compliance with any of the other requirements or obligations of the Regulation.",
+            }
+        ],
+        config={"configurable": {}},
+    )
+
+    assert stats["claim_verifier_verified"] == 1
+    assert stats["claim_verifier_unsupported"] == 0
+    assert claims[0]["status"] == "verified"
+
+
 def test_filter_and_cap_evidence_prefers_passages_and_drops_weak_text():
     evidence = [
         {

@@ -4,6 +4,7 @@ from agent.workflows.query_strategy import (
     analyze_query_coverage,
     backfill_diverse_queries,
     is_time_sensitive_topic,
+    result_published_datetime,
     summarize_freshness,
 )
 
@@ -56,3 +57,32 @@ def test_summarize_freshness_computes_buckets_and_ratios():
     assert summary["stale_180_count"] == 1
     assert summary["fresh_30_ratio"] == round(2 / 3, 3)
     assert summary["stale_180_ratio"] == round(1 / 3, 3)
+
+
+def test_summarize_freshness_reads_provider_date_aliases_and_snippets():
+    now = datetime.now(timezone.utc)
+    month_date = now - timedelta(days=2)
+    month_date_text = f"{month_date.strftime('%B')} {month_date.day}, {month_date.year}"
+
+    search_runs = [
+        {
+            "query": "q1",
+            "results": [
+                {"url": "https://a.example/1", "publishedDate": (now - timedelta(days=1)).isoformat()},
+                {"url": "https://a.example/2", "datePublished": (now - timedelta(days=10)).isoformat()},
+                {"url": "https://a.example/3", "snippet": "3 days ago — provider snippet with relative date."},
+                {"url": "https://a.example/4", "summary": f"{month_date_text} — release notes and updates."},
+            ],
+        }
+    ]
+
+    summary = summarize_freshness(search_runs)
+
+    assert summary["total_results"] == 4
+    assert summary["known_count"] == 4
+    assert summary["unknown_count"] == 0
+    assert summary["fresh_30_ratio"] >= 0.75
+
+
+def test_result_published_datetime_ignores_year_only_text():
+    assert result_published_datetime({"summary": "The 2026 report discusses long-term trends."}) is None
