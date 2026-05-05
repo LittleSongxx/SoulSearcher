@@ -20,7 +20,28 @@ def test_deepsearch_node_uses_auto_runner(monkeypatch):
     assert result["runner"] == "auto"
 
 
-def test_deepsearch_node_delegates_simple_factual_query_to_direct_answer_node(monkeypatch):
+def test_deepsearch_node_passes_resolved_route_to_runner(monkeypatch):
+    captured = {}
+
+    def fake_auto(state, config):
+        captured["config"] = config
+        return {"final_report": "ok", "quality_summary": {}, "messages": []}
+
+    monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
+
+    nodes.deepsearch_node(
+        {"input": "Analyze semiconductor supply chain resilience", "route": "deep"},
+        {"configurable": {"search_mode": {"mode": "deep"}}},
+    )
+
+    cfg = captured["config"]["configurable"]
+    assert cfg["resolved_route"] == "deep"
+    assert cfg["search_mode"]["route"] == "deep"
+
+
+def test_deepsearch_node_delegates_simple_factual_query_to_direct_answer_node(
+    monkeypatch,
+):
     called = {"direct": False}
 
     def fake_direct(state, config):
@@ -28,7 +49,9 @@ def test_deepsearch_node_delegates_simple_factual_query_to_direct_answer_node(mo
         return {"final_report": "Paris", "messages": []}
 
     def fake_auto(state, config):
-        raise AssertionError("deepsearch runner should be skipped for simple factual query")
+        raise AssertionError(
+            "deepsearch runner should be skipped for simple factual query"
+        )
 
     def fake_agent(state, config):
         raise AssertionError("agent node should be skipped for simple factual query")
@@ -60,7 +83,9 @@ def test_run_deepsearch_auto_respects_runtime_override(monkeypatch):
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_tree", fake_tree)
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
     monkeypatch.setattr(deepsearch_optimized.settings, "tree_exploration_enabled", True)
-    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "tree", raising=False)
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "deepsearch_mode", "tree", raising=False
+    )
 
     result = deepsearch_optimized.run_deepsearch_auto(
         {"input": "test"},
@@ -86,7 +111,9 @@ def test_run_deepsearch_auto_prefers_linear_for_simple_query(monkeypatch):
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_tree", fake_tree)
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
     monkeypatch.setattr(deepsearch_optimized.settings, "tree_exploration_enabled", True)
-    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False
+    )
 
     result = deepsearch_optimized.run_deepsearch_auto(
         {"input": "What is the capital of France?"},
@@ -106,9 +133,15 @@ def test_run_deepsearch_auto_reduces_budget_for_simple_query(monkeypatch):
         return {"mode": "linear"}
 
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
-    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_tree", lambda *args, **kwargs: {"mode": "tree"})
+    monkeypatch.setattr(
+        deepsearch_optimized,
+        "run_deepsearch_tree",
+        lambda *args, **kwargs: {"mode": "tree"},
+    )
     monkeypatch.setattr(deepsearch_optimized.settings, "tree_exploration_enabled", True)
-    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False
+    )
 
     deepsearch_optimized.run_deepsearch_auto(
         {"input": "What is the capital of France?"},
@@ -166,7 +199,9 @@ def test_run_deepsearch_auto_uses_supervisor_workers_strategy_override(monkeypat
     assert result["state"]["deepsearch_strategy_decision"]["strategy"] == "supervisor_workers"
 
 
-def test_run_deepsearch_auto_simple_query_preserves_noncopyable_runtime_config(monkeypatch):
+def test_run_deepsearch_auto_simple_query_preserves_noncopyable_runtime_config(
+    monkeypatch,
+):
     captured = {}
 
     class NonCopyable:
@@ -178,9 +213,15 @@ def test_run_deepsearch_auto_simple_query_preserves_noncopyable_runtime_config(m
         return {"mode": "linear"}
 
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
-    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_tree", lambda *args, **kwargs: {"mode": "tree"})
+    monkeypatch.setattr(
+        deepsearch_optimized,
+        "run_deepsearch_tree",
+        lambda *args, **kwargs: {"mode": "tree"},
+    )
     monkeypatch.setattr(deepsearch_optimized.settings, "tree_exploration_enabled", True)
-    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False
+    )
 
     deepsearch_optimized.run_deepsearch_auto(
         {"input": "What is the capital of France?"},
@@ -199,7 +240,9 @@ def test_deepsearch_node_emits_visualization_events(monkeypatch):
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -210,7 +253,9 @@ def test_deepsearch_node_emits_visualization_events(monkeypatch):
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     result = nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},
@@ -234,7 +279,9 @@ def test_deepsearch_node_emits_compact_unique_preview_sources(monkeypatch):
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -278,14 +325,18 @@ def test_deepsearch_node_emits_compact_unique_preview_sources(monkeypatch):
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},
         {"configurable": {"thread_id": "thread_test"}},
     )
 
-    complete_events = [data for name, data in emitted if name == "research_node_complete"]
+    complete_events = [
+        data for name, data in emitted if name == "research_node_complete"
+    ]
     assert complete_events
 
     sources = complete_events[0].get("sources", [])
@@ -300,7 +351,9 @@ def test_deepsearch_node_builds_preview_from_sources_fallback(monkeypatch):
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -314,14 +367,18 @@ def test_deepsearch_node_builds_preview_from_sources_fallback(monkeypatch):
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},
         {"configurable": {"thread_id": "thread_test"}},
     )
 
-    complete_events = [data for name, data in emitted if name == "research_node_complete"]
+    complete_events = [
+        data for name, data in emitted if name == "research_node_complete"
+    ]
     assert complete_events
     urls = [src.get("url") for src in complete_events[0].get("sources", [])]
     assert urls == ["https://example.com/a", "https://example.com/b"]
@@ -332,7 +389,9 @@ def test_deepsearch_node_skips_wrapper_events_when_runner_marks_emitted(monkeypa
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -343,7 +402,9 @@ def test_deepsearch_node_skips_wrapper_events_when_runner_marks_emitted(monkeypa
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},
@@ -359,10 +420,16 @@ def test_run_deepsearch_auto_sets_events_emitted_marker(monkeypatch):
         return {"mode": "linear"}
 
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
-    monkeypatch.setattr(deepsearch_optimized.settings, "tree_exploration_enabled", False)
-    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "tree_exploration_enabled", False
+    )
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False
+    )
 
-    result = deepsearch_optimized.run_deepsearch_auto({"input": "test"}, {"configurable": {}})
+    result = deepsearch_optimized.run_deepsearch_auto(
+        {"input": "test"}, {"configurable": {}}
+    )
     assert result["_deepsearch_events_emitted"] is True
 
 
@@ -371,7 +438,9 @@ def test_deepsearch_node_dedupes_preview_urls_after_tracking_normalization(monke
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -382,7 +451,10 @@ def test_deepsearch_node_dedupes_preview_urls_after_tracking_normalization(monke
                 {
                     "query": "q1",
                     "results": [
-                        {"title": "A", "url": "https://example.com/a?utm_source=newsletter"},
+                        {
+                            "title": "A",
+                            "url": "https://example.com/a?utm_source=newsletter",
+                        },
                         {"title": "A2", "url": "https://example.com/a/"},
                     ],
                 }
@@ -390,14 +462,18 @@ def test_deepsearch_node_dedupes_preview_urls_after_tracking_normalization(monke
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},
         {"configurable": {"thread_id": "thread_test"}},
     )
 
-    complete_events = [data for name, data in emitted if name == "research_node_complete"]
+    complete_events = [
+        data for name, data in emitted if name == "research_node_complete"
+    ]
     assert complete_events
     urls = [src.get("url") for src in complete_events[0].get("sources", [])]
     assert urls == ["https://example.com/a"]
@@ -408,7 +484,9 @@ def test_deepsearch_node_dedupes_preview_urls_with_case_insensitive_host(monkeyp
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -427,14 +505,18 @@ def test_deepsearch_node_dedupes_preview_urls_with_case_insensitive_host(monkeyp
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},
         {"configurable": {"thread_id": "thread_test"}},
     )
 
-    complete_events = [data for name, data in emitted if name == "research_node_complete"]
+    complete_events = [
+        data for name, data in emitted if name == "research_node_complete"
+    ]
     assert complete_events
     urls = [src.get("url") for src in complete_events[0].get("sources", [])]
     assert urls == ["https://example.com/b"]
@@ -445,19 +527,29 @@ def test_run_deepsearch_auto_does_not_mark_cancelled_result(monkeypatch):
         return {"is_cancelled": True, "final_report": "cancelled"}
 
     monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
-    monkeypatch.setattr(deepsearch_optimized.settings, "tree_exploration_enabled", False)
-    monkeypatch.setattr(deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False)
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "tree_exploration_enabled", False
+    )
+    monkeypatch.setattr(
+        deepsearch_optimized.settings, "deepsearch_mode", "auto", raising=False
+    )
 
-    result = deepsearch_optimized.run_deepsearch_auto({"input": "test"}, {"configurable": {}})
+    result = deepsearch_optimized.run_deepsearch_auto(
+        {"input": "test"}, {"configurable": {}}
+    )
     assert "_deepsearch_events_emitted" not in result
 
 
-def test_deepsearch_node_emits_completion_for_cancelled_result_even_with_marker(monkeypatch):
+def test_deepsearch_node_emits_completion_for_cancelled_result_even_with_marker(
+    monkeypatch,
+):
     emitted = []
 
     class DummyEmitter:
         def emit_sync(self, event_type, data):
-            event_name = event_type.value if hasattr(event_type, "value") else str(event_type)
+            event_name = (
+                event_type.value if hasattr(event_type, "value") else str(event_type)
+            )
             emitted.append((event_name, data))
 
     def fake_auto(state, config):
@@ -468,7 +560,9 @@ def test_deepsearch_node_emits_completion_for_cancelled_result_even_with_marker(
         }
 
     monkeypatch.setattr(nodes, "run_deepsearch_auto", fake_auto, raising=False)
-    monkeypatch.setattr(nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False)
+    monkeypatch.setattr(
+        nodes, "get_emitter_sync", lambda _thread_id: DummyEmitter(), raising=False
+    )
 
     nodes.deepsearch_node(
         {"input": "test topic", "cancel_token_id": "thread_test"},

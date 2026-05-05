@@ -1,0 +1,112 @@
+[
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_001",
+    "query": "2025年全球半导体行业并购交易分析：主要交易、估值趋势与监管审批情况",
+    "variant": "optimized",
+    "wall_time_s": 0.3,
+    "domain": "financial"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_002",
+    "query": "东南亚数字银行盈利现状与未来展望：主要玩家、监管环境与市场渗透率对比",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "financial"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_003",
+    "query": "大规模分布式训练框架对比：DeepSpeed、Megatron-LM、FSDP 的架构差异、扩展性与实际部署经验",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "technical"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_004",
+    "query": "WebAssembly 在边缘计算和 Serverless 场景中的应用进展、性能基准与生态系统成熟度",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "technical"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_005",
+    "query": "中国《生成式人工智能服务管理暂行办法》实施一年后的执法案例、企业合规实践与行业影响评估",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "legal"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_006",
+    "query": "全球数据跨境传输规制比较：GDPR 充分性认定、中国数据出境安全评估与美国行政令的异同与企业应对策略",
+    "variant": "optimized",
+    "wall_time_s": 0.2,
+    "domain": "legal"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_007",
+    "query": "CAR-T 细胞疗法在实体瘤治疗中的最新临床试验进展、技术瓶颈与未来方向",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "medical"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_008",
+    "query": "2024-2025 年全球抗菌药物耐药性（AMR）趋势：新型抗生素管线、各国行动计划与经济负担评估",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "medical"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_009",
+    "query": "室温超导研究争议与进展：LK-99 后续验证、替代材料路线与理论模型的最新发展",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "scientific"
+  },
+  {
+    "status": "error",
+    "error": "no parseable output; returncode=1; stderr: Traceback (most recent call last):\n  File \"<string>\", line 12, in <module>\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/song/anaconda3/envs/langchain/lib/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/scripts/benchmark_deep_research.py\", line 279, in _execute_research_case\n    import main  # local import after env override\n    ^^^^^^^^^^^\n  File \"/home/song/code/Agent/Weaver/main.py\", line 18, in <module>\n    import psycopg\nModuleNotFoundError: No module named 'psycopg'\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_010",
+    "query": "人工光合作用与太阳能燃料：催化材料突破、能量转换效率里程碑与商业化路径",
+    "variant": "optimized",
+    "wall_time_s": 0.1,
+    "domain": "scientific"
+  }
+]

@@ -1,0 +1,363 @@
+[
+  {
+    "status": "completed",
+    "thread_id": "thread_5e435a9bc3cf47619b2eaa82a6810c1e",
+    "duration_ms": 523135.01,
+    "final_report_chars": 62,
+    "final_report": "Deep search failed: name '_build_feature_trace' is not defined",
+    "final_report_preview": "Deep search failed: name '_build_feature_trace' is not defined",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "epoch",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "freshness",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "evidence",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 0,
+          "risk": 0,
+          "implementation": 4
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "freshness",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "evidence",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 0,
+        "risk": 0,
+        "implementation": 4
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_5e435a9bc3cf47619b2eaa82a6810c1e",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-27T02:38:18.595563",
+      "ended_at": "2026-04-27T02:46:17.917211",
+      "duration_ms": 479321.65,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 0,
+        "unsupported_claims_count": 0,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 0,
+      "unsupported_claims_count": 0,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "v7_001",
+    "query": "2025年全球半导体行业并购交易分析：主要交易、估值趋势与监管审批情况",
+    "variant": "optimized",
+    "wall_time_s": 523.3,
+    "domain": "financial",
+    "retry_count": 1
+  },
+  {
+    "status": "timeout",
+    "error": "subprocess timeout at 900s; stderr: ya、UnionDigital、GOtyme的净息差、成本收入比与ROE分析（2023-2024）' returned 5 results\n2026-04-27 11:13:31 - tools.search.multi_search - INFO - [multi_search.py:876] - [MultiSearch] Got 5 results from tavily\n2026-04-27 11:13:31 - tools.search.multi_search - INFO - [multi_search.py:824] - [MultiSearch] Provider profile selected: ['tavily', 'duckduckgo']\n2026-04-27 11:13:41 - tools.search.search - INFO - [search.py:143] - Tavily search for '印尼数字银行Bank Jago、Neo Bank的盈利指标：净息差与成本收入比（2023-2024）' returned 5 results\n2026-04-27 11:13:41 - tools.search.multi_search - INFO - [multi_search.py:876] - [MultiSearch] Got 5 results from tavily\n2026-04-27 11:13:41 - tools.search.multi_search - INFO - [multi_search.py:824] - [MultiSearch] Provider profile selected: ['tavily', 'duckduckgo']\n2026-04-27 11:13:56 - tools.search.search - INFO - [search.py:143] - Tavily search for '新加坡数字银行GXS Bank与MariBank的运营成本结构、用户获取成本及盈亏平衡时间预测（2024-2025）' returned 5 results\n2026-04-27 11:13:56 - tools.search.multi_search - INFO - [multi_search.py:876] - [MultiSearch] Got 5 results from tavily\n2026-04-27 11:13:56 - tools.search.multi_search - INFO - [multi_search.py:824] - [MultiSearch] Provider profile selected: ['tavily', 'duckduckgo']\n",
+    "final_report_chars": 0,
+    "final_report": "",
+    "case_id": "v7_002",
+    "query": "东南亚数字银行盈利现状与未来展望：主要玩家、监管环境与市场渗透率对比",
+    "variant": "optimized",
+    "wall_time_s": 900.1,
+    "domain": "financial",
+    "retry_count": 1
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_7b4c50f164b9437d85a53a6fbeea3985",
+    "duration_ms": 640123.92,
+    "final_report_chars": 62,
+    "final_report": "Deep search failed: name '_build_feature_trace' is not defined",
+    "final_report_preview": "Deep search failed: name '_build_feature_trace' is not defined",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "epoch",
+      "query_coverage": {
+        "score": 0.4,
+        "covered_dimensions": [
+          "evidence",
+          "implementation"
+        ],
+        "missing_dimensions": [
+          "freshness",
+          "official",
+          "risk"
+        ],
+        "dimension_hits": {
+          "freshness": 0,
+          "official": 0,
+          "evidence": 1,
+          "risk": 0,
+          "implementation": 1
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.4,
+      "query_dimensions_covered": [
+        "evidence",
+        "implementation"
+      ],
+      "query_dimensions_missing": [
+        "freshness",
+        "official",
+        "risk"
+      ],
+      "query_dimension_hits": {
+        "freshness": 0,
+        "official": 0,
+        "evidence": 1,
+        "risk": 0,
+        "implementation": 1
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_7b4c50f164b9437d85a53a6fbeea3985",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-27T03:14:03.799316",
+      "ended_at": "2026-04-27T03:23:53.071525",
+      "duration_ms": 589272.21,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 0,
+        "unsupported_claims_count": 0,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 0,
+      "unsupported_claims_count": 0,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "v7_003",
+    "query": "大规模分布式训练框架对比：DeepSpeed、Megatron-LM、FSDP 的架构差异、扩展性与实际部署经验",
+    "variant": "optimized",
+    "wall_time_s": 640.3,
+    "domain": "technical"
+  },
+  {
+    "status": "completed",
+    "thread_id": "thread_7b34c07bab6a4326b5da9490be5cde27",
+    "duration_ms": 565398.92,
+    "final_report_chars": 62,
+    "final_report": "Deep search failed: name '_build_feature_trace' is not defined",
+    "final_report_preview": "Deep search failed: name '_build_feature_trace' is not defined",
+    "error": null,
+    "last_quality_update": {
+      "epoch": 1,
+      "stage": "epoch",
+      "query_coverage": {
+        "score": 0.8,
+        "covered_dimensions": [
+          "evidence",
+          "freshness",
+          "implementation",
+          "risk"
+        ],
+        "missing_dimensions": [
+          "official"
+        ],
+        "dimension_hits": {
+          "freshness": 1,
+          "official": 0,
+          "evidence": 1,
+          "risk": 1,
+          "implementation": 3
+        },
+        "total_queries": 8
+      },
+      "query_coverage_score": 0.8,
+      "query_dimensions_covered": [
+        "evidence",
+        "freshness",
+        "implementation",
+        "risk"
+      ],
+      "query_dimensions_missing": [
+        "official"
+      ],
+      "query_dimension_hits": {
+        "freshness": 1,
+        "official": 0,
+        "evidence": 1,
+        "risk": 1,
+        "implementation": 3
+      },
+      "freshness_summary": {
+        "total_results": 40,
+        "known_count": 0,
+        "unknown_count": 40,
+        "fresh_7_count": 0,
+        "fresh_30_count": 0,
+        "stale_180_count": 0,
+        "fresh_30_ratio": 0.0,
+        "stale_180_ratio": 0.0
+      },
+      "time_sensitive_query": false,
+      "freshness_warning": ""
+    },
+    "run_metrics": {
+      "run_id": "thread_7b34c07bab6a4326b5da9490be5cde27",
+      "model": "deepseek-v4-flash",
+      "route": "deep",
+      "started_at": "2026-04-27T03:23:56.405583",
+      "ended_at": "2026-04-27T03:32:34.969906",
+      "duration_ms": 518564.32,
+      "event_count": 10,
+      "nodes_started": {
+        "langgraph": 1,
+        "router": 1,
+        "route_decision": 1,
+        "deepsearch": 1,
+        "human_review": 1
+      },
+      "nodes_completed": {
+        "route_decision": 1,
+        "router": 1,
+        "deepsearch": 1,
+        "human_review": 1,
+        "langgraph": 1
+      },
+      "errors": [],
+      "cancelled": false,
+      "evidence_summary": {
+        "sources_count": 0,
+        "unsupported_claims_count": 0,
+        "freshness_ratio_30d": null,
+        "citation_coverage": null,
+        "query_coverage_score": null,
+        "freshness_warning": null,
+        "claim_verifier_total": null,
+        "claim_verifier_verified": null,
+        "claim_verifier_unsupported": null,
+        "claim_verifier_contradicted": null
+      }
+    },
+    "evidence_summary": {
+      "sources_count": 0,
+      "unsupported_claims_count": 0,
+      "freshness_ratio_30d": null,
+      "citation_coverage": null,
+      "query_coverage_score": null,
+      "freshness_warning": null,
+      "claim_verifier_total": null,
+      "claim_verifier_verified": null,
+      "claim_verifier_unsupported": null,
+      "claim_verifier_contradicted": null
+    },
+    "case_id": "v7_004",
+    "query": "WebAssembly 在边缘计算和 Serverless 场景中的应用进展、性能基准与生态系统成熟度",
+    "variant": "optimized",
+    "wall_time_s": 565.7,
+    "domain": "technical"
+  }
+]

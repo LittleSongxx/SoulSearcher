@@ -14,7 +14,8 @@ Key design choices:
 """
 
 import logging
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -23,22 +24,159 @@ from common.config import settings
 
 logger = logging.getLogger(__name__)
 
-REFLEXION_PROMPT = """You are a self-reflection assistant. Review the agent's last action round and evaluate progress toward the user's goal.
+REFLEXION_PROMPT = """You are a self-reflection assistant. Review the current progress snapshot and evaluate progress toward the user's goal.
 
 ## User Goal
 {user_goal}
 
-## Last Round Results
-{last_round_summary}
+## Current Progress Snapshot
+{progress_summary}
 
 ## Instructions
-Provide a brief self-reflection (3-5 sentences max):
-1. What was achieved in this round?
-2. What gaps remain toward the user's goal?
-3. What should the agent do next?
+Provide a brief self-reflection (3-5 sentences max) using this format:
+ACHIEVED: ...
+GAPS: ...
+NEXT_ACTION: ...
 
-Be concise and actionable. If the goal appears fully achieved, say "Goal achieved."
+Be concise and actionable. If the goal appears fully achieved, reply exactly "Goal achieved."
 """
+
+
+def _truncate_text(value: Any, limit: int) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def _message_fingerprint(message: BaseMessage) -> tuple:
+    return (
+        type(message).__name__,
+        getattr(message, "content", "") or "",
+        str(getattr(message, "name", "") or ""),
+        repr(getattr(message, "tool_calls", None)),
+        str(getattr(message, "tool_call_id", "") or ""),
+    )
+
+
+def merge_reflexion_context(
+    existing_messages: Optional[List[BaseMessage]],
+    new_messages: Optional[List[BaseMessage]],
+) -> List[BaseMessage]:
+    merged = list(existing_messages or [])
+    incoming = list(new_messages or [])
+    if not incoming:
+        return merged
+    if not merged:
+        return incoming
+
+    existing_fp = [_message_fingerprint(msg) for msg in merged]
+    incoming_fp = [_message_fingerprint(msg) for msg in incoming]
+    overlap = 0
+    max_overlap = min(len(existing_fp), len(incoming_fp))
+    for size in range(max_overlap, 0, -1):
+        if existing_fp[-size:] == incoming_fp[:size]:
+            overlap = size
+            break
+
+    return merged + incoming[overlap:]
+
+
+def summarize_reflexion_messages(last_messages: List[BaseMessage]) -> str:
+    summary_parts = []
+    for msg in list(last_messages or [])[-8:]:
+        role = type(msg).__name__
+        content = _truncate_text(getattr(msg, "content", "") or "", 320)
+        tool_calls = getattr(msg, "tool_calls", None)
+        if tool_calls:
+            content = f"{content}\nTOOL_CALLS: {_truncate_text(repr(tool_calls), 320)}".strip()
+        summary_parts.append(f"[{role}] {content}".strip())
+    return "\n".join(part for part in summary_parts if part)
+
+
+def generate_reflexion_feedback(
+    user_goal: str,
+    progress_summary: str,
+    llm: Any,
+    config: Optional[Dict] = None,
+) -> Optional[str]:
+    if not settings.agent_reflexion_enabled:
+        return None
+
+    progress_summary = str(progress_summary or "").strip()
+    if not progress_summary:
+        return None
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("user", REFLEXION_PROMPT),
+        ]
+    )
+
+    try:
+        msg = prompt.format_messages(
+            user_goal=_truncate_text(user_goal, 700),
+            progress_summary=_truncate_text(progress_summary, 2200),
+        )
+        response = llm.invoke(msg, config=config or {})
+        feedback = str(getattr(response, "content", "") or "").strip()
+        if not feedback:
+            return None
+        if feedback.lower().startswith("goal achieved"):
+            logger.debug("[reflexion] Goal achieved, skipping feedback injection")
+            return None
+        logger.info(f"[reflexion] Generated feedback ({len(feedback)} chars)")
+        return feedback
+    except Exception as e:
+        logger.warning(f"[reflexion] Failed to generate reflection: {e}")
+        return None
+
+
+def extract_reflexion_focus(feedback: str, limit: int = 3) -> List[str]:
+    text = str(feedback or "").strip()
+    if not text:
+        return []
+
+    lines = []
+    for raw in text.splitlines():
+        line = raw.strip().strip("-*• ")
+        if not line:
+            continue
+        lowered = line.lower()
+        if lowered.startswith("achieved:"):
+            continue
+        if ":" in line:
+            _, line = line.split(":", 1)
+        elif "：" in line:
+            _, line = line.split("：", 1)
+        line = line.strip()
+        if line:
+            lines.append(line)
+
+    if not lines:
+        lines = [text]
+
+    focus: List[str] = []
+    seen = set()
+    for line in lines:
+        parts = [
+            chunk.strip(" -*•")
+            for chunk in re.split(r"[;；\n]+|\s+(?:and|then)\s+|[，,]+", line)
+        ]
+        for part in parts:
+            normalized = re.sub(r"\s+", " ", part).strip()
+            if len(normalized) < 4:
+                continue
+            if normalized.lower() in {"gaps", "next_action", "next action"}:
+                continue
+            key = normalized.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            focus.append(normalized[:120])
+            if len(focus) >= limit:
+                return focus
+    return focus
 
 
 def build_reflexion_message(
@@ -66,45 +204,16 @@ def build_reflexion_message(
     if not last_messages:
         return None
 
-    # Build a compact summary of the last round
-    summary_parts = []
-    for msg in last_messages[-6:]:  # Last 6 messages max
-        role = type(msg).__name__
-        content = getattr(msg, "content", "") or ""
-        if len(content) > 300:
-            content = content[:300] + "..."
-        summary_parts.append(f"[{role}] {content}")
-
-    last_round_summary = "\n".join(summary_parts)
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("user", REFLEXION_PROMPT),
-    ])
-
-    try:
-        msg = prompt.format_messages(
-            user_goal=user_goal[:500],
-            last_round_summary=last_round_summary[:1500],
-        )
-        response = llm.invoke(msg, config=config or {})
-        feedback = getattr(response, "content", "") or ""
-
-        if not feedback.strip():
-            return None
-
-        # If goal is achieved, no need for further reflection
-        if "goal achieved" in feedback.lower()[:50]:
-            logger.debug("[reflexion] Goal achieved, skipping feedback injection")
-            return None
-
-        logger.info(f"[reflexion] Generated feedback ({len(feedback)} chars)")
-        return SystemMessage(
-            content=f"[Self-Reflection] {feedback.strip()}"
-        )
-
-    except Exception as e:
-        logger.warning(f"[reflexion] Failed to generate reflection: {e}")
+    feedback = generate_reflexion_feedback(
+        user_goal=user_goal,
+        progress_summary=summarize_reflexion_messages(last_messages),
+        llm=llm,
+        config=config,
+    )
+    if feedback is None:
         return None
+
+    return SystemMessage(content=f"[Self-Reflection] {feedback}")
 
 
 def should_reflect(round_num: int, total_messages: int) -> bool:

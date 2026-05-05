@@ -68,6 +68,12 @@ class ResearchTreeNode:
         summary: Synthesized summary of findings
         queries: Search queries generated for this topic
         relevance_score: How relevant this branch is (0-1)
+        score: The score of this node
+        retry_count: The number of retries for this node
+        quality_signals: Quality signals for this node
+        focus_areas: Focus areas for this node
+        backtrack_queries: Backtrack queries for this node
+        retry_history: Retry history for this node
         created_at: Timestamp of node creation
         completed_at: Timestamp of completion
     """
@@ -83,8 +89,12 @@ class ResearchTreeNode:
     summary: str = ""
     queries: List[str] = field(default_factory=list)
     relevance_score: float = 1.0
-    score: float = 0.0  # branch quality score (set by tree_evaluator)
-    retry_count: int = 0  # number of backtrack retries
+    score: float = 0.0
+    retry_count: int = 0
+    quality_signals: Dict[str, Any] = field(default_factory=dict)
+    focus_areas: List[str] = field(default_factory=list)
+    backtrack_queries: List[str] = field(default_factory=list)
+    retry_history: List[Dict[str, Any]] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     completed_at: Optional[str] = None
 
@@ -102,6 +112,12 @@ class ResearchTreeNode:
             "summary_length": len(self.summary),
             "queries": self.queries,
             "relevance_score": self.relevance_score,
+            "score": self.score,
+            "retry_count": self.retry_count,
+            "quality_signals": self.quality_signals,
+            "focus_areas": self.focus_areas,
+            "backtrack_queries": self.backtrack_queries,
+            "retry_history": self.retry_history,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
         }
@@ -372,6 +388,7 @@ class TreeExplorer:
         self.tree: Optional[ResearchTree] = None
         self.all_searched_urls: List[str] = []
         self.start_time: float = 0
+        self.backtrack_events: List[Dict[str, Any]] = []
 
     def _check_cancel(self, state: Dict[str, Any]) -> None:
         """Check for cancellation."""
@@ -380,6 +397,89 @@ class TreeExplorer:
         token_id = state.get("cancel_token_id")
         if token_id:
             _check_cancel_token(token_id)
+
+    async def _gather_with_task_cleanup(self, tasks: List[asyncio.Task]) -> None:
+        if not tasks:
+            return
+        try:
+            await asyncio.gather(*tasks)
+        except BaseException:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+    def _seed_node_queries(self, node: ResearchTreeNode) -> None:
+        seeded: List[str] = []
+        seen = set()
+        for query in node.queries or []:
+            if not isinstance(query, str):
+                continue
+            normalized = " ".join(query.split()).strip()
+            if not normalized:
+                continue
+            key = normalized.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            seeded.append(normalized)
+        if not seeded and node.topic:
+            seeded = [node.topic]
+        node.queries = seeded
+
+    def _record_search_results(
+        self,
+        node: ResearchTreeNode,
+        query: str,
+        results: List[Dict[str, Any]],
+    ) -> None:
+        for r in results or []:
+            if not isinstance(r, dict):
+                continue
+            url = r.get("url")
+            if url and url not in self.all_searched_urls:
+                self.all_searched_urls.append(url)
+            if url and url not in node.sources:
+                node.sources.append(url)
+            node.findings.append(
+                {
+                    "query": query,
+                    "result": r,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+    def _prepare_backtrack_retry(
+        self,
+        node: ResearchTreeNode,
+        evaluation: Dict[str, Any],
+    ) -> List[str]:
+        from agent.workflows.tree_evaluator import build_backtrack_queries
+
+        retry_queries = build_backtrack_queries(
+            node,
+            evaluation,
+            limit=max(1, int(self.queries_per_branch)),
+        )
+        node.quality_signals = dict(evaluation.get("signals", {}))
+        node.focus_areas = list(evaluation.get("focus_areas", []))
+        node.backtrack_queries = list(retry_queries)
+        retry_event = {
+            "attempt": node.retry_count,
+            "score": float(evaluation.get("score", node.score or 0.0)),
+            "focus_areas": list(node.focus_areas),
+            "retry_queries": list(retry_queries),
+        }
+        node.retry_history.append(retry_event)
+        self.backtrack_events.append(
+            {
+                "node_id": node.id,
+                "topic": node.topic,
+                **retry_event,
+            }
+        )
+        return retry_queries
 
     def decompose_topic(
         self,
@@ -603,7 +703,7 @@ class TreeExplorer:
     def _summarize_branch(self, node: ResearchTreeNode) -> str:
         """Summarize the findings of a branch."""
         findings_text = []
-        for i, f in enumerate(node.findings[:10], 1):  # Limit to first 10
+        for i, f in enumerate(node.findings[:10], 1):
             r = f.get("result", {})
             findings_text.append(
                 f"[{i}] {r.get('title', 'N/A')}\n"
@@ -616,21 +716,21 @@ class TreeExplorer:
                 (
                     "user",
                     """
-# 任务
-总结以下搜索结果中与主题相关的关键信息。
+ # 任务
+ 总结以下搜索结果中与主题相关的关键信息。
 
-# 主题
-{topic}
+ # 主题
+ {topic}
 
-# 搜索结果
-{findings}
+ # 搜索结果
+ {findings}
 
-# 输出要求
-- 提取关键信息和洞见
-- 保持简洁，500字以内
-- 使用要点列表格式
-- 标注重要来源
-""",
+ # 输出要求
+ - 提取关键信息和洞见
+ - 保持简洁，500字以内
+ - 使用要点列表格式
+ - 标注重要来源
+ """,
                 )
             ]
         )
@@ -669,19 +769,19 @@ class TreeExplorer:
                 (
                     "user",
                     """
-# 任务
-整合以下各分支的研究发现，生成一份统一的研究摘要。
+ # 任务
+ 整合以下各分支的研究发现，生成一份统一的研究摘要。
 
-# 各分支发现
-{branch_summaries}
+ # 各分支发现
+ {branch_summaries}
 
-# 输出要求
-- 整合所有分支的关键发现
-- 识别共同主题和差异
-- 按逻辑顺序组织内容
-- 保留重要细节和来源
-- 字数不超过1000字
-""",
+ # 输出要求
+ - 整合所有分支的关键发现
+ - 识别共同主题和差异
+ - 按逻辑顺序组织内容
+ - 保留重要细节和来源
+ - 字数不超过1000字
+ """,
                 )
             ]
         )
@@ -769,7 +869,7 @@ class TreeExplorer:
         subtopics = self.decompose_topic(
             parent.topic,
             existing_knowledge=parent.summary,
-            num_subtopics=min(2, self.max_branches),  # Fewer children at deeper levels
+            num_subtopics=min(2, self.max_branches),
         )
 
         for subtopic, relevance in subtopics:
@@ -777,8 +877,6 @@ class TreeExplorer:
             if child:
                 self._check_cancel(state)
                 self.explore_branch(child, state)
-
-    # ==================== Async Parallel Exploration ====================
 
     async def explore_branch_async(
         self,
@@ -804,7 +902,7 @@ class TreeExplorer:
         try:
             loop = asyncio.get_event_loop()
 
-            node.queries = [node.topic] if node.topic else []
+            self._seed_node_queries(node)
 
             async def _search_one_async(query: str) -> None:
                 self._check_cancel(state)
@@ -861,18 +959,7 @@ class TreeExplorer:
                 except Exception:
                     pass
 
-                for r in results:
-                    url = r.get("url")
-                    if url and url not in self.all_searched_urls:
-                        self.all_searched_urls.append(url)
-                        node.sources.append(url)
-                    node.findings.append(
-                        {
-                            "query": query,
-                            "result": r,
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
+                self._record_search_results(node, query, results)
 
             if node.queries:
                 await _search_one_async(node.queries[0])
@@ -940,25 +1027,31 @@ class TreeExplorer:
             )
 
             # LATS-style evaluation for async path
-            from agent.workflows.tree_evaluator import score_branch, should_backtrack
+            from agent.workflows.tree_evaluator import evaluate_branch, should_backtrack
 
-            node.score = score_branch(node)
+            evaluation = evaluate_branch(node)
+            node.score = float(evaluation.get("score", 0.0))
+            node.quality_signals = dict(evaluation.get("signals", {}))
+            node.focus_areas = list(evaluation.get("focus_areas", []))
             max_retries = int(getattr(settings, "tree_backtrack_max_retries", 1))
             if should_backtrack(node) and node.retry_count < max_retries:
                 node.retry_count += 1
                 node.status = NodeStatus.RETRY
+                retry_queries = self._prepare_backtrack_retry(node, evaluation)
                 logger.info(
                     f"[TreeExplorer] Async branch {node.id} scored {node.score:.3f}, "
                     f"triggering backtrack retry {node.retry_count}/{max_retries}"
+                    f" | focus={node.focus_areas[:2]}"
                 )
                 node.findings = []
                 node.sources = []
                 node.summary = ""
-                node.queries = (
+                node.queries = retry_queries or (
                     [f"{node.topic} alternative perspective"] if node.topic else []
                 )
                 node.status = NodeStatus.IN_PROGRESS
                 await self.explore_branch_async(node, state, per_query_results)
+                return
 
         except asyncio.CancelledError:
             raise
@@ -1035,7 +1128,8 @@ class TreeExplorer:
         logger.info(
             f"[TreeExplorer] Parallel exploring {len(children)} children of {parent.id} with context isolation"
         )
-        await asyncio.gather(*[explore_with_isolation(c) for c in children])
+        tasks = [asyncio.create_task(explore_with_isolation(c)) for c in children]
+        await self._gather_with_task_cleanup(tasks)
 
         # Merge all child results back to parent state
         for scope_id, child_state in child_results:
@@ -1126,7 +1220,8 @@ class TreeExplorer:
                 logger.info(
                     f"[TreeExplorer] Parallel exploring {len(children)} subtopics"
                 )
-                await asyncio.gather(*[explore_child(c) for c in children])
+                tasks = [asyncio.create_task(explore_child(c)) for c in children]
+                await self._gather_with_task_cleanup(tasks)
 
         elapsed = time.time() - self.start_time
         logger.info(
@@ -1179,6 +1274,10 @@ class TreeExplorer:
     def get_all_sources(self) -> List[str]:
         """Get all unique sources found during exploration."""
         return self.all_searched_urls.copy()
+
+    def get_backtrack_events(self) -> List[Dict[str, Any]]:
+        """Get all recorded backtrack events."""
+        return list(self.backtrack_events)
 
     def get_all_findings(self) -> List[Dict[str, Any]]:
         """Get all findings from all nodes."""

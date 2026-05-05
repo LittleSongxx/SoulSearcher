@@ -1,11 +1,15 @@
 """Tests for the agent reflexion module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from agent.core.reflexion import build_reflexion_message, should_reflect
+from agent.core.reflexion import (
+    build_reflexion_message,
+    extract_reflexion_focus,
+    merge_reflexion_context,
+    should_reflect,
+)
 
 
 class TestShouldReflect:
@@ -98,3 +102,39 @@ class TestBuildReflexionMessage:
             result = build_reflexion_message("goal", messages, mock_llm)
 
         assert result is None
+
+
+class TestReflexionHelpers:
+    def test_extract_focus_prefers_gap_and_next_action_lines(self):
+        feedback = """ACHIEVED: gathered initial evidence.
+GAPS: official source coverage is missing; need fresher updates.
+NEXT_ACTION: search regulator filing and latest vendor announcement.
+"""
+
+        focus = extract_reflexion_focus(feedback)
+
+        assert any("official source coverage" in item for item in focus)
+        assert any(
+            "latest vendor announcement" in item or "regulator filing" in item
+            for item in focus
+        )
+
+    def test_merge_reflexion_context_deduplicates_overlapping_messages(self):
+        base_messages = [
+            SystemMessage(content="system"),
+            HumanMessage(content="goal"),
+            AIMessage(content="I'll search"),
+        ]
+        new_messages = [
+            AIMessage(content="I'll search"),
+            AIMessage(content="Search results summarized"),
+        ]
+
+        merged = merge_reflexion_context(base_messages, new_messages)
+
+        assert [msg.content for msg in merged] == [
+            "system",
+            "goal",
+            "I'll search",
+            "Search results summarized",
+        ]

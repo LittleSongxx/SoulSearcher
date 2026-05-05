@@ -558,6 +558,38 @@ def _configurable(config: RunnableConfig) -> Dict[str, Any]:
     return {}
 
 
+def _clone_config_with_route(
+    config: RunnableConfig,
+    route: str,
+    *,
+    profile: Optional[Dict[str, Any]] = None,
+) -> RunnableConfig:
+    if not isinstance(config, dict):
+        return config
+
+    next_config = dict(config)
+    cfg = dict(_configurable(config))
+    normalized_route = str(route or "").strip().lower()
+    if normalized_route:
+        cfg["resolved_route"] = normalized_route
+        cfg.setdefault("route", normalized_route)
+        search_mode = cfg.get("search_mode") or {}
+        if isinstance(search_mode, dict):
+            next_search_mode = dict(search_mode)
+            next_search_mode["route"] = normalized_route
+            cfg["search_mode"] = next_search_mode
+
+    current_profile = profile if isinstance(profile, dict) else cfg.get("agent_profile")
+    if isinstance(current_profile, dict):
+        next_profile = dict(current_profile)
+        if normalized_route:
+            next_profile["route"] = normalized_route
+        cfg["agent_profile"] = next_profile
+
+    next_config["configurable"] = cfg
+    return next_config
+
+
 def _selected_model(config: RunnableConfig, fallback: str) -> str:
     cfg = _configurable(config)
     val = cfg.get("model")
@@ -1197,6 +1229,9 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
     """Deep search pipeline that iterates query → search → summarize."""
     logger.info("Executing deepsearch node")
     cfg = _configurable(config)
+    deepsearch_config = _clone_config_with_route(
+        config, state.get("route", "deep") or "deep"
+    )
     thread_id = str(cfg.get("thread_id") or state.get("cancel_token_id") or "").strip()
     emitter = None
 
@@ -1226,7 +1261,7 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
         token_id = state.get("cancel_token_id")
         if token_id:
             _check_cancellation(token_id)
-        result = run_deepsearch_auto(state, config)
+        result = run_deepsearch_auto(state, deepsearch_config)
 
         if emitter and isinstance(result, dict):
             try:
@@ -1363,6 +1398,7 @@ def route_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
 
     # Merge max_revisions into result
     result["max_revisions"] = max_revisions
+    result["resolved_route"] = route
 
     # Domain classification (if enabled)
     if getattr(settings, "domain_routing_enabled", False) and route in ("deep", "web"):
@@ -2037,12 +2073,26 @@ def agent_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
 
         cfg = _configurable(config)
         profile = cfg.get("agent_profile") or {}
+        route = (
+            str(
+                state.get("route")
+                or cfg.get("resolved_route")
+                or profile.get("route")
+                or "agent"
+            )
+            .strip()
+            .lower()
+            or "agent"
+        )
+        agent_config = _clone_config_with_route(config, route, profile=profile)
+        cfg = _configurable(agent_config)
+        profile = cfg.get("agent_profile") or {}
         thread_id = str(cfg.get("thread_id") or "default")
 
-        model = _model_for_task("research", config)
+        model = _model_for_task("research", agent_config)
 
         # Try to use enhanced tool registry if available
-        tools = build_agent_tools(config)
+        tools = build_agent_tools(agent_config)
 
         # Log enabled tools for debugging
         tool_names = [getattr(t, "name", t.__class__.__name__) for t in tools]
@@ -2127,33 +2177,43 @@ You can also use XML format for tool calls:
             )
         )
 
-        response = agent.invoke({"messages": messages}, config=config)
+        response = agent.invoke({"messages": messages}, config=agent_config)
         logger.info(f"[timing] agent {(time.time() - t0):.3f}s")
 
         # Reflexion: self-reflect on tool-calling results and optionally re-invoke
-        from agent.core.reflexion import build_reflexion_message, should_reflect
+        from agent.core.reflexion import (
+            build_reflexion_message,
+            merge_reflexion_context,
+            should_reflect,
+        )
 
         resp_messages = (
             response.get("messages", []) if isinstance(response, dict) else []
         )
+        merged_messages = merge_reflexion_context(messages, resp_messages)
+        if isinstance(response, dict):
+            response = {**response, "messages": merged_messages}
         round_num = 1
-        while should_reflect(round_num, len(resp_messages)):
+        while should_reflect(round_num, len(merged_messages)):
             llm = create_chat_model(model, temperature=0.3)
             reflection_msg = build_reflexion_message(
                 user_goal=state.get("input", ""),
-                last_messages=resp_messages,
+                last_messages=merged_messages,
                 llm=llm,
-                config=config,
+                config=agent_config,
             )
             if reflection_msg is None:
                 break  # Goal achieved or reflection not needed
             # Inject reflection and re-invoke agent
-            messages.append(reflection_msg)
+            merged_messages = merge_reflexion_context(merged_messages, [reflection_msg])
             logger.info(f"[agent_node] Reflexion round {round_num}: re-invoking agent")
-            response = agent.invoke({"messages": messages}, config=config)
+            response = agent.invoke({"messages": merged_messages}, config=agent_config)
             resp_messages = (
                 response.get("messages", []) if isinstance(response, dict) else []
             )
+            merged_messages = merge_reflexion_context(merged_messages, resp_messages)
+            if isinstance(response, dict):
+                response = {**response, "messages": merged_messages}
             round_num += 1
 
         text = ""

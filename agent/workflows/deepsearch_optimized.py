@@ -31,6 +31,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
 from agent.core.llm_factory import create_chat_model
+from agent.core.reflexion import extract_reflexion_focus, generate_reflexion_feedback
 from agent.core.search_cache import get_search_cache
 from agent.workflows.domain_router import ResearchDomain, build_provider_profile
 from agent.workflows.evidence_passages import split_into_passages
@@ -272,7 +273,10 @@ def _auto_mode_prefers_linear(topic: str) -> bool:
         return False
 
     lowered = text.lower()
-    if any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in _SIMPLE_FACT_PATTERNS):
+    if any(
+        re.search(pattern, lowered, flags=re.IGNORECASE)
+        for pattern in _SIMPLE_FACT_PATTERNS
+    ):
         return True
 
     if any(cue in lowered for cue in _BROAD_RESEARCH_CUES):
@@ -281,15 +285,23 @@ def _auto_mode_prefers_linear(topic: str) -> bool:
 
 
 def _resolve_search_strategy() -> SearchStrategy:
-    raw = str(getattr(settings, "search_strategy", "fallback") or "fallback").strip().lower()
+    raw = (
+        str(getattr(settings, "search_strategy", "fallback") or "fallback")
+        .strip()
+        .lower()
+    )
     try:
         return SearchStrategy(raw)
     except ValueError:
-        logger.warning(f"[deepsearch] invalid search_strategy='{raw}', fallback to 'fallback'")
+        logger.warning(
+            f"[deepsearch] invalid search_strategy='{raw}', fallback to 'fallback'"
+        )
         return SearchStrategy.FALLBACK
 
 
-def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _normalize_multi_search_results(
+    results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     for r in results:
         if not isinstance(r, dict):
@@ -332,7 +344,7 @@ def _resolve_provider_profile(state: Dict[str, Any]) -> Optional[List[str]]:
     """Build provider profile from domain routing metadata if present."""
     domain_config = state.get("domain_config") or {}
     suggested_sources = domain_config.get("suggested_sources", [])
-    domain_value = (state.get("domain") or domain_config.get("domain") or "general")
+    domain_value = state.get("domain") or domain_config.get("domain") or "general"
     try:
         domain = ResearchDomain(str(domain_value).strip().lower())
     except ValueError:
@@ -388,6 +400,21 @@ def _budget_stop_reason(
     return None
 
 
+def _should_skip_expensive_postprocessing(
+    *,
+    start_ts: float,
+    max_seconds: float,
+    budget_stop_reason: str,
+    reserve_seconds: float = 20.0,
+) -> bool:
+    if budget_stop_reason:
+        return True
+    if max_seconds <= 0:
+        return False
+    remaining = float(max_seconds) - max(0.0, time.time() - start_ts)
+    return remaining <= max(1.0, float(reserve_seconds or 0.0))
+
+
 def _search_query(
     query: str,
     max_results: int,
@@ -416,7 +443,9 @@ def _search_query(
         if normalized:
             cache.set(cache_key, copy.deepcopy(normalized))
             return normalized
-        logger.info(f"[deepsearch] multi_search returned no results for query='{query[:80]}'")
+        logger.info(
+            f"[deepsearch] multi_search returned no results for query='{query[:80]}'"
+        )
     except Exception as e:
         logger.warning(f"[deepsearch] multi_search failed, falling back to tavily: {e}")
 
@@ -563,8 +592,12 @@ def _pick_relevant_urls(
 
     # Fallback: top scores
     if not urls:
-        sorted_results = sorted(available_results, key=lambda r: r.get("score", 0), reverse=True)
-        urls = [r.get("_canonical_url") for r in sorted_results if r.get("_canonical_url")]
+        sorted_results = sorted(
+            available_results, key=lambda r: r.get("score", 0), reverse=True
+        )
+        urls = [
+            r.get("_canonical_url") for r in sorted_results if r.get("_canonical_url")
+        ]
 
     # Clamp and dedupe
     deduped: List[str] = []
@@ -1028,7 +1061,9 @@ def _format_sources_for_writer(
         domain = str(src.get("domain") or "").strip()
         provider = str(src.get("provider") or "").strip()
         published = str(src.get("publishedDate") or "").strip()
-        meta_parts = [p for p in (domain, provider, published) if p and p.lower() != "none"]
+        meta_parts = [
+            p for p in (domain, provider, published) if p and p.lower() != "none"
+        ]
         meta = " | ".join(meta_parts)
 
         snippet = ""
@@ -1810,7 +1845,9 @@ def _build_fetcher_evidence(
         lowered = str(text).lower()
         if "please enable javascript" in lowered:
             return True
-        if "enable javascript" in lowered and ("cookies" in lowered or "continue" in lowered):
+        if "enable javascript" in lowered and (
+            "cookies" in lowered or "continue" in lowered
+        ):
             return True
         if "checking your browser" in lowered:
             return True
@@ -1831,7 +1868,9 @@ def _build_fetcher_evidence(
             return -1e9
 
         length = len(stripped)
-        sentence_marks = sum(stripped.count(ch) for ch in (".", "?", "!", "。", "？", "！"))
+        sentence_marks = sum(
+            stripped.count(ch) for ch in (".", "?", "!", "。", "？", "！")
+        )
         pipes = stripped.count("|")
         score = min(length, 800) / 800.0
         score += min(sentence_marks, 12) / 12.0
@@ -1839,21 +1878,29 @@ def _build_fetcher_evidence(
             score -= 0.5
         return float(score)
 
-    def _select_passages(passages: List[Dict[str, Any]], *, max_count: int) -> List[Dict[str, Any]]:
+    def _select_passages(
+        passages: List[Dict[str, Any]], *, max_count: int
+    ) -> List[Dict[str, Any]]:
         if not passages:
             return []
-        scored: List[tuple[float, Dict[str, Any]]] = [(_passage_quality_score(p), p) for p in passages]
+        scored: List[tuple[float, Dict[str, Any]]] = [
+            (_passage_quality_score(p), p) for p in passages
+        ]
         candidates = [(s, p) for s, p in scored if s > -1e8]
         if not candidates:
-            return passages[:max(1, max_count)]
+            return passages[: max(1, max_count)]
         candidates.sort(
             key=lambda pair: (
                 -pair[0],
-                int((pair[1].get("start_char") or 0) if isinstance(pair[1], dict) else 0),
+                int(
+                    (pair[1].get("start_char") or 0) if isinstance(pair[1], dict) else 0
+                ),
             )
         )
         best = [p for _s, p in candidates[: max(1, max_count)]]
-        best.sort(key=lambda p: int((p.get("start_char") or 0) if isinstance(p, dict) else 0))
+        best.sort(
+            key=lambda p: int((p.get("start_char") or 0) if isinstance(p, dict) else 0)
+        )
         return best
 
     def _collapse_whitespace(text: str) -> str:
@@ -1918,9 +1965,9 @@ def _safe_filename(name: str) -> str:
     return re.sub(r'[\/\\:\*\?"<>\|]', "_", name)[:80]
 
 
-
-
-def _build_quality_diagnostics(topic: str, queries: List[str], search_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _build_quality_diagnostics(
+    topic: str, queries: List[str], search_runs: List[Dict[str, Any]]
+) -> Dict[str, Any]:
     """Build query-coverage and freshness diagnostics for deepsearch runs."""
     query_coverage = analyze_query_coverage(queries)
     freshness_summary = summarize_freshness(search_runs)
@@ -1930,7 +1977,12 @@ def _build_quality_diagnostics(topic: str, queries: List[str], search_runs: List
     )
     min_fresh_ratio = max(
         0.0,
-        min(1.0, float(getattr(settings, "deepsearch_freshness_warning_min_ratio", 0.4) or 0.4)),
+        min(
+            1.0,
+            float(
+                getattr(settings, "deepsearch_freshness_warning_min_ratio", 0.4) or 0.4
+            ),
+        ),
     )
 
     freshness_warning = ""
@@ -2102,6 +2154,266 @@ def _strategy_payload(
     payload.setdefault("reason", fallback_reason)
     return payload
 
+def _merge_focus_hints(*hint_groups: Any, max_items: int = 6) -> List[str]:
+    limit = max(1, int(max_items or 1))
+    merged: List[str] = []
+    seen = set()
+
+    for group in hint_groups:
+        if group is None:
+            continue
+        items = group if isinstance(group, (list, tuple, set)) else [group]
+        for item in items:
+            if isinstance(item, dict):
+                text = str(
+                    item.get("hint") or item.get("focus") or item.get("topic") or ""
+                )
+            else:
+                text = str(item or "")
+            normalized = re.sub(r"\s+", " ", text).strip(" -*•\n\t")
+            if len(normalized) < 3:
+                continue
+            key = normalized.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(normalized[:160])
+            if len(merged) >= limit:
+                return merged
+
+    return merged
+
+
+def _quality_focus_hints(
+    diagnostics: Optional[Dict[str, Any]], max_items: int = 4
+) -> List[str]:
+    data = diagnostics if isinstance(diagnostics, dict) else {}
+    missing_dimensions = data.get("query_dimensions_missing", []) or []
+    dimension_hints = {
+        "freshness": "近期更新与近30天来源",
+        "official": "官方/监管/公司原始来源",
+        "evidence": "量化数据、交易金额与估值倍数证据",
+        "risk": "监管审批风险与失败因素",
+        "implementation": "具体案例、交易结构与执行细节",
+    }
+
+    hints: List[str] = [
+        dimension_hints[str(dimension).strip().lower()]
+        for dimension in missing_dimensions
+        if str(dimension).strip().lower() in dimension_hints
+    ]
+
+    freshness_summary = data.get("freshness_summary", {}) or {}
+    if data.get("freshness_warning"):
+        hints.append("补充近30天新鲜来源")
+    elif data.get("time_sensitive_query") and (
+        float(freshness_summary.get("fresh_30_ratio", 0.0) or 0.0) < 0.4
+    ):
+        hints.append("最新政策、公告与财报动态")
+
+    return _merge_focus_hints(hints, max_items=max_items)
+
+
+def _run_progress_reflexion(
+    *,
+    topic: str,
+    mode: str,
+    round_num: int,
+    queries: List[str],
+    summary_notes: List[str],
+    diagnostics: Dict[str, Any],
+    chosen_results: List[Dict[str, Any]],
+    llm: Any,
+    config: Dict[str, Any],
+    extra_focus: Optional[List[str]] = None,
+) -> Tuple[Optional[str], List[str]]:
+    progress_parts = [
+        f"MODE: {mode}",
+        f"ROUND: {round_num}",
+        f"TOPIC: {topic}",
+    ]
+
+    if queries:
+        progress_parts.append(
+            "QUERIES:\n- "
+            + "\n- ".join(
+                re.sub(r"\s+", " ", str(query or "")).strip()
+                for query in queries[-8:]
+                if str(query or "").strip()
+            )
+        )
+
+    query_coverage_score = diagnostics.get("query_coverage_score")
+    if query_coverage_score is not None:
+        progress_parts.append(
+            f"QUERY_COVERAGE_SCORE: {float(query_coverage_score):.2f}"
+        )
+
+    missing_dimensions = diagnostics.get("query_dimensions_missing", []) or []
+    if missing_dimensions:
+        progress_parts.append(
+            "MISSING_DIMENSIONS: "
+            + ", ".join(str(item) for item in missing_dimensions[:5])
+        )
+
+    freshness_summary = diagnostics.get("freshness_summary", {}) or {}
+    if freshness_summary:
+        progress_parts.append(
+            "FRESHNESS: "
+            f"known={int(freshness_summary.get('known_count', 0) or 0)}, "
+            f"fresh30={float(freshness_summary.get('fresh_30_ratio', 0.0) or 0.0):.2f}, "
+            f"total={int(freshness_summary.get('total_results', 0) or 0)}"
+        )
+
+    summary_snippets = []
+    for note in summary_notes[-3:]:
+        text = re.sub(r"\s+", " ", str(note or "")).strip()
+        if text:
+            summary_snippets.append(text[:280])
+    if summary_snippets:
+        progress_parts.append("SUMMARY_NOTES:\n- " + "\n- ".join(summary_snippets))
+
+    result_snippets = []
+    for result in chosen_results[:5]:
+        if not isinstance(result, dict):
+            continue
+        title = re.sub(r"\s+", " ", str(result.get("title") or "")).strip()
+        url = re.sub(r"\s+", " ", str(result.get("url") or "")).strip()
+        snippet = title or url
+        if snippet:
+            result_snippets.append(snippet[:180])
+    if result_snippets:
+        progress_parts.append("LATEST_RESULTS:\n- " + "\n- ".join(result_snippets))
+
+    merged_focus = _merge_focus_hints(
+        extra_focus,
+        _quality_focus_hints(diagnostics),
+        max_items=6,
+    )
+    if merged_focus:
+        progress_parts.append("EXISTING_FOCUS:\n- " + "\n- ".join(merged_focus))
+
+    feedback = generate_reflexion_feedback(
+        user_goal=topic,
+        progress_summary="\n\n".join(part for part in progress_parts if part),
+        llm=llm,
+        config=config,
+    )
+    if not feedback:
+        return None, merged_focus
+
+    focus_hints = _merge_focus_hints(
+        extract_reflexion_focus(feedback, limit=4),
+        merged_focus,
+        max_items=6,
+    )
+    logger.info(
+        f"[deepsearch-{mode}] Reflexion round {round_num}: "
+        f"feedback={len(feedback)} chars, focus={focus_hints[:3]}"
+    )
+    return feedback, focus_hints
+
+
+def _build_reflexion_queries(
+    topic: str,
+    focus_hints: List[str],
+    have_query: List[str],
+    *,
+    limit: int,
+) -> List[str]:
+    max_queries = max(1, int(limit or 1))
+    seen = {
+        re.sub(r"\s+", " ", str(query or "")).strip().lower()
+        for query in (have_query or [])
+        if str(query or "").strip()
+    }
+    queries: List[str] = []
+
+    for hint in _merge_focus_hints(focus_hints, max_items=max_queries * 2):
+        if topic and hint.lower() not in str(topic).lower():
+            candidate = f"{topic} {hint}"
+        else:
+            candidate = str(topic or hint)
+        candidate = re.sub(r"\s+", " ", candidate).strip()
+        if not candidate:
+            continue
+        key = candidate.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        queries.append(candidate)
+        if len(queries) >= max_queries:
+            break
+
+    if not queries:
+        fallback = re.sub(r"\s+", " ", str(topic or "")).strip()
+        if fallback and fallback.lower() not in seen:
+            queries.append(fallback)
+
+    return queries[:max_queries]
+
+
+def _build_feature_trace(
+    state: Dict[str, Any],
+    config: Dict[str, Any],
+    *,
+    executed_mode: str,
+    reflexion_feedbacks: Optional[List[str]] = None,
+    reflexion_focus: Optional[List[str]] = None,
+    backtrack_events: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    cfg = config.get("configurable") if isinstance(config, dict) else {}
+    runtime_cfg = cfg if isinstance(cfg, dict) else {}
+    search_mode = runtime_cfg.get("search_mode") or {}
+    route = ""
+    if isinstance(search_mode, dict):
+        route = str(search_mode.get("route") or "").strip().lower()
+    if not route:
+        route = (
+            str(
+                runtime_cfg.get("resolved_route")
+                or state.get("route")
+                or runtime_cfg.get("route")
+                or ""
+            )
+            .strip()
+            .lower()
+        )
+
+    feedbacks = list(reflexion_feedbacks or [])
+    focus = list(reflexion_focus or [])
+    backtracks = list(backtrack_events or [])
+
+    return {
+        "configured_mode": _resolve_deepsearch_mode(config),
+        "executed_mode": str(executed_mode or "").strip() or "linear",
+        "resolved_route": route,
+        "tree_exploration_enabled": bool(
+            getattr(settings, "tree_exploration_enabled", True)
+        ),
+        "observation_masking_enabled": bool(
+            getattr(settings, "observation_masking", False)
+        ),
+        "context_offloading_enabled": bool(
+            getattr(settings, "context_offloading", False)
+        ),
+        "agent_reflexion_enabled": bool(
+            getattr(settings, "agent_reflexion_enabled", False)
+        ),
+        "dynamic_tool_pruning_enabled": bool(
+            getattr(settings, "dynamic_tool_pruning", False)
+        ),
+        "tree_backtrack_enabled": bool(
+            getattr(settings, "tree_backtrack_enabled", False)
+        ),
+        "reflexion_triggered": bool(feedbacks),
+        "reflexion_rounds": len(feedbacks),
+        "reflexion_focus_count": len(focus),
+        "reflexion_focus_preview": focus[:6],
+        "tree_backtrack_triggered": bool(backtracks),
+        "tree_backtrack_events": len(backtracks),
+    }
+
 
 def _resolve_event_emitter(state: Dict[str, Any], config: Dict[str, Any]) -> Any:
     """Resolve thread-scoped emitter if available (best effort)."""
@@ -2132,7 +2444,9 @@ def _emit_event(emitter: Any, event_type: str, data: Dict[str, Any]) -> None:
         logger.debug(f"[deepsearch] failed to emit event '{event_type}': {e}")
 
 
-def _compact_search_results(results: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, Any]]:
+def _compact_search_results(
+    results: List[Dict[str, Any]], limit: int = 5
+) -> List[Dict[str, Any]]:
     return compact_unique_sources(results, limit=limit)
 
 
@@ -2147,7 +2461,9 @@ def _provider_breakdown(results: List[Dict[str, Any]]) -> Dict[str, int]:
 
 
 def _event_results_limit() -> int:
-    return max(1, min(20, int(getattr(settings, "deepsearch_event_results_limit", 5) or 5)))
+    return max(
+        1, min(20, int(getattr(settings, "deepsearch_event_results_limit", 5) or 5))
+    )
 
 
 def _save_deepsearch_data(
@@ -2177,7 +2493,9 @@ def _save_deepsearch_data(
             "epoch": epoch,
             "mode": "deepsearch_optimized",
         }
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         logger.info(f"[deepsearch] saved run data -> {path}")
         return str(path)
     except Exception as e:
@@ -2185,7 +2503,9 @@ def _save_deepsearch_data(
         return ""
 
 
-def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def run_deepsearch_optimized(
+    state: Dict[str, Any], config: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Optimized iterative deep-search pipeline.
 
@@ -2243,11 +2563,16 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
     planner_llm = _chat_model(planning_model, temperature=0.8)
     critic_llm = _chat_model(research_model, temperature=0.2)
     writer_llm = _chat_model(writing_model, temperature=0.5)
+    reflexion_llm = _chat_model(
+        _model_for_task("gap_analysis", config), temperature=0.2
+    )
 
     have_query: List[str] = []
     summary_notes: List[str] = []
     search_runs: List[Dict[str, Any]] = []
     provider_evidence_items: List[Dict[str, Any]] = []
+    reflexion_feedbacks: List[str] = []
+    reflexion_focus_hints: List[str] = []
     provider_profile = _resolve_provider_profile(state)
     evidence_providers = build_evidence_providers(
         brief=brief,
@@ -2348,14 +2673,18 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                         max_tokens=max_tokens,
                     )
                     if budget_stop_reason:
-                        logger.info(f"[deepsearch] 搜索阶段触发预算停止: {budget_stop_reason}")
+                        logger.info(
+                            f"[deepsearch] 搜索阶段触发预算停止: {budget_stop_reason}"
+                        )
                         break
 
                     # While API search is running (blocking), render a small animated status page
                     # so the Live browser viewer isn't stuck on a blank about:blank.
                     if visualize_browser:
                         try:
-                            from agent.workflows.browser_visualizer import show_browser_status_page
+                            from agent.workflows.browser_visualizer import (
+                                show_browser_status_page,
+                            )
 
                             show_browser_status_page(
                                 state=state,
@@ -2396,7 +2725,9 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                             "query": q,
                             "provider": provider_name,
                             "provider_breakdown": provider_breakdown,
-                            "results": _compact_search_results(results, limit=_event_results_limit()),
+                            "results": _compact_search_results(
+                                results, limit=_event_results_limit()
+                            ),
                             "count": len(results),
                             "epoch": epoch + 1,
                         },
@@ -2406,7 +2737,9 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                     # This is best-effort UX only; failures must not break research.
                     if visualize_browser:
                         try:
-                            from agent.workflows.browser_visualizer import visualize_urls_from_results
+                            from agent.workflows.browser_visualizer import (
+                                visualize_urls_from_results,
+                            )
 
                             visualize_urls_from_results(
                                 state=state,
@@ -2612,21 +2945,29 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                     max_tokens=max_tokens,
                 )
                 if budget_stop_reason:
-                    logger.info(f"[deepsearch] 摘要后触发预算停止: {budget_stop_reason}")
+                    logger.info(
+                        f"[deepsearch] 摘要后触发预算停止: {budget_stop_reason}"
+                    )
                     break
 
                 # ⏱️ Step 5.5: 知识空白分析 (可选)
-                use_gap_analysis = getattr(settings, "deepsearch_use_gap_analysis", True)
+                use_gap_analysis = getattr(
+                    settings, "deepsearch_use_gap_analysis", True
+                )
                 if use_gap_analysis and not enough and epoch < max_epochs - 1:
                     gap_start = time.time()
                     try:
                         gap_model = _model_for_task("gap_analysis", config)
                         gap_llm = _chat_model(gap_model, temperature=0.3)
-                        gap_analyzer = KnowledgeGapAnalyzer(gap_llm, config, coverage_threshold=0.8)
+                        gap_analyzer = KnowledgeGapAnalyzer(
+                            gap_llm, config, coverage_threshold=0.8
+                        )
 
                         # Analyze current knowledge state
                         collected_knowledge = "\n\n".join(summary_notes)
-                        gap_result = gap_analyzer.analyze(topic, have_query, collected_knowledge)
+                        gap_result = gap_analyzer.analyze(
+                            topic, have_query, collected_knowledge
+                        )
 
                         logger.info(
                             f"[deepsearch] Epoch {epoch + 1}: 知识空白分析完成"
@@ -2637,11 +2978,15 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
 
                         # Use gap analysis to determine if we can stop early
                         if gap_analyzer.is_research_sufficient(gap_result):
-                            logger.info(f"[deepsearch] Epoch {epoch + 1}: 知识空白分析判定信息足够")
+                            logger.info(
+                                f"[deepsearch] Epoch {epoch + 1}: 知识空白分析判定信息足够"
+                            )
                             enough = True
 
                         # Get high-priority aspects for next round's query generation
-                        high_priority_aspects = gap_analyzer.get_high_priority_aspects(gap_result)
+                        high_priority_aspects = gap_analyzer.get_high_priority_aspects(
+                            gap_result
+                        )
                         if high_priority_aspects:
                             logger.info(
                                 f"[deepsearch] 高优先级空白: {', '.join(high_priority_aspects[:3])}"
@@ -2650,10 +2995,51 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                             state["missing_topics"] = high_priority_aspects
 
                     except Exception as e:
-                        logger.warning(f"[deepsearch] 知识空白分析失败，继续常规流程: {e}")
+                        logger.warning(
+                            f"[deepsearch] 知识空白分析失败，继续常规流程: {e}"
+                        )
 
+                epoch_diagnostics = _build_quality_diagnostics(
+                    topic, have_query, search_runs
+                )
+                if (
+                    settings.agent_reflexion_enabled
+                    and not enough
+                    and epoch < max_epochs - 1
+                ):
+                    feedback, focus_hints = _run_progress_reflexion(
+                        topic=topic,
+                        mode="linear",
+                        round_num=epoch + 1,
+                        queries=have_query,
+                        summary_notes=summary_notes,
+                        diagnostics=epoch_diagnostics,
+                        chosen_results=chosen_results,
+                        llm=reflexion_llm,
+                        config=config,
+                        extra_focus=state.get("missing_topics", []),
+                    )
+                    if feedback:
+                        reflexion_feedbacks.append(feedback)
+                        reflexion_focus_hints = _merge_focus_hints(
+                            reflexion_focus_hints,
+                            focus_hints,
+                            max_items=6,
+                        )
+                        if focus_hints:
+                            state["missing_topics"] = _merge_focus_hints(
+                                state.get("missing_topics", []),
+                                focus_hints,
+                                max_items=6,
+                            )
+                            logger.info(
+                                f"[deepsearch] Epoch {epoch + 1}: reflexion added focus hints: "
+                                f"{state.get('missing_topics', [])[:3]}"
+                            )
                 epoch_duration = time.time() - epoch_start
-                logger.info(f"[deepsearch] Epoch {epoch + 1}: 总耗时 {epoch_duration:.2f}s")
+                logger.info(
+                    f"[deepsearch] Epoch {epoch + 1}: 总耗时 {epoch_duration:.2f}s"
+                )
                 epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
                 gate_results = _record_quality_gates(
                     diagnostics=epoch_diagnostics,
@@ -2679,7 +3065,9 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
                     "research_node_complete",
                     {
                         "node_id": epoch_node_id,
-                        "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
+                        "summary": (
+                            summary_text[:1200] if isinstance(summary_text, str) else ""
+                        ),
                         "sources": _compact_search_results(
                             chosen_results,
                             limit=_event_results_limit(),
@@ -2697,7 +3085,9 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
             except asyncio.CancelledError:
                 raise  # 继续向上抛出
             except Exception as e:
-                logger.error(f"[deepsearch] Epoch {epoch + 1} 失败: {str(e)}", exc_info=True)
+                logger.error(
+                    f"[deepsearch] Epoch {epoch + 1} 失败: {str(e)}", exc_info=True
+                )
                 logger.error(traceback.format_exc())
                 logger.info("[deepsearch] 继续下一轮搜索...")
                 continue  # 单轮失败不影响整体流程
@@ -2729,7 +3119,9 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
         # ⏱️ Step 6: 生成最终报告（带强引用来源编号）
         report_start = time.time()
         final_report = (
-            _final_report(writer_llm, topic, summary_notes, config, sources=sources_block)
+            _final_report(
+                writer_llm, topic, summary_notes, config, sources=sources_block
+            )
             if summary_notes
             else summary_text_prompt
         )
@@ -2767,6 +3159,13 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
         )
 
         diagnostics = _build_quality_diagnostics(topic, have_query, citation_runs)
+        feature_trace = _build_feature_trace(
+            state,
+            config,
+            executed_mode="linear",
+            reflexion_feedbacks=reflexion_feedbacks,
+            reflexion_focus=reflexion_focus_hints,
+        )
         quality_summary = {
             "epochs_completed": epoch + 1,
             "summary_count": len(summary_notes),
@@ -2775,6 +3174,8 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
             "budget_stop_reason": budget_stop_reason or "",
             "tokens_used": tokens_used,
             "elapsed_seconds": elapsed,
+            "reflexion_rounds": len(reflexion_feedbacks),
+            "feature_trace": feature_trace,
             **diagnostics,
         }
         claims = []
@@ -2782,10 +3183,12 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
             from agent.workflows.claim_verifier import ClaimVerifier
 
             min_overlap = int(
-                getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2
+                getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2)
+                or 2
             )
             max_evidence = int(
-                getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3
+                getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3)
+                or 3
             )
             use_passages = bool(
                 getattr(settings, "deepsearch_claim_verifier_use_passages", True)
@@ -2826,9 +3229,19 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
             pass
 
         _cv_total = len(claims)
-        _cv_verified = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
-        _cv_unsupported = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
-        _cv_contradicted = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+        _cv_verified = sum(
+            1 for c in claims if isinstance(c, dict) and c.get("status") == "verified"
+        )
+        _cv_unsupported = sum(
+            1
+            for c in claims
+            if isinstance(c, dict) and c.get("status") == "unsupported"
+        )
+        _cv_contradicted = sum(
+            1
+            for c in claims
+            if isinstance(c, dict) and c.get("status") == "contradicted"
+        )
         quality_summary["claim_verifier_total"] = _cv_total
         quality_summary["claim_verifier_verified"] = _cv_verified
         quality_summary["claim_verifier_unsupported"] = _cv_unsupported
@@ -2941,7 +3354,9 @@ def run_deepsearch_optimized(state: Dict[str, Any], config: Dict[str, Any]) -> D
         }
 
 
-def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def run_deepsearch_tree(
+    state: Dict[str, Any], config: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Tree-based deep search pipeline.
 
@@ -2963,6 +3378,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     planner_llm = _chat_model(planning_model, temperature=0.8)
     critic_llm = _chat_model(research_model, temperature=0.2)
     writer_llm = _chat_model(writing_model, temperature=0.5)
+    reflexion_llm = _chat_model(
+        _model_for_task("gap_analysis", config), temperature=0.2
+    )
 
     max_depth = int(getattr(settings, "tree_max_depth", 2))
     max_branches = int(getattr(settings, "tree_max_branches", 4))
@@ -3032,6 +3450,12 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     budget_stop_reason = ""
     tokens_used = _estimate_tokens_from_text(topic)
     searches_used = 0
+    reflexion_feedbacks: List[str] = []
+    reflexion_focus_hints: List[str] = []
+    tree = None
+    have_query: List[str] = []
+    backtrack_events: List[Dict[str, Any]] = []
+    merged_summary = ""
 
     budget_stop_reason = _budget_stop_reason(
         start_ts=start_ts,
@@ -3041,6 +3465,7 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     )
     if budget_stop_reason:
         diagnostics = _build_quality_diagnostics(topic, [], [])
+        feature_trace = _build_feature_trace(state, config, executed_mode="tree")
         quality_summary = {
             "epochs_completed": 0,
             "summary_count": 0,
@@ -3048,9 +3473,16 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "budget_stop_reason": budget_stop_reason,
             "tokens_used": tokens_used,
             "elapsed_seconds": 0.0,
+            "reflexion_rounds": 0,
+            "tree_backtrack_events": 0,
+            "feature_trace": feature_trace,
             **diagnostics,
         }
-        _emit_event(emitter, "quality_update", {"epoch": 0, "stage": "budget_stop", **diagnostics})
+        _emit_event(
+            emitter,
+            "quality_update",
+            {"epoch": 0, "stage": "budget_stop", **diagnostics},
+        )
         _emit_event(
             emitter,
             "research_node_complete",
@@ -3068,7 +3500,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "draft_report": summary_text_prompt,
             "final_report": summary_text_prompt,
             "messages": [
-                AIMessage(content=f"（预算限制触发，未执行树搜索：{budget_stop_reason}）")
+                AIMessage(
+                    content=f"（预算限制触发，未执行树搜索：{budget_stop_reason}）"
+                )
             ],
             "is_complete": False,
             "budget_stop_reason": budget_stop_reason,
@@ -3083,10 +3517,12 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
                 "query_coverage": diagnostics.get("query_coverage", {}),
                 "freshness_summary": diagnostics.get("freshness_summary", {}),
             },
+            "feature_trace": feature_trace,
             "deepsearch_mode": "tree",
         }
 
     try:
+
         def _tree_budget_reason() -> Optional[str]:
             nonlocal budget_stop_reason
             if budget_stop_reason:
@@ -3114,9 +3550,7 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             effective_config = (
                 kwargs.get("config")
                 if isinstance(kwargs.get("config"), dict)
-                else config_payload
-                if isinstance(config_payload, dict)
-                else config
+                else config_payload if isinstance(config_payload, dict) else config
             )
             tokens_used += _estimate_tokens_from_text(query)
             results = _search_query(
@@ -3135,7 +3569,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
                     "timestamp": datetime.now().isoformat(),
                 }
             )
-            provider_breakdown = _provider_breakdown(results if isinstance(results, list) else [])
+            provider_breakdown = _provider_breakdown(
+                results if isinstance(results, list) else []
+            )
             provider_name = "unknown"
             if len(provider_breakdown) > 1:
                 provider_name = "multi"
@@ -3181,7 +3617,6 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
         )
 
         # Run tree exploration (use async if parallel_branches > 0)
-        tree = None
         if parallel_branches > 0:
             # Use async parallel exploration
             try:
@@ -3192,28 +3627,40 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
 
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(
-                            lambda: asyncio.run(explorer.run_async(topic, state, decompose_root=True))
+                            lambda: asyncio.run(
+                                explorer.run_async(topic, state, decompose_root=True)
+                            )
                         )
                         tree = future.result()
                 else:
-                    tree = loop.run_until_complete(explorer.run_async(topic, state, decompose_root=True))
+                    tree = loop.run_until_complete(
+                        explorer.run_async(topic, state, decompose_root=True)
+                    )
                 logger.info("[deepsearch-tree] Used async parallel exploration")
             except TreeExplorationBudgetExceeded as e:
-                budget_stop_reason = budget_stop_reason or getattr(e, "reason", "") or str(e)
+                budget_stop_reason = (
+                    budget_stop_reason or getattr(e, "reason", "") or str(e)
+                )
                 tree = getattr(explorer, "tree", None)
             except RuntimeError:
                 # No event loop, create one
                 try:
-                    tree = asyncio.run(explorer.run_async(topic, state, decompose_root=True))
+                    tree = asyncio.run(
+                        explorer.run_async(topic, state, decompose_root=True)
+                    )
                     logger.info("[deepsearch-tree] Used async parallel exploration")
                 except TreeExplorationBudgetExceeded as e:
-                    budget_stop_reason = budget_stop_reason or getattr(e, "reason", "") or str(e)
+                    budget_stop_reason = (
+                        budget_stop_reason or getattr(e, "reason", "") or str(e)
+                    )
                     tree = getattr(explorer, "tree", None)
         else:
             try:
                 tree = explorer.run(topic, state, decompose_root=True)
             except TreeExplorationBudgetExceeded as e:
-                budget_stop_reason = budget_stop_reason or getattr(e, "reason", "") or str(e)
+                budget_stop_reason = (
+                    budget_stop_reason or getattr(e, "reason", "") or str(e)
+                )
                 tree = getattr(explorer, "tree", None)
 
         if tree is None:
@@ -3250,22 +3697,108 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
                 all_sources.append(canonical_source)
                 all_sources_set.add(canonical_source)
         all_findings = explorer.get_all_findings()
+        backtrack_events = explorer.get_backtrack_events()
 
         summary_notes = [merged_summary] if merged_summary else []
         # Collect queries + search runs from all nodes
-        have_query: List[str] = []
+        have_query = []
         for node in tree.nodes.values():
             have_query.extend(node.queries)
         if not search_runs:
             for node in tree.nodes.values():
                 for finding in node.findings:
-                    search_runs.append({
-                        "query": finding.get("query", ""),
-                        "results": [finding.get("result", {})],
-                        "timestamp": finding.get("timestamp", ""),
-                        "branch_id": node.id,
-                        "branch_topic": node.topic,
-                    })
+                    search_runs.append(
+                        {
+                            "query": finding.get("query", ""),
+                            "results": [finding.get("result", {})],
+                            "timestamp": finding.get("timestamp", ""),
+                            "branch_id": node.id,
+                            "branch_topic": node.topic,
+                        }
+                    )
+
+        tree_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+        reflexion_seed_focus = _merge_focus_hints(
+            *[
+                event.get("focus_areas", [])
+                for event in backtrack_events
+                if isinstance(event, dict)
+            ],
+            _quality_focus_hints(tree_diagnostics),
+            max_items=6,
+        )
+        if settings.agent_reflexion_enabled:
+            feedback, focus_hints = _run_progress_reflexion(
+                topic=topic,
+                mode="tree",
+                round_num=1,
+                queries=have_query,
+                summary_notes=summary_notes,
+                diagnostics=tree_diagnostics,
+                chosen_results=[
+                    finding.get("result", {})
+                    for finding in all_findings[-8:]
+                    if isinstance(finding, dict)
+                ],
+                llm=reflexion_llm,
+                config=config,
+                extra_focus=reflexion_seed_focus,
+            )
+            if feedback:
+                reflexion_feedbacks.append(feedback)
+                reflexion_focus_hints = _merge_focus_hints(
+                    reflexion_focus_hints,
+                    focus_hints,
+                    max_items=6,
+                )
+                reflexion_queries = _build_reflexion_queries(
+                    topic,
+                    reflexion_focus_hints,
+                    have_query,
+                    limit=min(2, max(1, queries_per_branch)),
+                )
+                reflexion_results: List[Dict[str, Any]] = []
+                for query in reflexion_queries:
+                    try:
+                        results = _tree_search(
+                            {"query": query, "max_results": per_query_results}, config
+                        )
+                    except TreeExplorationBudgetExceeded as e:
+                        budget_stop_reason = (
+                            budget_stop_reason or getattr(e, "reason", "") or str(e)
+                        )
+                        break
+                    results = results if isinstance(results, list) else []
+                    if query not in have_query:
+                        have_query.append(query)
+                    if search_runs and isinstance(search_runs[-1], dict):
+                        latest_run = dict(search_runs[-1])
+                        latest_run.setdefault("branch_id", "reflexion")
+                        latest_run.setdefault("branch_topic", topic)
+                        search_runs[-1] = latest_run
+                    for result in results:
+                        canonical_source = canonicalize_source_url(result.get("url"))
+                        if canonical_source and canonical_source not in all_sources_set:
+                            all_sources.append(canonical_source)
+                            all_sources_set.add(canonical_source)
+                        all_findings.append(
+                            {
+                                "query": query,
+                                "result": result,
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
+                    reflexion_results.extend(results)
+                if reflexion_results:
+                    _, reflexion_summary = _summarize_new_knowledge(
+                        critic_llm,
+                        topic,
+                        summary_notes,
+                        reflexion_results,
+                        config,
+                    )
+                    if reflexion_summary:
+                        summary_notes.append(reflexion_summary)
 
         report_sources_limit = int(
             getattr(settings, "deepsearch_report_sources_limit", 20) or 20
@@ -3286,7 +3819,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
 
         # Generate final report (strong citations aligned to extracted_sources order)
         final_report = (
-            _final_report(writer_llm, topic, summary_notes, config, sources=sources_block)
+            _final_report(
+                writer_llm, topic, summary_notes, config, sources=sources_block
+            )
             if summary_notes
             else summary_text_prompt
         )
@@ -3327,13 +3862,28 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
 
         # Save data
         save_path = _save_deepsearch_data(
-            topic, have_query, summary_notes, search_runs, final_report, epoch=1,
+            topic,
+            have_query,
+            summary_notes,
+            search_runs,
+            final_report,
+            epoch=1,
         )
         diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+        feature_trace = _build_feature_trace(
+            state,
+            config,
+            executed_mode="tree",
+            reflexion_feedbacks=reflexion_feedbacks,
+            reflexion_focus=reflexion_focus_hints,
+            backtrack_events=backtrack_events,
+        )
         if live_search_events_emitted == 0:
             for run in search_runs:
                 results = run.get("results") if isinstance(run, dict) else []
-                provider_breakdown = _provider_breakdown(results if isinstance(results, list) else [])
+                provider_breakdown = _provider_breakdown(
+                    results if isinstance(results, list) else []
+                )
                 provider_name = "unknown"
                 if len(provider_breakdown) > 1:
                     provider_name = "multi"
@@ -3364,6 +3914,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "budget_stop_reason": budget_stop_reason or "",
             "tokens_used": tokens_used,
             "elapsed_seconds": elapsed,
+            "reflexion_rounds": len(reflexion_feedbacks),
+            "tree_backtrack_events": len(backtrack_events),
+            "feature_trace": feature_trace,
             **diagnostics,
         }
         fetched_pages, passages = _build_fetcher_evidence(all_sources[:10], config)
@@ -3373,10 +3926,12 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             from agent.workflows.claim_verifier import ClaimVerifier
 
             min_overlap = int(
-                getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2
+                getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2)
+                or 2
             )
             max_evidence = int(
-                getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3
+                getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3)
+                or 3
             )
             use_passages = bool(
                 getattr(settings, "deepsearch_claim_verifier_use_passages", True)
@@ -3415,9 +3970,19 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             pass
 
         _cv_total = len(claims)
-        _cv_verified = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
-        _cv_unsupported = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
-        _cv_contradicted = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+        _cv_verified = sum(
+            1 for c in claims if isinstance(c, dict) and c.get("status") == "verified"
+        )
+        _cv_unsupported = sum(
+            1
+            for c in claims
+            if isinstance(c, dict) and c.get("status") == "unsupported"
+        )
+        _cv_contradicted = sum(
+            1
+            for c in claims
+            if isinstance(c, dict) and c.get("status") == "contradicted"
+        )
         quality_summary["claim_verifier_total"] = _cv_total
         quality_summary["claim_verifier_verified"] = _cv_verified
         quality_summary["claim_verifier_unsupported"] = _cv_unsupported
@@ -3461,6 +4026,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "research_tree": tree.to_dict(),
             "quality_summary": quality_summary,
             "quality_gates": quality_gate_history,
+            "feature_trace": feature_trace,
+            "reflexion_feedbacks": reflexion_feedbacks,
+            "backtrack_events": backtrack_events,
             "query_coverage": diagnostics.get("query_coverage", {}),
             "freshness_summary": diagnostics.get("freshness_summary", {}),
             "evidence_items": evidence_items,
@@ -3471,7 +4039,9 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "sources": extracted_sources,
             "claims": claims,
         }
-        _emit_event(emitter, "quality_update", {"epoch": 1, "stage": "final", **diagnostics})
+        _emit_event(
+            emitter, "quality_update", {"epoch": 1, "stage": "final", **diagnostics}
+        )
         _emit_event(
             emitter,
             "research_tree_update",
@@ -3498,10 +4068,14 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
         if save_path:
             messages.append(AIMessage(content=f"(数据已保存: {save_path})"))
         if budget_stop_reason:
-            messages.append(AIMessage(content=f"（预算限制提示：{budget_stop_reason}）"))
+            messages.append(
+                AIMessage(content=f"（预算限制提示：{budget_stop_reason}）")
+            )
         if diagnostics.get("freshness_warning"):
             messages.append(
-                AIMessage(content="（时间敏感问题的新鲜来源占比较低，建议补充近30天来源并重试。）")
+                AIMessage(
+                    content="（时间敏感问题的新鲜来源占比较低，建议补充近30天来源并重试。）"
+                )
             )
 
         return {
@@ -3512,6 +4086,7 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
             "quality_summary": quality_summary,
             "sources": extracted_sources,
             "deepsearch_artifacts": deepsearch_artifacts,
+            "feature_trace": feature_trace,
             "deepsearch_mode": "tree",
             "messages": messages,
             "research_tree": tree.to_dict(),
@@ -3531,9 +4106,157 @@ def run_deepsearch_tree(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
         }
     except Exception as e:
         logger.error(f"[deepsearch-tree] Failed: {e}", exc_info=True)
-        # Fallback to linear mode
-        logger.info("[deepsearch-tree] Falling back to linear deepsearch...")
-        return run_deepsearch_optimized(state, config)
+        elapsed = max(0.0, time.time() - start_ts)
+        should_fallback = searches_used == 0 and not search_runs and elapsed < 5.0
+        if should_fallback:
+            logger.info("[deepsearch-tree] Falling back to linear deepsearch...")
+            return run_deepsearch_optimized(state, config)
+
+        error_message = str(e).strip() or e.__class__.__name__
+        if not budget_stop_reason:
+            budget_stop_reason = "tree_runtime_error"
+
+        partial_queries = [
+            str(query).strip() for query in have_query if str(query).strip()
+        ]
+        if not partial_queries:
+            partial_queries = [
+                str(run.get("query") or "").strip()
+                for run in search_runs
+                if isinstance(run, dict) and str(run.get("query") or "").strip()
+            ]
+
+        partial_results: List[Dict[str, Any]] = []
+        for run in search_runs[-min(10, len(search_runs)) :]:
+            if not isinstance(run, dict):
+                continue
+            results = run.get("results")
+            if not isinstance(results, list):
+                continue
+            for result in results:
+                if isinstance(result, dict):
+                    partial_results.append(result)
+                if len(partial_results) >= 10:
+                    break
+            if len(partial_results) >= 10:
+                break
+
+        partial_report = re.sub(r"\s+", " ", str(merged_summary or "")).strip()
+        if not partial_report and partial_results:
+            partial_report = _format_results(partial_results)
+        if not partial_report:
+            partial_report = (
+                "树搜索在生成最终结果时中断，已返回当前可用的部分研究结果。"
+            )
+
+        diagnostics = _build_quality_diagnostics(topic, partial_queries, search_runs)
+        feature_trace = _build_feature_trace(
+            state,
+            config,
+            executed_mode="tree",
+            reflexion_feedbacks=reflexion_feedbacks,
+            reflexion_focus=reflexion_focus_hints,
+            backtrack_events=backtrack_events,
+        )
+
+        extracted_sources: List[Dict[str, Any]] = []
+        try:
+            from agent.workflows.evidence_extractor import extract_message_sources
+
+            extracted_sources = extract_message_sources(search_runs)
+        except Exception:
+            extracted_sources = []
+
+        tree_payload = None
+        if tree is not None and hasattr(tree, "to_dict"):
+            try:
+                tree_payload = tree.to_dict()
+            except Exception:
+                tree_payload = None
+
+        quality_summary = {
+            "epochs_completed": 1 if partial_queries or search_runs else 0,
+            "summary_count": 1 if partial_report else 0,
+            "source_count": len(extracted_sources),
+            "tree_node_count": len(getattr(tree, "nodes", {}) or {}),
+            "budget_stop_reason": budget_stop_reason,
+            "tokens_used": tokens_used,
+            "elapsed_seconds": elapsed,
+            "reflexion_rounds": len(reflexion_feedbacks),
+            "tree_backtrack_events": len(backtrack_events),
+            "feature_trace": feature_trace,
+            "tree_error": error_message,
+            **diagnostics,
+        }
+
+        deepsearch_artifacts = {
+            "mode": "tree",
+            "queries": partial_queries,
+            "research_tree": tree_payload,
+            "quality_summary": quality_summary,
+            "feature_trace": feature_trace,
+            "reflexion_feedbacks": reflexion_feedbacks,
+            "backtrack_events": backtrack_events,
+            "query_coverage": diagnostics.get("query_coverage", {}),
+            "freshness_summary": diagnostics.get("freshness_summary", {}),
+            "fetched_pages": [],
+            "passages": [],
+            "sources": extracted_sources,
+            "claims": [],
+            "errors": [error_message],
+        }
+
+        _emit_event(
+            emitter,
+            "quality_update",
+            {
+                "epoch": 1 if partial_queries or search_runs else 0,
+                "stage": "partial_error",
+                "error": error_message,
+                **diagnostics,
+            },
+        )
+        _emit_event(
+            emitter,
+            "research_node_complete",
+            {
+                "node_id": "deepsearch_tree",
+                "summary": (
+                    partial_report[:1200] if isinstance(partial_report, str) else ""
+                ),
+                "sources": _compact_search_results(
+                    partial_results,
+                    limit=_event_results_limit(),
+                ),
+                "quality": {"error": error_message, **diagnostics},
+            },
+        )
+
+        messages = [AIMessage(content=partial_report)]
+        messages.append(
+            AIMessage(
+                content=f"（树搜索在部分完成后发生错误，已跳过线性回退：{error_message}）"
+            )
+        )
+
+        return {
+            "research_plan": partial_queries,
+            "scraped_content": search_runs,
+            "draft_report": partial_report,
+            "final_report": partial_report,
+            "quality_summary": quality_summary,
+            "sources": extracted_sources,
+            "deepsearch_artifacts": deepsearch_artifacts,
+            "feature_trace": feature_trace,
+            "deepsearch_mode": "tree",
+            "messages": messages,
+            "research_tree": tree_payload,
+            "is_complete": False,
+            "budget_stop_reason": budget_stop_reason,
+            "deepsearch_tokens_used": tokens_used,
+            "deepsearch_elapsed_seconds": elapsed,
+            "errors": [error_message],
+        }
 
 
 def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
@@ -4950,19 +5673,36 @@ def run_deepsearch_auto(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
         logger.info("[deepsearch] Using supervisor-workers exploration mode")
         return _with_event_marker(run_deepsearch_supervisor_workers(state, config))
 
-    if strategy == "linear_light":
-        logger.info("[deepsearch] Auto strategy selected light linear exploration")
-        simple_config = dict(config) if isinstance(config, dict) else {"configurable": {}}
+    use_tree = getattr(settings, "tree_exploration_enabled", True)
+    topic = str(state.get("input") or state.get("topic") or "").strip()
+    if strategy == "linear_light" or (use_tree and _auto_mode_prefers_linear(topic)):
+        if strategy == "linear_light":
+            logger.info("[deepsearch] Auto strategy selected light linear exploration")
+        else:
+            logger.info(
+                "[deepsearch] Auto mode selected linear exploration for simple factual query"
+            )
+        simple_config = (
+            dict(config) if isinstance(config, dict) else {"configurable": {}}
+        )
         existing_cfg = simple_config.get("configurable")
         simple_cfg = dict(existing_cfg) if isinstance(existing_cfg, dict) else {}
         simple_config["configurable"] = simple_cfg
         for key, value in (decision.parameters or {}).items():
             simple_cfg.setdefault(key, value)
+        simple_cfg.setdefault("deepsearch_max_epochs", 1)
+        simple_cfg.setdefault("deepsearch_query_num", 1)
+        simple_cfg.setdefault("deepsearch_results_per_query", 5)
+        simple_cfg.setdefault("deepsearch_visualize_browser", False)
         return _with_event_marker(run_deepsearch_optimized(state, simple_config))
 
     if strategy == "hybrid_private_web":
         logger.info("[deepsearch] Using hybrid private/web linear exploration")
         return _with_event_marker(run_deepsearch_optimized(state, config))
+
+    if use_tree:
+        logger.info("[deepsearch] Using tree-based exploration mode")
+        return _with_event_marker(run_deepsearch_tree(state, config))
 
     logger.info("[deepsearch] Using linear exploration mode")
     return _with_event_marker(run_deepsearch_optimized(state, config))
