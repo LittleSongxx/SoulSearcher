@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, dataclass, field
 from threading import Lock
 from typing import Any, Optional
@@ -16,6 +17,7 @@ class DeepResearchBudget:
     max_context_tokens: int = 0
     max_compression_attempts: int = 0
     max_reflection_rounds: int = 0
+    max_seconds_per_worker: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -121,6 +123,20 @@ class ResearchBudgetRuntime:
             self.reflection_rounds_used += 1
             return True
 
+    def check_worker_timeout(self, worker_id: str, started_at: float) -> bool:
+        if self.budget.max_seconds_per_worker <= 0:
+            return False
+        elapsed = time.time() - started_at
+        if elapsed >= self.budget.max_seconds_per_worker:
+            with self._lock:
+                self._record_locked(
+                    "worker_timeout",
+                    f"worker {worker_id} exceeded time budget ({elapsed:.1f}s >= {self.budget.max_seconds_per_worker:.1f}s)",
+                    {"worker_id": worker_id, "elapsed_s": round(elapsed, 2), "limit_s": self.budget.max_seconds_per_worker},
+                )
+            return True
+        return False
+
     def record_stop_reason(self, reason: str, details: Optional[dict[str, Any]] = None) -> None:
         with self._lock:
             self._record_locked("budget_stop", reason, dict(details or {}))
@@ -162,6 +178,7 @@ def build_deepsearch_budget(*, config: dict[str, Any], research_brief: Any = Non
     max_context_tokens = _int_setting(cfg, brief_policy, "deepsearch_max_context_tokens", "max_context_tokens", int(getattr(settings, "deepsearch_max_context_tokens", 0) or 0))
     max_compression_attempts = _int_setting(cfg, brief_policy, "deepsearch_max_compression_attempts", "max_compression_attempts", max_research_units)
     max_reflection_rounds = _int_setting(cfg, brief_policy, "deepsearch_max_reflection_rounds", "max_reflection_rounds", rounds)
+    max_seconds_per_worker = _float_setting(cfg, brief_policy, "deepsearch_max_seconds_per_worker", "max_seconds_per_worker", float(getattr(settings, "deepsearch_max_seconds_per_worker", 0.0) or 0.0))
     return DeepResearchBudget(
         max_research_units=max(0, max_research_units),
         max_tool_calls_per_unit=max(0, max_tool_calls_per_unit),
@@ -170,6 +187,7 @@ def build_deepsearch_budget(*, config: dict[str, Any], research_brief: Any = Non
         max_context_tokens=max(0, max_context_tokens),
         max_compression_attempts=max(0, max_compression_attempts),
         max_reflection_rounds=max(0, max_reflection_rounds),
+        max_seconds_per_worker=max(0.0, max_seconds_per_worker),
     )
 
 
@@ -195,3 +213,14 @@ def _int_setting(cfg: dict[str, Any], brief_policy: dict[str, Any], config_key: 
         except (TypeError, ValueError):
             continue
     return int(default)
+
+
+def _float_setting(cfg: dict[str, Any], brief_policy: dict[str, Any], config_key: str, brief_key: str, default: float) -> float:
+    for value in (cfg.get(config_key), brief_policy.get(brief_key), brief_policy.get(config_key)):
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return float(default)

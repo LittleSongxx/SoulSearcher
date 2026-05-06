@@ -34,6 +34,7 @@ from agent.core.llm_factory import create_chat_model
 from agent.core.reflexion import extract_reflexion_focus, generate_reflexion_feedback
 from agent.core.search_cache import get_search_cache
 from agent.workflows.brief_coverage import build_brief_coverage_artifact
+from agent.workflows.browser_reader_plan import build_browser_reader_plan
 from agent.workflows.citation_artifacts import (
     build_citation_annotations,
     build_timeline_artifacts,
@@ -46,6 +47,10 @@ from agent.workflows.claim_ledger import (
 )
 from agent.workflows.context_budget import build_context_budget_manager
 from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
+from agent.workflows.deepsearch_stage_runtime import (
+    DeepSearchStageRuntime,
+    build_fallback_artifact,
+)
 from agent.workflows.domain_router import ResearchDomain, build_provider_profile
 from agent.workflows.evidence import build_evidence_items
 from agent.workflows.evidence_passages import split_into_passages
@@ -84,6 +89,7 @@ from agent.workflows.research_brief import (
     brief_topic,
     build_research_brief,
 )
+from agent.workflows.research_brief_review import build_research_brief_review_artifact
 from agent.workflows.research_budget import (
     ResearchBudgetRuntime,
     build_deepsearch_budget,
@@ -102,8 +108,13 @@ from agent.workflows.sectioned_report import (
     compile_sectioned_report,
     grade_section_content,
 )
+from agent.workflows.semantic_claim_verifier import enrich_claim_checks_with_semantics
 from agent.workflows.skill_context import format_skill_context, select_research_skills
 from agent.workflows.source_curator import curate_sources
+from agent.workflows.source_quality import (
+    build_source_quality_artifact,
+    quality_summary_from_source_quality,
+)
 from agent.workflows.source_routing import build_source_routing_policy
 from agent.workflows.source_url_utils import (
     canonicalize_source_url,
@@ -113,7 +124,9 @@ from agent.workflows.stage_metrics import StageMetricsRecorder, warn_slow_stages
 from agent.workflows.strategy_selector import select_deepsearch_strategy
 from agent.workflows.structural_text import is_structural_text
 from agent.workflows.supervisor_workers import (
+    build_branch_diagnostics_artifact,
     build_intermediate_steps,
+    build_worker_orchestration_artifact,
     build_worker_run,
     build_worker_tasks,
     decide_supervisor_next_step,
@@ -217,7 +230,7 @@ def _check_cancel(state: dict[str, Any]) -> None:
 
 
 def _normalize_deepsearch_mode(value: Any) -> str:
-    """Normalize deepsearch mode to one of: auto, tree, linear, reflection_loop."""
+    """Normalize deepsearch mode to a supported DeepSearch execution mode."""
     mode = str(value or "").strip().lower().replace("-", "_")
     if mode == "reflection":
         mode = "reflection_loop"
@@ -225,7 +238,7 @@ def _normalize_deepsearch_mode(value: Any) -> str:
         mode = "supervisor_workers"
     if mode in _DEEPSEARCH_MODES:
         return mode
-    return "auto"
+    return "supervisor_workers"
 
 
 def _resolve_deepsearch_mode(config: dict[str, Any]) -> str:
@@ -233,14 +246,16 @@ def _resolve_deepsearch_mode(config: dict[str, Any]) -> str:
     Resolve deepsearch mode with precedence:
     1. request/configurable.deepsearch_mode
     2. settings.deepsearch_mode
-    3. auto
+    3. supervisor_workers
     """
     cfg = config.get("configurable") or {}
     runtime_mode = cfg.get("deepsearch_mode") if isinstance(cfg, dict) else None
     if runtime_mode is not None:
         return _normalize_deepsearch_mode(runtime_mode)
 
-    return _normalize_deepsearch_mode(getattr(settings, "deepsearch_mode", "auto"))
+    return _normalize_deepsearch_mode(
+        getattr(settings, "deepsearch_mode", "supervisor_workers")
+    )
 
 
 def _configurable_value(config: dict[str, Any], key: str) -> Any:
@@ -1327,7 +1342,55 @@ def _verify_report_claims(
         ),
         passages=verifier_passages if use_passages and verifier_passages else None,
     )
-    return checks, serialize_claim_checks(checks), summarize_claim_checks(checks)
+    claims = serialize_claim_checks(checks)
+    stats = summarize_claim_checks(checks)
+    semantic_checks, semantic_stats = enrich_claim_checks_with_semantics(
+        checks,
+        evidence_items=_evidence_candidates_for_semantic_verifier(
+            search_runs=search_runs,
+            passages=verifier_passages,
+        ),
+        config=config,
+    )
+    if semantic_stats.get("semantic_claim_verifier_enabled"):
+        claims = [check.to_dict() for check in semantic_checks]
+        stats.update(_claim_stats_from_semantic_checks(semantic_checks))
+    stats.update(semantic_stats)
+    return checks, claims, stats
+
+
+def _evidence_candidates_for_semantic_verifier(
+    *,
+    search_runs: list[dict[str, Any]],
+    passages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for run in search_runs or []:
+        if not isinstance(run, dict):
+            continue
+        for result in run.get("results") or []:
+            if isinstance(result, dict):
+                candidates.append(result)
+    candidates.extend(item for item in passages or [] if isinstance(item, dict))
+    return candidates
+
+
+def _claim_stats_from_semantic_checks(checks: list[Any]) -> dict[str, int]:
+    stats = {
+        "claim_verifier_total": len(checks or []),
+        "claim_verifier_verified": 0,
+        "claim_verifier_unsupported": 0,
+        "claim_verifier_contradicted": 0,
+    }
+    for check in checks or []:
+        status = str(getattr(check, "status", "") or "").lower()
+        if status == "verified":
+            stats["claim_verifier_verified"] += 1
+        elif status == "contradicted":
+            stats["claim_verifier_contradicted"] += 1
+        elif status == "unsupported":
+            stats["claim_verifier_unsupported"] += 1
+    return stats
 
 
 def _revise_report_for_claim_failures(
@@ -4845,6 +4908,10 @@ def run_deepsearch_supervisor_workers(
     brief.source_routing = source_routing
     state["research_brief"] = brief.to_dict()
     state["source_routing"] = source_routing
+    brief_review = build_research_brief_review_artifact(
+        research_brief=brief.to_dict(), config=config
+    )
+    state["research_brief_review"] = brief_review
     topic = brief.clarified_goal or state.get("input", "")
     _check_cancel(state)
 
@@ -4991,6 +5058,29 @@ def run_deepsearch_supervisor_workers(
         mode="supervisor_workers", parent_id="deepsearch_supervisor"
     )
     stage_metrics = StageMetricsRecorder()
+    stage_runtime = DeepSearchStageRuntime(
+        mode="supervisor_workers",
+        run_id=str(state.get("thread_id") or state.get("run_id") or ""),
+    )
+    stage_handle = stage_runtime.start(
+        "research_brief",
+        source_policy=brief.source_policy,
+        expected_field_count=len(brief.expected_fields or []),
+    )
+    stage_runtime.finish(
+        stage_handle,
+        complexity=brief.complexity,
+        source_policy=brief.source_policy,
+    )
+    review_handle = stage_runtime.start(
+        "brief_review",
+        approval_required=bool(brief_review.get("approval_required")),
+    )
+    stage_runtime.finish(
+        review_handle,
+        status=brief_review.get("status"),
+        next_action=brief_review.get("next_action"),
+    )
     missing_topics = list(state.get("missing_topics", []) or [])
     rounds_completed = 0
 
@@ -5008,6 +5098,11 @@ def run_deepsearch_supervisor_workers(
                 break
 
             stage = stage_metrics.start(
+                "supervisor_plan",
+                round=round_index,
+                missing_topic_count=len(missing_topics),
+            )
+            runtime_stage = stage_runtime.start(
                 "supervisor_plan",
                 round=round_index,
                 missing_topic_count=len(missing_topics),
@@ -5035,6 +5130,11 @@ def run_deepsearch_supervisor_workers(
                 )
             stage_metrics.finish(
                 stage, task_count=len(tasks), rejected_task_count=len(rejected_tasks)
+            )
+            stage_runtime.finish(
+                runtime_stage,
+                task_count=len(tasks),
+                rejected_task_count=len(rejected_tasks),
             )
             if not tasks:
                 budget_stop_reason = "maximum research units reached"
@@ -5145,6 +5245,13 @@ def run_deepsearch_supervisor_workers(
                 worker_count=len(tasks),
                 parallel_workers=parallel_workers,
             )
+            runtime_stage = stage_runtime.start(
+                "worker_dispatch",
+                round=round_index,
+                worker_count=len(tasks),
+                parallel_workers=parallel_workers,
+                dispatch="parallel" if parallel_workers > 1 else "sequential",
+            )
             if parallel_workers > 1 and len(tasks) > 1:
                 with ThreadPoolExecutor(
                     max_workers=min(parallel_workers, len(tasks))
@@ -5159,6 +5266,15 @@ def run_deepsearch_supervisor_workers(
                 stage,
                 result_count=sum(
                     len(payload.get("results") or []) for payload in task_payloads
+                ),
+            )
+            stage_runtime.finish(
+                runtime_stage,
+                result_count=sum(
+                    len(payload.get("results") or []) for payload in task_payloads
+                ),
+                error_count=sum(
+                    len(payload.get("errors") or []) for payload in task_payloads
                 ),
             )
 
@@ -5434,11 +5550,26 @@ def run_deepsearch_supervisor_workers(
             "deepsearch_supervisor_fetch_passages",
             bool(getattr(settings, "deepsearch_supervisor_fetch_passages", False)),
         ):
+            runtime_stage = stage_runtime.start(
+                "source_fetch", source_limit=fetch_source_limit
+            )
             fetched_pages, passages = _build_fetcher_evidence(
                 _source_urls_for_fetch(report_sources, limit=fetch_source_limit),
                 config,
             )
             passages = _cap_passages(passages, config)
+            stage_runtime.finish(
+                runtime_stage,
+                fetched_page_count=len(fetched_pages),
+                passage_count=len(passages),
+            )
+        else:
+            stage_runtime.skip("source_fetch", reason="fetch passages disabled")
+        runtime_stage = stage_runtime.start(
+            "evidence_build",
+            provider_evidence_count=len(provider_evidence_items),
+            source_count=len(all_sources),
+        )
         evidence_items = _merge_evidence_item_payloads(
             provider_evidence_items,
             build_evidence_items(
@@ -5452,6 +5583,23 @@ def run_deepsearch_supervisor_workers(
             evidence_items, all_sources
         )
         evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
+        source_quality = build_source_quality_artifact(
+            sources=all_sources,
+            evidence_items=evidence_items,
+            search_runs=search_runs,
+        )
+        browser_reader_plan = build_browser_reader_plan(
+            worker_runs=worker_runs,
+            fetched_pages=fetched_pages,
+            sources=all_sources,
+            config=config,
+        )
+        stage_runtime.finish(
+            runtime_stage,
+            evidence_item_count=len(evidence_items),
+            source_quality_score=source_quality.get("credibility_score"),
+            reader_action_count=browser_reader_plan.get("action_count", 0),
+        )
         fact_cards = build_fact_cards(
             evidence_items=evidence_items,
             sources=report_sources,
@@ -5584,6 +5732,17 @@ def run_deepsearch_supervisor_workers(
                     evidence_items, all_sources
                 )
                 evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
+                source_quality = build_source_quality_artifact(
+                    sources=all_sources,
+                    evidence_items=evidence_items,
+                    search_runs=search_runs,
+                )
+                browser_reader_plan = build_browser_reader_plan(
+                    worker_runs=worker_runs,
+                    fetched_pages=fetched_pages,
+                    sources=all_sources,
+                    config=config,
+                )
                 fact_cards = build_fact_cards(
                     evidence_items=evidence_items,
                     sources=report_sources,
@@ -5754,6 +5913,11 @@ def run_deepsearch_supervisor_workers(
             sectioned=bool(sectioned_compiled_report),
             fact_card_count=len(fact_cards),
         )
+        runtime_stage = stage_runtime.start(
+            "writer",
+            sectioned=bool(sectioned_compiled_report),
+            fact_card_count=len(fact_cards),
+        )
         draft_report = (
             sectioned_compiled_report
             if sectioned_compiled_report
@@ -5770,8 +5934,12 @@ def run_deepsearch_supervisor_workers(
             )
         )
         stage_metrics.finish(stage, report_chars=len(draft_report or ""))
+        stage_runtime.finish(runtime_stage, report_chars=len(draft_report or ""))
         try:
             stage = stage_metrics.start(
+                "verifier", report_chars=len(draft_report or "")
+            )
+            runtime_stage = stage_runtime.start(
                 "verifier", report_chars=len(draft_report or "")
             )
             _checks, claims, claim_stats = _verify_report_claims(
@@ -5782,8 +5950,14 @@ def run_deepsearch_supervisor_workers(
                 config=config,
             )
             stage_metrics.finish(stage, claim_count=len(claims))
+            stage_runtime.finish(runtime_stage, claim_count=len(claims))
         except Exception:
             stage_metrics.finish(stage, status="failed")
+            stage_runtime.fail(
+                runtime_stage if "runtime_stage" in locals() else None,
+                "claim verification failed",
+                recovery_hint="reuse draft report and rerun claim verifier",
+            )
             claims = []
             claim_stats = {
                 "claim_verifier_total": 0,
@@ -5989,6 +6163,15 @@ def run_deepsearch_supervisor_workers(
                 ),
             ),
         )
+        worker_orchestration = build_worker_orchestration_artifact(
+            worker_runs=worker_runs,
+            supervisor_decisions=supervisor_decisions,
+            parallel_workers=parallel_workers,
+        )
+        branch_diagnostics = build_branch_diagnostics_artifact(
+            worker_runs=worker_runs,
+            evidence_items=evidence_items,
+        )
         quality_summary = {
             "epochs_completed": rounds_completed,
             "supervisor_rounds_completed": rounds_completed,
@@ -6000,6 +6183,16 @@ def run_deepsearch_supervisor_workers(
             "decision_log_count": len(decision_log),
             "parallel_workers": parallel_workers,
             "worker_dispatch": "parallel" if parallel_workers > 1 else "sequential",
+            "worker_orchestration_dispatch_model": worker_orchestration.get(
+                "dispatch_model"
+            ),
+            "worker_partial_result_count": worker_orchestration.get(
+                "partial_result_count", 0
+            ),
+            "branch_count": branch_diagnostics.get("branch_count", 0),
+            "branch_duplicate_focus_count": branch_diagnostics.get(
+                "duplicate_focus_count", 0
+            ),
             "context_policy_stage_count": context_policy.get("stage_count", 0),
             "model_profile_stage_count": model_profile.get("stage_count", 0),
             "evidence_provider_count": provider_capabilities.get("provider_count", 0),
@@ -6042,6 +6235,7 @@ def run_deepsearch_supervisor_workers(
             "elapsed_seconds": elapsed,
             **diagnostics,
         }
+        quality_summary.update(quality_summary_from_source_quality(source_quality))
         quality_summary.update(claim_stats)
 
         final_gate_payload = _record_quality_gates(
@@ -6093,6 +6287,7 @@ def run_deepsearch_supervisor_workers(
         budget_artifact = budget_runtime.to_artifact()
         loop_guard_artifact = loop_guard.to_artifact()
         context_budget_artifact = context_budget_manager.to_artifact()
+        stage_runtime_artifact = stage_runtime.artifact()
         research_pipeline = build_supervisor_workers_pipeline_artifact(
             research_brief=brief.to_dict(),
             task_runtime=task_runtime.to_artifact(),
@@ -6107,6 +6302,10 @@ def run_deepsearch_supervisor_workers(
             budget_artifact=budget_artifact,
             loop_guard_artifact=loop_guard_artifact,
             context_budget_artifact=context_budget_artifact,
+            stage_runtime_artifact=stage_runtime_artifact,
+            source_quality=source_quality,
+            browser_reader_plan=browser_reader_plan,
+            brief_review=brief_review,
         )
         _emit_event(
             emitter,
@@ -6131,6 +6330,9 @@ def run_deepsearch_supervisor_workers(
             "supervisor_decisions": supervisor_decisions,
             "worker_runs": worker_runs,
             "research_task_runtime": task_runtime.to_artifact(),
+            "worker_orchestration": worker_orchestration,
+            "branch_diagnostics": branch_diagnostics,
+            "stage_runtime": stage_runtime_artifact,
             "research_budget": budget_artifact,
             "loop_guard": loop_guard_artifact,
             "context_budget": context_budget_artifact,
@@ -6147,6 +6349,9 @@ def run_deepsearch_supervisor_workers(
             "model_profile": model_profile,
             "fact_cards": fact_cards,
             "brief_coverage": brief_coverage,
+            "brief_review": brief_review,
+            "source_quality": source_quality,
+            "browser_reader_plan": browser_reader_plan,
             "stage_metrics": stage_metrics_artifact,
             "slow_stage_warnings": slow_stage_warnings,
             "provider_capabilities": provider_capabilities,
@@ -6192,12 +6397,36 @@ def run_deepsearch_supervisor_workers(
             "deepsearch_artifacts": {
                 "mode": "supervisor_workers",
                 "research_task_runtime": task_runtime.to_artifact(),
+                "stage_runtime": stage_runtime.artifact()
+                if "stage_runtime" in locals()
+                else {},
                 "decision_log": decision_log,
             },
         }
     except Exception as exc:
         logger.error(f"[deepsearch-supervisor] Failed: {exc}", exc_info=True)
-        return run_deepsearch_optimized(state, config)
+        fallback_artifact = build_fallback_artifact(
+            source_strategy="supervisor_workers",
+            fallback_strategy="linear",
+            error=exc,
+        )
+        if "emitter" in locals():
+            _emit_event(
+                emitter,
+                "strategy_fallback",
+                fallback_artifact,
+            )
+        fallback_result = run_deepsearch_optimized(state, config)
+        if isinstance(fallback_result, dict):
+            artifacts = fallback_result.get("deepsearch_artifacts")
+            if not isinstance(artifacts, dict):
+                artifacts = {}
+            artifacts["fallback"] = fallback_artifact
+            artifacts.setdefault("source_strategy", "supervisor_workers")
+            if "stage_runtime" in locals():
+                artifacts.setdefault("stage_runtime", stage_runtime.artifact())
+            fallback_result["deepsearch_artifacts"] = artifacts
+        return fallback_result
 
 
 def run_deepsearch_auto(

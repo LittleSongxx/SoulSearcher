@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     judge_parser = subparsers.add_parser("judge", help="Run LLM-as-Judge for a run directory")
     judge_parser.add_argument("--run-dir", type=Path, required=True)
     judge_parser.add_argument("--judge-model", default="")
+    judge_parser.add_argument("--include-hallucination", action="store_true", default=False, help="Include hallucination detection judge")
 
     summary_parser = subparsers.add_parser("summarize", help="Aggregate benchmark metrics")
     summary_parser.add_argument("--run-dir", type=Path, required=True)
@@ -73,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "judge":
-        scores = judge_run(args.run_dir, judge_model=args.judge_model)
+        scores = judge_run(args.run_dir, judge_model=args.judge_model, include_hallucination=args.include_hallucination)
         print(f"Judge complete: {len(scores)} scores -> {args.run_dir / 'judge_scores.json'}")
         return 0
 

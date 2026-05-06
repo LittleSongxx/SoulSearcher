@@ -76,6 +76,14 @@ export interface EvidenceResponse {
   continue_requests?: ContinueResearchRequestItem[]
   fetched_pages?: any[]
   passages?: EvidencePassage[]
+  research_pipeline?: Record<string, any>
+  stage_runtime?: Record<string, any>
+  source_quality?: Record<string, any>
+  browser_reader_plan?: Record<string, any>
+  worker_orchestration?: Record<string, any>
+  branch_diagnostics?: Record<string, any>
+  brief_review?: Record<string, any>
+  fallback?: Record<string, any>
 }
 
 export interface ContinueResearchResponse {

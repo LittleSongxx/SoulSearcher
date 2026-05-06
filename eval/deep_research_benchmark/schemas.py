@@ -170,6 +170,9 @@ class MetricSummary:
     avg_claims_checked: Optional[float] = None
     avg_claims_supported: Optional[float] = None
     avg_claims_unsupported: Optional[float] = None
+    hallucination_rate: Optional[float] = None
+    hallucination_count: Optional[float] = None
+    hallucination_judge_scored: int = 0
     by_language: dict[str, Any] = field(default_factory=dict)
     by_domain: dict[str, Any] = field(default_factory=dict)
     p50_duration_s: Optional[float] = None

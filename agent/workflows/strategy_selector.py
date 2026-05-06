@@ -63,14 +63,26 @@ def select_deepsearch_strategy(
     simple_query_detector: Optional[Callable[[str], bool]] = None,
 ) -> StrategyDecision:
     strategy = _explicit_strategy(config)
-    if strategy in {"linear_light", "linear", "tree", "reflection_loop", "supervisor_workers", "hybrid_private_web"}:
+    if strategy in {
+        "linear_light",
+        "linear",
+        "tree",
+        "reflection_loop",
+        "supervisor_workers",
+        "hybrid_private_web",
+    }:
         return StrategyDecision(strategy=strategy, reason="runtime strategy override", confidence=1.0)
 
     explicit_mode = _explicit_mode(config)
     if explicit_mode in {"linear", "tree", "reflection_loop", "supervisor_workers"}:
         return StrategyDecision(strategy=explicit_mode, reason="runtime mode override", confidence=1.0)
 
-    configured_mode = str(getattr(settings, "deepsearch_mode", "auto") or "auto").strip().lower().replace("-", "_")
+    configured_mode = (
+        str(getattr(settings, "deepsearch_mode", "supervisor_workers") or "supervisor_workers")
+        .strip()
+        .lower()
+        .replace("-", "_")
+    )
     if configured_mode in {"linear", "tree", "reflection_loop", "supervisor_workers"}:
         return StrategyDecision(strategy=configured_mode, reason="settings mode override", confidence=1.0)
 
@@ -95,15 +107,11 @@ def select_deepsearch_strategy(
             low_budget = int(cfg.get("deepsearch_max_epochs")) <= 2 and int(cfg.get("deepsearch_query_num")) <= 2
         except (TypeError, ValueError):
             low_budget = False
-    if _truthy(cfg.get("use_reflection_loop")) or low_budget:
+    if _truthy(cfg.get("use_reflection_loop")):
         return StrategyDecision(strategy="reflection_loop", reason="low budget reflection loop selected", confidence=0.75)
-
-    if brief.source_policy in {"hybrid", "private-first"}:
-        return StrategyDecision(strategy="hybrid_private_web", reason="brief requests hybrid/private evidence", confidence=0.8)
-
-    use_tree = bool(getattr(settings, "tree_exploration_enabled", True))
-    if use_tree and brief.complexity == "broad":
-        return StrategyDecision(strategy="tree", reason="broad research brief", confidence=0.8)
-    if use_tree:
-        return StrategyDecision(strategy="tree", reason="tree exploration enabled", confidence=0.65)
-    return StrategyDecision(strategy="linear", reason="tree exploration disabled", confidence=0.7)
+    return StrategyDecision(
+        strategy="supervisor_workers",
+        reason="default supervisor-workers deep research strategy",
+        parameters={"low_budget": low_budget} if low_budget else {},
+        confidence=0.85,
+    )

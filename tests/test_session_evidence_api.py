@@ -106,6 +106,14 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
                 "snippet_hash": "deadbeef",
             }
         ],
+        "research_pipeline": {"stage_count": 3},
+        "stage_runtime": {"stage_count": 4, "resumable": True},
+        "source_quality": {"source_diversity_score": 1.0},
+        "browser_reader_plan": {"action_count": 1},
+        "worker_orchestration": {"dispatch_model": "parallel_batch"},
+        "branch_diagnostics": {"branch_count": 1},
+        "brief_review": {"status": "approved"},
+        "fallback": {"source_strategy": "supervisor_workers", "fallback_strategy": "linear"},
     }
     state = SessionState(
         thread_id="thread-evidence",
@@ -157,6 +165,14 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
     assert passage.get("method") == "direct_http"
     assert passage.get("quote") == "hello"
     assert passage.get("snippet_hash") == "deadbeef"
+    assert data.get("research_pipeline", {}).get("stage_count") == 3
+    assert data.get("stage_runtime", {}).get("resumable") is True
+    assert data.get("source_quality", {}).get("source_diversity_score") == 1.0
+    assert data.get("browser_reader_plan", {}).get("action_count") == 1
+    assert data.get("worker_orchestration", {}).get("dispatch_model") == "parallel_batch"
+    assert data.get("branch_diagnostics", {}).get("branch_count") == 1
+    assert data.get("brief_review", {}).get("status") == "approved"
+    assert data.get("fallback", {}).get("fallback_strategy") == "linear"
 
 
 @pytest.mark.asyncio

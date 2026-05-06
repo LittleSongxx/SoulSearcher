@@ -11,6 +11,7 @@ from eval.deep_research_benchmark.dataset import load_tasks
 from eval.deep_research_benchmark.judges.base import env_int
 from eval.deep_research_benchmark.judges.citation_judge import judge_citations
 from eval.deep_research_benchmark.judges.claim_judge import judge_claims
+from eval.deep_research_benchmark.judges.hallucination_judge import judge_hallucinations
 from eval.deep_research_benchmark.judges.report_judge import score_report
 from eval.deep_research_benchmark.schemas import BenchmarkTask, JudgeScore
 
@@ -135,7 +136,7 @@ def _run_one_judge(
     _write_scores(output_path, scores)
 
 
-def judge_run(run_dir: str | Path, *, judge_model: str = "") -> list[JudgeScore]:
+def judge_run(run_dir: str | Path, *, judge_model: str = "", include_hallucination: bool = False) -> list[JudgeScore]:
     root = Path(run_dir)
     config = _read_json(root / "run_config.json")
     dataset_path = Path(str(config.get("dataset_path") or ""))
@@ -197,6 +198,19 @@ def judge_run(run_dir: str | Path, *, judge_model: str = "") -> list[JudgeScore]
                 task, report, evidence, judge_model=judge_model
             ),
         )
+        if include_hallucination:
+            _run_one_judge(
+                output_path=output_path,
+                scores=scores,
+                existing=existing,
+                case_id=case_id,
+                judge_type="hallucination",
+                total_cases=total_cases,
+                case_index=case_index,
+                fn=lambda task=task, report=report, evidence=evidence: judge_hallucinations(
+                    task, report, evidence, judge_model=judge_model
+                ),
+            )
     _write_scores(output_path, scores)
     print(
         f"[judge] complete scores={len(scores)} output={root / 'judge_scores.json'}",

@@ -19,6 +19,7 @@ class WorkerTask:
     round_index: int
     context_id: str
     status: str = "pending"
+    depth: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -45,6 +46,8 @@ class WorkerRun:
     confidence: float = 0.0
     budget_snapshot: dict[str, Any] = field(default_factory=dict)
     gaps: list[str] = field(default_factory=list)
+    compression_stats: dict[str, Any] = field(default_factory=dict)
+    depth: int = 0
     provider_breakdown: dict[str, int] = field(default_factory=dict)
     status: str = "completed"
     started_at: str = ""
@@ -68,6 +71,22 @@ class SupervisorDecision:
     next_worker_topics: list[str] = field(default_factory=list)
     failed_gates: list[str] = field(default_factory=list)
     quality_snapshot: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if value not in (None, "", [], {})
+        }
+
+
+@dataclass
+class SupervisorThinkStep:
+    round_index: int
+    reflection: str = ""
+    knowledge_gaps: list[str] = field(default_factory=list)
+    confidence: float = 0.0
+    next_focus: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -217,6 +236,8 @@ def build_worker_run(
     tool_calls: Optional[list[dict[str, Any]]] = None,
     budget_snapshot: Optional[dict[str, Any]] = None,
     gaps: Optional[list[str]] = None,
+    compression_stats: Optional[dict[str, Any]] = None,
+    depth: int = 0,
 ) -> WorkerRun:
     completed_at = datetime.now(UTC).isoformat()
     citations = _citations_from_results(results or [], evidence_items or [])
@@ -244,6 +265,8 @@ def build_worker_run(
         confidence=_worker_confidence(results or [], evidence_items or [], citations),
         budget_snapshot=dict(budget_snapshot or {}),
         gaps=list(gaps or []),
+        compression_stats=dict(compression_stats or {}),
+        depth=depth,
         provider_breakdown=_provider_breakdown(results or []),
         status="failed" if errors else "completed",
         started_at=started_at,
@@ -525,3 +548,181 @@ def build_intermediate_steps(
     for idx, step in enumerate(steps, 1):
         step["order"] = idx
     return steps
+
+
+def build_worker_orchestration_artifact(
+    *,
+    worker_runs: list[dict[str, Any]],
+    supervisor_decisions: list[dict[str, Any]],
+    parallel_workers: int,
+) -> dict[str, Any]:
+    status_counts: dict[str, int] = {}
+    round_counts: dict[str, int] = {}
+    partial_results: list[dict[str, Any]] = []
+    failed_workers: list[dict[str, Any]] = []
+    for run in worker_runs or []:
+        if not isinstance(run, dict):
+            continue
+        status = _text(run.get("status") or "completed") or "completed"
+        status_counts[status] = status_counts.get(status, 0) + 1
+        round_key = str(run.get("round_index") or 0)
+        round_counts[round_key] = round_counts.get(round_key, 0) + 1
+        partial_results.append(
+            {
+                key: value
+                for key, value in {
+                    "worker_id": run.get("worker_id"),
+                    "context_id": run.get("context_id"),
+                    "round_index": run.get("round_index"),
+                    "focus": run.get("focus"),
+                    "status": status,
+                    "result_count": run.get("result_count", 0),
+                    "evidence_count": run.get("evidence_count", 0),
+                    "completed_at": run.get("completed_at"),
+                }.items()
+                if value not in (None, "", [], {})
+            }
+        )
+        if status == "failed" or run.get("errors"):
+            failed_workers.append(
+                {
+                    "worker_id": run.get("worker_id"),
+                    "round_index": run.get("round_index"),
+                    "errors": run.get("errors") or [],
+                }
+            )
+    return {
+        "schema_version": 1,
+        "dispatch_model": "parallel_batch" if parallel_workers > 1 else "sequential",
+        "parallel_workers": max(1, int(parallel_workers or 1)),
+        "worker_count": len(worker_runs or []),
+        "status_counts": status_counts,
+        "round_counts": round_counts,
+        "partial_result_count": len(partial_results),
+        "partial_results": partial_results,
+        "failed_workers": failed_workers,
+        "supervisor_decision_count": len(supervisor_decisions or []),
+        "supports_partial_results": True,
+        "supports_dynamic_spawn": False,
+        "supports_midflight_cancel": False,
+    }
+
+
+def build_branch_diagnostics_artifact(
+    *,
+    worker_runs: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    focus_counts: dict[str, int] = {}
+    branch_evidence_counts: dict[str, int] = {}
+    branch_gap_counts: dict[str, int] = {}
+    conflict_hints: list[dict[str, Any]] = []
+    for run in worker_runs or []:
+        if not isinstance(run, dict):
+            continue
+        focus = _text(run.get("focus") or run.get("topic") or run.get("worker_id") or "branch")
+        focus_key = focus.lower()
+        focus_counts[focus_key] = focus_counts.get(focus_key, 0) + 1
+        worker_id = _text(run.get("worker_id") or focus_key)
+        branch_evidence_counts[worker_id] = int(run.get("evidence_count") or 0)
+        branch_gap_counts[worker_id] = len(run.get("gaps") or [])
+        errors = run.get("errors") or []
+        if errors:
+            conflict_hints.append(
+                {
+                    "worker_id": worker_id,
+                    "kind": "worker_error",
+                    "details": errors[:3] if isinstance(errors, list) else [str(errors)],
+                }
+            )
+    duplicate_focus_count = sum(max(0, count - 1) for count in focus_counts.values())
+    evidence_by_url: dict[str, int] = {}
+    for item in evidence_items or []:
+        if not isinstance(item, dict):
+            continue
+        url = _text(item.get("url") or item.get("source_url") or item.get("document_id"))
+        if url:
+            evidence_by_url[url] = evidence_by_url.get(url, 0) + 1
+    duplicate_evidence_urls = [url for url, count in evidence_by_url.items() if count > 1][:10]
+    if duplicate_evidence_urls:
+        conflict_hints.append(
+            {
+                "kind": "duplicate_evidence",
+                "details": duplicate_evidence_urls,
+            }
+        )
+    return {
+        "schema_version": 1,
+        "branch_count": len(worker_runs or []),
+        "duplicate_focus_count": duplicate_focus_count,
+        "branch_evidence_counts": branch_evidence_counts,
+        "branch_gap_counts": branch_gap_counts,
+        "conflict_hint_count": len(conflict_hints),
+        "conflict_hints": conflict_hints[:12],
+        "merge_strategy": "deduplicate_by_source_and_focus",
+    }
+
+
+def build_intermediate_report(
+    *,
+    worker_runs: list[dict[str, Any]],
+    summary_notes: list[str],
+    evidence_items: list[dict[str, Any]],
+    round_index: int,
+    topic: str = "",
+) -> dict[str, Any]:
+    total_results = sum(
+        int(run.get("result_count") or 0)
+        for run in worker_runs or []
+        if isinstance(run, dict)
+    )
+    total_evidence = sum(
+        int(run.get("evidence_count") or 0)
+        for run in worker_runs or []
+        if isinstance(run, dict)
+    )
+    source_urls = _unique(
+        _text(item.get("url") or item.get("source_url") or item.get("href") or "")
+        for item in evidence_items or []
+        if isinstance(item, dict)
+    )[:20]
+    findings = "\n\n".join(summary_notes or [])
+    key_learnings: list[str] = []
+    for run in worker_runs or []:
+        if not isinstance(run, dict):
+            continue
+        for learning in run.get("learnings") or []:
+            text = _text(learning)
+            if text and text not in key_learnings:
+                key_learnings.append(text)
+    key_learnings = key_learnings[:15]
+
+    report_text = f"# Intermediate Research Report (Round {round_index})\n\n"
+    if topic:
+        report_text += f"**Topic:** {topic}\n\n"
+    report_text += f"**Evidence collected:** {total_results} results, {total_evidence} evidence items\n\n"
+    if key_learnings:
+        report_text += "## Key Findings\n\n"
+        for learning in key_learnings:
+            report_text += f"- {learning}\n"
+        report_text += "\n"
+    if findings:
+        report_text += "## Detailed Notes\n\n"
+        report_text += findings[:4000]
+        report_text += "\n\n"
+    if source_urls:
+        report_text += "## Sources\n\n"
+        for idx, url in enumerate(source_urls[:10], 1):
+            report_text += f"{idx}. {url}\n"
+
+    return {
+        "round_index": round_index,
+        "topic": topic,
+        "report_text": report_text,
+        "total_results": total_results,
+        "total_evidence": total_evidence,
+        "key_learnings": key_learnings,
+        "source_count": len(source_urls),
+        "completion_estimate": min(1.0, round(total_results / max(1, 20) * 0.5 + total_evidence / max(1, 40) * 0.5, 3)),
+        "timestamp": datetime.now(UTC).isoformat(),
+    }

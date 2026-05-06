@@ -25,6 +25,9 @@ class QualityGatePolicy:
     min_citation_coverage: float = 0.6
     max_unsupported_claims: int = 0
     max_contradicted_claims: int = 0
+    min_source_diversity: float = 0.35
+    min_primary_source_ratio: float = 0.0
+    max_low_value_source_ratio: float = 0.5
 
 
 def _float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -52,6 +55,9 @@ def default_policy(settings: Any = None) -> QualityGatePolicy:
         min_citation_coverage=float(getattr(settings, "citation_gate_min_coverage", 0.6) if settings else 0.6),
         max_unsupported_claims=int(getattr(settings, "claim_verifier_gate_max_unsupported", 0) if settings else 0),
         max_contradicted_claims=int(getattr(settings, "claim_verifier_gate_max_contradicted", 0) if settings else 0),
+        min_source_diversity=float(getattr(settings, "deepsearch_quality_gate_min_source_diversity", 0.35) if settings else 0.35),
+        min_primary_source_ratio=float(getattr(settings, "deepsearch_quality_gate_min_primary_source_ratio", 0.0) if settings else 0.0),
+        max_low_value_source_ratio=float(getattr(settings, "deepsearch_quality_gate_max_low_value_source_ratio", 0.5) if settings else 0.5),
     )
 
 
@@ -182,6 +188,84 @@ def evaluate_quality_gates(
                 details={"unsupported": unsupported, "contradicted": contradicted, "epoch": epoch},
             )
         )
+
+    source_diversity = _float(quality_summary.get("source_diversity_score"), None)
+    if source_diversity is not None:
+        if source_diversity < policy.min_source_diversity:
+            results.append(
+                QualityGateResult(
+                    name="source_diversity",
+                    status="fail",
+                    score=source_diversity,
+                    threshold=policy.min_source_diversity,
+                    action="add_diverse_sources",
+                    reason="source diversity below threshold",
+                    details={"epoch": epoch},
+                )
+            )
+        else:
+            results.append(
+                QualityGateResult(
+                    name="source_diversity",
+                    status="pass",
+                    score=source_diversity,
+                    threshold=policy.min_source_diversity,
+                    action="continue",
+                    details={"epoch": epoch},
+                )
+            )
+
+    primary_ratio = _float(quality_summary.get("primary_source_ratio"), None)
+    if primary_ratio is not None and policy.min_primary_source_ratio > 0:
+        if primary_ratio < policy.min_primary_source_ratio:
+            results.append(
+                QualityGateResult(
+                    name="primary_source_ratio",
+                    status="fail",
+                    score=primary_ratio,
+                    threshold=policy.min_primary_source_ratio,
+                    action="prefer_primary_sources",
+                    reason="primary-source ratio below threshold",
+                    details={"epoch": epoch},
+                )
+            )
+        else:
+            results.append(
+                QualityGateResult(
+                    name="primary_source_ratio",
+                    status="pass",
+                    score=primary_ratio,
+                    threshold=policy.min_primary_source_ratio,
+                    action="continue",
+                    details={"epoch": epoch},
+                )
+            )
+
+    low_value_ratio = _float(quality_summary.get("low_value_source_ratio"), None)
+    if low_value_ratio is not None:
+        if low_value_ratio > policy.max_low_value_source_ratio:
+            results.append(
+                QualityGateResult(
+                    name="low_value_sources",
+                    status="fail",
+                    score=low_value_ratio,
+                    threshold=policy.max_low_value_source_ratio,
+                    action="replace_low_value_sources",
+                    reason="low-value source ratio above threshold",
+                    details={"epoch": epoch},
+                )
+            )
+        else:
+            results.append(
+                QualityGateResult(
+                    name="low_value_sources",
+                    status="pass",
+                    score=low_value_ratio,
+                    threshold=policy.max_low_value_source_ratio,
+                    action="continue",
+                    details={"epoch": epoch},
+                )
+            )
 
     return results
 

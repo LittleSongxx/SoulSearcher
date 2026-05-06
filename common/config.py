@@ -274,6 +274,7 @@ class Settings(BaseSettings):
     app_config_path: str = (
         "config/config.toml"  # Optional TOML config (OpenManus style)
     )
+    yaml_config_path: str = "config/config.yaml"  # Optional YAML config
     mcp_config_path: str = "config/mcp.json"  # MCP servers definition (JSON)
     app_config_object: Optional[AppConfig] = (
         None  # populated at runtime if TOML is present
@@ -401,7 +402,7 @@ class Settings(BaseSettings):
     deepsearch_use_gap_analysis: bool = (
         True  # use knowledge gap analysis for targeted queries
     )
-    deepsearch_mode: str = "auto"  # auto | tree | linear
+    deepsearch_mode: str = "supervisor_workers"
     deepsearch_max_seconds: float = 0.0  # 0 = disabled
     deepsearch_max_tokens: int = 0  # 0 = disabled
     deepsearch_max_research_units: int = 0  # 0 = derive from rounds * workers
@@ -410,10 +411,28 @@ class Settings(BaseSettings):
     deepsearch_max_context_tokens: int = 0  # 0 = model-derived context budget
     deepsearch_max_compression_attempts: int = 0  # 0 = derive from research units
     deepsearch_max_reflection_rounds: int = 0  # 0 = derive from supervisor rounds
+    deepsearch_max_skills: int = 3
     deepsearch_loop_max_repeated_query: int = 1
     deepsearch_loop_max_repeated_url: int = 2
     deepsearch_loop_max_repeated_tool_call: int = 1
     deepsearch_loop_max_empty_result_streak: int = 3
+    deepsearch_loop_warn_threshold: int = 3
+    deepsearch_loop_hard_limit: int = 5
+    deepsearch_loop_window_size: int = 20
+    deepsearch_loop_tool_freq_warn: int = 30
+    deepsearch_loop_tool_freq_hard_limit: int = 50
+    deepsearch_guardrail_denied_tools: str = ""
+    deepsearch_guardrail_allowed_domains: str = ""
+    deepsearch_supervisor_think_enabled: bool = True
+    deepsearch_max_seconds_per_worker: float = 0.0
+    deepsearch_forced_intermediate_report_fraction: float = 0.4
+    deepsearch_compression_citation_threshold: float = 0.8
+    deepsearch_encourage_open_url: bool = True
+    deepsearch_summary_trigger_tokens: int = 8000
+    deepsearch_summary_trigger_messages: int = 10
+    deepsearch_summary_keep_recent: int = 3
+    deepsearch_supervisor_max_depth: int = 1
+    deepsearch_supervisor_depth_confidence_threshold: float = 0.5
     deepsearch_freshness_warning_min_known: int = (
         3  # minimum dated results before warning checks
     )
@@ -439,10 +458,13 @@ class Settings(BaseSettings):
         3  # max evidence passages/urls stored per claim
     )
     deepsearch_claim_verifier_max_claims: int = 10
+    deepsearch_semantic_claim_verifier_enabled: bool = False
+    deepsearch_semantic_claim_verifier_mode: str = "heuristic"
     deepsearch_evidence_item_cap: int = 160
     deepsearch_min_evidence_snippet_chars: int = 40
     deepsearch_passage_cap: int = 40
     deepsearch_claim_grounding_gate_enabled: bool = True
+    deepsearch_claim_grounding_max_passes: int = 3
     deepsearch_citation_repair_enabled: bool = True
     deepsearch_citation_repair_min_coverage: float = 0.85
     deepsearch_supervisor_fetch_passages: bool = False
@@ -459,6 +481,12 @@ class Settings(BaseSettings):
     deepsearch_prewrite_gap_followup_enabled: bool = True
     deepsearch_prewrite_gap_followup_queries: int = 2
     deepsearch_stage_warn_after_s: float = 120.0
+    deepsearch_reader_plan_enabled: bool = True
+    deepsearch_reader_plan_mode: str = "search_fetch_browser_hint"
+    deepsearch_brief_review_required: bool = False
+    deepsearch_quality_gate_min_source_diversity: float = 0.35
+    deepsearch_quality_gate_min_primary_source_ratio: float = 0.0
+    deepsearch_quality_gate_max_low_value_source_ratio: float = 0.5
     deepsearch_supervisor_rounds: int = 2
     deepsearch_supervisor_max_workers: int = 4
     deepsearch_supervisor_queries_per_worker: int = 2
@@ -756,7 +784,7 @@ class Settings(BaseSettings):
             mode = "supervisor_workers"
         if mode in {"auto", "tree", "linear", "reflection_loop", "supervisor_workers"}:
             return mode
-        return "auto"
+        return "supervisor_workers"
 
 
 def _project_root() -> Path:
@@ -888,13 +916,67 @@ def load_app_config(config_path: str, mcp_path: str) -> Optional[AppConfig]:
     )
 
 
+def load_yaml_config(yaml_path: str) -> dict[str, Any]:
+    """
+    Load a YAML config file and return a flat dict of settings.
+    Supports layered structure: llm, search, browser, sandbox, deepsearch, agent, eval.
+    Returns empty dict if file not found or parsing fails.
+    """
+    root = _project_root()
+    primary = Path(yaml_path) if Path(yaml_path).is_absolute() else root / yaml_path
+    example = primary.with_suffix(".yaml.example") if primary.suffix == ".yaml" else primary
+    candidates = [primary, example]
+    cfg_file = next((p for p in candidates if p.exists()), None)
+    if not cfg_file:
+        return {}
+    try:
+        import yaml
+        data = yaml.safe_load(cfg_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning(f"Failed to load YAML config from {cfg_file}: {exc}")
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    flat: dict[str, Any] = {}
+    for section_key, section_val in data.items():
+        if isinstance(section_val, dict):
+            for key, val in section_val.items():
+                flat[key] = val
+        else:
+            flat[section_key] = section_val
+    return flat
+
+
+def _apply_yaml_overrides(settings_obj: Settings) -> None:
+    """
+    Apply YAML config as low-priority overrides (below env vars and TOML).
+    Only sets values that are still at their defaults.
+    """
+    yaml_data = load_yaml_config(settings_obj.yaml_config_path)
+    if not yaml_data:
+        return
+    defaults = Settings()
+    for key, value in yaml_data.items():
+        if not hasattr(settings_obj, key):
+            continue
+        current = getattr(settings_obj, key, None)
+        default = getattr(defaults, key, None)
+        if current == default and value is not None:
+            try:
+                setattr(settings_obj, key, value)
+            except Exception:
+                pass
+
+
 def apply_app_config_overrides(settings: Settings) -> None:
     """
     Merge TOML/JSON app config into BaseSettings values without overriding explicit env values.
+    Then apply YAML config as lowest-priority overrides.
     """
     app_cfg = load_app_config(settings.app_config_path, settings.mcp_config_path)
     settings.app_config_object = app_cfg
     if not app_cfg:
+        _apply_yaml_overrides(settings)
         return
 
     default_llm = app_cfg.llm.get("default")
@@ -949,6 +1031,8 @@ def apply_app_config_overrides(settings: Settings) -> None:
     ):
         # allow disabling sandbox via config
         settings.sandbox_mode = "none"
+
+    _apply_yaml_overrides(settings)
 
 
 try:

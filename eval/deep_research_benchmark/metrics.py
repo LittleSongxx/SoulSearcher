@@ -130,6 +130,7 @@ def summarize_results(
         s for s in scores if s.get("judge_type") == "citation" and s.get("status") == "scored"
     ]
     claim_scores = [s for s in scores if s.get("judge_type") == "claim" and s.get("status") == "scored"]
+    hallucination_scores = [s for s in scores if s.get("judge_type") == "hallucination" and s.get("status") == "scored"]
 
     citation_accuracy_values = [
         float(s["score"]) for s in citation_scores if isinstance(s.get("score"), (int, float))
@@ -188,6 +189,13 @@ def summarize_results(
         avg_claims_checked=_avg(_claim_counts(results)),
         avg_claims_supported=_avg(_claim_counts(results, "verified")),
         avg_claims_unsupported=_avg(_claim_counts(results, "unsupported")),
+        hallucination_rate=_avg([float(s["score"]) for s in hallucination_scores if isinstance(s.get("score"), (int, float))]),
+        hallucination_count=_avg([
+            float(s.get("details", {}).get("hallucination_count") or 0)
+            for s in hallucination_scores
+            if isinstance(s.get("details"), dict)
+        ]) if hallucination_scores else None,
+        hallucination_judge_scored=len(hallucination_scores),
         by_language=_group_breakdown(results, scores, tasks_by_id, "language") if tasks_by_id else {},
         by_domain=_group_breakdown(results, scores, tasks_by_id, "domain") if tasks_by_id else {},
         p50_duration_s=percentile(duration_s, 0.5),

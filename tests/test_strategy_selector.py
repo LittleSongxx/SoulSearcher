@@ -45,14 +45,20 @@ def test_strategy_selector_selects_reflection_for_low_budget():
     brief = build_research_brief({"input": "Summarize local notes"}, {})
     decision = select_deepsearch_strategy(
         brief=brief,
-        config={"configurable": {"deepsearch_max_epochs": 2, "deepsearch_query_num": 2}},
+        config={
+            "configurable": {
+                "deepsearch_max_epochs": 2,
+                "deepsearch_query_num": 2,
+                "use_reflection_loop": True,
+            }
+        },
         settings=SimpleNamespace(deepsearch_mode="auto", tree_exploration_enabled=True),
     )
 
     assert decision.strategy == "reflection_loop"
 
 
-def test_strategy_selector_selects_hybrid_for_private_policy():
+def test_strategy_selector_uses_supervisor_workers_for_private_policy_by_default():
     brief = build_research_brief({"input": "q", "source_policy": "private-first"}, {})
     decision = select_deepsearch_strategy(
         brief=brief,
@@ -60,4 +66,15 @@ def test_strategy_selector_selects_hybrid_for_private_policy():
         settings=SimpleNamespace(deepsearch_mode="auto", tree_exploration_enabled=False),
     )
 
-    assert decision.strategy == "hybrid_private_web"
+    assert decision.strategy == "supervisor_workers"
+
+
+def test_strategy_selector_defaults_to_supervisor_workers_for_broad_queries():
+    brief = build_research_brief({"input": "broad market analysis"}, {})
+    decision = select_deepsearch_strategy(
+        brief=brief,
+        config={"configurable": {}},
+        settings=SimpleNamespace(deepsearch_mode="auto", tree_exploration_enabled=True),
+    )
+
+    assert decision.strategy == "supervisor_workers"

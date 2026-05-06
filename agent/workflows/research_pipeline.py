@@ -55,6 +55,10 @@ def build_supervisor_workers_pipeline_artifact(
     budget_artifact: Optional[dict[str, Any]] = None,
     loop_guard_artifact: Optional[dict[str, Any]] = None,
     context_budget_artifact: Optional[dict[str, Any]] = None,
+    stage_runtime_artifact: Optional[dict[str, Any]] = None,
+    source_quality: Optional[dict[str, Any]] = None,
+    browser_reader_plan: Optional[dict[str, Any]] = None,
+    brief_review: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     claim_ledger = list(claim_ledger or [])
     quality_summary = dict(quality_summary or {})
@@ -77,6 +81,7 @@ def build_supervisor_workers_pipeline_artifact(
                 "expected_field_count": len(
                     research_brief.get("expected_fields") or []
                 ),
+                "review_status": (brief_review or {}).get("status"),
             },
         ),
         ResearchPipelineStage(
@@ -138,6 +143,35 @@ def build_supervisor_workers_pipeline_artifact(
             },
         ),
     ]
+    if source_quality:
+        stages.insert(
+            4,
+            ResearchPipelineStage(
+                name="source_quality",
+                status="completed",
+                item_count=int(source_quality.get("source_count") or 0),
+                outputs={
+                    "source_diversity_score": source_quality.get("source_diversity_score"),
+                    "primary_source_ratio": source_quality.get("primary_source_ratio"),
+                    "low_value_source_ratio": source_quality.get("low_value_source_ratio"),
+                    "warning_count": len(source_quality.get("warnings") or []),
+                },
+            ),
+        )
+    if browser_reader_plan:
+        stages.insert(
+            5,
+            ResearchPipelineStage(
+                name="browser_reader_plan",
+                status="completed" if browser_reader_plan.get("enabled") else "skipped",
+                item_count=int(browser_reader_plan.get("action_count") or 0),
+                outputs={
+                    "mode": browser_reader_plan.get("mode"),
+                    "failure_count": browser_reader_plan.get("failure_count", 0),
+                    "action_count": browser_reader_plan.get("action_count", 0),
+                },
+            ),
+        )
 
     return {
         "schema_version": 1,
@@ -152,9 +186,13 @@ def build_supervisor_workers_pipeline_artifact(
                 "budget": budget_artifact,
                 "loop_guard": loop_guard_artifact,
                 "context_budget": context_budget_artifact,
+                "stage_runtime": stage_runtime_artifact,
             }.items()
             if value
         },
+        "source_quality": source_quality or {},
+        "browser_reader_plan": browser_reader_plan or {},
+        "brief_review": brief_review or {},
     }
 
 

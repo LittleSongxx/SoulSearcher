@@ -1,0 +1,118 @@
+# Weaver Unified YAML Configuration
+# Priority: env vars > TOML config > YAML config > defaults
+# Keys are flattened from sections into Settings fields.
+
+llm:
+  primary_model: ""
+  openai_base_url: ""
+  # openai_api_key: ""  # prefer env var OPENAI_API_KEY
+
+search:
+  search_engines: "tavily"
+  # tavily_api_key: ""  # prefer env var
+
+deepsearch:
+  deepsearch_strategy: supervisor_workers
+  deepsearch_mode: supervisor_workers
+  deepsearch_supervisor_rounds: 2
+  deepsearch_supervisor_max_workers: 4
+  deepsearch_supervisor_queries_per_worker: 2
+  deepsearch_supervisor_parallel_workers: 2
+  deepsearch_results_per_query: 5
+  deepsearch_max_seconds: 0
+  deepsearch_max_tokens: 0
+  deepsearch_max_research_units: 0
+  deepsearch_max_search_queries: 0
+  deepsearch_max_tool_calls_per_unit: 0
+  deepsearch_max_context_tokens: 0
+  deepsearch_max_compression_attempts: 0
+  deepsearch_max_reflection_rounds: 0
+  deepsearch_max_skills: 3
+  deepsearch_report_sources_limit: 20
+
+  # Loop guard
+  deepsearch_loop_warn_threshold: 3
+  deepsearch_loop_hard_limit: 5
+  deepsearch_loop_window_size: 20
+  deepsearch_loop_tool_freq_warn: 30
+  deepsearch_loop_tool_freq_hard_limit: 50
+
+  # Guardrails
+  deepsearch_guardrail_denied_tools: ""
+  deepsearch_guardrail_allowed_domains: ""
+
+  # Supervisor think step
+  deepsearch_supervisor_think_enabled: true
+
+  # Worker time budget
+  deepsearch_max_seconds_per_worker: 0.0
+  deepsearch_forced_intermediate_report_fraction: 0.4
+
+  # Compression
+  deepsearch_compression_citation_threshold: 0.8
+
+  # Evidence and verification
+  deepsearch_supervisor_fetch_passages: false
+  deepsearch_supervisor_fetch_source_limit: 8
+  deepsearch_passage_cap: 40
+  deepsearch_evidence_item_cap: 160
+  deepsearch_min_evidence_snippet_chars: 40
+  deepsearch_claim_verifier_use_passages: true
+  deepsearch_claim_verifier_min_overlap_tokens: 2
+  deepsearch_claim_verifier_max_evidence_per_claim: 3
+  deepsearch_claim_verifier_max_claims: 10
+  deepsearch_semantic_claim_verifier_enabled: false
+  deepsearch_semantic_claim_verifier_mode: "heuristic"
+  deepsearch_claim_grounding_gate_enabled: true
+  deepsearch_claim_grounding_max_passes: 3
+  deepsearch_citation_repair_enabled: true
+  deepsearch_citation_repair_min_coverage: 0.85
+  deepsearch_enable_claim_ledger: true
+  deepsearch_claim_ledger_max_claims: 24
+  deepsearch_final_verifier_revise: false
+  deepsearch_final_verifier_max_revisions: 1
+  deepsearch_source_curator_enabled: true
+  deepsearch_fact_card_cap: 80
+  deepsearch_fact_card_writer_cap: 40
+  deepsearch_fact_card_min_quote_chars: 40
+  deepsearch_prewrite_gap_followup_enabled: true
+  deepsearch_prewrite_gap_followup_queries: 2
+  deepsearch_quality_gate_min_source_diversity: 0.35
+  deepsearch_quality_gate_min_primary_source_ratio: 0.0
+  deepsearch_quality_gate_max_low_value_source_ratio: 0.5
+
+  # Sectioned report
+  deepsearch_sectioned_report: false
+  deepsearch_sectioned_report_requires_approval: false
+  deepsearch_sectioned_report_max_sections: 8
+  deepsearch_sectioned_report_adaptive: true
+  deepsearch_sectioned_report_adaptive_max_sections: 5
+  deepsearch_section_followups: 1
+  deepsearch_section_min_chars: 120
+  deepsearch_section_min_evidence: 1
+  deepsearch_section_results_cap: 6
+  deepsearch_section_evidence_cap: 8
+
+  # Research review and reader planning
+  deepsearch_brief_review_required: false
+  deepsearch_reader_plan_enabled: true
+  deepsearch_reader_plan_mode: "search_fetch_browser_hint"
+
+  # URL behavior
+  deepsearch_encourage_open_url: true
+
+  # Summary triggers
+  deepsearch_summary_trigger_tokens: 8000
+  deepsearch_summary_trigger_messages: 10
+  deepsearch_summary_keep_recent: 3
+
+  # Recursive depth
+  deepsearch_supervisor_max_depth: 1
+  deepsearch_supervisor_depth_confidence_threshold: 0.5
+
+agent:
+  # debug: false
+
+eval:
+  # Benchmark-specific settings can be overridden here
+  # deepsearch_supervisor_rounds: 3

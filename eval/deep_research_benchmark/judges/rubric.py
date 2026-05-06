@@ -7,6 +7,7 @@ from typing import Any
 REPORT_JUDGE_PROMPT_VERSION = "report-rubric-v1"
 CITATION_JUDGE_PROMPT_VERSION = "citation-v1"
 CLAIM_JUDGE_PROMPT_VERSION = "claim-support-v1"
+HALLUCINATION_JUDGE_PROMPT_VERSION = "hallucination-v1"
 
 
 REPORT_RUBRIC_PROMPT = """You are an expert evaluator for Deep Research reports.
@@ -91,6 +92,37 @@ Return:
   "unsupported_claim_rate": null,
   "claims": [
     {{"claim": "...", "status": "supported", "reason": "...", "source_urls": []}}
+  ]
+}}
+"""
+
+
+HALLUCINATION_JUDGE_PROMPT = """You are an expert hallucination detector for Deep Research reports.
+Identify claims in the report that are NOT supported by the provided evidence.
+Focus on these hallucination types:
+1. unsourced_assertion: factual claims with no supporting evidence
+2. fabricated_statistic: invented numbers, percentages, or data points
+3. wrong_attribution: claims attributed to wrong sources or entities
+4. temporal_error: incorrect dates, timelines, or chronological claims
+5. logical_overreach: conclusions that go beyond what the evidence supports
+
+Task:
+{task_json}
+
+Report:
+{report}
+
+Sources and evidence snippets:
+{evidence_json}
+
+Check at most 8 important factual claims in the report against the evidence.
+Return ONLY valid JSON:
+{{
+  "total_claims_checked": 0,
+  "hallucination_count": 0,
+  "hallucination_rate": null,
+  "hallucinations": [
+    {{"claim": "...", "type": "unsourced_assertion", "severity": "high", "reason": "...", "source_urls": []}}
   ]
 }}
 """

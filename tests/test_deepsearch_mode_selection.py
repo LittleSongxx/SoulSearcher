@@ -416,10 +416,12 @@ def test_deepsearch_node_skips_wrapper_events_when_runner_marks_emitted(monkeypa
 
 
 def test_run_deepsearch_auto_sets_events_emitted_marker(monkeypatch):
-    def fake_linear(state, config):
-        return {"mode": "linear"}
+    def fake_supervisor(state, config):
+        return {"mode": "supervisor_workers"}
 
-    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
+    monkeypatch.setattr(
+        deepsearch_optimized, "run_deepsearch_supervisor_workers", fake_supervisor
+    )
     monkeypatch.setattr(
         deepsearch_optimized.settings, "tree_exploration_enabled", False
     )
@@ -523,10 +525,12 @@ def test_deepsearch_node_dedupes_preview_urls_with_case_insensitive_host(monkeyp
 
 
 def test_run_deepsearch_auto_does_not_mark_cancelled_result(monkeypatch):
-    def fake_linear(state, config):
+    def fake_supervisor(state, config):
         return {"is_cancelled": True, "final_report": "cancelled"}
 
-    monkeypatch.setattr(deepsearch_optimized, "run_deepsearch_optimized", fake_linear)
+    monkeypatch.setattr(
+        deepsearch_optimized, "run_deepsearch_supervisor_workers", fake_supervisor
+    )
     monkeypatch.setattr(
         deepsearch_optimized.settings, "tree_exploration_enabled", False
     )

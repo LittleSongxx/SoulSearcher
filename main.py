@@ -949,6 +949,13 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "deepsearch_results_per_query",
     "deepsearch_max_seconds",
     "deepsearch_max_tokens",
+    "deepsearch_max_research_units",
+    "deepsearch_max_search_queries",
+    "deepsearch_max_tool_calls_per_unit",
+    "deepsearch_max_context_tokens",
+    "deepsearch_max_compression_attempts",
+    "deepsearch_max_reflection_rounds",
+    "deepsearch_max_skills",
     "deepsearch_reflection_loops",
     "deepsearch_tree_max_searches",
     "deepsearch_supervisor_rounds",
@@ -966,8 +973,12 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "deepsearch_min_evidence_snippet_chars",
     "deepsearch_enable_claim_ledger",
     "deepsearch_claim_ledger_max_claims",
+    "deepsearch_claim_verifier_use_passages",
+    "deepsearch_claim_verifier_min_overlap_tokens",
+    "deepsearch_claim_verifier_max_evidence_per_claim",
     "deepsearch_claim_verifier_max_claims",
     "deepsearch_claim_grounding_gate_enabled",
+    "deepsearch_claim_grounding_max_passes",
     "deepsearch_final_verifier_revise",
     "deepsearch_final_verifier_max_revisions",
     "deepsearch_citation_repair_enabled",
@@ -1037,14 +1048,53 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "mcp_requires_auth",
     "mcp_tools_to_include",
     "mcp_tool_whitelist",
+    "mcp_max_tools",
     "use_rag",
     "use_reflection_loop",
+    "deepsearch_loop_max_repeated_query",
+    "deepsearch_loop_max_repeated_url",
+    "deepsearch_loop_max_repeated_tool_call",
+    "deepsearch_loop_max_empty_result_streak",
+    "deepsearch_loop_warn_threshold",
+    "deepsearch_loop_hard_limit",
+    "deepsearch_loop_window_size",
+    "deepsearch_loop_tool_freq_warn",
+    "deepsearch_loop_tool_freq_hard_limit",
+    "deepsearch_guardrail_denied_tools",
+    "deepsearch_guardrail_allowed_domains",
+    "deepsearch_semantic_claim_verifier_enabled",
+    "deepsearch_semantic_claim_verifier_mode",
+    "semantic_claim_verifier_enabled",
+    "semantic_claim_verifier_mode",
+    "semantic_claim_verifier_results",
+    "deepsearch_semantic_claim_verifier_results",
+    "deepsearch_reader_plan_enabled",
+    "deepsearch_reader_plan_mode",
+    "deepsearch_brief_review_required",
+    "research_brief_review_required",
+    "deepsearch_quality_gate_min_source_diversity",
+    "deepsearch_quality_gate_min_primary_source_ratio",
+    "deepsearch_quality_gate_max_low_value_source_ratio",
+    "deepsearch_supervisor_think_enabled",
+    "deepsearch_max_seconds_per_worker",
+    "deepsearch_forced_intermediate_report_fraction",
+    "deepsearch_compression_citation_threshold",
+    "deepsearch_encourage_open_url",
+    "deepsearch_summary_trigger_tokens",
+    "deepsearch_summary_trigger_messages",
+    "deepsearch_summary_keep_recent",
+    "deepsearch_supervisor_max_depth",
+    "deepsearch_supervisor_depth_confidence_threshold",
 }
 
 
 _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
     "deepsearch_sectioned_report_review",
     "sectioned_report_review",
+    "deepsearch_brief_review",
+    "research_brief_review",
+    "semantic_claim_verifier_results",
+    "deepsearch_semantic_claim_verifier_results",
     "source_routing",
     "mcp_results",
 }
@@ -3716,6 +3766,14 @@ class EvidenceResponse(BaseModel):
     continue_requests: list[dict[str, Any]] = []
     fetched_pages: list[FetchedPageItem] = []
     passages: list[EvidencePassageItem] = []
+    research_pipeline: dict[str, Any] = {}
+    stage_runtime: dict[str, Any] = {}
+    source_quality: dict[str, Any] = {}
+    browser_reader_plan: dict[str, Any] = {}
+    worker_orchestration: dict[str, Any] = {}
+    branch_diagnostics: dict[str, Any] = {}
+    brief_review: dict[str, Any] = {}
+    fallback: dict[str, Any] = {}
 
 
 @app.get("/api/sessions", response_model=SessionsListResponse)
@@ -3892,6 +3950,14 @@ async def get_session_evidence(thread_id: str, request: Request):
         continue_requests = artifacts.get("continue_requests", [])
         fetched_pages = artifacts.get("fetched_pages", [])
         passages = artifacts.get("passages", [])
+        research_pipeline = artifacts.get("research_pipeline", {})
+        stage_runtime = artifacts.get("stage_runtime", {})
+        source_quality = artifacts.get("source_quality", {})
+        browser_reader_plan = artifacts.get("browser_reader_plan", {})
+        worker_orchestration = artifacts.get("worker_orchestration", {})
+        branch_diagnostics = artifacts.get("branch_diagnostics", {})
+        brief_review = artifacts.get("brief_review", {})
+        fallback = artifacts.get("fallback", {})
         evidence_store = build_evidence_store_snapshot(
             thread_id=thread_id,
             artifacts=artifacts,
@@ -3971,6 +4037,22 @@ async def get_session_evidence(thread_id: str, request: Request):
                 if isinstance(passages, list)
                 else evidence_patch.get("passages", [])
             ),
+            "research_pipeline": (
+                research_pipeline if isinstance(research_pipeline, dict) else {}
+            ),
+            "stage_runtime": stage_runtime if isinstance(stage_runtime, dict) else {},
+            "source_quality": source_quality if isinstance(source_quality, dict) else {},
+            "browser_reader_plan": (
+                browser_reader_plan if isinstance(browser_reader_plan, dict) else {}
+            ),
+            "worker_orchestration": (
+                worker_orchestration if isinstance(worker_orchestration, dict) else {}
+            ),
+            "branch_diagnostics": (
+                branch_diagnostics if isinstance(branch_diagnostics, dict) else {}
+            ),
+            "brief_review": brief_review if isinstance(brief_review, dict) else {},
+            "fallback": fallback if isinstance(fallback, dict) else {},
         }
 
     except HTTPException:

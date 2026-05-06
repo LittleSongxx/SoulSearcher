@@ -106,8 +106,8 @@ def test_cors_origins_list_does_not_auto_expand_in_prod():
         ("supervisor_workers", "supervisor_workers"),
         ("TREE", "tree"),
         (" Linear ", "linear"),
-        ("", "auto"),
-        ("unknown", "auto"),
+        ("", "supervisor_workers"),
+        ("unknown", "supervisor_workers"),
     ],
 )
 def test_deepsearch_mode_normalizes_to_supported_values(raw, expected):

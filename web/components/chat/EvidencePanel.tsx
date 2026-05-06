@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, ExternalLink, RefreshCw, Search } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ExternalLink, GitBranch, Layers, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { fetchResearchEvidence } from '@/lib/researchApiClient'
@@ -56,6 +56,16 @@ function collectQualityGaps(data: EvidenceResponse | null): string[] {
   return gaps
 }
 
+function hasObject(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as Record<string, any>).length > 0
+}
+
+function percent(value: unknown) {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return '—'
+  return `${Math.round(num * 100)}%`
+}
+
 export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelProps) {
   const [data, setData] = useState<EvidenceResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -88,6 +98,13 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
   const passages = useMemo(() => data?.passages || [], [data])
   const gaps = useMemo(() => collectQualityGaps(data), [data])
   const quality = data?.quality_summary || {}
+  const pipeline = data?.research_pipeline || {}
+  const sourceQuality = data?.source_quality || {}
+  const readerPlan = data?.browser_reader_plan || {}
+  const orchestration = data?.worker_orchestration || {}
+  const branchDiagnostics = data?.branch_diagnostics || {}
+  const briefReview = data?.brief_review || {}
+  const fallback = data?.fallback || {}
 
   if (!threadId) {
     return (
@@ -153,6 +170,60 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
                 ))}
               </CardContent>
             </Card>
+          )}
+
+          {(hasObject(pipeline) || hasObject(sourceQuality) || hasObject(readerPlan) || hasObject(orchestration) || hasObject(branchDiagnostics) || hasObject(briefReview) || hasObject(fallback)) && (
+            <Section title="Research Runtime">
+              {hasObject(fallback) && (
+                <RuntimeCard icon={<AlertCircle className="h-3.5 w-3.5" />} title="Strategy fallback" tone="warning">
+                  <RuntimeRow label="from" value={fallback.source_strategy} />
+                  <RuntimeRow label="to" value={fallback.fallback_strategy} />
+                  <RuntimeRow label="reason" value={fallback.reason} />
+                </RuntimeCard>
+              )}
+              {hasObject(briefReview) && (
+                <RuntimeCard icon={<ShieldCheck className="h-3.5 w-3.5" />} title="ResearchBrief Review">
+                  <RuntimeRow label="status" value={briefReview.status} />
+                  <RuntimeRow label="approval" value={briefReview.approval_required ? 'required' : 'not required'} />
+                  <RuntimeRow label="next" value={briefReview.next_action} />
+                </RuntimeCard>
+              )}
+              {hasObject(pipeline) && (
+                <RuntimeCard icon={<GitBranch className="h-3.5 w-3.5" />} title="Pipeline">
+                  <RuntimeRow label="stages" value={pipeline.stage_count} />
+                  <RuntimeRow label="research units" value={Array.isArray(pipeline.research_units) ? pipeline.research_units.length : 0} />
+                  <RuntimeRow label="findings" value={Array.isArray(pipeline.sub_research_findings) ? pipeline.sub_research_findings.length : 0} />
+                </RuntimeCard>
+              )}
+              {hasObject(orchestration) && (
+                <RuntimeCard icon={<Users className="h-3.5 w-3.5" />} title="Worker Orchestration">
+                  <RuntimeRow label="dispatch" value={orchestration.dispatch_model} />
+                  <RuntimeRow label="workers" value={orchestration.worker_count} />
+                  <RuntimeRow label="partial results" value={orchestration.partial_result_count} />
+                </RuntimeCard>
+              )}
+              {hasObject(branchDiagnostics) && (
+                <RuntimeCard icon={<GitBranch className="h-3.5 w-3.5" />} title="Branch Diagnostics">
+                  <RuntimeRow label="branches" value={branchDiagnostics.branch_count} />
+                  <RuntimeRow label="duplicate focus" value={branchDiagnostics.duplicate_focus_count} />
+                  <RuntimeRow label="conflict hints" value={branchDiagnostics.conflict_hint_count} />
+                </RuntimeCard>
+              )}
+              {hasObject(sourceQuality) && (
+                <RuntimeCard icon={<ShieldCheck className="h-3.5 w-3.5" />} title="Source Quality">
+                  <RuntimeRow label="diversity" value={percent(sourceQuality.source_diversity_score)} />
+                  <RuntimeRow label="primary ratio" value={percent(sourceQuality.primary_source_ratio)} />
+                  <RuntimeRow label="low-value ratio" value={percent(sourceQuality.low_value_source_ratio)} />
+                </RuntimeCard>
+              )}
+              {hasObject(readerPlan) && (
+                <RuntimeCard icon={<Layers className="h-3.5 w-3.5" />} title="Reader Plan">
+                  <RuntimeRow label="mode" value={readerPlan.mode} />
+                  <RuntimeRow label="actions" value={readerPlan.action_count} />
+                  <RuntimeRow label="fetch failures" value={readerPlan.failure_count} />
+                </RuntimeCard>
+              )}
+            </Section>
           )}
 
           {gaps.length > 0 && (
@@ -231,6 +302,28 @@ function Section({ title, children }: { title: string, children: React.ReactNode
     <div className="space-y-2">
       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
       <div className="space-y-2">{children}</div>
+    </div>
+  )
+}
+
+function RuntimeCard({ icon, title, tone, children }: { icon: React.ReactNode, title: string, tone?: 'warning', children: React.ReactNode }) {
+  return (
+    <div className={`rounded-lg border p-3 text-xs ${tone === 'warning' ? 'border-amber-500/30 bg-amber-500/10' : 'bg-muted/30'}`}>
+      <div className="mb-2 flex items-center gap-2 font-medium">
+        {icon}
+        <span>{title}</span>
+      </div>
+      <div className="space-y-1 text-muted-foreground">{children}</div>
+    </div>
+  )
+}
+
+function RuntimeRow({ label, value }: { label: string, value: unknown }) {
+  if (value === undefined || value === null || value === '') return null
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="shrink-0">{label}</span>
+      <span className="truncate text-right font-medium text-foreground">{String(value)}</span>
     </div>
   )
 }

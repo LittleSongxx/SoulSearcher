@@ -1058,8 +1058,8 @@ Made by the Weaver Team
 
 ```bash
 # Deep mode selection
-DEEPSEARCH_MODE=auto                     # auto|tree|linear
-TREE_EXPLORATION_ENABLED=true
+DEEPSEARCH_MODE=supervisor_workers      # supervisor_workers|auto|tree|linear|reflection_loop
+TREE_EXPLORATION_ENABLED=true           # tree remains available only by explicit mode/strategy
 
 # Budget guards
 DEEPSEARCH_MAX_SECONDS=0                 # 0 = disabled
@@ -1085,7 +1085,7 @@ CITATION_GATE_MIN_COVERAGE=0.6
 ```bash
 python scripts/benchmark_deep_research.py \
   --max-cases 3 \
-  --mode auto \
+  --mode supervisor_workers \
   --output /tmp/bench.json
 ```
 
@@ -1097,7 +1097,7 @@ python scripts/benchmark_deep_research.py \
 
 - Unstable deep research flow:
   - set `DEEPSEARCH_MODE=linear`
-  - disable tree default with `TREE_EXPLORATION_ENABLED=false`
+  - or explicitly set `DEEPSEARCH_MODE=tree` for the legacy tree runner
 - Stale results:
   - enable freshness ranking
   - reduce `SEARCH_FRESHNESS_HALF_LIFE_DAYS`
