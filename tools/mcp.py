@@ -6,6 +6,7 @@ from langchain.tools import BaseTool
 
 from common.config import settings
 from tools.core.mcp_clients import MCPClients
+from tools.core.mcp_policy import build_mcp_tool_policy, filter_mcp_tools
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +26,20 @@ def _parse_servers(servers: Any) -> dict[str, Any]:
 async def init_mcp_tools(
     servers_override: Optional[dict[str, Any]] = None,
     enabled: Optional[bool] = None,
+    policy_config: Optional[dict[str, Any]] = None,
 ) -> list[BaseTool]:
     """
     Initialize MCP tools with evented proxy tools.
     """
     global _CLIENTS
-    servers_cfg = servers_override if servers_override is not None else settings.mcp_servers
+    servers_cfg = (
+        servers_override if servers_override is not None else settings.mcp_servers
+    )
     servers: dict[str, Any] = _parse_servers(servers_cfg)
+    policy = build_mcp_tool_policy(policy_config or {})
     use_mcp = enabled if enabled is not None else settings.enable_mcp
 
-    if not use_mcp or not servers:
+    if policy.disabled or not use_mcp or not servers:
         logger.info("MCP disabled or no servers configured.")
         _CLIENTS = None
         return []
@@ -49,19 +54,26 @@ async def init_mcp_tools(
     for server_id, cfg in server_items:
         try:
             if not isinstance(cfg, dict):
-                logger.warning(f"Invalid MCP server config for {server_id}; expected object.")
+                logger.warning(
+                    f"Invalid MCP server config for {server_id}; expected object."
+                )
                 continue
             if cfg.get("type") == "sse":
                 await clients.connect_sse(cfg.get("url"), server_id)
             elif cfg.get("type") == "stdio":
-                await clients.connect_stdio(cfg.get("command"), cfg.get("args", []), server_id)
+                await clients.connect_stdio(
+                    cfg.get("command"), cfg.get("args", []), server_id
+                )
             else:
                 logger.warning(f"Unknown MCP server type for {server_id}")
         except Exception as e:
             logger.error(f"MCP connect failed for {server_id}: {e}")
 
     _CLIENTS = clients
-    logger.info(f"Loaded {len(clients.tools)} MCP tools from {len(server_items)} servers")
+    clients.tools = filter_mcp_tools(clients.tools, policy)
+    logger.info(
+        f"Loaded {len(clients.tools)} MCP tools from {len(server_items)} servers"
+    )
     return clients.tools
 
 

@@ -35,6 +35,16 @@ class WorkerRun:
     result_count: int = 0
     evidence_count: int = 0
     summary: str = ""
+    raw_notes: list[str] = field(default_factory=list)
+    compressed_research: str = ""
+    learnings: list[str] = field(default_factory=list)
+    follow_up_questions: list[str] = field(default_factory=list)
+    citations: list[str] = field(default_factory=list)
+    sources: list[dict[str, Any]] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    confidence: float = 0.0
+    budget_snapshot: dict[str, Any] = field(default_factory=dict)
+    gaps: list[str] = field(default_factory=list)
     provider_breakdown: dict[str, int] = field(default_factory=dict)
     status: str = "completed"
     started_at: str = ""
@@ -42,7 +52,11 @@ class WorkerRun:
     errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if value not in (None, "", [], {})
+        }
 
 
 @dataclass
@@ -56,7 +70,11 @@ class SupervisorDecision:
     quality_snapshot: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if value not in (None, "", [], {})
+        }
 
 
 def _stable_id(prefix: str, *parts: Any) -> str:
@@ -85,7 +103,9 @@ def _provider_breakdown(results: list[dict[str, Any]]) -> dict[str, int]:
     for result in results or []:
         if not isinstance(result, dict):
             continue
-        provider = _text(result.get("provider") or result.get("source_type") or "unknown")
+        provider = _text(
+            result.get("provider") or result.get("source_type") or "unknown"
+        )
         counts[provider] = counts.get(provider, 0) + 1
     return counts
 
@@ -93,17 +113,38 @@ def _provider_breakdown(results: list[dict[str, Any]]) -> dict[str, int]:
 def _role_candidates(brief: ResearchBrief) -> list[str]:
     roles: list[str] = []
     constraints = brief.constraints if isinstance(brief.constraints, dict) else {}
-    source_constraints = constraints.get("source_constraints") if isinstance(constraints.get("source_constraints"), dict) else {}
-    judge_rubric = constraints.get("judge_rubric") if isinstance(constraints.get("judge_rubric"), dict) else {}
+    source_constraints = (
+        constraints.get("source_constraints")
+        if isinstance(constraints.get("source_constraints"), dict)
+        else {}
+    )
+    judge_rubric = (
+        constraints.get("judge_rubric")
+        if isinstance(constraints.get("judge_rubric"), dict)
+        else {}
+    )
     if source_constraints or brief.preferred_sources:
         roles.append("source_triage")
-    if bool(judge_rubric.get("requires_citations_for_claims")) or bool(brief.expected_fields):
+    if bool(judge_rubric.get("requires_citations_for_claims")) or bool(
+        brief.expected_fields
+    ):
         roles.append("claim_verification")
-    if brief.freshness_requirement and brief.freshness_requirement not in {"", "not_required"}:
+    if brief.freshness_requirement and brief.freshness_requirement not in {
+        "",
+        "not_required",
+    }:
         roles.append("freshness")
-    if any("timeline" in _text(field).lower() or "时间线" in _text(field) for field in brief.expected_fields or []):
+    if any(
+        "timeline" in _text(field).lower() or "时间线" in _text(field)
+        for field in brief.expected_fields or []
+    ):
         roles.append("timeline")
-    if any("comparison" in _text(field).lower() or "比较" in _text(field) or "对比" in _text(field) for field in brief.expected_fields or []):
+    if any(
+        "comparison" in _text(field).lower()
+        or "比较" in _text(field)
+        or "对比" in _text(field)
+        for field in brief.expected_fields or []
+    ):
         roles.append("comparison_table")
     return roles
 
@@ -172,8 +213,17 @@ def build_worker_run(
     summary: str,
     errors: Optional[list[str]] = None,
     started_at: str = "",
+    raw_notes: Optional[list[str]] = None,
+    tool_calls: Optional[list[dict[str, Any]]] = None,
+    budget_snapshot: Optional[dict[str, Any]] = None,
+    gaps: Optional[list[str]] = None,
 ) -> WorkerRun:
     completed_at = datetime.now(UTC).isoformat()
+    citations = _citations_from_results(results or [], evidence_items or [])
+    sources = _sources_from_results(results or [], evidence_items or [])
+    compressed_research = summary or ""
+    learnings = _learnings_from_summary(summary)
+    follow_up_questions = _unique(task.queries or [])[:5]
     return WorkerRun(
         worker_id=task.worker_id,
         context_id=task.context_id,
@@ -184,12 +234,157 @@ def build_worker_run(
         result_count=len(results or []),
         evidence_count=len(evidence_items or []),
         summary=summary or "",
+        raw_notes=list(raw_notes or _raw_notes_from_results(results or [])),
+        compressed_research=compressed_research,
+        learnings=learnings,
+        follow_up_questions=follow_up_questions,
+        citations=citations,
+        sources=sources,
+        tool_calls=list(tool_calls or _tool_calls_from_queries(task.queries or [])),
+        confidence=_worker_confidence(results or [], evidence_items or [], citations),
+        budget_snapshot=dict(budget_snapshot or {}),
+        gaps=list(gaps or []),
         provider_breakdown=_provider_breakdown(results or []),
         status="failed" if errors else "completed",
         started_at=started_at,
         completed_at=completed_at,
         errors=list(errors or []),
     )
+
+
+def _raw_notes_from_results(results: list[dict[str, Any]]) -> list[str]:
+    notes: list[str] = []
+    for result in results[:8]:
+        if not isinstance(result, dict):
+            continue
+        title = _text(result.get("title") or result.get("name"))
+        snippet = _text(
+            result.get("snippet") or result.get("content") or result.get("body")
+        )
+        url = _text(result.get("url") or result.get("href"))
+        note = " | ".join(part for part in (title, snippet[:500], url) if part)
+        if note:
+            notes.append(note)
+    return notes
+
+
+def _tool_calls_from_queries(queries: list[str]) -> list[dict[str, Any]]:
+    return [
+        {"tool": "evidence_provider_search", "query": query}
+        for query in _unique(queries or [])
+    ]
+
+
+def _citations_from_results(
+    results: list[dict[str, Any]], evidence_items: list[dict[str, Any]]
+) -> list[str]:
+    citations: list[str] = []
+    for result in results or []:
+        if not isinstance(result, dict):
+            continue
+        citation = _text(
+            result.get("citation_id")
+            or result.get("url")
+            or result.get("href")
+            or result.get("document_id")
+        )
+        if citation:
+            citations.append(citation)
+    for item in evidence_items or []:
+        if not isinstance(item, dict):
+            continue
+        citation = _text(
+            item.get("citation_id")
+            or item.get("url")
+            or item.get("source_url")
+            or item.get("document_id")
+            or item.get("id")
+        )
+        if citation:
+            citations.append(citation)
+    return _unique(citations)[:20]
+
+
+def _sources_from_results(
+    results: list[dict[str, Any]], evidence_items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    seen = set()
+    for result in results or []:
+        if not isinstance(result, dict):
+            continue
+        key = _text(
+            result.get("url")
+            or result.get("href")
+            or result.get("document_id")
+            or result.get("title")
+        )
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        sources.append(
+            _compact_source(
+                title=result.get("title") or result.get("name"),
+                url=result.get("url") or result.get("href"),
+                document_id=result.get("document_id") or result.get("id"),
+                provider=result.get("provider") or result.get("source_type"),
+                citation_id=result.get("citation_id"),
+            )
+        )
+    for item in evidence_items or []:
+        if not isinstance(item, dict):
+            continue
+        key = _text(
+            item.get("url")
+            or item.get("source_url")
+            or item.get("document_id")
+            or item.get("id")
+        )
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        sources.append(
+            _compact_source(
+                title=item.get("title"),
+                url=item.get("url") or item.get("source_url"),
+                document_id=item.get("document_id") or item.get("id"),
+                provider=item.get("provider") or item.get("source_type"),
+                citation_id=item.get("citation_id"),
+            )
+        )
+    return sources[:20]
+
+
+def _compact_source(**values: Any) -> dict[str, Any]:
+    return {
+        key: value for key, value in values.items() if value not in (None, "", [], {})
+    }
+
+
+def _learnings_from_summary(summary: str) -> list[str]:
+    text = _text(summary)
+    if not text:
+        return []
+    candidates = []
+    for line in text.splitlines():
+        stripped = line.strip(" -•\t")
+        if len(stripped) >= 20:
+            candidates.append(stripped)
+    if not candidates:
+        candidates = [text[:500]]
+    return _unique(candidates)[:6]
+
+
+def _worker_confidence(
+    results: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
+    citations: list[str],
+) -> float:
+    score = 0.25
+    score += min(0.3, len(results or []) * 0.03)
+    score += min(0.25, len(evidence_items or []) * 0.05)
+    score += min(0.2, len(citations or []) * 0.03)
+    return round(max(0.0, min(1.0, score)), 3)
 
 
 def decide_supervisor_next_step(
@@ -215,7 +410,11 @@ def decide_supervisor_next_step(
             if text:
                 missing_topics.append(text)
     missing_topics = _unique(missing_topics)
-    total_results = sum(int(run.get("result_count") or 0) for run in worker_runs or [] if isinstance(run, dict))
+    total_results = sum(
+        int(run.get("result_count") or 0)
+        for run in worker_runs or []
+        if isinstance(run, dict)
+    )
     quality_snapshot = {
         "query_coverage_score": diagnostics.get("query_coverage_score"),
         "freshness_warning": diagnostics.get("freshness_warning"),
@@ -309,7 +508,12 @@ def build_intermediate_steps(
             continue
         steps.append(
             {
-                "id": _stable_id("step", "supervisor", decision.get("round_index"), decision.get("action")),
+                "id": _stable_id(
+                    "step",
+                    "supervisor",
+                    decision.get("round_index"),
+                    decision.get("action"),
+                ),
                 "type": "supervisor_decision",
                 "round_index": decision.get("round_index"),
                 "title": decision.get("action"),

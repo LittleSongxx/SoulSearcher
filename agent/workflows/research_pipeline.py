@@ -52,6 +52,9 @@ def build_supervisor_workers_pipeline_artifact(
     claim_ledger: Optional[list[dict[str, Any]]] = None,
     quality_summary: Optional[dict[str, Any]] = None,
     final_report: str = "",
+    budget_artifact: Optional[dict[str, Any]] = None,
+    loop_guard_artifact: Optional[dict[str, Any]] = None,
+    context_budget_artifact: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     claim_ledger = list(claim_ledger or [])
     quality_summary = dict(quality_summary or {})
@@ -61,6 +64,7 @@ def build_supervisor_workers_pipeline_artifact(
     failed_subtasks = int(runtime_status_counts.get("failed") or 0)
     compressed_research = _compressed_research_from_worker_runs(worker_runs)
     sub_research_findings = build_sub_research_findings(worker_runs)
+    research_units = _research_units_from_worker_runs(worker_runs)
 
     stages = [
         ResearchPipelineStage(
@@ -95,6 +99,7 @@ def build_supervisor_workers_pipeline_artifact(
                 "status_counts": runtime_status_counts,
                 "worker_run_count": len(worker_runs or []),
                 "evidence_item_count": len(evidence_items or []),
+                "research_unit_count": len(research_units),
             },
         ),
         ResearchPipelineStage(
@@ -139,7 +144,17 @@ def build_supervisor_workers_pipeline_artifact(
         "mode": "supervisor_workers",
         "stage_count": len(stages),
         "stages": [stage.to_dict() for stage in stages],
+        "research_units": research_units,
         "sub_research_findings": [item.to_dict() for item in sub_research_findings],
+        "runtime_controls": {
+            key: value
+            for key, value in {
+                "budget": budget_artifact,
+                "loop_guard": loop_guard_artifact,
+                "context_budget": context_budget_artifact,
+            }.items()
+            if value
+        },
     }
 
 
@@ -162,7 +177,9 @@ def _compressed_research_from_worker_runs(
 ) -> list[dict[str, Any]]:
     compressed: list[dict[str, Any]] = []
     for run in worker_runs or []:
-        summary = str(run.get("summary") or "").strip()
+        summary = str(
+            run.get("compressed_research") or run.get("summary") or ""
+        ).strip()
         if not summary:
             continue
         compressed.append(
@@ -172,9 +189,47 @@ def _compressed_research_from_worker_runs(
                 "round_index": run.get("round_index"),
                 "focus": run.get("focus"),
                 "summary": summary,
+                "learnings": run.get("learnings") or [],
+                "citations": run.get("citations") or [],
             }
         )
     return compressed
+
+
+def _research_units_from_worker_runs(
+    worker_runs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    units: list[dict[str, Any]] = []
+    for run in worker_runs or []:
+        if not isinstance(run, dict):
+            continue
+        units.append(
+            {
+                key: value
+                for key, value in {
+                    "worker_id": run.get("worker_id"),
+                    "context_id": run.get("context_id"),
+                    "round_index": run.get("round_index"),
+                    "topic": run.get("topic"),
+                    "focus": run.get("focus"),
+                    "queries": run.get("queries") or [],
+                    "raw_notes": run.get("raw_notes") or [],
+                    "compressed_research": run.get("compressed_research")
+                    or run.get("summary"),
+                    "learnings": run.get("learnings") or [],
+                    "follow_up_questions": run.get("follow_up_questions") or [],
+                    "citations": run.get("citations") or [],
+                    "sources": run.get("sources") or [],
+                    "tool_calls": run.get("tool_calls") or [],
+                    "confidence": run.get("confidence"),
+                    "budget_snapshot": run.get("budget_snapshot") or {},
+                    "gaps": run.get("gaps") or [],
+                    "status": run.get("status", "completed"),
+                }.items()
+                if value not in (None, "", [], {})
+            }
+        )
+    return units
 
 
 def build_sub_research_findings(
@@ -182,7 +237,9 @@ def build_sub_research_findings(
 ) -> list[SubResearchFinding]:
     findings: list[SubResearchFinding] = []
     for run in worker_runs or []:
-        summary = str(run.get("summary") or "").strip()
+        summary = str(
+            run.get("compressed_research") or run.get("summary") or ""
+        ).strip()
         topic = str(run.get("topic") or run.get("focus") or "").strip()
         if not summary and not topic:
             continue

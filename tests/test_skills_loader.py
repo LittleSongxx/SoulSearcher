@@ -9,7 +9,9 @@ if str(ROOT) not in sys.path:
 from common import skills_loader
 
 
-def _write_skill(path: Path, frontmatter: str, body: str = '# Role\n\nYou are a skill.') -> None:
+def _write_skill(
+    path: Path, frontmatter: str, body: str = "# Role\n\nYou are a skill."
+) -> None:
     path.write_text(
         f"---\n{textwrap.dedent(frontmatter).strip()}\n---\n\n{textwrap.dedent(body).strip()}\n",
         encoding="utf-8",
@@ -66,7 +68,10 @@ def test_validate_skills_parses_contracts_and_reports_invalid_manifest(tmp_path)
     assert snapshot.total_files == 2
     assert snapshot.valid_count == 1
     assert snapshot.invalid_count == 1
-    assert any("unknown tool 'definitely_unknown_tool'" in issue.message for issue in snapshot.issues)
+    assert any(
+        "unknown tool 'definitely_unknown_tool'" in issue.message
+        for issue in snapshot.issues
+    )
 
     valid_skill = next(skill for skill in snapshot.skills if skill.id == "valid-skill")
     assert valid_skill.is_valid is True
@@ -74,7 +79,6 @@ def test_validate_skills_parses_contracts_and_reports_invalid_manifest(tmp_path)
     assert valid_skill.output_contract[0].name == "answer"
     assert valid_skill.to_enabled_tools()["python"] is True
     assert valid_skill.to_enabled_tools()["web_search"] is False
-
 
 
 def test_validate_skills_reports_duplicate_ids(tmp_path):
@@ -104,8 +108,10 @@ def test_validate_skills_reports_duplicate_ids(tmp_path):
 
     assert snapshot.valid_count == 0
     assert snapshot.invalid_count == 2
-    assert any("duplicate skill id 'duplicate-skill'" in issue.message for issue in snapshot.issues)
-
+    assert any(
+        "duplicate skill id 'duplicate-skill'" in issue.message
+        for issue in snapshot.issues
+    )
 
 
 def test_update_skill_status_persists_override(tmp_path, monkeypatch):
@@ -144,11 +150,51 @@ def test_update_skill_status_persists_override(tmp_path, monkeypatch):
 
     skills_loader.reload_skill_registry()
     disabled_snapshot = skills_loader.update_skill_status("toggle-skill", "disabled")
-    disabled_skill = next(skill for skill in disabled_snapshot.skills if skill.id == "toggle-skill")
+    disabled_skill = next(
+        skill for skill in disabled_snapshot.skills if skill.id == "toggle-skill"
+    )
     assert disabled_skill.status == "disabled"
     assert skills_loader.load_all_skills(use_cache=False) == []
 
     enabled_snapshot = skills_loader.update_skill_status("toggle-skill", "enabled")
-    enabled_skill = next(skill for skill in enabled_snapshot.skills if skill.id == "toggle-skill")
+    enabled_skill = next(
+        skill for skill in enabled_snapshot.skills if skill.id == "toggle-skill"
+    )
     assert enabled_skill.status == "enabled"
-    assert [skill.id for skill in skills_loader.load_all_skills(use_cache=False)] == ["toggle-skill"]
+    assert [skill.id for skill in skills_loader.load_all_skills(use_cache=False)] == [
+        "toggle-skill"
+    ]
+
+
+def test_validate_skills_discovers_directory_skill_md(tmp_path):
+    skills_dir = tmp_path / "skills"
+    nested_dir = skills_dir / "deep-research"
+    nested_dir.mkdir(parents=True)
+
+    _write_skill(
+        nested_dir / "SKILL.md",
+        """
+        id: deep-research-skill
+        name: Deep Research Skill
+        description: A directory based research skill
+        category: research
+        mode: deep
+        tools:
+          - web_search
+        permissions:
+          network: true
+          filesystem: read
+          shell: false
+          browser: false
+          sandbox: false
+          external_apis: false
+        tags:
+          - research
+        """,
+    )
+
+    snapshot = skills_loader.validate_skills(skills_dir)
+
+    assert snapshot.total_files == 1
+    assert snapshot.valid_count == 1
+    assert snapshot.skills[0].id == "deep-research-skill"

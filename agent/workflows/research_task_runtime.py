@@ -48,11 +48,22 @@ class ResearchSubtaskRun:
     evidence_count: int = 0
     raw_notes: list[str] = field(default_factory=list)
     compressed_summary: str = ""
+    learnings: list[str] = field(default_factory=list)
+    follow_up_questions: list[str] = field(default_factory=list)
+    citations: list[str] = field(default_factory=list)
+    sources: list[dict[str, Any]] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    budget_snapshot: dict[str, Any] = field(default_factory=dict)
+    gaps: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if value not in (None, "", [], {})
+        }
 
 
 class ResearchTaskRuntime:
@@ -62,10 +73,14 @@ class ResearchTaskRuntime:
         self._subtasks: dict[str, ResearchSubtaskRun] = {}
         self._events: list[dict[str, Any]] = []
 
-    def register_tasks(self, tasks: Iterable[Any], *, metadata: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
+    def register_tasks(
+        self, tasks: Iterable[Any], *, metadata: Optional[dict[str, Any]] = None
+    ) -> list[dict[str, Any]]:
         return [self.register_task(task, metadata=metadata) for task in tasks]
 
-    def register_task(self, task: Any, *, metadata: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    def register_task(
+        self, task: Any, *, metadata: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         worker_id = _stable_text(getattr(task, "worker_id", ""))
         run = ResearchSubtaskRun(
             subtask_id=worker_id,
@@ -84,7 +99,13 @@ class ResearchTaskRuntime:
         self._record_event(run, "registered")
         return run.to_dict()
 
-    def start_task(self, worker_id: str, *, started_at: Optional[str] = None, metadata: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    def start_task(
+        self,
+        worker_id: str,
+        *,
+        started_at: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         run = self._subtasks[worker_id]
         run.status = "running"
         run.started_at = started_at or _utc_now_iso()
@@ -102,6 +123,13 @@ class ResearchTaskRuntime:
         evidence_count: int = 0,
         compressed_summary: str = "",
         raw_notes: Optional[list[str]] = None,
+        learnings: Optional[list[str]] = None,
+        follow_up_questions: Optional[list[str]] = None,
+        citations: Optional[list[str]] = None,
+        sources: Optional[list[dict[str, Any]]] = None,
+        tool_calls: Optional[list[dict[str, Any]]] = None,
+        budget_snapshot: Optional[dict[str, Any]] = None,
+        gaps: Optional[list[str]] = None,
         errors: Optional[list[str]] = None,
         completed_at: Optional[str] = None,
     ) -> dict[str, Any]:
@@ -113,6 +141,13 @@ class ResearchTaskRuntime:
             evidence_count=evidence_count,
             compressed_summary=compressed_summary,
             raw_notes=raw_notes,
+            learnings=learnings,
+            follow_up_questions=follow_up_questions,
+            citations=citations,
+            sources=sources,
+            tool_calls=tool_calls,
+            budget_snapshot=budget_snapshot,
+            gaps=gaps,
             errors=errors,
             completed_at=completed_at,
         )
@@ -126,6 +161,13 @@ class ResearchTaskRuntime:
         evidence_count: int = 0,
         compressed_summary: str = "",
         raw_notes: Optional[list[str]] = None,
+        learnings: Optional[list[str]] = None,
+        follow_up_questions: Optional[list[str]] = None,
+        citations: Optional[list[str]] = None,
+        sources: Optional[list[dict[str, Any]]] = None,
+        tool_calls: Optional[list[dict[str, Any]]] = None,
+        budget_snapshot: Optional[dict[str, Any]] = None,
+        gaps: Optional[list[str]] = None,
         errors: Optional[list[str]] = None,
         completed_at: Optional[str] = None,
     ) -> dict[str, Any]:
@@ -137,6 +179,13 @@ class ResearchTaskRuntime:
         run.evidence_count = max(0, int(evidence_count or 0))
         run.compressed_summary = compressed_summary or ""
         run.raw_notes = list(raw_notes or [])
+        run.learnings = list(learnings or [])
+        run.follow_up_questions = list(follow_up_questions or [])
+        run.citations = list(citations or [])
+        run.sources = list(sources or [])
+        run.tool_calls = list(tool_calls or [])
+        run.budget_snapshot = dict(budget_snapshot or {})
+        run.gaps = list(gaps or [])
         run.errors = list(errors or [])
         run.completed_at = completed_at or _utc_now_iso()
         run.updated_at = run.completed_at
@@ -159,7 +208,9 @@ class ResearchTaskRuntime:
             "events": list(self._events),
         }
 
-    def finish_open_tasks(self, *, status: str, error: str = "") -> list[dict[str, Any]]:
+    def finish_open_tasks(
+        self, *, status: str, error: str = ""
+    ) -> list[dict[str, Any]]:
         finished: list[dict[str, Any]] = []
         for worker_id, run in list(self._subtasks.items()):
             if run.status in _TERMINAL_STATUSES:

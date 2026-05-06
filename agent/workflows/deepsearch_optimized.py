@@ -44,6 +44,7 @@ from agent.workflows.claim_ledger import (
     serialize_claim_checks,
     summarize_claim_checks,
 )
+from agent.workflows.context_budget import build_context_budget_manager
 from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
 from agent.workflows.domain_router import ResearchDomain, build_provider_profile
 from agent.workflows.evidence import build_evidence_items
@@ -83,6 +84,14 @@ from agent.workflows.research_brief import (
     brief_topic,
     build_research_brief,
 )
+from agent.workflows.research_budget import (
+    ResearchBudgetRuntime,
+    build_deepsearch_budget,
+)
+from agent.workflows.research_loop_guard import (
+    ResearchLoopGuard,
+    build_loop_guard_policy,
+)
 from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_artifact
 from agent.workflows.research_reflection import gap_queries_from_quality_gates
 from agent.workflows.research_task_runtime import ResearchTaskRuntime
@@ -93,6 +102,7 @@ from agent.workflows.sectioned_report import (
     compile_sectioned_report,
     grade_section_content,
 )
+from agent.workflows.skill_context import format_skill_context, select_research_skills
 from agent.workflows.source_curator import curate_sources
 from agent.workflows.source_routing import build_source_routing_policy
 from agent.workflows.source_url_utils import (
@@ -4906,15 +4916,36 @@ def run_deepsearch_supervisor_workers(
         model_map.get("writer_model") or _model_for_task("writing", config)
     )
     verifier_model = str(model_map.get("verifier_model") or research_model)
-    context_policy = build_deepsearch_context_policy(
-        {
-            "planning": planning_model,
-            "research": research_model,
-            "compression": compression_model,
-            "writing": writing_model,
-            "verifier": verifier_model,
-        }
+    context_models = {
+        "planning": planning_model,
+        "research": research_model,
+        "compression": compression_model,
+        "writing": writing_model,
+        "verifier": verifier_model,
+    }
+    context_policy = build_deepsearch_context_policy(context_models)
+    budget = build_deepsearch_budget(config=config, research_brief=brief)
+    budget_runtime = ResearchBudgetRuntime(budget)
+    loop_guard = ResearchLoopGuard(build_loop_guard_policy(config))
+    context_budget_manager = build_context_budget_manager(
+        models=context_models,
+        max_context_tokens=budget.max_context_tokens,
     )
+    selected_skills = select_research_skills(
+        query=topic,
+        research_brief=brief,
+        config=config,
+        max_skills=_configurable_int(config, "deepsearch_max_skills", 3),
+    )
+    if selected_skills:
+        brief.skill_ids = [skill.skill_id for skill in selected_skills]
+        state["research_brief"] = brief.to_dict()
+        state["skill_context"] = {
+            "selected_skills": [
+                skill.to_dict(include_prompt=False) for skill in selected_skills
+            ],
+            "context": format_skill_context(selected_skills),
+        }
     critic_llm = _chat_model(search_summary_model, temperature=0.2)
     writer_llm = _chat_model(writing_model, temperature=0.4)
 
@@ -4989,7 +5020,26 @@ def run_deepsearch_supervisor_workers(
                 historical_queries=have_query,
                 missing_topics=missing_topics,
             )
-            stage_metrics.finish(stage, task_count=len(tasks))
+            tasks, rejected_tasks = budget_runtime.reserve_research_units(tasks)
+            if rejected_tasks:
+                decision_log.append(
+                    {
+                        "type": "budget_guard",
+                        "round_index": round_index,
+                        "reason": "maximum research units reached",
+                        "rejected_worker_ids": [
+                            task.worker_id for task in rejected_tasks
+                        ],
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+            stage_metrics.finish(
+                stage, task_count=len(tasks), rejected_task_count=len(rejected_tasks)
+            )
+            if not tasks:
+                budget_stop_reason = "maximum research units reached"
+                budget_runtime.record_stop_reason(budget_stop_reason)
+                break
             task_runtime.register_tasks(tasks, metadata={"round": round_index})
             _emit_event(
                 emitter,
@@ -5027,6 +5077,25 @@ def run_deepsearch_supervisor_workers(
                 task_search_runs: list[dict[str, Any]] = []
                 errors: list[str] = []
                 for query in task.queries:
+                    query_guard = loop_guard.before_search_query(query)
+                    if not query_guard.allowed:
+                        errors.append(query_guard.reason)
+                        continue
+                    tool_guard = loop_guard.before_tool_call(
+                        "evidence_provider_search",
+                        {"query": query, "max_results": per_query_results},
+                    )
+                    if not tool_guard.allowed:
+                        errors.append(tool_guard.reason)
+                        continue
+                    if not budget_runtime.reserve_search_query(query):
+                        errors.append("maximum search queries reached")
+                        continue
+                    if not budget_runtime.reserve_tool_call(
+                        task.worker_id, "evidence_provider_search"
+                    ):
+                        errors.append("maximum tool calls per research unit reached")
+                        continue
                     try:
                         provider_outputs = search_with_evidence_providers(
                             providers=evidence_providers,
@@ -5042,6 +5111,9 @@ def run_deepsearch_supervisor_workers(
                         errors.append(str(exc))
                     task_results.extend(results)
                     task_evidence.extend(evidence_payload)
+                    result_guard = loop_guard.record_search_results(query, results)
+                    if not result_guard.allowed:
+                        errors.append(result_guard.reason)
                     task_search_runs.append(
                         {
                             "query": query,
@@ -5053,8 +5125,11 @@ def run_deepsearch_supervisor_workers(
                             "context_id": task.context_id,
                             "worker_topic": task.topic,
                             "worker_focus": task.focus,
+                            "loop_guard": result_guard.to_dict(),
                         }
                     )
+                    if not result_guard.allowed:
+                        break
                 return {
                     "task": task,
                     "started_at": worker_started_at,
@@ -5132,18 +5207,33 @@ def run_deepsearch_supervisor_workers(
                 stage = stage_metrics.start(
                     "worker_compression", round=round_index, worker_id=task.worker_id
                 )
-                enough, summary_text = _summarize_new_knowledge(
-                    critic_llm,
-                    task.topic,
-                    summary_notes,
-                    task_results[: max(1, per_query_results)],
-                    config,
-                )
+                if budget_runtime.reserve_compression_attempt(task.worker_id):
+                    enough, summary_text = _summarize_new_knowledge(
+                        critic_llm,
+                        task.topic,
+                        context_budget_manager.cap_text_list(
+                            summary_notes, stage="compression"
+                        ),
+                        context_budget_manager.cap_results(
+                            task_results[: max(1, per_query_results)],
+                            stage="compression",
+                        ),
+                        config,
+                    )
+                else:
+                    enough = False
+                    summary_text = ""
+                    errors.append("maximum compression attempts reached")
                 stage_metrics.finish(
                     stage, summary_chars=len(summary_text or ""), enough=bool(enough)
                 )
                 if summary_text:
-                    summary_notes.append(f"{task.focus}: {summary_text}")
+                    summary_notes.append(
+                        context_budget_manager.cap_text(
+                            f"{task.focus}: {summary_text}",
+                            stage="research",
+                        )
+                    )
                     tokens_used += _estimate_tokens_from_text(summary_text)
                 worker_run = build_worker_run(
                     task=task,
@@ -5152,13 +5242,21 @@ def run_deepsearch_supervisor_workers(
                     summary=summary_text,
                     errors=errors,
                     started_at=payload["started_at"],
+                    budget_snapshot=budget_runtime.to_artifact().get("usage", {}),
                 ).to_dict()
                 completed_subtask = task_runtime.complete_task(
                     task.worker_id,
                     result_count=len(task_results),
                     evidence_count=len(task_evidence),
                     compressed_summary=summary_text,
-                    raw_notes=[summary_text] if summary_text else [],
+                    raw_notes=worker_run.get("raw_notes") or [],
+                    learnings=worker_run.get("learnings") or [],
+                    follow_up_questions=worker_run.get("follow_up_questions") or [],
+                    citations=worker_run.get("citations") or [],
+                    sources=worker_run.get("sources") or [],
+                    tool_calls=worker_run.get("tool_calls") or [],
+                    budget_snapshot=worker_run.get("budget_snapshot") or {},
+                    gaps=worker_run.get("gaps") or [],
                     errors=errors,
                     completed_at=worker_run.get("completed_at"),
                 )
@@ -5276,6 +5374,17 @@ def run_deepsearch_supervisor_workers(
             )
             if decision.action == "synthesize":
                 break
+            if not budget_runtime.reserve_reflection_round(round_index):
+                budget_stop_reason = "maximum reflection rounds reached"
+                decision_log.append(
+                    {
+                        "type": "budget_guard",
+                        "round_index": round_index,
+                        "reason": budget_stop_reason,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+                break
 
         if not summary_notes and search_runs:
             flat_results = []
@@ -5287,7 +5396,12 @@ def run_deepsearch_supervisor_workers(
                     )
             formatted = _format_results(flat_results[:10]) if flat_results else ""
             if formatted:
-                summary_notes.append(formatted)
+                summary_notes.append(
+                    context_budget_manager.cap_text(formatted, stage="research")
+                )
+        summary_notes = context_budget_manager.cap_text_list(
+            summary_notes, stage="writing"
+        )
 
         report_sources_limit = _configurable_int(
             config,
@@ -5512,7 +5626,9 @@ def run_deepsearch_supervisor_workers(
                     fact_card_count=len(fact_cards),
                 )
         claim_ledger: list[dict[str, Any]] = []
-        summary_notes_for_writer = list(summary_notes)
+        summary_notes_for_writer = context_budget_manager.cap_text_list(
+            list(summary_notes), stage="writing"
+        )
         if fact_cards_for_writer:
             summary_notes_for_writer.append(fact_cards_for_writer)
         if _configurable_bool(
@@ -5560,6 +5676,9 @@ def run_deepsearch_supervisor_workers(
             ledger_text = format_claim_ledger_for_writer(claim_ledger)
             if ledger_text:
                 summary_notes_for_writer.append(ledger_text)
+        summary_notes_for_writer = context_budget_manager.cap_text_list(
+            summary_notes_for_writer, stage="writing"
+        )
         sources_block = _format_sources_for_writer(
             report_sources,
             search_runs,
@@ -5568,6 +5687,7 @@ def run_deepsearch_supervisor_workers(
             passages=passages,
             fact_cards=fact_cards,
         )
+        sources_block = context_budget_manager.cap_text(sources_block, stage="writing")
         report_plan = build_sectioned_report_plan(
             research_brief=brief.to_dict(),
             worker_runs=worker_runs,
@@ -5970,6 +6090,9 @@ def run_deepsearch_supervisor_workers(
             worker_runs=worker_runs,
             supervisor_decisions=supervisor_decisions,
         )
+        budget_artifact = budget_runtime.to_artifact()
+        loop_guard_artifact = loop_guard.to_artifact()
+        context_budget_artifact = context_budget_manager.to_artifact()
         research_pipeline = build_supervisor_workers_pipeline_artifact(
             research_brief=brief.to_dict(),
             task_runtime=task_runtime.to_artifact(),
@@ -5981,6 +6104,9 @@ def run_deepsearch_supervisor_workers(
             claim_ledger=claim_ledger,
             quality_summary=quality_summary,
             final_report=final_report,
+            budget_artifact=budget_artifact,
+            loop_guard_artifact=loop_guard_artifact,
+            context_budget_artifact=context_budget_artifact,
         )
         _emit_event(
             emitter,
@@ -6005,6 +6131,14 @@ def run_deepsearch_supervisor_workers(
             "supervisor_decisions": supervisor_decisions,
             "worker_runs": worker_runs,
             "research_task_runtime": task_runtime.to_artifact(),
+            "research_budget": budget_artifact,
+            "loop_guard": loop_guard_artifact,
+            "context_budget": context_budget_artifact,
+            "skill_context": {
+                "selected_skills": [
+                    skill.to_dict(include_prompt=False) for skill in selected_skills
+                ]
+            },
             "decision_log": decision_log,
             "research_pipeline": research_pipeline,
             "report_plan": report_plan,

@@ -17,6 +17,7 @@ from tools.browser.browser_tools import build_browser_tools
 from tools.browser.browser_use_tool import build_browser_use_tools
 from tools.code.chart_viz_tool import chart_visualize
 from tools.core.collection import ToolCollection
+from tools.core.mcp_policy import build_mcp_tool_policy, filter_mcp_tools
 from tools.core.registry import get_registered_tools
 from tools.core.wrappers import wrap_tools_with_events
 from tools.crawl.crawl4ai_tool import crawl4ai
@@ -266,7 +267,8 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
         tools.append(plan_steps)
 
     if _enabled(profile, "mcp", default=True):
-        tools.extend(get_registered_tools())
+        mcp_policy = build_mcp_tool_policy({"configurable": cfg})
+        tools.extend(filter_mcp_tools(get_registered_tools(), mcp_policy))
 
     # Daytona remote sandbox tools (only when mode=daytona)
     if settings.sandbox_mode == "daytona" and _enabled(

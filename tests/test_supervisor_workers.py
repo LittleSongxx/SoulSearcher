@@ -128,9 +128,10 @@ def test_worker_run_and_intermediate_steps_are_serializable():
     )[0]
     worker_run = build_worker_run(
         task=task,
-        results=[{"provider": "web", "title": "A"}],
-        evidence_items=[{"id": "ev1"}],
-        summary="summary",
+        results=[{"provider": "web", "title": "A", "url": "https://example.com/a"}],
+        evidence_items=[{"id": "ev1", "url": "https://example.com/e"}],
+        summary="summary line with enough detail for a learning",
+        budget_snapshot={"research_units_started": 1},
     ).to_dict()
     steps = build_intermediate_steps(
         worker_runs=[worker_run],
@@ -141,6 +142,12 @@ def test_worker_run_and_intermediate_steps_are_serializable():
 
     assert worker_run["round_index"] == 1
     assert worker_run["provider_breakdown"] == {"web": 1}
+    assert (
+        worker_run["compressed_research"]
+        == "summary line with enough detail for a learning"
+    )
+    assert worker_run["citations"] == ["https://example.com/a", "https://example.com/e"]
+    assert worker_run["budget_snapshot"]["research_units_started"] == 1
     assert [step["order"] for step in steps] == [1, 2]
     assert {step["type"] for step in steps} == {"worker_run", "supervisor_decision"}
 
@@ -163,6 +170,13 @@ def test_research_task_runtime_tracks_subtask_lifecycle():
         evidence_count=1,
         compressed_summary="summary",
         raw_notes=["raw note"],
+        learnings=["learning"],
+        follow_up_questions=["next"],
+        citations=["https://example.com"],
+        sources=[{"url": "https://example.com"}],
+        tool_calls=[{"tool": "search"}],
+        budget_snapshot={"search_queries_used": 1},
+        gaps=["gap"],
     )
     artifact = runtime.to_artifact()
 
@@ -171,6 +185,8 @@ def test_research_task_runtime_tracks_subtask_lifecycle():
     assert completed["status"] == "completed"
     assert completed["result_count"] == 2
     assert completed["evidence_count"] == 1
+    assert completed["learnings"] == ["learning"]
+    assert completed["budget_snapshot"]["search_queries_used"] == 1
     assert artifact["subtask_count"] == 1
     assert artifact["status_counts"] == {"completed": 1}
     assert [event["type"] for event in artifact["events"]] == [
@@ -210,6 +226,9 @@ def test_build_supervisor_workers_pipeline_artifact_has_stage_boundaries():
             "claim_verifier_unsupported": 0,
         },
         final_report="final",
+        budget_artifact={"usage": {"research_units_started": 1}},
+        loop_guard_artifact={"denied_count": 0},
+        context_budget_artifact={"usage": {}},
     )
 
     stages = {stage["name"]: stage for stage in artifact["stages"]}
@@ -236,6 +255,10 @@ def test_build_supervisor_workers_pipeline_artifact_has_stage_boundaries():
     assert artifact["sub_research_findings"][0]["citations"] == [
         "https://example.com/a"
     ]
+    assert artifact["research_units"][0]["compressed_research"] == "compressed finding"
+    assert (
+        artifact["runtime_controls"]["budget"]["usage"]["research_units_started"] == 1
+    )
 
 
 def test_build_sub_research_findings_serializes_worker_evidence():

@@ -199,6 +199,11 @@ class Settings(BaseSettings):
     memory_top_k: int = 5
     enable_mcp: bool = False
     mcp_servers: str = ""  # JSON mapping for MultiServerMCPClient
+    mcp_strategy: str = (
+        "on_demand"  # disabled | fast_once | per_research_unit | on_demand
+    )
+    mcp_tool_whitelist: str = ""  # comma-separated allowed MCP tool names
+    mcp_max_tools: int = 0  # 0 = no explicit cap
     human_review: bool = False  # require manual approval before final report
     tool_approval: bool = False  # require approval before executing tools
     max_revisions: int = 2
@@ -399,6 +404,16 @@ class Settings(BaseSettings):
     deepsearch_mode: str = "auto"  # auto | tree | linear
     deepsearch_max_seconds: float = 0.0  # 0 = disabled
     deepsearch_max_tokens: int = 0  # 0 = disabled
+    deepsearch_max_research_units: int = 0  # 0 = derive from rounds * workers
+    deepsearch_max_search_queries: int = 0  # 0 = derive from workers * queries
+    deepsearch_max_tool_calls_per_unit: int = 0  # 0 = derive from queries per worker
+    deepsearch_max_context_tokens: int = 0  # 0 = model-derived context budget
+    deepsearch_max_compression_attempts: int = 0  # 0 = derive from research units
+    deepsearch_max_reflection_rounds: int = 0  # 0 = derive from supervisor rounds
+    deepsearch_loop_max_repeated_query: int = 1
+    deepsearch_loop_max_repeated_url: int = 2
+    deepsearch_loop_max_repeated_tool_call: int = 1
+    deepsearch_loop_max_empty_result_streak: int = 3
     deepsearch_freshness_warning_min_known: int = (
         3  # minimum dated results before warning checks
     )

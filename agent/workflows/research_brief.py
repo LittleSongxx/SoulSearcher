@@ -65,6 +65,10 @@ class ResearchBrief:
     expected_fields: list[str] = field(default_factory=list)
     preferred_sources: list[str] = field(default_factory=list)
     excluded_sources: list[str] = field(default_factory=list)
+    source_preferences: list[str] = field(default_factory=list)
+    open_dimensions: list[str] = field(default_factory=list)
+    skill_ids: list[str] = field(default_factory=list)
+    mcp_policy: dict[str, Any] = field(default_factory=dict)
     freshness_requirement: str = ""
     language: str = ""
     audience: str = ""
@@ -95,6 +99,8 @@ class ResearchBrief:
 
 
 def _clean_list(values: Any) -> list[str]:
+    if isinstance(values, str):
+        values = [part.strip() for part in values.split(",") if part.strip()]
     if not isinstance(values, list):
         return []
     cleaned: list[str] = []
@@ -182,6 +188,54 @@ def _derive_source_policy(state: dict[str, Any], config: dict[str, Any]) -> str:
     return "web"
 
 
+def _derive_open_dimensions(query: str, expected_fields: list[str]) -> list[str]:
+    dimensions = []
+    if not any(field in expected_fields for field in ("risks", "limitations")):
+        dimensions.append("risks_or_limitations")
+    if (
+        _has_any(query, _COMPARISON_MARKERS)
+        and "evaluation_criteria" not in expected_fields
+    ):
+        dimensions.append("evaluation_criteria")
+    if not _has_any(query, _TIME_MARKERS):
+        dimensions.append("time_range_if_relevant")
+    return dimensions
+
+
+def _derive_mcp_policy(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    cfg = config.get("configurable") if isinstance(config, dict) else {}
+    cfg = cfg if isinstance(cfg, dict) else {}
+    whitelist = _clean_list(
+        cfg.get("mcp_tool_whitelist")
+        or cfg.get("mcp_tools_to_include")
+        or state.get("mcp_tool_whitelist")
+        or state.get("mcp_tools_to_include")
+    )
+    strategy = (
+        str(
+            cfg.get("mcp_strategy")
+            or cfg.get("deepsearch_mcp_strategy")
+            or state.get("mcp_strategy")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
+    auth_required = bool(
+        cfg.get("mcp_auth_required")
+        or cfg.get("mcp_requires_auth")
+        or state.get("mcp_auth_required")
+    )
+    policy = {
+        "strategy": strategy or "disabled",
+        "tool_whitelist": whitelist,
+        "auth_required": auth_required,
+    }
+    return {
+        key: value for key, value in policy.items() if value not in (None, "", [], {})
+    }
+
+
 def build_research_brief(
     state: dict[str, Any], config: Optional[dict[str, Any]] = None
 ) -> ResearchBrief:
@@ -209,6 +263,14 @@ def build_research_brief(
             expected_fields=_clean_list(existing.get("expected_fields")),
             preferred_sources=_clean_list(existing.get("preferred_sources")),
             excluded_sources=_clean_list(existing.get("excluded_sources")),
+            source_preferences=_clean_list(existing.get("source_preferences")),
+            open_dimensions=_clean_list(existing.get("open_dimensions")),
+            skill_ids=_clean_list(existing.get("skill_ids")),
+            mcp_policy=(
+                existing.get("mcp_policy")
+                if isinstance(existing.get("mcp_policy"), dict)
+                else _derive_mcp_policy(state, config)
+            ),
             freshness_requirement=str(existing.get("freshness_requirement") or ""),
             language=str(existing.get("language") or ""),
             audience=str(existing.get("audience") or ""),
@@ -254,6 +316,12 @@ def build_research_brief(
         expected_fields=expected_fields,
         preferred_sources=_clean_list(state.get("preferred_sources")),
         excluded_sources=_clean_list(state.get("excluded_sources")),
+        source_preferences=_clean_list(state.get("source_preferences")),
+        open_dimensions=_derive_open_dimensions(query, expected_fields),
+        skill_ids=_clean_list(
+            state.get("skill_ids") or state.get("deepsearch_skill_ids")
+        ),
+        mcp_policy=_derive_mcp_policy(state, config),
         freshness_requirement=freshness,
         language=str(state.get("language") or "").strip(),
         audience=str(state.get("audience") or "").strip(),

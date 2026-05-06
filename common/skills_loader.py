@@ -161,7 +161,13 @@ class SkillRegistrySnapshot:
 
     @property
     def disabled_count(self) -> int:
-        return len([skill for skill in self.skills if skill.is_valid and skill.status != "enabled"])
+        return len(
+            [
+                skill
+                for skill in self.skills
+                if skill.is_valid and skill.status != "enabled"
+            ]
+        )
 
     def to_dict(self, *, include_skills: bool = False) -> dict[str, Any]:
         payload = {
@@ -308,6 +314,7 @@ class SkillProfile:
 # Parsing
 # ---------------------------------------------------------------------------
 
+
 def _normalize_string_list(value: Any) -> list[str]:
     if value is None:
         return []
@@ -321,7 +328,13 @@ def _normalize_string_list(value: Any) -> list[str]:
 
 
 def _infer_permissions(tools: list[str]) -> SkillPermissions:
-    browser_tools = {"browser", "browser_use", "sandbox_browser", "sandbox_web_search", "computer_use"}
+    browser_tools = {
+        "browser",
+        "browser_use",
+        "sandbox_browser",
+        "sandbox_web_search",
+        "computer_use",
+    }
     network_tools = browser_tools | {"web_search", "crawl", "mcp"}
     sandbox_tools = {
         "sandbox_browser",
@@ -346,7 +359,9 @@ def _infer_permissions(tools: list[str]) -> SkillPermissions:
     }
     return SkillPermissions(
         network=any(tool in network_tools for tool in tools),
-        filesystem="sandbox" if any(tool in filesystem_tools for tool in tools) else "none",
+        filesystem=(
+            "sandbox" if any(tool in filesystem_tools for tool in tools) else "none"
+        ),
         shell=any(tool in {"bash", "sandbox_shell"} for tool in tools),
         browser=any(tool in browser_tools for tool in tools),
         sandbox=any(tool in sandbox_tools for tool in tools),
@@ -366,7 +381,10 @@ def _parse_contract_fields(
         return []
     items: list[Any]
     if isinstance(value, dict):
-        items = [{"name": key, **(item if isinstance(item, dict) else {"description": item})} for key, item in value.items()]
+        items = [
+            {"name": key, **(item if isinstance(item, dict) else {"description": item})}
+            for key, item in value.items()
+        ]
     elif isinstance(value, list):
         items = value
     else:
@@ -473,9 +491,25 @@ def _validate_skill(skill: SkillProfile) -> list[SkillValidationIssue]:
     issues = list(skill.validation_issues)
 
     if not skill.id:
-        issues.append(SkillValidationIssue(severity="error", message="id is required", field="id", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="id is required",
+                field="id",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
     elif not _SKILL_ID_RE.match(skill.id):
-        issues.append(SkillValidationIssue(severity="error", message="id must match ^[a-z0-9][a-z0-9_.-]*$", field="id", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="id must match ^[a-z0-9][a-z0-9_.-]*$",
+                field="id",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
 
     for field_name in ("name", "description"):
         if not str(getattr(skill, field_name) or "").strip():
@@ -490,33 +524,180 @@ def _validate_skill(skill: SkillProfile) -> list[SkillValidationIssue]:
             )
 
     if skill.category not in ALLOWED_SKILL_CATEGORIES:
-        issues.append(SkillValidationIssue(severity="error", message=f"category must be one of {sorted(ALLOWED_SKILL_CATEGORIES)}", field="category", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message=f"category must be one of {sorted(ALLOWED_SKILL_CATEGORIES)}",
+                field="category",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
     if skill.mode not in ALLOWED_SKILL_MODES:
-        issues.append(SkillValidationIssue(severity="error", message=f"mode must be one of {sorted(ALLOWED_SKILL_MODES)}", field="mode", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message=f"mode must be one of {sorted(ALLOWED_SKILL_MODES)}",
+                field="mode",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
     if skill.status not in ALLOWED_SKILL_STATUSES:
-        issues.append(SkillValidationIssue(severity="error", message=f"status must be one of {sorted(ALLOWED_SKILL_STATUSES)}", field="status", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message=f"status must be one of {sorted(ALLOWED_SKILL_STATUSES)}",
+                field="status",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
     if skill.tool_policy not in ALLOWED_TOOL_POLICIES:
-        issues.append(SkillValidationIssue(severity="error", message=f"tool_policy must be one of {sorted(ALLOWED_TOOL_POLICIES)}", field="tool_policy", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message=f"tool_policy must be one of {sorted(ALLOWED_TOOL_POLICIES)}",
+                field="tool_policy",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
     if not skill.system_prompt.strip():
-        issues.append(SkillValidationIssue(severity="error", message="system_prompt body is required", field="system_prompt", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="system_prompt body is required",
+                field="system_prompt",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
 
     unknown_tools = [tool for tool in skill.tools if tool not in KNOWN_TOOL_KEYS]
     for tool in unknown_tools:
-        issues.append(SkillValidationIssue(severity="error", message=f"unknown tool '{tool}'", field="tools", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message=f"unknown tool '{tool}'",
+                field="tools",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
 
     if skill.permissions.filesystem not in {"none", "read", "write", "sandbox"}:
-        issues.append(SkillValidationIssue(severity="error", message="permissions.filesystem must be one of ['none', 'read', 'write', 'sandbox']", field="permissions.filesystem", skill_id=skill.id, source=skill._source))
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="permissions.filesystem must be one of ['none', 'read', 'write', 'sandbox']",
+                field="permissions.filesystem",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
 
-    if any(tool in {"bash", "sandbox_shell"} for tool in skill.tools) and not skill.permissions.shell:
-        issues.append(SkillValidationIssue(severity="error", message="permissions.shell must be true when shell tools are enabled", field="permissions.shell", skill_id=skill.id, source=skill._source))
-    if any(tool in {"browser", "browser_use", "sandbox_browser", "sandbox_web_search", "computer_use"} for tool in skill.tools) and not skill.permissions.browser:
-        issues.append(SkillValidationIssue(severity="error", message="permissions.browser must be true when browser tools are enabled", field="permissions.browser", skill_id=skill.id, source=skill._source))
-    if any(tool in {"web_search", "crawl", "browser", "browser_use", "sandbox_browser", "sandbox_web_search", "mcp"} for tool in skill.tools) and not skill.permissions.network:
-        issues.append(SkillValidationIssue(severity="error", message="permissions.network must be true when network tools are enabled", field="permissions.network", skill_id=skill.id, source=skill._source))
-    if any(tool.startswith("sandbox_") or tool in {"presentation_outline", "presentation_v2"} for tool in skill.tools) and not skill.permissions.sandbox:
-        issues.append(SkillValidationIssue(severity="error", message="permissions.sandbox must be true when sandbox-backed tools are enabled", field="permissions.sandbox", skill_id=skill.id, source=skill._source))
-    if any(tool in {"sandbox_files", "sandbox_sheets", "sandbox_presentation", "presentation_outline", "presentation_v2"} for tool in skill.tools) and skill.permissions.filesystem == "none":
-        issues.append(SkillValidationIssue(severity="error", message="permissions.filesystem must allow file access when file-producing tools are enabled", field="permissions.filesystem", skill_id=skill.id, source=skill._source))
+    if (
+        any(tool in {"bash", "sandbox_shell"} for tool in skill.tools)
+        and not skill.permissions.shell
+    ):
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="permissions.shell must be true when shell tools are enabled",
+                field="permissions.shell",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
+    if (
+        any(
+            tool
+            in {
+                "browser",
+                "browser_use",
+                "sandbox_browser",
+                "sandbox_web_search",
+                "computer_use",
+            }
+            for tool in skill.tools
+        )
+        and not skill.permissions.browser
+    ):
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="permissions.browser must be true when browser tools are enabled",
+                field="permissions.browser",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
+    if (
+        any(
+            tool
+            in {
+                "web_search",
+                "crawl",
+                "browser",
+                "browser_use",
+                "sandbox_browser",
+                "sandbox_web_search",
+                "mcp",
+            }
+            for tool in skill.tools
+        )
+        and not skill.permissions.network
+    ):
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="permissions.network must be true when network tools are enabled",
+                field="permissions.network",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
+    if (
+        any(
+            tool.startswith("sandbox_")
+            or tool in {"presentation_outline", "presentation_v2"}
+            for tool in skill.tools
+        )
+        and not skill.permissions.sandbox
+    ):
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="permissions.sandbox must be true when sandbox-backed tools are enabled",
+                field="permissions.sandbox",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
+    if (
+        any(
+            tool
+            in {
+                "sandbox_files",
+                "sandbox_sheets",
+                "sandbox_presentation",
+                "presentation_outline",
+                "presentation_v2",
+            }
+            for tool in skill.tools
+        )
+        and skill.permissions.filesystem == "none"
+    ):
+        issues.append(
+            SkillValidationIssue(
+                severity="error",
+                message="permissions.filesystem must allow file access when file-producing tools are enabled",
+                field="permissions.filesystem",
+                skill_id=skill.id,
+                source=skill._source,
+            )
+        )
 
     return issues
 
@@ -557,7 +738,9 @@ def _load_skill_state(paths: Optional[SkillsStatePaths] = None) -> dict[str, Any
         return raw
 
 
-def _save_skill_state(payload: dict[str, Any], paths: Optional[SkillsStatePaths] = None) -> None:
+def _save_skill_state(
+    payload: dict[str, Any], paths: Optional[SkillsStatePaths] = None
+) -> None:
     paths = paths or _state_paths()
     payload = dict(payload)
     payload["updated_at"] = _utc_now_iso()
@@ -574,7 +757,9 @@ def _apply_status_override(skill_id: str, status: str, state: dict[str, Any]) ->
     return status
 
 
-def _parse_skill_file(path: Path, *, state: Optional[dict[str, Any]] = None) -> Optional[SkillProfile]:
+def _parse_skill_file(
+    path: Path, *, state: Optional[dict[str, Any]] = None
+) -> Optional[SkillProfile]:
     """Parse a single .md skill file into a SkillProfile."""
     try:
         raw = path.read_text(encoding="utf-8")
@@ -622,7 +807,8 @@ def _parse_skill_file(path: Path, *, state: Optional[dict[str, Any]] = None) -> 
         is_preset=bool(meta.get("is_preset", True)),
         version=str(meta.get("version") or "1.0.0").strip() or "1.0.0",
         status=str(meta.get("status") or "enabled").strip().lower() or "enabled",
-        tool_policy=str(meta.get("tool_policy") or "strict").strip().lower() or "strict",
+        tool_policy=str(meta.get("tool_policy") or "strict").strip().lower()
+        or "strict",
         tags=_normalize_string_list(meta.get("tags")),
         runtime=meta.get("runtime") if isinstance(meta.get("runtime"), dict) else {},
         input_contract=_parse_contract_fields(
@@ -663,17 +849,20 @@ def _default_skills_dir() -> Path:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def _build_registry(skills_dir: Optional[Path] = None) -> SkillRegistrySnapshot:
     directory = skills_dir or _default_skills_dir()
     snapshot = SkillRegistrySnapshot(skills_dir=str(directory), total_files=0)
     if not directory.is_dir():
-        logger.info("Skills directory %s does not exist; returning empty list", directory)
+        logger.info(
+            "Skills directory %s does not exist; returning empty list", directory
+        )
         return snapshot
 
     state = _load_skill_state()
     parsed_skills: list[SkillProfile] = []
     issues: list[SkillValidationIssue] = []
-    files = sorted(directory.glob("*.md"))
+    files = _discover_skill_files(directory)
     snapshot.total_files = len(files)
 
     for md_file in files:
@@ -710,8 +899,25 @@ def _build_registry(skills_dir: Optional[Path] = None) -> SkillRegistrySnapshot:
 
     snapshot.skills = parsed_skills
     snapshot.issues = issues
-    snapshot.invalid_count = len([skill for skill in parsed_skills if not skill.is_valid])
+    snapshot.invalid_count = len(
+        [skill for skill in parsed_skills if not skill.is_valid]
+    )
     return snapshot
+
+
+def _discover_skill_files(directory: Path) -> list[Path]:
+    files = list(directory.glob("*.md"))
+    files.extend(path for path in directory.glob("*/SKILL.md") if path.is_file())
+    files.extend(path for path in directory.glob("*/skill.md") if path.is_file())
+    seen = set()
+    discovered: list[Path] = []
+    for path in sorted(files):
+        resolved = str(path.resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        discovered.append(path)
+    return discovered
 
 
 def get_skill_registry(
@@ -722,7 +928,11 @@ def get_skill_registry(
     global _REGISTRY_CACHE
 
     directory = skills_dir or _default_skills_dir()
-    if use_cache and _REGISTRY_CACHE is not None and _REGISTRY_CACHE.skills_dir == str(directory):
+    if (
+        use_cache
+        and _REGISTRY_CACHE is not None
+        and _REGISTRY_CACHE.skills_dir == str(directory)
+    ):
         return _REGISTRY_CACHE
 
     snapshot = _build_registry(directory)
