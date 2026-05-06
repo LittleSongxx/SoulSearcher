@@ -9,16 +9,16 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-import re
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Optional
 
 from .models import ScheduledTrigger, TriggerStatus
 
 logger = logging.getLogger(__name__)
 
 
-def parse_cron_field(field: str, min_val: int, max_val: int) -> Set[int]:
+def parse_cron_field(field: str, min_val: int, max_val: int) -> set[int]:
     """
     Parse a single cron field into a set of valid values.
 
@@ -55,7 +55,7 @@ def parse_cron_field(field: str, min_val: int, max_val: int) -> Set[int]:
     return values
 
 
-def parse_cron(expression: str) -> Dict[str, Set[int]]:
+def parse_cron(expression: str) -> dict[str, set[int]]:
     """
     Parse cron expression into component sets.
 
@@ -122,9 +122,9 @@ class TriggerScheduler:
     """
 
     def __init__(self):
-        self.triggers: Dict[str, ScheduledTrigger] = {}
-        self.tasks: Dict[str, asyncio.Task] = {}
-        self.callbacks: Dict[str, Callable] = {}
+        self.triggers: dict[str, ScheduledTrigger] = {}
+        self.tasks: dict[str, asyncio.Task] = {}
+        self.callbacks: dict[str, Callable] = {}
         self._running = False
         self._lock = asyncio.Lock()
 
@@ -185,7 +185,9 @@ class TriggerScheduler:
 
                 # Run immediately if configured
                 if trigger.run_immediately:
-                    logger.info(f"[scheduler] Running trigger '{trigger.name}' immediately")
+                    logger.info(
+                        f"[scheduler] Running trigger '{trigger.name}' immediately"
+                    )
                     await self._execute_trigger(trigger)
 
     async def remove_trigger(self, trigger_id: str) -> bool:
@@ -217,7 +219,6 @@ class TriggerScheduler:
             if trigger.id not in self.triggers:
                 return False
 
-            old_trigger = self.triggers[trigger.id]
             callback = self.callbacks.get(trigger.id)
 
             # Cancel old task
@@ -288,7 +289,7 @@ class TriggerScheduler:
         """Get a trigger by ID."""
         return self.triggers.get(trigger_id)
 
-    def list_triggers(self) -> List[ScheduledTrigger]:
+    def list_triggers(self) -> list[ScheduledTrigger]:
         """List all triggers."""
         return list(self.triggers.values())
 
@@ -297,7 +298,9 @@ class TriggerScheduler:
         if trigger.id in self.tasks:
             return
 
-        task = asyncio.create_task(self._trigger_loop(trigger), name=f"trigger_{trigger.id}")
+        task = asyncio.create_task(
+            self._trigger_loop(trigger), name=f"trigger_{trigger.id}"
+        )
         self.tasks[trigger.id] = task
 
     async def _trigger_loop(self, trigger: ScheduledTrigger) -> None:
@@ -306,7 +309,10 @@ class TriggerScheduler:
             try:
                 # Get fresh trigger data
                 current_trigger = self.triggers.get(trigger.id)
-                if not current_trigger or current_trigger.status != TriggerStatus.ACTIVE:
+                if (
+                    not current_trigger
+                    or current_trigger.status != TriggerStatus.ACTIVE
+                ):
                     break
 
                 # Calculate wait time
@@ -328,7 +334,10 @@ class TriggerScheduler:
 
                 # Check if still active after sleep
                 current_trigger = self.triggers.get(trigger.id)
-                if not current_trigger or current_trigger.status != TriggerStatus.ACTIVE:
+                if (
+                    not current_trigger
+                    or current_trigger.status != TriggerStatus.ACTIVE
+                ):
                     break
 
                 # Execute the trigger
@@ -342,7 +351,9 @@ class TriggerScheduler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[scheduler] Error in trigger loop for '{trigger.name}': {e}")
+                logger.error(
+                    f"[scheduler] Error in trigger loop for '{trigger.name}': {e}"
+                )
                 # Wait before retrying
                 await asyncio.sleep(60)
 
@@ -367,7 +378,9 @@ class TriggerScheduler:
                     await result
 
         except Exception as e:
-            logger.error(f"[scheduler] Trigger execution failed for '{trigger.name}': {e}")
+            logger.error(
+                f"[scheduler] Trigger execution failed for '{trigger.name}': {e}"
+            )
             trigger.failure_count += 1
 
             # Update status if too many failures

@@ -1,10 +1,10 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain.tools import tool
 
 
 @tool
-def crawl4ai(urls: List[str], max_depth: int = 1, max_pages: int = 20) -> List[Dict[str, Any]]:
+def crawl4ai(urls: list[str], max_depth: int = 1, max_pages: int = 20) -> list[dict[str, Any]]:
     """
     Crawl web pages using crawl4ai (if installed). Returns list of page dicts.
     """

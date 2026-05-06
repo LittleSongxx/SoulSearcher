@@ -1,7 +1,7 @@
 import operator
-from typing import Annotated, Any, Dict, List, Literal, Optional, TypedDict
+from typing import Annotated, Any, Literal, Optional, TypedDict
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 from agent.core.message_utils import summarize_messages
@@ -11,8 +11,8 @@ from .middleware import mask_old_observations, maybe_strip_tool_messages
 
 
 def capped_add_messages(
-    existing: List[BaseMessage] | None, new: List[BaseMessage] | None
-) -> List[BaseMessage]:
+    existing: list[BaseMessage] | None, new: list[BaseMessage] | None
+) -> list[BaseMessage]:
     """
     Aggregate messages and trim to keep context bounded.
 
@@ -73,7 +73,7 @@ class AgentState(TypedDict):
     # User's original input/query
     input: str
     # Optional base64-encoded images from the user
-    images: List[Dict[str, Any]]
+    images: list[dict[str, Any]]
     # Final report/answer
     final_report: str
     # Draft report for evaluator/optimizer loop
@@ -89,9 +89,9 @@ class AgentState(TypedDict):
 
     # ============ Execution Control ============
     # Message history for LLM context (auto-trimmed via capped_add_messages)
-    messages: Annotated[List[BaseMessage], capped_add_messages]
+    messages: Annotated[list[BaseMessage], capped_add_messages]
     # Structured research plan (list of search queries/steps)
-    research_plan: List[str]
+    research_plan: list[str]
     # Current step being executed
     current_step: int
     # Execution status
@@ -111,7 +111,7 @@ class AgentState(TypedDict):
     # Routing confidence (0-1)
     routing_confidence: float
     # Suggested queries from router
-    suggested_queries: List[str]
+    suggested_queries: list[str]
 
     # ============ Clarification ============
     # Flag for clarify step
@@ -121,19 +121,19 @@ class AgentState(TypedDict):
 
     # ============ Research Data ============
     # All scraped content from searches
-    scraped_content: Annotated[List[Dict[str, Any]], operator.add]
+    scraped_content: Annotated[list[dict[str, Any]], operator.add]
     # Code execution results
-    code_results: Annotated[List[Dict[str, Any]], operator.add]
+    code_results: Annotated[list[dict[str, Any]], operator.add]
     # Summary notes from deep search
-    summary_notes: List[str]
+    summary_notes: list[str]
     # Sources collected
-    sources: List[Dict[str, str]]
+    sources: list[dict[str, str]]
 
     # ============ Deep Search Artifacts ============
     # Structured artifacts from deep search (quality metrics, claims, sources, etc.)
-    deepsearch_artifacts: Dict[str, Any]
+    deepsearch_artifacts: dict[str, Any]
     # Quality summary from deep search diagnostics
-    quality_summary: Dict[str, Any]
+    quality_summary: dict[str, Any]
 
     # ============ Quality Control ============
     # Evaluation feedback for optimizer
@@ -141,9 +141,9 @@ class AgentState(TypedDict):
     # Evaluator verdict ("pass" / "revise" / "incomplete")
     verdict: str
     # Structured evaluation dimensions (coverage, accuracy, freshness, coherence)
-    eval_dimensions: Dict[str, float]
+    eval_dimensions: dict[str, float]
     # Missing topics identified by evaluator
-    missing_topics: List[str]
+    missing_topics: list[str]
     # Revision control
     revision_count: int
     max_revisions: int
@@ -152,26 +152,26 @@ class AgentState(TypedDict):
     # Tool approval gating
     tool_approved: bool
     # Pending tool calls awaiting approval
-    pending_tool_calls: List[Dict[str, Any]]
+    pending_tool_calls: list[dict[str, Any]]
     # Tool call accounting
     tool_call_count: int
     # Maximum tool calls allowed
     tool_call_limit: int
     # Tools enabled for this session
-    enabled_tools: Dict[str, bool]
+    enabled_tools: dict[str, bool]
 
     # ============ Cancellation & Error ============
     # Cancellation support
     cancel_token_id: Optional[str]  # 取消令牌 ID
     is_cancelled: bool  # 是否已取消
     # Error tracking
-    errors: Annotated[List[str], operator.add]
+    errors: Annotated[list[str], operator.add]
     # Last error message
     last_error: str
 
     # ============ Research Tree ============
     # Tree-based research structure (serialized dict)
-    research_tree: Dict[str, Any]
+    research_tree: dict[str, Any]
     # Current branch being explored
     current_branch_id: Optional[str]
     # Whether tree exploration is enabled
@@ -187,17 +187,17 @@ class AgentState(TypedDict):
 
     # ============ Compressed Knowledge ============
     # Structured compressed knowledge from research
-    compressed_knowledge: Dict[str, Any]
+    compressed_knowledge: dict[str, Any]
 
     # ============ Domain Routing ============
     # Detected research domain (scientific, legal, financial, etc.)
     domain: str
     # Domain-specific configuration (search hints, sources, etc.)
-    domain_config: Dict[str, Any]
+    domain_config: dict[str, Any]
 
     # ============ Sub-Agent Context Isolation ============
     # Tracking of sub-agent contexts for parallel branches
-    sub_agent_contexts: Dict[str, Dict[str, Any]]
+    sub_agent_contexts: dict[str, dict[str, Any]]
 
     # ============ Metrics ============
     # Token usage tracking
@@ -208,7 +208,7 @@ class AgentState(TypedDict):
 class ResearchPlan(TypedDict):
     """Structured research plan output."""
 
-    queries: List[str]
+    queries: list[str]
     reasoning: str
 
 
@@ -216,7 +216,7 @@ class SearchResult(TypedDict):
     """Search result structure."""
 
     query: str
-    results: List[Dict[str, Any]]
+    results: list[dict[str, Any]]
     timestamp: str
 
 

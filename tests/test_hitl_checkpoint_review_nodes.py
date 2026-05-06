@@ -1,13 +1,13 @@
 import json
 import operator
 from typing import Annotated, Any
-from typing_extensions import TypedDict
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 from langgraph.types import Command
+from typing_extensions import TypedDict
 
 
 class PlanState(TypedDict, total=False):

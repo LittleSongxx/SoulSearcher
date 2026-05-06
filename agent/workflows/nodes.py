@@ -5,9 +5,8 @@ import mimetypes
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
-from agent.core.llm_factory import create_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -15,7 +14,9 @@ from langchain_openai import ChatOpenAI
 from langgraph.types import Send, interrupt
 from pydantic import BaseModel, Field
 
+from agent.core.context_offloader import load_all_offloaded, offload_content_list
 from agent.core.events import ToolEventType, get_emitter_sync
+from agent.core.llm_factory import create_chat_model
 from agent.core.middleware import enforce_tool_call_limit, retry_call
 from agent.core.state import AgentState, QueryState
 from agent.workflows.browser_context_helper import build_browser_context_hint
@@ -24,8 +25,6 @@ from common.cancellation import check_cancellation as _check_cancellation
 from common.config import settings
 from tools import execute_python_code, tavily_search
 from tools.core.registry import get_global_registry, get_registered_tools
-
-from agent.core.context_offloader import load_all_offloaded, offload_content_list
 
 from .agent_factory import build_tool_agent, build_writer_agent
 from .agent_tools import build_agent_tools
@@ -155,7 +154,7 @@ _NARROW_COMPARE_BROAD_CUES = (
 )
 
 
-def check_cancellation(state: Union[AgentState, QueryState, Dict[str, Any]]) -> None:
+def check_cancellation(state: Union[AgentState, QueryState, dict[str, Any]]) -> None:
     """
     检查取消状态，如果已取消则抛出 CancelledError
 
@@ -171,7 +170,7 @@ def check_cancellation(state: Union[AgentState, QueryState, Dict[str, Any]]) -> 
         _check_cancellation(token_id)
 
 
-def handle_cancellation(state: AgentState, error: Exception) -> Dict[str, Any]:
+def handle_cancellation(state: AgentState, error: Exception) -> dict[str, Any]:
     """
     处理取消异常，返回取消状态
     """
@@ -179,7 +178,7 @@ def handle_cancellation(state: AgentState, error: Exception) -> Dict[str, Any]:
     return {
         "is_cancelled": True,
         "is_complete": True,
-        "errors": [f"Cancelled: {str(error)}"],
+        "errors": [f"Cancelled: {error!s}"],
         "final_report": "任务已被用户取消。",
     }
 
@@ -193,8 +192,8 @@ def _event_results_limit() -> int:
 def _build_compact_unique_source_preview(
     scraped_content: Any,
     limit: int,
-) -> List[Dict[str, Any]]:
-    candidates: List[Dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
 
     for run in scraped_content or []:
         if not isinstance(run, dict):
@@ -255,7 +254,7 @@ def _apply_output_contract(user_input: str, report: str) -> str:
     return report
 
 
-def _is_tool_enabled(profile: Dict[str, Any], key: str, default: bool = False) -> bool:
+def _is_tool_enabled(profile: dict[str, Any], key: str, default: bool = False) -> bool:
     enabled_tools = profile.get("enabled_tools") or {}
     if isinstance(enabled_tools, dict) and key in enabled_tools:
         return bool(enabled_tools.get(key))
@@ -322,8 +321,8 @@ def _build_fast_agent_search_query(user_input: str) -> str:
     return text or str(user_input or "").strip()
 
 
-def _format_fast_search_results(results: List[Dict[str, Any]], limit: int = 3) -> str:
-    blocks: List[str] = []
+def _format_fast_search_results(results: list[dict[str, Any]], limit: int = 3) -> str:
+    blocks: list[str] = []
     for idx, item in enumerate(results[:limit], start=1):
         if not isinstance(item, dict):
             continue
@@ -347,7 +346,7 @@ def _format_fast_search_results(results: List[Dict[str, Any]], limit: int = 3) -
 def _run_fast_agent_search(
     query: str,
     config: RunnableConfig,
-) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+) -> tuple[Optional[str], list[dict[str, Any]]]:
     if not query:
         return None, []
 
@@ -380,7 +379,7 @@ def _run_fast_agent_search(
 def _answer_simple_agent_query(
     state: AgentState,
     config: RunnableConfig,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     user_input = str(state.get("input", "") or "").strip()
     search_query = _build_fast_agent_search_query(user_input)
     if not search_query:
@@ -405,7 +404,7 @@ def _answer_simple_agent_query(
     if not evidence:
         return None
 
-    messages: List[Any] = []
+    messages: list[Any] = []
     for seeded in state.get("messages") or []:
         if isinstance(seeded, SystemMessage):
             messages.append(seeded)
@@ -462,7 +461,7 @@ def _answer_simple_agent_query(
 def _chat_model(
     model: str,
     temperature: float,
-    extra_body: Optional[Dict[str, Any]] = None,
+    extra_body: Optional[dict[str, Any]] = None,
 ) -> ChatOpenAI:
     """
     Build a ChatOpenAI instance honoring custom base URL / Azure / timeout / extra body.
@@ -550,7 +549,7 @@ def initialize_enhanced_tools() -> None:
         logger.error(f"Failed to initialize enhanced tools: {e}", exc_info=True)
 
 
-def _configurable(config: RunnableConfig) -> Dict[str, Any]:
+def _configurable(config: RunnableConfig) -> dict[str, Any]:
     if isinstance(config, dict):
         cfg = config.get("configurable") or {}
         if isinstance(cfg, dict):
@@ -562,7 +561,7 @@ def _clone_config_with_route(
     config: RunnableConfig,
     route: str,
     *,
-    profile: Optional[Dict[str, Any]] = None,
+    profile: Optional[dict[str, Any]] = None,
 ) -> RunnableConfig:
     if not isinstance(config, dict):
         return config
@@ -640,7 +639,7 @@ def _model_for_task(task_type: str, config: RunnableConfig) -> str:
 
 def _extract_tool_call_fields(
     tool_call: Any,
-) -> Tuple[Optional[str], Dict[str, Any], Optional[str]]:
+) -> tuple[Optional[str], dict[str, Any], Optional[str]]:
     """
     Normalize tool call objects across LangChain 0.x/1.x.
     Returns (name, args_dict, tool_call_id).
@@ -672,8 +671,8 @@ def _extract_tool_call_fields(
     return name, raw_args, tool_call_id
 
 
-def _get_writer_tools() -> List[Any]:
-    tools: List[Any] = [execute_python_code]
+def _get_writer_tools() -> list[Any]:
+    tools: list[Any] = [execute_python_code]
     tools.extend(get_registered_tools())
     return tools
 
@@ -683,12 +682,12 @@ def _guess_mime(name: Optional[str]) -> str:
     return mime or "image/png"
 
 
-def _normalize_images(images: Optional[List[Dict[str, Any]]]) -> List[Dict[str, str]]:
+def _normalize_images(images: Optional[list[dict[str, Any]]]) -> list[dict[str, str]]:
     """
     Normalize image payloads to data URLs for OpenAI-compatible multimodal inputs.
     Accepts items with either `data` (base64 without prefix) or `url` (already data URL).
     """
-    normalized: List[Dict[str, str]] = []
+    normalized: list[dict[str, str]] = []
     if not images:
         return normalized
 
@@ -716,13 +715,13 @@ def _normalize_images(images: Optional[List[Dict[str, Any]]]) -> List[Dict[str, 
 
 
 def _build_user_content(
-    text: str, images: Optional[List[Dict[str, Any]]]
-) -> Union[str, List[Dict[str, Any]]]:
+    text: str, images: Optional[list[dict[str, Any]]]
+) -> Union[str, list[dict[str, Any]]]:
     """
     Build multimodal content for HumanMessage.
     Returns plain text if no images, otherwise a mixed list with text + image_url parts.
     """
-    parts: List[Dict[str, Any]] = []
+    parts: list[dict[str, Any]] = []
     text = text or ""
     normalized_images = _normalize_images(images)
 
@@ -746,7 +745,7 @@ def _build_user_content(
 
 def perform_parallel_search(
     state: QueryState, config: RunnableConfig
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Executes a single search query in parallel.
 
@@ -879,12 +878,12 @@ def perform_parallel_search(
         logger.info(f"Search cancelled for {query}: {e}")
         return {"scraped_content": [], "is_cancelled": True}
     except Exception as e:
-        logger.error(f"Parallel search error for {query}: {str(e)}")
+        logger.error(f"Parallel search error for {query}: {e!s}")
         # Return empty result to avoid failing the whole graph
         return {"scraped_content": []}
 
 
-def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def coordinator_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Coordinator node that decides the next research action.
 
@@ -910,7 +909,6 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         research_plan = state.get("research_plan", [])
         scraped_content = state.get("scraped_content", [])
         summary_notes = state.get("summary_notes", [])
-        revision_count = state.get("revision_count", 0)
         max_revisions = state.get("max_revisions", 2)
 
         # Track coordinator iterations to prevent infinite loops.
@@ -1045,13 +1043,13 @@ def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         # Default to planning on error - safe fallback
         return {
             "coordinator_action": "plan",
-            "coordinator_reasoning": f"Coordinator error, defaulting to plan: {str(e)}",
+            "coordinator_reasoning": f"Coordinator error, defaulting to plan: {e!s}",
             "coordinator_iterations": coord_iters,
             "missing_topics": state.get("missing_topics", []),
         }
 
 
-def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def tree_search_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Tree-based search node for hybrid coordinator mode.
 
@@ -1071,12 +1069,7 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
         coord_iters = int(state.get("coordinator_iterations", 0) or 0)
 
         # On subsequent rounds, focus tree on missing topics
-        existing_knowledge = ""
         if coord_iters > 1 and missing_topics:
-            existing_knowledge = (
-                "Already researched. Focus on these gaps:\n"
-                + "\n".join(f"- {t}" for t in missing_topics[:5])
-            )
             logger.info(
                 f"[tree_search] Focused search on {len(missing_topics)} missing topics"
             )
@@ -1102,14 +1095,14 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
 
         from agent.workflows.research_tree import TreeExplorer
 
-        search_runs: List[Dict[str, Any]] = []
+        search_runs: list[dict[str, Any]] = []
 
         def _tree_search_func(payload, config_payload=None, **kwargs):
             query = (payload or {}).get("query", "")
             max_results = int((payload or {}).get("max_results", per_query_results))
             from agent.workflows.deepsearch_optimized import (
-                _search_query,
                 _resolve_provider_profile,
+                _search_query,
             )
 
             provider_profile = _resolve_provider_profile(state)
@@ -1221,11 +1214,11 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
             "research_plan": [state.get("input", "")],
             "scraped_content": [],  # operator.add reducer; empty = no change
             "summary_notes": state.get("summary_notes", []),
-            "errors": [f"Tree search error: {str(e)}"],
+            "errors": [f"Tree search error: {e!s}"],
         }
 
 
-def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def deepsearch_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """Deep search pipeline that iterates query → search → summarize."""
     logger.info("Executing deepsearch node")
     cfg = _configurable(config)
@@ -1329,7 +1322,7 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
     except asyncio.CancelledError as e:
         return handle_cancellation(state, e)
     except Exception as e:
-        logger.error(f"Deepsearch error: {str(e)}", exc_info=settings.debug)
+        logger.error(f"Deepsearch error: {e!s}", exc_info=settings.debug)
         err_text = str(e)
         # Provide a clearer hint when the provider rejects the model name
         if "Model Not Exist" in err_text or "model_not_found" in err_text:
@@ -1350,7 +1343,7 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
         }
 
 
-def route_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def route_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Route execution using SmartRouter (LLM-based intelligent routing).
 
@@ -1428,7 +1421,7 @@ def route_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     return result
 
 
-def clarify_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def clarify_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Light-weight guardrail to decide if the query needs clarification before planning.
     Uses structured output with retry for robustness.
@@ -1484,7 +1477,7 @@ def clarify_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     return {"needs_clarification": False, "messages": [AIMessage(content=verification)]}
 
 
-def direct_answer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def direct_answer_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """Direct answer without research."""
     logger.info("Executing direct answer node")
     t0 = time.time()
@@ -1521,7 +1514,7 @@ def direct_answer_node(state: AgentState, config: RunnableConfig) -> Dict[str, A
     }
 
 
-def initiate_research(state: AgentState) -> List[Send]:
+def initiate_research(state: AgentState) -> list[Send]:
     """
     Map step: Generates search tasks for each query in the plan.
 
@@ -1545,7 +1538,7 @@ def initiate_research(state: AgentState) -> List[Send]:
     return [Send("perform_parallel_search", {"query": q}) for q in unique_queries]
 
 
-def planner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def planner_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Planning node: Creates a structured research plan.
 
@@ -1564,7 +1557,7 @@ def planner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         t0 = time.time()
 
         class PlanResponse(BaseModel):
-            queries: List[str] = Field(description="3-7 targeted search queries")
+            queries: list[str] = Field(description="3-7 targeted search queries")
             reasoning: str = Field(
                 description="Brief explanation of the research strategy"
             )
@@ -1592,7 +1585,7 @@ def planner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         raw_queries = plan_data.get("queries", [state["input"]])
         # Normalize, dedupe, and clamp to a manageable set
         seen = set()
-        queries: List[str] = []
+        queries: list[str] = []
         for q in raw_queries:
             if not isinstance(q, str):
                 continue
@@ -1624,11 +1617,11 @@ def planner_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     except asyncio.CancelledError as e:
         return handle_cancellation(state, e)
     except Exception as e:
-        logger.error(f"Planner error: {str(e)}")
+        logger.error(f"Planner error: {e!s}")
         return {
             "research_plan": [state["input"]],
             "current_step": 0,
-            "errors": [f"Planning error: {str(e)}"],
+            "errors": [f"Planning error: {e!s}"],
             "messages": [
                 AIMessage(
                     content=f"Using fallback plan: direct search for '{state['input']}'"
@@ -1652,7 +1645,7 @@ def _hitl_checkpoint_active(config: RunnableConfig, checkpoint: str) -> bool:
     return checkpoint.strip().lower() in _hitl_checkpoints_enabled()
 
 
-def _parse_research_plan_content(value: Any) -> List[str] | None:
+def _parse_research_plan_content(value: Any) -> list[str] | None:
     """
     Parse a user-edited plan payload into a normalized list of queries.
 
@@ -1685,7 +1678,7 @@ def _parse_research_plan_content(value: Any) -> List[str] | None:
         return None
 
     seen = set()
-    queries: List[str] = []
+    queries: list[str] = []
     for item in raw:
         if not isinstance(item, str):
             continue
@@ -1705,7 +1698,7 @@ def _parse_research_plan_content(value: Any) -> List[str] | None:
     return queries or None
 
 
-def hitl_plan_review_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def hitl_plan_review_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Optional HITL checkpoint: review/edit the research plan after it is generated.
 
@@ -1748,7 +1741,7 @@ def hitl_plan_review_node(state: AgentState, config: RunnableConfig) -> Dict[str
     return {"research_plan": parsed}
 
 
-def hitl_draft_review_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def hitl_draft_review_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Optional HITL checkpoint: review/edit the draft report before evaluation/finalization.
     """
@@ -1793,7 +1786,7 @@ def _format_sources_snapshot_for_instruction(state: AgentState) -> str:
     scraped_content = state.get("scraped_content", []) or []
     compressed = state.get("compressed_knowledge", {}) or {}
 
-    urls: List[str] = []
+    urls: list[str] = []
     seen = set()
     try:
         for item in scraped_content:
@@ -1816,7 +1809,7 @@ def _format_sources_snapshot_for_instruction(state: AgentState) -> str:
         pass
 
     facts = compressed.get("facts") if isinstance(compressed, dict) else None
-    facts_preview: List[str] = []
+    facts_preview: list[str] = []
     if isinstance(facts, list):
         for f in facts[:8]:
             if not isinstance(f, dict):
@@ -1834,13 +1827,13 @@ def _format_sources_snapshot_for_instruction(state: AgentState) -> str:
         summary = ""
 
     entities = compressed.get("key_entities") if isinstance(compressed, dict) else None
-    entities_list: List[str] = []
+    entities_list: list[str] = []
     if isinstance(entities, list):
         for e in entities[:10]:
             if isinstance(e, str) and e.strip():
                 entities_list.append(e.strip())
 
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append(
         f"- Sources collected: {sum(len((i or {}).get('results', []) or []) for i in scraped_content if isinstance(i, dict))}"
     )
@@ -1863,7 +1856,7 @@ def _format_sources_snapshot_for_instruction(state: AgentState) -> str:
 
 def hitl_sources_review_node(
     state: AgentState, config: RunnableConfig
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Optional HITL checkpoint: review sources/compressed knowledge, add guidance.
 
@@ -1910,7 +1903,7 @@ def hitl_sources_review_node(
     return {"human_guidance": guidance}
 
 
-def refine_plan_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def refine_plan_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Refinement node: creates follow-up queries based on evaluator feedback.
 
@@ -1928,7 +1921,7 @@ def refine_plan_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any
     suggested_queries = state.get("suggested_queries", []) or []
     missing_topics = state.get("missing_topics", []) or []
 
-    new_queries: List[str] = []
+    new_queries: list[str] = []
 
     # Add suggested queries (already validated by evaluator)
     for q in suggested_queries:
@@ -2010,7 +2003,7 @@ Return ONLY a JSON object:
                 except json.JSONDecodeError:
                     pass
         except Exception as e:
-            logger.error(f"Refine plan LLM error: {str(e)}")
+            logger.error(f"Refine plan LLM error: {e!s}")
 
     # Final fallback
     if not new_queries:
@@ -2034,7 +2027,7 @@ Return ONLY a JSON object:
     }
 
 
-def web_search_plan_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def web_search_plan_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """Simple plan for web search only mode."""
     logger.info("Executing web search plan node")
     return {
@@ -2046,7 +2039,7 @@ def web_search_plan_node(state: AgentState, config: RunnableConfig) -> Dict[str,
     }
 
 
-def agent_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def agent_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Agent node: Tool-calling loop (GPTs/Manus-like) with enhanced features.
 
@@ -2152,7 +2145,7 @@ You can also use XML format for tool calls:
             enhanced_system_prompt += xml_instruction
 
         # Build messages list with enhanced system prompt
-        messages: List[Any] = []
+        messages: list[Any] = []
 
         # Check if there's already a system message in seeded messages
         seeded = state.get("messages") or []
@@ -2282,7 +2275,7 @@ You can also use XML format for tool calls:
         }
 
 
-def compressor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def compressor_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Compressor node: Extracts and structures key facts from research.
 
@@ -2360,7 +2353,7 @@ def compressor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]
         return {"compressed_knowledge": {}}
 
 
-def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def writer_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Writer node: Synthesizes research into a comprehensive report.
 
@@ -2389,7 +2382,7 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         use_tools = route != "web" and not is_hierarchical
         agent, writer_tools = build_writer_agent(model) if use_tools else (None, [])
         t0 = time.time()
-        code_results: List[Dict[str, Any]] = []
+        code_results: list[dict[str, Any]] = []
 
         # Use ResultAggregator for intelligent fusion
         scraped_content = state.get("scraped_content", [])
@@ -2422,11 +2415,11 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         # This matches the baseline _final_report() exactly: same prompt template,
         # same summary_notes (tree branch summaries), same sources_block format.
         if is_hierarchical:
-            from prompts.templates.deepsearch import final_summary_prompt
             from agent.workflows.deepsearch_optimized import (
-                _format_sources_for_writer,
                 _append_auto_references,
+                _format_sources_for_writer,
             )
+            from prompts.templates.deepsearch import final_summary_prompt
 
             summary_notes = state.get("summary_notes", []) or []
             summary_search = "\n\n".join(summary_notes) or "暂无"
@@ -2435,7 +2428,7 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
             report_sources_limit = int(
                 getattr(settings, "deepsearch_report_sources_limit", 20) or 20
             )
-            extracted_sources: List[Dict[str, Any]] = []
+            extracted_sources: list[dict[str, Any]] = []
             try:
                 from agent.workflows.evidence_extractor import extract_message_sources
 
@@ -2499,9 +2492,9 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
                     logger.warning(f"[writer] Chart generation skipped: {e}")
 
             # --- Build quality diagnostics (same as baseline) ---
-            quality_summary: Dict[str, Any] = {}
-            claims: List[Dict[str, Any]] = []
-            searched_queries: List[str] = []
+            quality_summary: dict[str, Any] = {}
+            claims: list[dict[str, Any]] = []
+            searched_queries: list[str] = []
             for sc in scraped_content:
                 q = sc.get("query") if isinstance(sc, dict) else None
                 if isinstance(q, str) and q.strip():
@@ -2610,7 +2603,7 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
 
         writer_system_prompt = get_writer_prompt()
 
-        messages: List[Any] = [
+        messages: list[Any] = [
             SystemMessage(content=writer_system_prompt),
             HumanMessage(
                 content=_build_user_content(state["input"], state.get("images"))
@@ -2683,12 +2676,12 @@ def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     except asyncio.CancelledError as e:
         return handle_cancellation(state, e)
     except Exception as e:
-        logger.error(f"Writer error: {str(e)}", exc_info=True)
+        logger.error(f"Writer error: {e!s}", exc_info=True)
         return {
             "final_report": "Error generating report",
             "is_complete": True,
-            "errors": [f"Writing error: {str(e)}"],
-            "messages": [AIMessage(content=f"Failed to generate report: {str(e)}")],
+            "errors": [f"Writing error: {e!s}"],
+            "messages": [AIMessage(content=f"Failed to generate report: {e!s}")],
         }
 
 
@@ -2709,7 +2702,7 @@ def should_continue_research(state: AgentState) -> str:
         return "write"
 
 
-def evaluator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def evaluator_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """
     Evaluate the draft report with structured, multi-dimensional feedback.
 
@@ -2757,11 +2750,11 @@ def evaluator_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
         feedback: str = Field(
             description="Concise, actionable feedback for improvement"
         )
-        missing_topics: List[str] = Field(
+        missing_topics: list[str] = Field(
             default_factory=list,
             description="Topics or aspects that should be covered but are missing",
         )
-        suggested_queries: List[str] = Field(
+        suggested_queries: list[str] = Field(
             default_factory=list, description="Search queries that would help fill gaps"
         )
 
@@ -3012,7 +3005,7 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         except Exception as e:
             logger.warning(f"Quality assessment skipped: {e}")
 
-        claim_verifier_counts: Optional[Dict[str, Any]] = None
+        claim_verifier_counts: Optional[dict[str, Any]] = None
         try:
             from agent.workflows.claim_verifier import ClaimStatus, ClaimVerifier
 
@@ -3083,7 +3076,7 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         if thread_id:
             try:
                 emitter = get_emitter_sync(thread_id)
-                payload: Dict[str, Any] = {
+                payload: dict[str, Any] = {
                     "stage": "evaluation",
                     "verdict": verdict,
                     "quality_overall_score": quality_overall_score,
@@ -3096,19 +3089,19 @@ Provide specific, actionable feedback and search queries to address gaps.""",
             except Exception as e:
                 logger.debug(f"[evaluator] failed to emit quality_update: {e}")
 
-        quality_patch: Dict[str, Any] = {
+        quality_patch: dict[str, Any] = {
             "citation_coverage": citation_coverage_score,
             "citation_coverage_score": citation_coverage_score,
             **(claim_verifier_counts or {}),
         }
 
         quality_summary_state = state.get("quality_summary")
-        quality_summary: Dict[str, Any] = (
+        quality_summary: dict[str, Any] = (
             quality_summary_state if isinstance(quality_summary_state, dict) else {}
         )
 
         state_deepsearch_artifacts = state.get("deepsearch_artifacts")
-        deepsearch_artifacts: Optional[Dict[str, Any]] = None
+        deepsearch_artifacts: Optional[dict[str, Any]] = None
         if isinstance(state_deepsearch_artifacts, dict):
             artifact_quality_state = state_deepsearch_artifacts.get("quality_summary")
             artifact_quality = (
@@ -3124,7 +3117,7 @@ Provide specific, actionable feedback and search queries to address gaps.""",
                 },
             }
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "evaluation": eval_summary,
             "verdict": verdict,
             "eval_dimensions": dimensions,
@@ -3149,7 +3142,7 @@ Provide specific, actionable feedback and search queries to address gaps.""",
         return {"evaluation": f"Evaluation failed: {e}", "verdict": "pass"}
 
 
-def revise_report_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def revise_report_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """Revise the report based on evaluator feedback."""
     logger.info("Executing revise report node")
     llm = _chat_model(_model_for_task("writing", config), temperature=0.5)
@@ -3187,7 +3180,7 @@ Keep the structure clear and improve factual accuracy and clarity.""",
     }
 
 
-def human_review_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
+def human_review_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     """Optional human review step using LangGraph interrupt."""
     logger.info("Executing human review node")
     configurable = config.get("configurable", {}) if isinstance(config, dict) else {}

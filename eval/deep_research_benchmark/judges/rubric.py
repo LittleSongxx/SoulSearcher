@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict
-
+from typing import Any
 
 REPORT_JUDGE_PROMPT_VERSION = "report-rubric-v1"
 CITATION_JUDGE_PROMPT_VERSION = "citation-v1"
@@ -97,7 +96,7 @@ Return:
 """
 
 
-def extract_json_object(text: str) -> Dict[str, Any]:
+def extract_json_object(text: str) -> dict[str, Any]:
     raw = str(text or "").strip()
     if not raw:
         raise ValueError("empty judge response")

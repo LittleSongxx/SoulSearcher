@@ -15,10 +15,10 @@ from prompts.templates.deepsearch import (
 )
 
 __all__ = [
+    "final_summary_prompt",
     "formulate_query_prompt",
+    "get_behavior_prompt",
     "related_url_prompt",
     "summary_crawl_prompt",
-    "final_summary_prompt",
     "summary_text_prompt",
-    "get_behavior_prompt",
 ]

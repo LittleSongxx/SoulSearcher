@@ -16,9 +16,13 @@ from eval.deep_research_benchmark.collectors import (
     fetch_run_metrics,
 )
 from eval.deep_research_benchmark.dataset import load_tasks
-from eval.deep_research_benchmark.schemas import BenchmarkTask, CaseRunResult, RunConfig, utc_now_iso
+from eval.deep_research_benchmark.schemas import (
+    BenchmarkTask,
+    CaseRunResult,
+    RunConfig,
+    utc_now_iso,
+)
 from eval.deep_research_benchmark.sse_client import iter_sse_events
-
 
 _SUPERVISOR_STRATEGY_ALIASES = {"supervisor", "workers", "supervisor_worker", "supervisor_workers"}
 
@@ -161,7 +165,7 @@ async def run_case(task: BenchmarkTask, config: RunConfig) -> CaseRunResult:
                                 break
 
             await asyncio.wait_for(_stream(), timeout=max(1.0, float(config.timeout_s)))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result.status = "timeout"
             error_message = f"timeout after {config.timeout_s}s"
             try:

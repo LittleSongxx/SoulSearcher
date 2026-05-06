@@ -11,7 +11,6 @@ export declare class WeaverApiError extends Error {
     });
 }
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-type ChatRequest = components['schemas']['ChatRequest'];
 type CancelRequest = components['schemas']['CancelRequest'];
 type ResearchRequest = components['schemas']['ResearchRequest'];
 type SessionsListResponse = components['schemas']['SessionsListResponse'];
@@ -29,16 +28,8 @@ export declare class WeaverClient {
     private url;
     requestJson<T>(path: string, init?: RequestInit): Promise<T>;
     requestRaw(path: string, init?: RequestInit): Promise<Response>;
-    chatSse(payload: Omit<ChatRequest, 'stream'> & {
-        stream?: boolean;
-    }, opts?: {
-        signal?: AbortSignal;
-    }): AsyncGenerator<StreamEvent>;
-    cancelChat(threadId: string, request?: CancelRequest | undefined): Promise<unknown>;
-    cancelAllChats(): Promise<unknown>;
-    researchStream(query: string, opts?: {
-        signal?: AbortSignal;
-    }): AsyncGenerator<StreamEvent>;
+    cancelResearch(threadId: string, request?: CancelRequest | undefined): Promise<unknown>;
+    cancelAllResearch(): Promise<unknown>;
     researchSse(payload: ResearchRequest, opts?: {
         signal?: AbortSignal;
     }): AsyncGenerator<StreamEvent>;

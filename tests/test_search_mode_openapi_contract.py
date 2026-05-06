@@ -18,7 +18,7 @@ def _anyof(schema: dict) -> list[dict]:
 def test_search_mode_is_contractually_an_object_not_a_string():
     spec = build_openapi_spec()
 
-    for name in ("ChatRequest", "ResearchRequest", "GraphInterruptResumeRequest"):
+    for name in ("ResearchRequest", "GraphInterruptResumeRequest"):
         schema = _search_mode_schema(spec, name)
         anyof = _anyof(schema)
 
@@ -26,6 +26,6 @@ def test_search_mode_is_contractually_an_object_not_a_string():
         # but should NOT advertise string/object passthrough types.
         assert not any(s.get("type") == "string" for s in anyof), (name, schema)
         assert not any(
-            s.get("type") == "object" and bool(s.get("additionalProperties")) for s in anyof
+            s.get("type") == "object" and bool(s.get("additionalProperties"))
+            for s in anyof
         ), (name, schema)
-

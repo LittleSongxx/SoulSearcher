@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -12,9 +12,9 @@ class QualityGateResult:
     threshold: Optional[float] = None
     action: str = "continue"
     reason: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
@@ -56,15 +56,15 @@ def default_policy(settings: Any = None) -> QualityGatePolicy:
 
 
 def evaluate_quality_gates(
-    diagnostics: Dict[str, Any],
+    diagnostics: dict[str, Any],
     *,
-    quality_summary: Optional[Dict[str, Any]] = None,
+    quality_summary: Optional[dict[str, Any]] = None,
     epoch: int = 0,
     policy: Optional[QualityGatePolicy] = None,
-) -> List[QualityGateResult]:
+) -> list[QualityGateResult]:
     quality_summary = quality_summary or {}
     policy = policy or default_policy()
-    results: List[QualityGateResult] = []
+    results: list[QualityGateResult] = []
 
     query_score = _float(
         diagnostics.get("query_coverage_score"),
@@ -186,12 +186,12 @@ def evaluate_quality_gates(
     return results
 
 
-def serialize_gate_results(results: List[QualityGateResult]) -> List[Dict[str, Any]]:
+def serialize_gate_results(results: list[QualityGateResult]) -> list[dict[str, Any]]:
     return [result.to_dict() for result in results]
 
 
-def missing_topics_from_gates(results: List[QualityGateResult]) -> List[str]:
-    topics: List[str] = []
+def missing_topics_from_gates(results: list[QualityGateResult]) -> list[str]:
+    topics: list[str] = []
     seen = set()
     for result in results:
         if result.status != "fail" or result.action != "add_gap_queries":

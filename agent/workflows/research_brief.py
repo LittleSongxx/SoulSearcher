@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
+from agent.workflows.source_routing import (
+    build_source_routing_policy,
+    source_policy_from_routing,
+)
 
 _TIME_MARKERS = (
     "latest",
@@ -57,17 +61,22 @@ class ResearchBrief:
     original_query: str
     clarified_goal: str
     scope: str = ""
-    constraints: Dict[str, Any] = field(default_factory=dict)
-    expected_fields: List[str] = field(default_factory=list)
-    preferred_sources: List[str] = field(default_factory=list)
-    excluded_sources: List[str] = field(default_factory=list)
+    constraints: dict[str, Any] = field(default_factory=dict)
+    expected_fields: list[str] = field(default_factory=list)
+    preferred_sources: list[str] = field(default_factory=list)
+    excluded_sources: list[str] = field(default_factory=list)
     freshness_requirement: str = ""
+    language: str = ""
+    audience: str = ""
     output_format: str = "research_report"
-    success_criteria: List[str] = field(default_factory=list)
+    citation_policy: str = "required"
+    budget_policy: dict[str, Any] = field(default_factory=dict)
+    success_criteria: list[str] = field(default_factory=list)
     source_policy: str = "web"
+    source_routing: dict[str, Any] = field(default_factory=dict)
     complexity: str = "standard"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     def prompt_context(self) -> str:
@@ -85,10 +94,10 @@ class ResearchBrief:
         return "\n".join(parts)
 
 
-def _clean_list(values: Any) -> List[str]:
+def _clean_list(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     seen = set()
     for value in values:
         text = str(value or "").strip()
@@ -107,8 +116,8 @@ def _has_any(text: str, markers: tuple[str, ...]) -> bool:
     return any(marker in lowered for marker in markers)
 
 
-def _derive_expected_fields(query: str) -> List[str]:
-    fields: List[str] = []
+def _derive_expected_fields(query: str) -> list[str]:
+    fields: list[str] = []
     if _has_any(query, _COMPARISON_MARKERS):
         fields.extend(["comparison_dimensions", "pros_cons", "recommendation"])
     if _has_any(query, _TIME_MARKERS):
@@ -117,7 +126,7 @@ def _derive_expected_fields(query: str) -> List[str]:
         fields.extend(["background", "key_findings", "evidence", "risks"])
     if not fields:
         fields.extend(["answer", "evidence"])
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for field_name in fields:
         if field_name not in seen:
@@ -126,7 +135,7 @@ def _derive_expected_fields(query: str) -> List[str]:
     return deduped
 
 
-def _derive_complexity(query: str, expected_fields: List[str]) -> str:
+def _derive_complexity(query: str, expected_fields: list[str]) -> str:
     if len(expected_fields) >= 5 or _has_any(query, _COMPARISON_MARKERS):
         return "broad"
     if _has_any(query, _RESEARCH_MARKERS):
@@ -134,8 +143,10 @@ def _derive_complexity(query: str, expected_fields: List[str]) -> str:
     return "light"
 
 
-def _derive_freshness(query: str, constraints: Dict[str, Any]) -> str:
-    freshness_days = constraints.get("freshness_days") if isinstance(constraints, dict) else None
+def _derive_freshness(query: str, constraints: dict[str, Any]) -> str:
+    freshness_days = (
+        constraints.get("freshness_days") if isinstance(constraints, dict) else None
+    )
     if isinstance(freshness_days, (int, float)) and int(freshness_days) > 0:
         return f"within_{int(freshness_days)}_days"
     if _has_any(query, _TIME_MARKERS) or re.search(r"\b20\d{2}\b", query):
@@ -143,46 +154,99 @@ def _derive_freshness(query: str, constraints: Dict[str, Any]) -> str:
     return "not_required"
 
 
-def _derive_source_policy(state: Dict[str, Any], config: Dict[str, Any]) -> str:
+def _derive_source_policy(state: dict[str, Any], config: dict[str, Any]) -> str:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     cfg = cfg if isinstance(cfg, dict) else {}
-    configured = str(cfg.get("source_policy") or state.get("source_policy") or "").strip().lower()
-    if configured in {"web", "web-only", "private-first", "hybrid", "rag", "local"}:
+    routing = cfg.get("source_routing") or state.get("source_routing")
+    if isinstance(routing, dict) and routing:
+        routed = source_policy_from_routing(routing)
+        if routed:
+            return routed
+    configured = (
+        str(cfg.get("source_policy") or state.get("source_policy") or "")
+        .strip()
+        .lower()
+    )
+    if configured in {
+        "web",
+        "web-only",
+        "private-first",
+        "hybrid",
+        "rag",
+        "local",
+        "mcp",
+    }:
         return "web" if configured == "web-only" else configured
     if bool(cfg.get("use_rag") or state.get("use_rag")):
         return "hybrid"
     return "web"
 
 
-def build_research_brief(state: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> ResearchBrief:
+def build_research_brief(
+    state: dict[str, Any], config: Optional[dict[str, Any]] = None
+) -> ResearchBrief:
     config = config or {}
     existing = state.get("research_brief") or state.get("deepsearch_research_brief")
     if isinstance(existing, ResearchBrief):
         return existing
     if isinstance(existing, dict):
-        return ResearchBrief(
-            original_query=str(existing.get("original_query") or state.get("input") or ""),
-            clarified_goal=str(existing.get("clarified_goal") or existing.get("goal") or state.get("input") or ""),
+        brief = ResearchBrief(
+            original_query=str(
+                existing.get("original_query") or state.get("input") or ""
+            ),
+            clarified_goal=str(
+                existing.get("clarified_goal")
+                or existing.get("goal")
+                or state.get("input")
+                or ""
+            ),
             scope=str(existing.get("scope") or ""),
-            constraints=existing.get("constraints") if isinstance(existing.get("constraints"), dict) else {},
+            constraints=(
+                existing.get("constraints")
+                if isinstance(existing.get("constraints"), dict)
+                else {}
+            ),
             expected_fields=_clean_list(existing.get("expected_fields")),
             preferred_sources=_clean_list(existing.get("preferred_sources")),
             excluded_sources=_clean_list(existing.get("excluded_sources")),
             freshness_requirement=str(existing.get("freshness_requirement") or ""),
+            language=str(existing.get("language") or ""),
+            audience=str(existing.get("audience") or ""),
             output_format=str(existing.get("output_format") or "research_report"),
+            citation_policy=str(existing.get("citation_policy") or "required"),
+            budget_policy=(
+                existing.get("budget_policy")
+                if isinstance(existing.get("budget_policy"), dict)
+                else {}
+            ),
             success_criteria=_clean_list(existing.get("success_criteria")),
             source_policy=str(existing.get("source_policy") or "web"),
+            source_routing=(
+                existing.get("source_routing")
+                if isinstance(existing.get("source_routing"), dict)
+                else {}
+            ),
             complexity=str(existing.get("complexity") or "standard"),
         )
+        if not brief.source_routing:
+            brief.source_routing = build_source_routing_policy(
+                brief=brief, config=config, state=state
+            )
+        brief.source_policy = source_policy_from_routing(brief.source_routing)
+        return brief
 
     query = str(state.get("input") or state.get("topic") or "").strip()
-    constraints = state.get("constraints") if isinstance(state.get("constraints"), dict) else {}
-    expected_fields = _clean_list(state.get("expected_fields")) or _derive_expected_fields(query)
+    constraints = (
+        state.get("constraints") if isinstance(state.get("constraints"), dict) else {}
+    )
+    expected_fields = _clean_list(
+        state.get("expected_fields")
+    ) or _derive_expected_fields(query)
     freshness = _derive_freshness(query, constraints)
     success_criteria = [f"cover:{field_name}" for field_name in expected_fields]
     if freshness != "not_required":
         success_criteria.append(f"freshness:{freshness}")
-    return ResearchBrief(
+    brief = ResearchBrief(
         original_query=query,
         clarified_goal=query,
         scope=str(state.get("scope") or "").strip(),
@@ -191,11 +255,24 @@ def build_research_brief(state: Dict[str, Any], config: Optional[Dict[str, Any]]
         preferred_sources=_clean_list(state.get("preferred_sources")),
         excluded_sources=_clean_list(state.get("excluded_sources")),
         freshness_requirement=freshness,
+        language=str(state.get("language") or "").strip(),
+        audience=str(state.get("audience") or "").strip(),
         output_format=str(state.get("output_format") or "research_report"),
+        citation_policy=str(state.get("citation_policy") or "required"),
+        budget_policy=(
+            state.get("budget_policy")
+            if isinstance(state.get("budget_policy"), dict)
+            else {}
+        ),
         success_criteria=success_criteria,
         source_policy=_derive_source_policy(state, config),
         complexity=_derive_complexity(query, expected_fields),
     )
+    brief.source_routing = build_source_routing_policy(
+        brief=brief, config=config, state=state
+    )
+    brief.source_policy = source_policy_from_routing(brief.source_routing)
+    return brief
 
 
 def brief_topic(brief: ResearchBrief) -> str:

@@ -4,14 +4,14 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
-def build_openapi_spec() -> Dict[str, Any]:
+def build_openapi_spec() -> dict[str, Any]:
     from main import app
 
     return app.openapi()

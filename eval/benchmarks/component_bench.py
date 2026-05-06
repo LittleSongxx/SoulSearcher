@@ -16,9 +16,9 @@ import json
 import sys
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -34,7 +34,7 @@ if str(ROOT) not in sys.path:
 class BenchResult:
     name: str
     passed: bool
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     duration_ms: float = 0.0
     details: str = ""
 
@@ -44,7 +44,7 @@ class BenchResult:
 # =====================================================================
 
 # Synthetic evidence corpus (simulating scraped search results)
-_EVIDENCE_CORPUS: List[Dict[str, Any]] = [
+_EVIDENCE_CORPUS: list[dict[str, Any]] = [
     {
         "query": "AI market growth",
         "results": [
@@ -119,7 +119,7 @@ Russia became the world's largest solar panel manufacturer in 2024.
 # The verifier uses set-intersection of content tokens (min_overlap_tokens=2),
 # so claims sharing >=2 content words with evidence get matched, then
 # contradiction detection checks negation polarity and trend direction.
-_CLAIM_GROUND_TRUTH: Dict[str, str] = {
+_CLAIM_GROUND_TRUTH: dict[str, str] = {
     # Claims with strong token overlap to evidence -> verified
     "global ai market was valued at $196.6 billion": "verified",
     "nvidia holds approximately 80%": "verified",
@@ -134,7 +134,7 @@ _CLAIM_GROUND_TRUTH: Dict[str, str] = {
 }
 
 
-def _match_ground_truth(claim_text: str, ground_truth: Dict[str, str]) -> Optional[str]:
+def _match_ground_truth(claim_text: str, ground_truth: dict[str, str]) -> Optional[str]:
     """Find the matching ground truth label for a claim."""
     lower = claim_text.lower()
     for key, label in ground_truth.items():
@@ -161,7 +161,7 @@ def bench_claim_verifier() -> BenchResult:
     incorrect = 0
     matched = 0
     unmatched_claims = []
-    confusion: Dict[str, Dict[str, int]] = {}  # expected -> actual -> count
+    confusion: dict[str, dict[str, int]] = {}  # expected -> actual -> count
 
     for check in checks:
         expected = _match_ground_truth(check.claim, _CLAIM_GROUND_TRUTH)
@@ -248,7 +248,7 @@ def bench_claim_verifier() -> BenchResult:
 # 2. URL Deduplication Benchmark
 # =====================================================================
 
-_DEDUP_TEST_URLS: List[Dict[str, str]] = [
+_DEDUP_TEST_URLS: list[dict[str, str]] = [
     # Exact duplicates
     {"url": "https://example.com/article/123", "group": "A"},
     {"url": "https://example.com/article/123", "group": "A"},
@@ -290,8 +290,8 @@ def bench_url_dedup() -> BenchResult:
     expected_unique_groups = len(set(item["group"] for item in _DEDUP_TEST_URLS))
 
     # Canonicalize all URLs
-    canonical_map: Dict[str, str] = {}  # canonical -> first group
-    canonical_urls: List[str] = []
+    canonical_map: dict[str, str] = {}  # canonical -> first group
+    canonical_urls: list[str] = []
     for item in _DEDUP_TEST_URLS:
         canonical = _canonicalize_result_url(item["url"])
         if canonical not in canonical_map:
@@ -302,7 +302,7 @@ def bench_url_dedup() -> BenchResult:
     dedup_ratio = 1.0 - (actual_unique / max(1, total_input))
 
     # Check correctness: items in the same group should collapse
-    groups_seen: Dict[str, set] = {}
+    groups_seen: dict[str, set] = {}
     for item in _DEDUP_TEST_URLS:
         canonical = _canonicalize_result_url(item["url"])
         groups_seen.setdefault(canonical, set()).add(item["group"])
@@ -338,7 +338,7 @@ def bench_url_dedup() -> BenchResult:
 # 3. Multi-Search Result Aggregation Benchmark
 # =====================================================================
 
-_MULTI_SEARCH_RESULTS: List[Dict[str, Any]] = [
+_MULTI_SEARCH_RESULTS: list[dict[str, Any]] = [
     # Provider A results
     {
         "url": "https://example.com/article/1",
@@ -589,7 +589,7 @@ def bench_tool_registry() -> BenchResult:
     """Benchmark ToolRegistry registration, lookup, and statistics tracking."""
     start = time.monotonic()
 
-    from tools.core.registry import ToolMetadata, ToolRegistry
+    from tools.core.registry import ToolRegistry
 
     registry = ToolRegistry()
 
@@ -664,9 +664,9 @@ ALL_BENCHMARKS = [
 ]
 
 
-def run_all(output: Path, benchmarks: Optional[List[str]] = None) -> Dict[str, Any]:
+def run_all(output: Path, benchmarks: Optional[list[str]] = None) -> dict[str, Any]:
     """Run selected (or all) benchmarks and write a JSON report."""
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     total_passed = 0
     total_failed = 0
 
@@ -691,7 +691,7 @@ def run_all(output: Path, benchmarks: Optional[List[str]] = None) -> Dict[str, A
             print(f"ERROR: {e}")
 
     report = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "total_benchmarks": len(results),
         "passed": total_passed,
         "failed": total_failed,

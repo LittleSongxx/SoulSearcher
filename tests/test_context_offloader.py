@@ -1,10 +1,7 @@
 """Tests for context offloading engine."""
 
-import json
 import os
 import tempfile
-
-import pytest
 from unittest.mock import patch
 
 from agent.core.context_offloader import (

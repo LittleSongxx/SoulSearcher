@@ -14,7 +14,7 @@ Key Features:
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 from langchain_core.language_models import BaseChatModel
@@ -30,7 +30,7 @@ class ClaimVerification:
     """Verification result for a single claim."""
     claim: str
     supported: bool
-    supporting_sources: List[str] = field(default_factory=list)
+    supporting_sources: list[str] = field(default_factory=list)
     confidence: float = 0.0
     notes: str = ""
 
@@ -44,15 +44,15 @@ class QualityReport:
     citation_accuracy_score: float = 0.0
     citation_coverage_score: float = 1.0
 
-    verified_claims: List[ClaimVerification] = field(default_factory=list)
-    contradictions: List[str] = field(default_factory=list)
-    unique_domains: List[str] = field(default_factory=list)
-    missing_citations: List[str] = field(default_factory=list)
+    verified_claims: list[ClaimVerification] = field(default_factory=list)
+    contradictions: list[str] = field(default_factory=list)
+    unique_domains: list[str] = field(default_factory=list)
+    missing_citations: list[str] = field(default_factory=list)
 
     overall_score: float = 0.0
-    recommendations: List[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "claim_support_score": self.claim_support_score,
             "source_diversity_score": self.source_diversity_score,
@@ -126,15 +126,15 @@ class QualityAssessor:
     - Citation accuracy: Are citations properly formatted?
     """
 
-    def __init__(self, llm: BaseChatModel, config: Dict[str, Any] = None):
+    def __init__(self, llm: BaseChatModel, config: dict[str, Any] = None):
         self.llm = llm
         self.config = config or {}
 
     def assess(
         self,
         report: str,
-        scraped_content: List[Dict[str, Any]],
-        sources: List[str] = None,
+        scraped_content: list[dict[str, Any]],
+        sources: list[str] = None,
     ) -> QualityReport:
         """
         Perform comprehensive quality assessment.
@@ -218,9 +218,9 @@ class QualityAssessor:
     def check_claims(
         self,
         report: str,
-        scraped_content: List[Dict[str, Any]],
+        scraped_content: list[dict[str, Any]],
         max_claims: int = 10,
-    ) -> List[ClaimVerification]:
+    ) -> list[ClaimVerification]:
         """
         Extract and verify claims from the report.
 
@@ -239,7 +239,7 @@ class QualityAssessor:
             max_claims=max_claims,
         )
 
-        verifications: List[ClaimVerification] = []
+        verifications: list[ClaimVerification] = []
         for check in claim_checks:
             status = check.status.value
             verifications.append(
@@ -296,7 +296,7 @@ class QualityAssessor:
             logger.error(f"Claim verification error: {e}")
             return ClaimVerification(claim=claim, supported=False, notes=str(e))
 
-    def check_contradictions(self, report: str) -> List[str]:
+    def check_contradictions(self, report: str) -> list[str]:
         """
         Check for contradictions within the report.
 
@@ -328,8 +328,8 @@ class QualityAssessor:
     def check_citation_accuracy(
         self,
         report: str,
-        known_urls: List[str],
-    ) -> Tuple[List[str], float]:
+        known_urls: list[str],
+    ) -> tuple[list[str], float]:
         """
         Check citation formatting and accuracy.
 
@@ -384,7 +384,7 @@ class QualityAssessor:
 
         return [], 0.5
 
-    def check_citation_coverage(self, report: str) -> Tuple[List[str], float]:
+    def check_citation_coverage(self, report: str) -> tuple[list[str], float]:
         """
         Estimate citation coverage over claim-like sentences.
 
@@ -394,7 +394,7 @@ class QualityAssessor:
         if not report:
             return [], 1.0
 
-        claim_like_sentences: List[str] = []
+        claim_like_sentences: list[str] = []
         sentence_candidates = re.split(r"(?<=[。！？.!?])\s+", report)
         claim_markers = [
             r"\d{4}",
@@ -419,7 +419,7 @@ class QualityAssessor:
         coverage = 1.0 - (len(uncited_claims) / max(1, len(claim_like_sentences)))
         return uncited_claims[:5], max(0.0, min(1.0, coverage))
 
-    def check_source_diversity(self, sources: List[str]) -> Tuple[List[str], float]:
+    def check_source_diversity(self, sources: list[str]) -> tuple[list[str], float]:
         """
         Check diversity of source domains.
 
@@ -435,9 +435,9 @@ class QualityAssessor:
 
     def _extract_urls(
         self,
-        scraped_content: List[Dict[str, Any]],
-        sources: List[str] = None,
-    ) -> List[str]:
+        scraped_content: list[dict[str, Any]],
+        sources: list[str] = None,
+    ) -> list[str]:
         """Extract all URLs from scraped content and sources list."""
         urls = list(sources) if sources else []
 
@@ -449,7 +449,7 @@ class QualityAssessor:
 
         return urls
 
-    def _get_unique_domains(self, urls: List[str]) -> List[str]:
+    def _get_unique_domains(self, urls: list[str]) -> list[str]:
         """Extract unique domains from URLs."""
         domains = set()
         for url in urls:
@@ -465,7 +465,7 @@ class QualityAssessor:
                 pass
         return sorted(domains)
 
-    def _calculate_diversity_score(self, domains: List[str]) -> float:
+    def _calculate_diversity_score(self, domains: list[str]) -> float:
         """
         Calculate source diversity score.
 
@@ -492,7 +492,7 @@ class QualityAssessor:
 
         return min(1.0, base_score + auth_bonus)
 
-    def _build_sources_context(self, scraped_content: List[Dict[str, Any]]) -> str:
+    def _build_sources_context(self, scraped_content: list[dict[str, Any]]) -> str:
         """Build sources context string for claim verification."""
         parts = []
         for item in scraped_content:
@@ -504,7 +504,7 @@ class QualityAssessor:
 
         return "\n\n---\n\n".join(parts[:15])
 
-    def _generate_recommendations(self, quality: QualityReport) -> List[str]:
+    def _generate_recommendations(self, quality: QualityReport) -> list[str]:
         """Generate improvement recommendations based on quality scores."""
         recommendations = []
 

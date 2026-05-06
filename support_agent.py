@@ -7,20 +7,20 @@ Provides a simple LangGraph that:
 - Stores the interaction back to memory
 """
 
-from typing import Annotated, List, TypedDict
+from typing import Annotated, TypedDict
 
-from agent.core.llm_factory import create_chat_model
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from agent.core.llm_factory import create_chat_model
 from common.config import settings
 from tools.core.memory_client import fetch_memories, store_interaction
 
 
 class SupportState(TypedDict):
-    messages: Annotated[List[BaseMessage], add_messages]
+    messages: Annotated[list[BaseMessage], add_messages]
     user_id: str
 
 

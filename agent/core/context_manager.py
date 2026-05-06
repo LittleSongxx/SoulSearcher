@@ -19,8 +19,8 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Optional
 
 import tiktoken
 from langchain_core.messages import (
@@ -230,7 +230,7 @@ class ContextManager:
 
         return tokens
 
-    def count_messages_tokens(self, messages: List[BaseMessage]) -> TokenStats:
+    def count_messages_tokens(self, messages: list[BaseMessage]) -> TokenStats:
         """
         Count tokens for a list of messages with detailed stats.
 
@@ -262,10 +262,10 @@ class ContextManager:
 
     def truncate_messages(
         self,
-        messages: List[BaseMessage],
+        messages: list[BaseMessage],
         max_tokens: Optional[int] = None,
         strategy: Optional[str] = None,
-    ) -> Tuple[List[BaseMessage], TokenStats]:
+    ) -> tuple[list[BaseMessage], TokenStats]:
         """
         Truncate messages to fit within token limit.
 
@@ -303,9 +303,9 @@ class ContextManager:
 
     def _truncate_smart(
         self,
-        messages: List[BaseMessage],
+        messages: list[BaseMessage],
         max_tokens: int,
-    ) -> Tuple[List[BaseMessage], TokenStats]:
+    ) -> tuple[list[BaseMessage], TokenStats]:
         """
         Smart truncation: preserve system messages and recent context.
 
@@ -368,9 +368,9 @@ class ContextManager:
 
     def _truncate_fifo(
         self,
-        messages: List[BaseMessage],
+        messages: list[BaseMessage],
         max_tokens: int,
-    ) -> Tuple[List[BaseMessage], TokenStats]:
+    ) -> tuple[list[BaseMessage], TokenStats]:
         """
         FIFO truncation: remove oldest messages first.
 
@@ -406,9 +406,9 @@ class ContextManager:
 
     def _truncate_middle(
         self,
-        messages: List[BaseMessage],
+        messages: list[BaseMessage],
         max_tokens: int,
-    ) -> Tuple[List[BaseMessage], TokenStats]:
+    ) -> tuple[list[BaseMessage], TokenStats]:
         """
         Middle truncation: keep start and end, remove middle.
 
@@ -470,7 +470,7 @@ class ContextManager:
 
     def get_available_tokens(
         self,
-        messages: List[BaseMessage],
+        messages: list[BaseMessage],
         reserve_for_response: int = 1000,
     ) -> int:
         """
@@ -489,7 +489,7 @@ class ContextManager:
 
     def should_truncate(
         self,
-        messages: List[BaseMessage],
+        messages: list[BaseMessage],
         threshold: float = 0.9,
     ) -> bool:
         """
@@ -555,7 +555,7 @@ class ContextManager:
 
 
 # Global context manager instances
-_context_managers: Dict[str, ContextManager] = {}
+_context_managers: dict[str, ContextManager] = {}
 
 
 def get_context_manager(
@@ -581,10 +581,10 @@ def get_context_manager(
 
 
 def truncate_for_model(
-    messages: List[BaseMessage],
+    messages: list[BaseMessage],
     model: str = "gpt-4",
     max_tokens: Optional[int] = None,
-) -> List[BaseMessage]:
+) -> list[BaseMessage]:
     """
     Convenience function to truncate messages for a model.
 

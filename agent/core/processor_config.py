@@ -17,7 +17,7 @@ Inspired by Manus AgentPress ProcessorConfig.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal, Optional
 
 from common.config import settings
 
@@ -163,7 +163,7 @@ class AgentProcessorConfig:
     tool_result_postprocessor: Optional[callable] = None
     """Custom function to postprocess tool results before injection."""
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     """Additional custom metadata."""
 
     def __post_init__(self):
@@ -215,7 +215,7 @@ class AgentProcessorConfig:
             f")"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""
         return {
             # Tool calling

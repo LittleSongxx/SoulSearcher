@@ -1,6 +1,6 @@
 import base64
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import matplotlib.pyplot as plt
 from langchain.tools import tool
@@ -8,11 +8,11 @@ from langchain.tools import tool
 
 @tool
 def chart_visualize(
-    series: List[float],
-    labels: Optional[List[str]] = None,
+    series: list[float],
+    labels: Optional[list[str]] = None,
     title: str = "Chart",
     kind: str = "line",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Generate a simple chart (line/bar) from numeric series; returns base64 PNG.
     """

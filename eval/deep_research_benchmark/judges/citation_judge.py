@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from eval.deep_research_benchmark.judges.base import env_int, get_judge_llm, invoke_text, maybe_number
+from eval.deep_research_benchmark.judges.base import (
+    env_int,
+    get_judge_llm,
+    invoke_text,
+    maybe_number,
+)
 from eval.deep_research_benchmark.judges.rubric import (
     CITATION_JUDGE_PROMPT,
     CITATION_JUDGE_PROMPT_VERSION,

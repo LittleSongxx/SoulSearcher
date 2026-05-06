@@ -12,14 +12,15 @@ Features:
 - Backward compatible with LangChain
 """
 
+import json
 import logging
 import textwrap
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from agent.core.llm_factory import create_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from tavily import TavilyClient
 
+from agent.core.llm_factory import create_chat_model
 from common.config import settings
 from tools.core.base import ToolResult, WeaverTool, tool_schema
 
@@ -214,9 +215,9 @@ class TavilySearchTool(WeaverTool):
             )
 
         except Exception as e:
-            logger.error(f"Tavily search error: {str(e)}")
+            logger.error(f"Tavily search error: {e!s}")
             return self.fail_response(
-                f"Search failed: {str(e)}",
+                f"Search failed: {e!s}",
                 metadata={"error_type": type(e).__name__, "query": query},
             )
 
@@ -243,7 +244,7 @@ class TavilySearchTool(WeaverTool):
         },
     )
     def search_multiple(
-        self, queries: List[str], max_results_per_query: int = 5
+        self, queries: list[str], max_results_per_query: int = 5
     ) -> ToolResult:
         """
         Execute multiple search queries in sequence.
@@ -332,7 +333,7 @@ class TavilySearchTool(WeaverTool):
 
 
 # Backward compatibility: keep original function signature
-def tavily_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+def tavily_search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
     """
     Legacy function for backward compatibility.
 
@@ -362,8 +363,8 @@ def tavily_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
 
 
 def search_multiple_queries(
-    queries: List[str], max_results_per_query: int = 5
-) -> List[Dict[str, Any]]:
+    queries: list[str], max_results_per_query: int = 5
+) -> list[dict[str, Any]]:
     """
     Legacy function for backward compatibility.
 
@@ -401,7 +402,7 @@ if __name__ == "__main__":
     tool = TavilySearchTool()
 
     print(f"\nRegistered methods: {tool.list_methods()}")
-    print(f"\nSchemas:")
+    print("\nSchemas:")
     for name, schema in tool.get_schemas().items():
         print(f"  - {schema.get('name')}: {schema.get('description')[:60]}...")
 

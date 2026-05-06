@@ -6,11 +6,10 @@ Parses various document formats into text chunks for embedding.
 
 import hashlib
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Union
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ except ImportError:
 class Document:
     """A document chunk with metadata."""
     content: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     doc_id: str = ""
     chunk_id: str = ""
 
@@ -70,7 +69,7 @@ class DocumentLoader:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def load(self, file_path: Union[str, Path]) -> List[Document]:
+    def load(self, file_path: Union[str, Path]) -> list[Document]:
         """
         Load a document from file path.
 
@@ -116,7 +115,7 @@ class DocumentLoader:
         content: bytes,
         filename: str,
         file_type: str = None,
-    ) -> List[Document]:
+    ) -> list[Document]:
         """
         Load a document from bytes.
 
@@ -218,8 +217,8 @@ class DocumentLoader:
     def _chunk_text(
         self,
         text: str,
-        metadata: Dict[str, Any],
-    ) -> List[Document]:
+        metadata: dict[str, Any],
+    ) -> list[Document]:
         """
         Split text into chunks with overlap.
 
@@ -288,10 +287,10 @@ class DocumentLoader:
 
 
 def load_documents(
-    paths: List[Union[str, Path]],
+    paths: list[Union[str, Path]],
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
-) -> List[Document]:
+) -> list[Document]:
     """
     Load multiple documents.
 

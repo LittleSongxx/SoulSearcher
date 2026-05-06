@@ -22,7 +22,7 @@ Usage:
 import asyncio
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -141,7 +141,7 @@ class CrawlerOptimized:
 
         logger.info("[crawler] Browser closed")
 
-    async def crawl_single_url(self, url: str) -> Dict[str, Any]:
+    async def crawl_single_url(self, url: str) -> dict[str, Any]:
         """
         Crawl a single URL and extract text content.
 
@@ -179,7 +179,7 @@ class CrawlerOptimized:
                 logger.debug(f"[crawler] ✓ {url} ({len(content)} chars)")
                 return {"url": url, "content": content.strip()}
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"[crawler] ✗ {url} (timeout)")
             return {"url": url, "content": "Crawl timeout - page load too slow"}
 
@@ -191,7 +191,7 @@ class CrawlerOptimized:
             if page:
                 await page.close()
 
-    async def crawl_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
+    async def crawl_urls(self, urls: list[str]) -> list[dict[str, Any]]:
         """
         Crawl multiple URLs in parallel.
 
@@ -218,7 +218,7 @@ class CrawlerOptimized:
         tasks = [self.crawl_single_url(url) for url in valid_urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        formatted_results: List[Dict[str, Any]] = []
+        formatted_results: list[dict[str, Any]] = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"[crawler] Task {i} failed with exception: {result}")
@@ -302,7 +302,7 @@ def _strip_html(html: str) -> str:
     return text.strip()
 
 
-def _crawl_url_legacy(url: str, timeout: int = 10) -> Dict[str, str]:
+def _crawl_url_legacy(url: str, timeout: int = 10) -> dict[str, str]:
     """
     Fetch a single URL using urllib (legacy implementation).
 
@@ -319,13 +319,13 @@ def _crawl_url_legacy(url: str, timeout: int = 10) -> Dict[str, str]:
         return {"url": url, "content": f"Crawl failed: {e}"}
 
 
-def _crawl_urls_legacy(urls: List[str], timeout: int = 10) -> List[Dict[str, str]]:
+def _crawl_urls_legacy(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
     """
     Fetch multiple URLs sequentially using urllib (legacy implementation).
 
     This is the original simple implementation used as fallback.
     """
-    results: List[Dict[str, str]] = []
+    results: list[dict[str, str]] = []
     for u in urls:
         if not u:
             continue
@@ -363,7 +363,7 @@ def _should_use_optimized() -> bool:
     return getattr(settings, "use_optimized_crawler", True)
 
 
-def crawl_urls(urls: List[str], timeout: int = 10) -> List[Dict[str, str]]:
+def crawl_urls(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
     """
     Intelligent crawler that automatically selects best implementation.
 
@@ -404,10 +404,10 @@ def crawl_urls(urls: List[str], timeout: int = 10) -> List[Dict[str, str]]:
     return _crawl_urls_legacy(urls, timeout)
 
 
-def _run_async_crawl(urls: List[str]) -> List[Dict[str, str]]:
+def _run_async_crawl(urls: list[str]) -> list[dict[str, str]]:
     """Helper to run async crawl in a safe event loop (handles running loop + Windows)."""
 
-    def _run_new_loop(target_urls: List[str]) -> List[Dict[str, str]]:
+    def _run_new_loop(target_urls: list[str]) -> list[dict[str, str]]:
         try:
             import platform
 
@@ -434,7 +434,7 @@ def _run_async_crawl(urls: List[str]) -> List[Dict[str, str]]:
     return _run_new_loop(urls)
 
 
-async def _async_crawl_urls(urls: List[str]) -> List[Dict[str, Any]]:
+async def _async_crawl_urls(urls: list[str]) -> list[dict[str, Any]]:
     """Internal async crawling function."""
     async with CrawlerOptimized() as crawler:
         return await crawler.crawl_urls(urls)

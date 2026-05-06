@@ -7,7 +7,6 @@ WeaverTool base class and tool_schema decorator.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 from tools.core.base import ToolResult, WeaverTool, tool_schema
 
@@ -120,9 +119,9 @@ class EnhancedSearchTool(WeaverTool):
             )
 
         except Exception as e:
-            logger.error(f"Search failed: {str(e)}")
+            logger.error(f"Search failed: {e!s}")
             return self.fail_response(
-                f"Search failed: {str(e)}",
+                f"Search failed: {e!s}",
                 metadata={
                     "error_type": type(e).__name__,
                     "query": query,
@@ -207,7 +206,7 @@ class EnhancedSearchTool(WeaverTool):
 
         except Exception as e:
             return self.fail_response(
-                f"Image search failed: {str(e)}",
+                f"Image search failed: {e!s}",
                 metadata={"error_type": type(e).__name__, "query": query},
             )
 
@@ -283,7 +282,7 @@ class EnhancedSearchTool(WeaverTool):
 
         except Exception as e:
             return self.fail_response(
-                f"Failed to fetch trending topics: {str(e)}",
+                f"Failed to fetch trending topics: {e!s}",
                 metadata={"error_type": type(e).__name__, "category": category},
             )
 
@@ -320,7 +319,7 @@ class DataAnalysisTool(WeaverTool):
             "required": ["data"],
         },
     )
-    def analyze(self, data: List[float], operations: List[str] = None) -> ToolResult:
+    def analyze(self, data: list[float], operations: list[str] = None) -> ToolResult:
         """
         Analyze numerical data.
 
@@ -368,7 +367,7 @@ class DataAnalysisTool(WeaverTool):
 
         except Exception as e:
             return self.fail_response(
-                f"Analysis failed: {str(e)}",
+                f"Analysis failed: {e!s}",
                 metadata={"error_type": type(e).__name__, "data_length": len(data)},
             )
 
@@ -386,20 +385,20 @@ if __name__ == "__main__":
 
     # Test web search
     result1 = search_tool.search("machine learning", max_results=3, search_type="academic")
-    print(f"\n2. Web Search Result:")
+    print("\n2. Web Search Result:")
     print(f"   Success: {result1.success}")
     print(f"   Output preview: {result1.output[:200]}...")
 
     # Test image search
     result2 = search_tool.search_images("sunset", count=10, size="large")
-    print(f"\n3. Image Search Result:")
+    print("\n3. Image Search Result:")
     print(f"   Success: {result2.success}")
     if result2.metadata and "warning" in result2.metadata:
         print(f"   Warning: {result2.metadata['warning']}")
 
     # Test trending
     result3 = search_tool.get_trending(category="tech", limit=5)
-    print(f"\n4. Trending Topics:")
+    print("\n4. Trending Topics:")
     print(f"   Success: {result3.success}")
 
     # Test DataAnalysisTool
@@ -407,7 +406,7 @@ if __name__ == "__main__":
     result4 = data_tool.analyze(
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], operations=["mean", "median", "std"]
     )
-    print(f"\n5. Data Analysis:")
+    print("\n5. Data Analysis:")
     print(f"   Result: {result4.output}")
 
     print("\n" + "=" * 60)

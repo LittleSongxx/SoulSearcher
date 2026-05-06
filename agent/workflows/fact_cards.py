@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Optional
 
 from agent.workflows.source_url_utils import canonicalize_source_url
 
@@ -19,9 +20,9 @@ class FactCard:
     quote: str = ""
     source_type: str = ""
     confidence: float = 0.0
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         return {key: value for key, value in data.items() if value not in (None, "", [], {})}
 
@@ -40,7 +41,7 @@ def _stable_id(prefix: str, *parts: Any) -> str:
     return f"{prefix}_{digest}"
 
 
-def _snippet(item: Dict[str, Any]) -> str:
+def _snippet(item: dict[str, Any]) -> str:
     for key in ("snippet", "quote", "text", "summary", "content", "raw_excerpt", "markdown"):
         value = _text(item.get(key))
         if value:
@@ -48,8 +49,8 @@ def _snippet(item: Dict[str, Any]) -> str:
     return ""
 
 
-def _source_index(sources: Iterable[Dict[str, Any]]) -> Dict[str, Tuple[int, Dict[str, Any]]]:
-    mapping: Dict[str, Tuple[int, Dict[str, Any]]] = {}
+def _source_index(sources: Iterable[dict[str, Any]]) -> dict[str, tuple[int, dict[str, Any]]]:
+    mapping: dict[str, tuple[int, dict[str, Any]]] = {}
     for idx, source in enumerate(sources or [], 1):
         if not isinstance(source, dict):
             continue
@@ -82,9 +83,9 @@ def _claim_signal_score(text: str) -> int:
     return sum(1 for marker in markers if re.search(marker, text, flags=re.IGNORECASE))
 
 
-def _confidence(item: Dict[str, Any], quote: str, source: Dict[str, Any]) -> Tuple[float, List[str]]:
+def _confidence(item: dict[str, Any], quote: str, source: dict[str, Any]) -> tuple[float, list[str]]:
     score = 0.25
-    reasons: List[str] = []
+    reasons: list[str] = []
     source_type = _text(item.get("source_type")).lower()
     if source_type == "passage":
         score += 0.3
@@ -116,13 +117,13 @@ def _confidence(item: Dict[str, Any], quote: str, source: Dict[str, Any]) -> Tup
 
 def build_fact_cards(
     *,
-    evidence_items: Iterable[Dict[str, Any]],
-    sources: Iterable[Dict[str, Any]],
+    evidence_items: Iterable[dict[str, Any]],
+    sources: Iterable[dict[str, Any]],
     max_cards: int = 80,
     min_quote_chars: int = 40,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     source_map = _source_index(sources)
-    rows: List[Tuple[float, int, FactCard]] = []
+    rows: list[tuple[float, int, FactCard]] = []
     seen = set()
     for idx, item in enumerate(evidence_items or []):
         if not isinstance(item, dict):
@@ -163,7 +164,7 @@ def build_fact_cards(
     return [card.to_dict() for _score, _idx, card in selected]
 
 
-def format_fact_cards_for_writer(fact_cards: Iterable[Dict[str, Any]], *, max_cards: int = 40) -> str:
+def format_fact_cards_for_writer(fact_cards: Iterable[dict[str, Any]], *, max_cards: int = 40) -> str:
     cards = [card for card in fact_cards or [] if isinstance(card, dict)]
     if not cards:
         return ""
@@ -186,11 +187,11 @@ def format_fact_cards_for_writer(fact_cards: Iterable[Dict[str, Any]], *, max_ca
     return "\n".join(lines).strip()
 
 
-def match_claim_to_fact_card(claim: str, fact_cards: Iterable[Dict[str, Any]], *, min_overlap: float = 0.28) -> Optional[Dict[str, Any]]:
+def match_claim_to_fact_card(claim: str, fact_cards: Iterable[dict[str, Any]], *, min_overlap: float = 0.28) -> Optional[dict[str, Any]]:
     claim_tokens = _tokens(claim)
     if not claim_tokens:
         return None
-    best: Tuple[float, Dict[str, Any] | None] = (0.0, None)
+    best: tuple[float, dict[str, Any] | None] = (0.0, None)
     for card in fact_cards or []:
         if not isinstance(card, dict):
             continue
@@ -211,11 +212,11 @@ def match_claim_to_fact_card(claim: str, fact_cards: Iterable[Dict[str, Any]], *
     return None
 
 
-def repair_citations_with_fact_cards(report: str, missing_claims: Iterable[str], fact_cards: Iterable[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]:
+def repair_citations_with_fact_cards(report: str, missing_claims: Iterable[str], fact_cards: Iterable[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
     missing = [_text(claim) for claim in missing_claims or [] if _text(claim)]
     if not report or not missing:
         return report, {"enabled": True, "repaired_count": 0, "unmatched_count": 0, "method": "fact_card"}
-    replacements: Dict[str, str] = {}
+    replacements: dict[str, str] = {}
     unmatched = 0
     for claim in missing:
         card = match_claim_to_fact_card(claim, fact_cards)
@@ -264,8 +265,8 @@ def _append_ref_to_sentence(sentence: str, ref: int) -> str:
     return f"{text} [{ref}]"
 
 
-def _split_sentences(text: str) -> List[str]:
-    sentences: List[str] = []
+def _split_sentences(text: str) -> list[str]:
+    sentences: list[str] = []
     for line in str(text or "").splitlines():
         sentences.extend(part.strip() for part in re.findall(r".+?(?:[。！？!?]|[.!?](?=\s|$))|.+$", line) if part.strip())
     return sentences

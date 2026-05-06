@@ -16,186 +16,156 @@ def _resolve_schema_ref(spec: dict, schema: dict) -> dict:
     return schemas.get(name, {}) or {}
 
 
-def test_openapi_has_key_paths_and_distinct_resume_schemas():
+def _response_schema(paths: dict, path: str, method: str = "get") -> dict:
+    return ((paths.get(path, {}) or {}).get(method, {}) or {}).get("responses", {}).get(
+        "200", {}
+    ).get("content", {}).get("application/json", {}).get("schema", {}) or {}
+
+
+def test_openapi_exposes_research_workspace_core_paths_only():
     spec = app.openapi()
     assert isinstance(spec, dict)
 
     paths = spec.get("paths", {}) or {}
-    assert "/api/interrupt/resume" in paths
-    assert "/api/sessions/{thread_id}/resume" in paths
-    assert "/api/agents" in paths
-    assert "/api/sessions" in paths
-    assert "/api/runs/{thread_id}" in paths
-    assert "/api/sessions/{thread_id}/continue-research" in paths
-    assert "/api/chat/sse" in paths
-    assert "/api/sessions/{thread_id}/versions" in paths
-    assert "/api/sessions/{thread_id}/evidence" in paths
-    assert "/api/chat/sse" in paths
-    assert "/api/runs/{thread_id}" in paths
+    expected_core_paths = {
+        "/api/research/sse",
+        "/api/research/cancel/{thread_id}",
+        "/api/research/cancel-all",
+        "/api/interrupt/resume",
+        "/api/sessions",
+        "/api/sessions/{thread_id}",
+        "/api/sessions/{thread_id}/state",
+        "/api/sessions/{thread_id}/evidence",
+        "/api/sessions/{thread_id}/continue-research",
+        "/api/runs/{thread_id}",
+        "/api/export/{thread_id}",
+        "/api/export/templates",
+        "/api/documents/upload",
+        "/api/documents/list",
+        "/api/documents/search",
+    }
+    for path in expected_core_paths:
+        assert path in paths
 
+    removed_product_paths = {
+        "/api/chat",
+        "/api/chat/sse",
+        "/api/chat/cancel/{thread_id}",
+        "/api/chat/cancel-all",
+        "/api/research",
+        "/api/agents",
+        "/api/agents/{agent_id}",
+        "/api/skills",
+        "/api/skills/{skill_id}",
+        "/api/asr/recognize",
+        "/api/asr/upload",
+        "/api/asr/status",
+        "/api/tts/synthesize",
+        "/api/tts/voices",
+        "/api/tts/status",
+        "/api/browser/{thread_id}/info",
+        "/api/browser/{thread_id}/screenshot",
+        "/api/events/{thread_id}",
+        "/api/screenshots",
+        "/api/screenshots/{filename}",
+        "/api/triggers",
+        "/api/triggers/webhook",
+        "/api/webhook/{trigger_id}",
+        "/api/mcp/config",
+        "/api/sandbox/browser/diagnose",
+    }
+    for path in removed_product_paths:
+        assert path not in paths
+
+
+def test_openapi_research_workspace_response_schemas_are_typed():
+    spec = app.openapi()
+    paths = spec.get("paths", {}) or {}
     schemas = (spec.get("components", {}) or {}).get("schemas", {}) or {}
+
+    assert "ResearchRequest" in schemas
     assert "GraphInterruptResumeRequest" in schemas
     assert "SessionResumeRequest" in schemas
+    assert "ChatRequest" not in schemas
+    assert "AgentUpsertPayload" not in schemas
+    assert "SupportChatRequest" not in schemas
 
-    agents_get = (paths.get("/api/agents", {}) or {}).get("get", {}) or {}
-    agents_schema = (
-        (agents_get.get("responses", {}) or {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-        or {}
-    )
-    assert agents_schema, "/api/agents 200 schema should not be empty (response_model missing?)"
-    agents_resolved = _resolve_schema_ref(spec, agents_schema)
-    agents_props = agents_resolved.get("properties", {}) or {}
-    assert "agents" in agents_props
-    assert agents_props["agents"].get("type") == "array"
+    research_req_props = schemas.get("ResearchRequest", {}).get("properties", {}) or {}
+    assert "query" in research_req_props
+    assert "search_mode" in research_req_props
+    assert "deepsearch_config" in research_req_props
+    assert "agent_id" not in research_req_props
+    assert "skill_id" not in research_req_props
 
-    sessions_get = (paths.get("/api/sessions", {}) or {}).get("get", {}) or {}
-    sessions_schema = (
-        (sessions_get.get("responses", {}) or {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-        or {}
-    )
-    assert sessions_schema, "/api/sessions 200 schema should not be empty (response_model missing?)"
+    sessions_schema = _response_schema(paths, "/api/sessions")
+    assert sessions_schema, "/api/sessions 200 schema should not be empty"
     sessions_resolved = _resolve_schema_ref(spec, sessions_schema)
     sessions_props = sessions_resolved.get("properties", {}) or {}
     assert sessions_props.get("count", {}).get("type") == "integer"
     assert sessions_props.get("sessions", {}).get("type") == "array"
 
-    comments_get = (paths.get("/api/sessions/{thread_id}/comments", {}) or {}).get("get", {}) or {}
-    comments_schema = (
-        (comments_get.get("responses", {}) or {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-        or {}
-    )
-    assert (
-        comments_schema
-    ), "/api/sessions/{thread_id}/comments 200 schema should not be empty (response_model missing?)"
-    comments_resolved = _resolve_schema_ref(spec, comments_schema)
-    comments_props = comments_resolved.get("properties", {}) or {}
-    assert comments_props.get("count", {}).get("type") == "integer"
-    assert comments_props.get("comments", {}).get("type") == "array"
-
-    versions_get = (paths.get("/api/sessions/{thread_id}/versions", {}) or {}).get("get", {}) or {}
-    versions_schema = (
-        (versions_get.get("responses", {}) or {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-        or {}
-    )
-    assert (
-        versions_schema
-    ), "/api/sessions/{thread_id}/versions 200 schema should not be empty (response_model missing?)"
-    versions_resolved = _resolve_schema_ref(spec, versions_schema)
-    versions_props = versions_resolved.get("properties", {}) or {}
-    assert versions_props.get("count", {}).get("type") == "integer"
-    assert versions_props.get("versions", {}).get("type") == "array"
-
-    evidence_get = (
-        (paths.get("/api/sessions/{thread_id}/evidence", {}) or {}).get("get", {}) or {}
-    )
-    evidence_schema = (
-        (evidence_get.get("responses", {}) or {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-        or {}
-    )
+    evidence_schema = _response_schema(paths, "/api/sessions/{thread_id}/evidence")
     assert (
         evidence_schema
-    ), "/api/sessions/{thread_id}/evidence 200 schema should not be empty (response_model missing?)"
+    ), "/api/sessions/{thread_id}/evidence 200 schema should not be empty"
     evidence_resolved = _resolve_schema_ref(spec, evidence_schema)
     evidence_props = evidence_resolved.get("properties", {}) or {}
-    assert evidence_props.get("sources", {}).get("type") == "array"
-    assert evidence_props.get("claims", {}).get("type") == "array"
+    for field in (
+        "sources",
+        "claims",
+        "quality_gates",
+        "evidence_items",
+        "citation_annotations",
+        "timeline",
+        "supervisor_decisions",
+        "worker_runs",
+        "intermediate_steps",
+        "continue_requests",
+        "fetched_pages",
+        "passages",
+    ):
+        assert evidence_props.get(field, {}).get("type") == "array"
     assert evidence_props.get("research_brief", {}).get("type") == "object"
-    assert evidence_props.get("quality_gates", {}).get("type") == "array"
-    assert evidence_props.get("evidence_items", {}).get("type") == "array"
-    assert evidence_props.get("citation_annotations", {}).get("type") == "array"
-    assert evidence_props.get("timeline", {}).get("type") == "array"
-    assert evidence_props.get("supervisor_decisions", {}).get("type") == "array"
-    assert evidence_props.get("worker_runs", {}).get("type") == "array"
-    assert evidence_props.get("intermediate_steps", {}).get("type") == "array"
-    assert evidence_props.get("continue_requests", {}).get("type") == "array"
-    assert evidence_props.get("fetched_pages", {}).get("type") == "array"
-    assert evidence_props.get("passages", {}).get("type") == "array"
 
-    passage_item = schemas.get("EvidencePassageItem", {}) or {}
-    passage_item_props = passage_item.get("properties", {}) or {}
-    assert "heading" in passage_item_props
-    assert "heading_path" in passage_item_props
-    assert "page_title" in passage_item_props
-    assert "retrieved_at" in passage_item_props
-    assert "method" in passage_item_props
-    assert "quote" in passage_item_props
-    assert "snippet_hash" in passage_item_props
+    passage_item_props = (
+        schemas.get("EvidencePassageItem", {}).get("properties", {}) or {}
+    )
+    for field in (
+        "heading",
+        "heading_path",
+        "page_title",
+        "retrieved_at",
+        "method",
+        "quote",
+        "snippet_hash",
+    ):
+        assert field in passage_item_props
 
-    claim_item = schemas.get("EvidenceClaim", {}) or {}
-    claim_item_props = claim_item.get("properties", {}) or {}
-    assert "evidence_passages" in claim_item_props
+    claim_item_props = schemas.get("EvidenceClaim", {}).get("properties", {}) or {}
     assert claim_item_props.get("evidence_passages", {}).get("type") == "array"
 
-    citation_item = schemas.get("CitationAnnotationResponse", {}) or {}
-    citation_item_props = citation_item.get("properties", {}) or {}
-    assert "marker" in citation_item_props
-    assert "evidence_ids" in citation_item_props
-
-    timeline_item = schemas.get("TimelineEventResponse", {}) or {}
-    timeline_item_props = timeline_item.get("properties", {}) or {}
-    assert "event_type" in timeline_item_props
-    assert "order" in timeline_item_props
-
-    worker_item = schemas.get("WorkerRunResponse", {}) or {}
-    worker_item_props = worker_item.get("properties", {}) or {}
-    assert "worker_id" in worker_item_props
-    assert "provider_breakdown" in worker_item_props
-
-    supervisor_item = schemas.get("SupervisorDecisionResponse", {}) or {}
-    supervisor_item_props = supervisor_item.get("properties", {}) or {}
-    assert "action" in supervisor_item_props
-    assert "quality_snapshot" in supervisor_item_props
-
-    step_item = schemas.get("IntermediateStepResponse", {}) or {}
-    step_item_props = step_item.get("properties", {}) or {}
-    assert "type" in step_item_props
-    assert "order" in step_item_props
-
-    continue_req = schemas.get("ContinueResearchRequest", {}) or {}
-    continue_req_props = continue_req.get("properties", {}) or {}
+    continue_req_props = (
+        schemas.get("ContinueResearchRequest", {}).get("properties", {}) or {}
+    )
     assert "target_type" in continue_req_props
     assert "instruction" in continue_req_props
 
-    continue_resp = schemas.get("ContinueResearchResponse", {}) or {}
-    continue_resp_props = continue_resp.get("properties", {}) or {}
+    continue_resp_props = (
+        schemas.get("ContinueResearchResponse", {}).get("properties", {}) or {}
+    )
     assert "continue_request" in continue_resp_props
     assert "stream_payload" in continue_resp_props
 
-    runs_get = (paths.get("/api/runs/{thread_id}", {}) or {}).get("get", {}) or {}
-    runs_schema = (
-        (runs_get.get("responses", {}) or {})
-        .get("200", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema", {})
-        or {}
-    )
-    assert runs_schema, "/api/runs/{thread_id} 200 schema should not be empty (response_model missing?)"
+    runs_schema = _response_schema(paths, "/api/runs/{thread_id}")
+    assert runs_schema, "/api/runs/{thread_id} 200 schema should not be empty"
     runs_resolved = _resolve_schema_ref(spec, runs_schema)
     runs_props = runs_resolved.get("properties", {}) or {}
-    assert "evidence_summary" in runs_props
-    evidence_summary_schema = runs_props.get("evidence_summary", {}) or {}
-    evidence_summary_resolved = _resolve_schema_ref(spec, evidence_summary_schema)
+    evidence_summary_resolved = _resolve_schema_ref(
+        spec, runs_props.get("evidence_summary", {}) or {}
+    )
     evidence_summary_props = evidence_summary_resolved.get("properties", {}) or {}
     assert evidence_summary_props.get("sources_count", {}).get("type") == "integer"
-    assert evidence_summary_props.get("unsupported_claims_count", {}).get("type") == "integer"
+    assert (
+        evidence_summary_props.get("unsupported_claims_count", {}).get("type")
+        == "integer"
+    )

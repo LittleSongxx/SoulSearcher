@@ -1,4 +1,4 @@
-from agent.workflows.research_brief import build_research_brief, brief_topic
+from agent.workflows.research_brief import brief_topic, build_research_brief
 
 
 def test_build_research_brief_derives_expected_fields_and_freshness():
@@ -16,6 +16,8 @@ def test_build_research_brief_derives_expected_fields_and_freshness():
     assert "recent_updates" in brief.expected_fields
     assert brief.freshness_requirement == "within_30_days"
     assert brief.complexity == "broad"
+    assert brief.citation_policy == "required"
+    assert brief.source_routing["mode"] == "web_only"
     assert "Expected fields:" in brief_topic(brief)
 
 
@@ -37,3 +39,4 @@ def test_build_research_brief_accepts_existing_dict():
     assert brief.clarified_goal == "goal"
     assert brief.expected_fields == ["a", "b"]
     assert brief.source_policy == "hybrid"
+    assert brief.source_routing["providers"] == ["web", "rag"]

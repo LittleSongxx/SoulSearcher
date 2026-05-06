@@ -6,7 +6,8 @@ Executes searches, manages sources, and analyzes results.
 
 import logging
 import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -29,19 +30,19 @@ class ResearchAgent:
         self,
         llm: BaseChatModel,
         search_func: Callable,
-        config: Dict[str, Any] = None,
+        config: dict[str, Any] = None,
     ):
         self.llm = llm
         self.search_func = search_func
         self.config = config or {}
-        self.all_searched_urls: List[str] = []
-        self.selected_urls: List[str] = []
+        self.all_searched_urls: list[str] = []
+        self.selected_urls: list[str] = []
 
     def execute_queries(
         self,
-        queries: List[str],
+        queries: list[str],
         max_results_per_query: int = 5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute a batch of search queries.
 
@@ -76,10 +77,10 @@ class ResearchAgent:
     def analyze_and_select(
         self,
         topic: str,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
         max_urls: int = 5,
         summary_context: str = "",
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Analyze results and select the most relevant URLs.
 
@@ -150,7 +151,7 @@ class ResearchAgent:
     def summarize_findings(
         self,
         topic: str,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
         existing_summary: str = "",
     ) -> str:
         """

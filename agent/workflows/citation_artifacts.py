@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 from agent.workflows.source_url_utils import canonicalize_source_url
-
 
 _CITATION_RE = re.compile(r"\[(S\d+|\d+)\]")
 
@@ -29,14 +29,14 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         normalized = text.replace("Z", "+00:00")
         dt = datetime.fromisoformat(normalized)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except ValueError:
         return None
 
 
-def _evidence_lookup(evidence_items: Iterable[Dict[str, Any]]) -> Dict[str, List[str]]:
-    lookup: Dict[str, List[str]] = {}
+def _evidence_lookup(evidence_items: Iterable[dict[str, Any]]) -> dict[str, list[str]]:
+    lookup: dict[str, list[str]] = {}
     for item in evidence_items or []:
         if not isinstance(item, dict):
             continue
@@ -63,10 +63,10 @@ def _evidence_lookup(evidence_items: Iterable[Dict[str, Any]]) -> Dict[str, List
 def build_citation_annotations(
     *,
     report: str,
-    sources: List[Dict[str, Any]],
-    evidence_items: Optional[List[Dict[str, Any]]] = None,
-) -> List[Dict[str, Any]]:
-    source_by_marker: Dict[str, Dict[str, Any]] = {}
+    sources: list[dict[str, Any]],
+    evidence_items: Optional[list[dict[str, Any]]] = None,
+) -> list[dict[str, Any]]:
+    source_by_marker: dict[str, dict[str, Any]] = {}
     for idx, source in enumerate(sources or [], 1):
         if not isinstance(source, dict):
             continue
@@ -77,7 +77,7 @@ def build_citation_annotations(
 
     evidence_by_key = _evidence_lookup(evidence_items or [])
     reference_start = (report or "").find("## 参考来源（自动生成）")
-    annotations: List[Dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
     for occurrence, match in enumerate(_CITATION_RE.finditer(report or ""), 1):
         marker_key = match.group(1)
         source = source_by_marker.get(marker_key)
@@ -115,7 +115,7 @@ def build_citation_annotations(
     return annotations
 
 
-def _append_event(events: List[Dict[str, Any]], event: Dict[str, Any]) -> None:
+def _append_event(events: list[dict[str, Any]], event: dict[str, Any]) -> None:
     event = {key: value for key, value in event.items() if value not in (None, "", [], {})}
     event.setdefault("id", _stable_id("tl", event.get("event_type"), event.get("timestamp"), event.get("title"), len(events)))
     event.setdefault("order", len(events) + 1)
@@ -124,12 +124,12 @@ def _append_event(events: List[Dict[str, Any]], event: Dict[str, Any]) -> None:
 
 def build_timeline_artifacts(
     *,
-    search_runs: Optional[List[Dict[str, Any]]] = None,
-    sources: Optional[List[Dict[str, Any]]] = None,
-    evidence_items: Optional[List[Dict[str, Any]]] = None,
-    quality_gates: Optional[List[Dict[str, Any]]] = None,
-) -> List[Dict[str, Any]]:
-    events: List[Dict[str, Any]] = []
+    search_runs: Optional[list[dict[str, Any]]] = None,
+    sources: Optional[list[dict[str, Any]]] = None,
+    evidence_items: Optional[list[dict[str, Any]]] = None,
+    quality_gates: Optional[list[dict[str, Any]]] = None,
+) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
     for run_idx, run in enumerate(search_runs or [], 1):
         if not isinstance(run, dict):
             continue
@@ -211,7 +211,7 @@ def build_timeline_artifacts(
     decorated = []
     for idx, event in enumerate(events):
         parsed = _parse_dt(event.get("timestamp"))
-        decorated.append((parsed is None, parsed or datetime.max.replace(tzinfo=timezone.utc), idx, event))
+        decorated.append((parsed is None, parsed or datetime.max.replace(tzinfo=UTC), idx, event))
     decorated.sort(key=lambda item: item[:3])
     output = []
     for order, (_, _, _, event) in enumerate(decorated, 1):

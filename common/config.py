@@ -5,7 +5,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from common.proxy_env import normalize_socks_proxy_env
 
@@ -44,7 +44,7 @@ class ProxySettings(BaseModel):
 
 class SearchSettings(BaseModel):
     engine: str = "tavily"
-    fallback_engines: List[str] = Field(default_factory=list)
+    fallback_engines: list[str] = Field(default_factory=list)
     retry_delay: int = 60
     max_retries: int = 3
     lang: str = "en"
@@ -54,7 +54,7 @@ class SearchSettings(BaseModel):
 class BrowserSettings(BaseModel):
     headless: bool = False
     disable_security: bool = True
-    extra_chromium_args: List[str] = Field(default_factory=list)
+    extra_chromium_args: list[str] = Field(default_factory=list)
     chrome_instance_path: Optional[str] = None
     wss_url: Optional[str] = None
     cdp_url: Optional[str] = None
@@ -87,11 +87,11 @@ class MCPServerConfig(BaseModel):
     type: str
     url: Optional[str] = None
     command: Optional[str] = None
-    args: List[str] = Field(default_factory=list)
+    args: list[str] = Field(default_factory=list)
 
 
 class MCPSettings(BaseModel):
-    servers: Dict[str, MCPServerConfig] = Field(default_factory=dict)
+    servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
 class RunflowSettings(BaseModel):
@@ -99,7 +99,7 @@ class RunflowSettings(BaseModel):
 
 
 class AppConfig(BaseModel):
-    llm: Dict[str, LLMSettingsModel]
+    llm: dict[str, LLMSettingsModel]
     sandbox: Optional[SandboxSettings] = None
     browser_config: Optional[BrowserSettings] = None
     search_config: Optional[SearchSettings] = None
@@ -242,8 +242,10 @@ class Settings(BaseSettings):
     rate_limit_general_per_minute: int = Field(
         default=60, ge=1, validation_alias="RATE_LIMIT_GENERAL_PER_MINUTE"
     )
-    rate_limit_chat_per_minute: int = Field(
-        default=20, ge=1, validation_alias="RATE_LIMIT_CHAT_PER_MINUTE"
+    rate_limit_research_per_minute: int = Field(
+        default=20,
+        ge=1,
+        validation_alias="RATE_LIMIT_RESEARCH_PER_MINUTE",
     )
     rate_limit_window_seconds: int = Field(
         default=60, ge=1, validation_alias="RATE_LIMIT_WINDOW_SECONDS"
@@ -617,7 +619,7 @@ class Settings(BaseSettings):
     prompt_optimization_sample_size: int = 50  # 每轮评估样本数
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         """Parse CORS origins string into list."""
         origins = [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
@@ -658,7 +660,7 @@ class Settings(BaseSettings):
         return env in {"prod", "production"}
 
     @property
-    def interrupt_nodes_list(self) -> List[str]:
+    def interrupt_nodes_list(self) -> list[str]:
         """Parse interrupt_before_nodes into list for LangGraph compile."""
         return [
             node.strip()
@@ -667,24 +669,24 @@ class Settings(BaseSettings):
         ]
 
     @property
-    def tool_selector_always_include_list(self) -> List[str]:
+    def tool_selector_always_include_list(self) -> list[str]:
         """Comma separated tool names that must always be kept when selector is on."""
         return [
             t.strip() for t in self.tool_selector_always_include.split(",") if t.strip()
         ]
 
     @property
-    def tool_whitelist_list(self) -> List[str]:
+    def tool_whitelist_list(self) -> list[str]:
         """Comma separated tool whitelist."""
         return [t.strip() for t in self.tool_whitelist.split(",") if t.strip()]
 
     @property
-    def tool_blacklist_list(self) -> List[str]:
+    def tool_blacklist_list(self) -> list[str]:
         """Comma separated tool blacklist."""
         return [t.strip() for t in self.tool_blacklist.split(",") if t.strip()]
 
     @property
-    def enhanced_tool_discovery_exclude_list(self) -> List[str]:
+    def enhanced_tool_discovery_exclude_list(self) -> list[str]:
         """Comma separated directory names excluded from enhanced tool discovery."""
         return [
             d.strip()
@@ -693,7 +695,7 @@ class Settings(BaseSettings):
         ]
 
     @property
-    def search_engines_list(self) -> List[str]:
+    def search_engines_list(self) -> list[str]:
         """Comma separated ordered search engines."""
         engines = [e.strip() for e in self.search_engines.split(",") if e.strip()]
         if not engines and getattr(self, "app_config_object", None):
@@ -746,7 +748,7 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _load_mcp_servers(mcp_path: str) -> Dict[str, MCPServerConfig]:
+def _load_mcp_servers(mcp_path: str) -> dict[str, MCPServerConfig]:
     """
     Load MCP server configs from JSON (mcp.json or mcp.json.example).
     """
@@ -775,7 +777,7 @@ def _load_mcp_servers(mcp_path: str) -> Dict[str, MCPServerConfig]:
     return {}
 
 
-@lru_cache()
+@lru_cache
 def load_app_config(config_path: str, mcp_path: str) -> Optional[AppConfig]:
     """
     Load AppConfig from TOML + MCP JSON (compatible with OpenManus config layout).
@@ -808,7 +810,7 @@ def load_app_config(config_path: str, mcp_path: str) -> Optional[AppConfig]:
         "api_version": base_llm.get("api_version", ""),
     }
 
-    llm_dict: Dict[str, LLMSettingsModel] = {}
+    llm_dict: dict[str, LLMSettingsModel] = {}
     if default_settings.get("model"):
         llm_dict["default"] = LLMSettingsModel(**default_settings)
     for name, override in overrides.items():

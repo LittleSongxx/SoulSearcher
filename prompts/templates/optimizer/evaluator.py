@@ -7,12 +7,12 @@ Prompt 评估函数模块
 import json
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def eval_planner_quality(results: List[Dict]) -> Tuple[float, List[Dict]]:
+def eval_planner_quality(results: list[dict]) -> tuple[float, list[dict]]:
     """
     评估 planner 输出质量
 
@@ -89,7 +89,9 @@ def eval_planner_quality(results: List[Dict]) -> Tuple[float, List[Dict]]:
                 words = set(q.lower().split())
                 unique_words.update(words)
                 total_words += len(words)
-            scores["diversity"] = len(unique_words) / total_words if total_words > 0 else 0.0
+            scores["diversity"] = (
+                len(unique_words) / total_words if total_words > 0 else 0.0
+            )
         else:
             scores["diversity"] = 0.5
 
@@ -118,7 +120,7 @@ def eval_planner_quality(results: List[Dict]) -> Tuple[float, List[Dict]]:
     return accuracy, annotated
 
 
-def eval_writer_quality(results: List[Dict]) -> Tuple[float, List[Dict]]:
+def eval_writer_quality(results: list[dict]) -> tuple[float, list[dict]]:
     """
     评估 writer 输出质量
 
@@ -153,7 +155,9 @@ def eval_writer_quality(results: List[Dict]) -> Tuple[float, List[Dict]]:
         has_paragraphs = len(output.split("\n\n")) >= 2
 
         structure_score = (
-            (0.4 if has_headers else 0) + (0.3 if has_lists else 0) + (0.3 if has_paragraphs else 0)
+            (0.4 if has_headers else 0)
+            + (0.3 if has_lists else 0)
+            + (0.3 if has_paragraphs else 0)
         )
         scores["structure"] = structure_score
 
@@ -212,8 +216,8 @@ def eval_writer_quality(results: List[Dict]) -> Tuple[float, List[Dict]]:
 
 
 def eval_generic_quality(
-    results: List[Dict], criteria: Dict[str, Dict[str, Any]] = None
-) -> Tuple[float, List[Dict]]:
+    results: list[dict], criteria: dict[str, dict[str, Any]] = None
+) -> tuple[float, list[dict]]:
     """
     通用质量评估函数
 
@@ -240,8 +244,17 @@ def eval_generic_quality(
     if criteria is None:
         criteria = {
             "not_empty": {"type": "length", "min": 10, "weight": 0.3},
-            "reasonable_length": {"type": "length", "min": 50, "max": 5000, "weight": 0.3},
-            "has_content": {"type": "contains", "values": ["。", ".", ",", "，"], "weight": 0.4},
+            "reasonable_length": {
+                "type": "length",
+                "min": 50,
+                "max": 5000,
+                "weight": 0.3,
+            },
+            "has_content": {
+                "type": "contains",
+                "values": ["。", ".", ",", "，"],
+                "weight": 0.4,
+            },
         }
 
     correct = 0
@@ -253,7 +266,6 @@ def eval_generic_quality(
 
         for name, config in criteria.items():
             criterion_type = config.get("type")
-            weight = config.get("weight", 1.0 / len(criteria))
 
             if criterion_type == "contains":
                 values = config.get("values", [])
@@ -296,9 +308,14 @@ def eval_generic_quality(
                     scores[name] = 0.5
 
         # 计算加权总分
-        total_weight = sum(c.get("weight", 1.0 / len(criteria)) for c in criteria.values())
+        total_weight = sum(
+            c.get("weight", 1.0 / len(criteria)) for c in criteria.values()
+        )
         total_score = (
-            sum(scores[name] * criteria[name].get("weight", 1.0 / len(criteria)) for name in scores)
+            sum(
+                scores[name] * criteria[name].get("weight", 1.0 / len(criteria))
+                for name in scores
+            )
             / total_weight
             if total_weight > 0
             else 0
@@ -310,14 +327,19 @@ def eval_generic_quality(
             correct += 1
 
         annotated.append(
-            {**item, "scores": scores, "total_score": total_score, "is_correct": is_correct}
+            {
+                **item,
+                "scores": scores,
+                "total_score": total_score,
+                "is_correct": is_correct,
+            }
         )
 
     accuracy = correct / len(results)
     return accuracy, annotated
 
 
-def _parse_queries(output: str) -> List[str]:
+def _parse_queries(output: str) -> list[str]:
     """
     从输出中解析查询列表
 
@@ -332,7 +354,9 @@ def _parse_queries(output: str) -> List[str]:
         if start >= 0 and end > start:
             data = json.loads(output[start:end])
             if isinstance(data.get("queries"), list):
-                queries = [q for q in data["queries"] if isinstance(q, str) and q.strip()]
+                queries = [
+                    q for q in data["queries"] if isinstance(q, str) and q.strip()
+                ]
                 if queries:
                     return queries
     except json.JSONDecodeError:

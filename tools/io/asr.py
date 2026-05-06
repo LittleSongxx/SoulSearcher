@@ -9,7 +9,7 @@ import os
 import tempfile
 import time
 from http import HTTPStatus
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from dashscope.audio.asr import Recognition, RecognitionCallback, Transcription
@@ -72,7 +72,7 @@ class ASRService:
         format: str = "wav",
         sample_rate: int = 16000,
         language_hints: Optional[list] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         识别音频文件
 
@@ -135,7 +135,7 @@ class ASRService:
             return {"success": False, "text": "", "error": error_msg}
 
         except Exception as e:
-            error_msg = f"ASR exception: {str(e)}"
+            error_msg = f"ASR exception: {e!s}"
             logger.error(error_msg, exc_info=True)
             self.last_error = error_msg
             self.last_error_time = time.time()
@@ -147,7 +147,7 @@ class ASRService:
         format: str = "wav",
         sample_rate: int = 16000,
         language_hints: Optional[list] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         识别音频字节数据
 

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 TRACKING_QUERY_KEYS = {
@@ -48,8 +48,8 @@ def canonicalize_source_url(raw_url: Any) -> str:
     )
 
 
-def compact_unique_sources(results: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, Any]]:
-    compact: List[Dict[str, Any]] = []
+def compact_unique_sources(results: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
+    compact: list[dict[str, Any]] = []
     seen_urls = set()
     for item in results or []:
         if not isinstance(item, dict):

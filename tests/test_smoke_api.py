@@ -19,26 +19,31 @@ from main import app
 
 @pytest.mark.asyncio
 async def test_chat_stream_smoke():
-    """Basic smoke test for /api/chat streaming endpoint."""
-    live = (os.getenv("WEAVER_LIVE_TESTS") or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+    live = (os.getenv("WEAVER_LIVE_TESTS") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
     if not live:
-        pytest.skip("Set WEAVER_LIVE_TESTS=1 to run the live /api/chat smoke test.")
+        pytest.skip(
+            "Set WEAVER_LIVE_TESTS=1 to run the live /api/research/sse smoke test."
+        )
 
     if not settings.openai_api_key:
-        pytest.skip("OPENAI_API_KEY is not configured; skipping live /api/chat smoke test.")
+        pytest.skip(
+            "OPENAI_API_KEY is not configured; skipping live /api/research/sse smoke test."
+        )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        model = (os.getenv("WEAVER_SMOKE_MODEL") or "").strip() or settings.primary_model
-        payload = {
-            "messages": [{"role": "user", "content": "Hello, just say hi."}],
-            "stream": False,
-            "model": model,
-        }
-        resp = await ac.post("/api/chat", json=payload)
+        model = (
+            os.getenv("WEAVER_SMOKE_MODEL") or ""
+        ).strip() or settings.primary_model
+        payload = {"query": "Hello, just say hi.", "model": model}
+        resp = await ac.post("/api/research/sse", json=payload)
         assert resp.status_code == 200
-        data = resp.json()
-        assert "content" in data
-        assert isinstance(data["content"], str)
+        assert "text/event-stream" in resp.headers.get("content-type", "")
 
 
 @pytest.mark.asyncio
@@ -56,12 +61,12 @@ async def test_cancel_endpoints_smoke():
     """Cancellation endpoints should never 500 for unknown threads."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.post("/api/chat/cancel/test-thread-123")
+        resp = await ac.post("/api/research/cancel/test-thread-123")
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") in {"cancelled", "not_found"}
 
-        resp2 = await ac.post("/api/chat/cancel-all")
+        resp2 = await ac.post("/api/research/cancel-all")
         assert resp2.status_code == 200
         data2 = resp2.json()
         assert data2.get("status") == "all_cancelled"
@@ -77,5 +82,7 @@ async def test_cancel_endpoints_smoke():
 async def test_interrupt_resume_unknown_thread_returns_404():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.post("/api/interrupt/resume", json={"thread_id": "nope", "payload": {}})
+        resp = await ac.post(
+            "/api/interrupt/resume", json={"thread_id": "nope", "payload": {}}
+        )
         assert resp.status_code == 404

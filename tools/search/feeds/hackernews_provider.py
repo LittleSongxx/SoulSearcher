@@ -12,7 +12,7 @@ Supports:
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import requests
 
@@ -49,7 +49,7 @@ class HackerNewsProvider(SearchProvider):
         tags: Optional[str] = None,
         sort_by_date: bool = False,
         min_points: int = 0,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         Search HackerNews stories and comments.
 
@@ -133,7 +133,7 @@ class HackerNewsProvider(SearchProvider):
             logger.error(f"[HackerNewsProvider] Search failed: {e}")
             return []
 
-    def get_top_stories(self, max_results: int = 30) -> List[SearchResult]:
+    def get_top_stories(self, max_results: int = 30) -> list[SearchResult]:
         """
         Get current top stories from HackerNews front page.
 
@@ -184,17 +184,17 @@ class HackerNewsProvider(SearchProvider):
             logger.error(f"[HackerNewsProvider] get_top_stories failed: {e}")
             return []
 
-    def get_ask_hn(self, max_results: int = 20) -> List[SearchResult]:
+    def get_ask_hn(self, max_results: int = 20) -> list[SearchResult]:
         """Get recent Ask HN posts."""
         return self.search("", max_results=max_results, tags="ask_hn", sort_by_date=True)
 
-    def get_show_hn(self, max_results: int = 20) -> List[SearchResult]:
+    def get_show_hn(self, max_results: int = 20) -> list[SearchResult]:
         """Get recent Show HN posts."""
         return self.search("", max_results=max_results, tags="show_hn", sort_by_date=True)
 
     def get_story_comments(
         self, story_id: str, max_comments: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get comments for a HackerNews story.
 
@@ -231,7 +231,7 @@ class HackerNewsProvider(SearchProvider):
             logger.error(f"[HackerNewsProvider] get_story_comments failed: {e}")
             return []
 
-    def _get_item(self, item_id: int) -> Optional[Dict[str, Any]]:
+    def _get_item(self, item_id: int) -> Optional[dict[str, Any]]:
         """Fetch a single HN item by ID."""
         try:
             response = self._session.get(

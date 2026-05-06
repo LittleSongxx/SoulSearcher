@@ -6,12 +6,12 @@
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from agent.core.llm_factory import create_chat_model_params
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
+from agent.core.llm_factory import create_chat_model_params
 from common.config import settings
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def _build_llm(
     Some LangChain clients fall back to process env vars if `api_key` is omitted;
     we always pass an explicit key to avoid accidental env leakage.
     """
-    params: Dict[str, Any] = create_chat_model_params(model, temperature)
+    params: dict[str, Any] = create_chat_model_params(model, temperature)
     params["timeout"] = settings.openai_timeout or None
 
     if api_base_url is not None:
@@ -126,10 +126,10 @@ Prompt: {current_prompt}
     async def analyze(
         self,
         current_prompt: str,
-        correct_samples: List[Dict],
-        incorrect_samples: List[Dict],
+        correct_samples: list[dict],
+        incorrect_samples: list[dict],
         max_samples: int = 5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         分析错误样本，返回改进建议
 
@@ -184,7 +184,7 @@ Prompt: {current_prompt}
         except Exception as e:
             logger.error(f"Analysis failed: {e}")
             return {
-                "error_patterns": [f"Analysis error: {str(e)}"],
+                "error_patterns": [f"Analysis error: {e!s}"],
                 "prompt_issues": [],
                 "improvement_suggestions": [],
                 "priority_fix": "Unable to analyze",
@@ -192,8 +192,8 @@ Prompt: {current_prompt}
             }
 
     async def quick_analyze(
-        self, current_prompt: str, incorrect_samples: List[Dict], max_samples: int = 3
-    ) -> Dict[str, str]:
+        self, current_prompt: str, incorrect_samples: list[dict], max_samples: int = 3
+    ) -> dict[str, str]:
         """
         快速分析，只返回主要问题和建议
 
@@ -227,10 +227,10 @@ Prompt: {current_prompt}
     def analyze_sync(
         self,
         current_prompt: str,
-        correct_samples: List[Dict],
-        incorrect_samples: List[Dict],
+        correct_samples: list[dict],
+        incorrect_samples: list[dict],
         max_samples: int = 5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         同步版本的分析方法
         """
@@ -248,7 +248,7 @@ Prompt: {current_prompt}
             )
         )
 
-    def _format_samples(self, samples: List[Dict], sample_type: str = "sample") -> str:
+    def _format_samples(self, samples: list[dict], sample_type: str = "sample") -> str:
         """格式化样本为文本"""
         if not samples:
             return f"无{sample_type}样本"
@@ -269,7 +269,7 @@ Prompt: {current_prompt}
 
         return "\n".join(lines)
 
-    def _format_score_details(self, samples: List[Dict]) -> str:
+    def _format_score_details(self, samples: list[dict]) -> str:
         """格式化评分详情"""
         if not samples:
             return "无评分详情"
@@ -284,7 +284,7 @@ Prompt: {current_prompt}
 
         return "\n".join(lines)
 
-    def _parse_json_response(self, content: str) -> Dict[str, Any]:
+    def _parse_json_response(self, content: str) -> dict[str, Any]:
         """从响应中解析 JSON"""
         # 尝试直接解析
         try:
@@ -334,8 +334,8 @@ class ComparativeAnalyzer:
         self.llm = _build_llm(model=model, temperature=0.2)
 
     async def compare_prompts(
-        self, prompt_a: str, prompt_b: str, results_a: List[Dict], results_b: List[Dict]
-    ) -> Dict[str, Any]:
+        self, prompt_a: str, prompt_b: str, results_a: list[dict], results_b: list[dict]
+    ) -> dict[str, Any]:
         """
         对比两个 Prompt 的效果
 

@@ -1,12 +1,11 @@
 import asyncio
 import json
 import logging
-import os
 import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -38,7 +37,7 @@ _parse_list_output = parse_list_output
 _format_results = format_search_results
 
 
-def _check_cancel(state: Dict[str, Any]) -> None:
+def _check_cancel(state: dict[str, Any]) -> None:
     """Respect cancellation flags/tokens."""
     if state.get("is_cancelled"):
         raise asyncio.CancelledError("Task was cancelled (flag)")
@@ -47,7 +46,7 @@ def _check_cancel(state: Dict[str, Any]) -> None:
         _check_cancel_token(token_id)
 
 
-def _selected_model(config: Dict[str, Any], fallback: str) -> str:
+def _selected_model(config: dict[str, Any], fallback: str) -> str:
     cfg = config.get("configurable") or {}
     if isinstance(cfg, dict):
         val = cfg.get("model")
@@ -56,7 +55,7 @@ def _selected_model(config: Dict[str, Any], fallback: str) -> str:
     return fallback
 
 
-def _selected_reasoning_model(config: Dict[str, Any], fallback: str) -> str:
+def _selected_reasoning_model(config: dict[str, Any], fallback: str) -> str:
     cfg = config.get("configurable") or {}
     if isinstance(cfg, dict):
         val = cfg.get("reasoning_model")
@@ -74,8 +73,8 @@ def _resolve_search_strategy() -> SearchStrategy:
         return SearchStrategy.FALLBACK
 
 
-def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    normalized: List[Dict[str, Any]] = []
+def _normalize_multi_search_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
     for r in results:
         if not isinstance(r, dict):
             continue
@@ -113,7 +112,7 @@ def _normalize_multi_search_results(results: List[Dict[str, Any]]) -> List[Dict[
     return normalized
 
 
-def _resolve_provider_profile(state: Dict[str, Any]) -> Optional[List[str]]:
+def _resolve_provider_profile(state: dict[str, Any]) -> Optional[list[str]]:
     """Build provider profile from domain routing metadata if present."""
     domain_config = state.get("domain_config") or {}
     suggested_sources = domain_config.get("suggested_sources", [])
@@ -130,13 +129,13 @@ def _resolve_provider_profile(state: Dict[str, Any]) -> Optional[List[str]]:
 def _search_query(
     query: str,
     max_results: int,
-    config: Dict[str, Any],
-    provider_profile: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    config: dict[str, Any],
+    provider_profile: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """Search with multi-provider orchestration first, then Tavily fallback."""
     strategy = _resolve_search_strategy()
     try:
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "query": query,
             "max_results": max_results,
             "strategy": strategy,
@@ -165,11 +164,11 @@ def _generate_queries(
     llm: ChatOpenAI,
     fallback_llm: ChatOpenAI,
     topic: str,
-    have_query: List[str],
-    summary_notes: List[str],
+    have_query: list[str],
+    summary_notes: list[str],
     query_num: int,
-    config: Dict[str, Any],
-) -> List[str]:
+    config: dict[str, Any],
+) -> list[str]:
     # Use user role to avoid providers that reject the newer "developer" role
     prompt = ChatPromptTemplate.from_messages([("user", formulate_query_prompt)])
     msg = prompt.format_messages(
@@ -190,7 +189,7 @@ def _generate_queries(
     queries = _parse_list_output(content)
     # Deduplicate and trim
     seen = set(q.lower() for q in have_query)
-    clean: List[str] = []
+    clean: list[str] = []
     for q in queries:
         if not q:
             continue
@@ -208,11 +207,11 @@ def _pick_relevant_urls(
     llm: ChatOpenAI,
     fallback_llm: ChatOpenAI,
     topic: str,
-    summary_notes: List[str],
-    results: List[Dict[str, Any]],
+    summary_notes: list[str],
+    results: list[dict[str, Any]],
     max_urls: int,
-    config: Dict[str, Any],
-) -> List[str]:
+    config: dict[str, Any],
+) -> list[str]:
     if not results:
         return []
     prompt = ChatPromptTemplate.from_messages([("user", related_url_prompt)])
@@ -235,7 +234,7 @@ def _pick_relevant_urls(
         sorted_results = sorted(results, key=lambda r: r.get("score", 0), reverse=True)
         urls = [r.get("url") for r in sorted_results if r.get("url")]
     # Clamp
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for u in urls:
         if not isinstance(u, str):
@@ -254,10 +253,10 @@ def _summarize_new_knowledge(
     llm: ChatOpenAI,
     fallback_llm: ChatOpenAI,
     topic: str,
-    summary_notes: List[str],
-    chosen_results: List[Dict[str, Any]],
-    config: Dict[str, Any],
-) -> Tuple[bool, str]:
+    summary_notes: list[str],
+    chosen_results: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> tuple[bool, str]:
     if not chosen_results:
         return False, ""
 
@@ -291,7 +290,7 @@ def _summarize_new_knowledge(
 
 
 def _final_report(
-    llm: ChatOpenAI, topic: str, summary_notes: List[str], config: Dict[str, Any]
+    llm: ChatOpenAI, topic: str, summary_notes: list[str], config: dict[str, Any]
 ) -> str:
     prompt = ChatPromptTemplate.from_messages([("user", final_summary_prompt)])
     msg = prompt.format_messages(
@@ -302,7 +301,7 @@ def _final_report(
     return getattr(response, "content", "") or summary_text_prompt
 
 
-def _hydrate_with_crawler(results: List[Dict[str, Any]]) -> None:
+def _hydrate_with_crawler(results: list[dict[str, Any]]) -> None:
     """
     Enrich results in-place with crawled content when Tavily lacks body text.
     """
@@ -336,9 +335,9 @@ def _safe_filename(name: str) -> str:
 
 def _save_deepsearch_data(
     topic: str,
-    have_query: List[str],
-    summary_notes: List[str],
-    search_runs: List[Dict[str, Any]],
+    have_query: list[str],
+    summary_notes: list[str],
+    search_runs: list[dict[str, Any]],
     final_report: str,
     epoch: int,
 ) -> str:
@@ -369,7 +368,7 @@ def _save_deepsearch_data(
         return ""
 
 
-def run_deepsearch(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def run_deepsearch(state: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     """
     Iterative deep-search pipeline inspired by the reference deepsearch project.
     """
@@ -394,9 +393,9 @@ def run_deepsearch(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, A
     writer_llm = _chat_model(primary_model, temperature=0.5)
     fallback_llm = writer_llm
 
-    have_query: List[str] = []
-    summary_notes: List[str] = []
-    search_runs: List[Dict[str, Any]] = []
+    have_query: list[str] = []
+    summary_notes: list[str] = []
+    search_runs: list[dict[str, Any]] = []
     provider_profile = _resolve_provider_profile(state)
 
     logger.info(f"[deepsearch] topic='{topic}' epochs={max_epochs}")
@@ -416,7 +415,7 @@ def run_deepsearch(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, A
         have_query.extend(q for q in queries if q not in have_query)
 
         # Search
-        combined_results: List[Dict[str, Any]] = []
+        combined_results: list[dict[str, Any]] = []
         for q in queries:
             _check_cancel(state)
             results = _search_query(

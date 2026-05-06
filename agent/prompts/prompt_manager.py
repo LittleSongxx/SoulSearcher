@@ -10,7 +10,7 @@ Provides centralized prompt management with support for:
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from common.config import settings
 
@@ -58,7 +58,7 @@ class PromptManager:
             prompt_style: "simple", "enhanced", or "custom"
         """
         self.prompt_style = prompt_style
-        self._custom_prompts: Dict[str, str] = {}
+        self._custom_prompts: dict[str, str] = {}
 
     def set_custom_prompt(self, prompt_type: str, content: str):
         """
@@ -87,7 +87,7 @@ class PromptManager:
         self.set_custom_prompt(prompt_type, content)
         logger.info(f"Loaded custom {prompt_type} prompt from {file_path}")
 
-    def get_agent_prompt(self, context: Optional[Dict[str, Any]] = None) -> str:
+    def get_agent_prompt(self, context: Optional[dict[str, Any]] = None) -> str:
         """
         Get the agent system prompt.
 
@@ -249,7 +249,7 @@ def reset_prompt_manager():
 # ============================================================================
 
 
-def get_agent_system_prompt(context: Optional[Dict[str, Any]] = None) -> str:
+def get_agent_system_prompt(context: Optional[dict[str, Any]] = None) -> str:
     """
     Get agent system prompt using global PromptManager.
 

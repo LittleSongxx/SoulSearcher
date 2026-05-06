@@ -5,7 +5,7 @@ Synthesizes research findings into comprehensive reports.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -65,15 +65,15 @@ class ResearchReporter:
     - Review and refine reports
     """
 
-    def __init__(self, llm: BaseChatModel, config: Dict[str, Any] = None):
+    def __init__(self, llm: BaseChatModel, config: dict[str, Any] = None):
         self.llm = llm
         self.config = config or {}
 
     def generate_report(
         self,
         topic: str,
-        findings: List[str],
-        sources: List[str],
+        findings: list[str],
+        sources: list[str],
     ) -> str:
         """
         Generate a comprehensive research report.

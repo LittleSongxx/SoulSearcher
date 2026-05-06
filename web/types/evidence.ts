@@ -62,6 +62,10 @@ export interface EvidenceResponse {
   claims?: EvidenceClaim[]
   quality_summary?: Record<string, any>
   research_brief?: Record<string, any>
+  source_routing?: Record<string, any>
+  source_collections?: Array<Record<string, any>>
+  evidence_store?: Record<string, any>
+  access_policy?: Record<string, any>
   quality_gates?: QualityGateRecord[]
   evidence_items?: EvidenceSource[]
   citation_annotations?: any[]

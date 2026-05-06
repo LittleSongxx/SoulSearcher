@@ -23,234 +23,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Agents */
-        get: operations["list_agents_api_agents_get"];
-        put?: never;
-        /** Create Agent */
-        post: operations["create_agent_api_agents_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agents/{agent_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Agent */
-        get: operations["get_agent_api_agents__agent_id__get"];
-        /** Update Agent */
-        put: operations["update_agent_api_agents__agent_id__put"];
-        post?: never;
-        /** Remove Agent */
-        delete: operations["remove_agent_api_agents__agent_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/asr/recognize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Recognize Speech
-         * @description ASR endpoint receiving Base64 audio data.
-         */
-        post: operations["recognize_speech_api_asr_recognize_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/asr/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Asr Status
-         * @description Get ASR service status.
-         */
-        get: operations["get_asr_status_api_asr_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/asr/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Recognize Speech Upload
-         * @description ASR upload endpoint receiving audio file.
-         */
-        post: operations["recognize_speech_upload_api_asr_upload_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/browser/{thread_id}/info": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Browser Session Info
-         * @description Get browser session information including CDP endpoint.
-         *
-         *     Returns browser session status and capabilities for real-time viewing.
-         */
-        get: operations["get_browser_session_info_api_browser__thread_id__info_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/browser/{thread_id}/screenshot": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Trigger Browser Screenshot
-         * @description Trigger a manual screenshot capture for the browser session.
-         */
-        post: operations["trigger_browser_screenshot_api_browser__thread_id__screenshot_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chat
-         * @description Main chat endpoint with streaming support.
-         *
-         *     Compatible with Vercel AI SDK useChat hook.
-         */
-        post: operations["chat_api_chat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/cancel-all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel All Chats
-         * @description 鍙栨秷鎵€鏈夋鍦ㄨ繘琛岀殑浠诲姟
-         */
-        post: operations["cancel_all_chats_api_chat_cancel_all_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/cancel/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel Chat
-         * @description 鍙栨秷姝ｅ湪杩涜鐨勮亰澶╀换鍔?
-         *     Args:
-         *         thread_id: 浠诲姟绾跨▼ ID
-         *         request: 鍙€夌殑鍙栨秷鍘熷洜
-         */
-        post: operations["cancel_chat_api_chat_cancel__thread_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/chat/sse": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chat Sse
-         * @description Standard SSE chat endpoint.
-         *
-         *     This endpoint translates the existing legacy `0:{json}\n` stream protocol
-         *     into standard SSE frames (`event:` / `data:`) so the frontend can use an
-         *     off-the-shelf SSE parser.
-         */
-        post: operations["chat_sse_api_chat_sse_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/config/public": {
         parameters: {
             query?: never;
@@ -351,39 +123,6 @@ export interface paths {
          * @description Delete a document from the RAG knowledge base by source path.
          */
         delete: operations["delete_document_api_documents__source__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/events/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stream Tool Events
-         * @description Subscribe to tool execution events for a specific thread.
-         *
-         *     This endpoint streams real-time events including:
-         *     - tool_start: When a tool begins execution
-         *     - tool_screenshot: When a screenshot is captured
-         *     - tool_result: When a tool completes execution
-         *     - task_update: Task progress updates
-         *
-         *     Usage:
-         *         const eventSource = new EventSource('/api/events/thread_123');
-         *         eventSource.onmessage = (e) => {
-         *             const data = JSON.parse(e.data);
-         *             console.log(data.type, data.data);
-         *         };
-         */
-        get: operations["stream_tool_events_api_events__thread_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -527,30 +266,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/mcp/config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Mcp Config
-         * @description Return current MCP enable flag, servers config, and loaded tool count.
-         */
-        get: operations["get_mcp_config_api_mcp_config_get"];
-        put?: never;
-        /**
-         * Update Mcp Config
-         * @description Update MCP enable flag and servers config at runtime.
-         */
-        post: operations["update_mcp_config_api_mcp_config_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/memory/status": {
         parameters: {
             query?: never;
@@ -571,7 +286,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/research": {
+    "/api/research/cancel-all": {
         parameters: {
             query?: never;
             header?: never;
@@ -581,12 +296,33 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Research
-         * @description Dedicated research endpoint for long-running queries.
-         *
-         *     Returns streaming response with research progress.
+         * Cancel All Research
+         * @description Cancel all currently running tasks.
          */
-        post: operations["research_api_research_post"];
+        post: operations["cancel_all_research_api_research_cancel_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/cancel/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Research
+         * @description Cancel a running research task.
+         *     Args:
+         *         thread_id: Task thread ID
+         *         request: Optional cancellation reason payload
+         */
+        post: operations["cancel_research_api_research_cancel__thread_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -606,9 +342,8 @@ export interface paths {
          * Research Sse
          * @description Standard SSE research endpoint.
          *
-         *     This endpoint translates the existing legacy `0:{json}\n` stream protocol
-         *     into standard SSE frames (`event:` / `data:`) so the frontend can use the
-         *     same SSE parser as `/api/chat/sse`.
+         *     This endpoint translates the internal stream protocol into standard SSE
+         *     frames (`event:` / `data:`).
          */
         post: operations["research_sse_api_research_sse_post"];
         delete?: never;
@@ -649,96 +384,6 @@ export interface paths {
          * @description Get metrics for a specific run/thread.
          */
         get: operations["get_run_metrics_api_runs__thread_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sandbox/browser/diagnose": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Sandbox Browser Diagnose
-         * @description Diagnose whether the E2B sandbox-backed browser tools are configured.
-         *
-         *     Fast path: validates env/config and local dependencies without cold-starting a sandbox.
-         *     Use this to troubleshoot "Capture failed: ..." errors in `/api/browser/{thread_id}/stream`.
-         */
-        get: operations["sandbox_browser_diagnose_api_sandbox_browser_diagnose_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/screenshots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Screenshots
-         * @description List available screenshots.
-         *
-         *     Args:
-         *         thread_id: Optional filter by thread ID
-         *         limit: Maximum number of results
-         */
-        get: operations["list_screenshots_api_screenshots_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/screenshots/cleanup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cleanup Screenshots
-         * @description Cleanup old screenshots.
-         */
-        post: operations["cleanup_screenshots_api_screenshots_cleanup_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/screenshots/{filename}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Screenshot
-         * @description Serve a screenshot file.
-         *
-         *     Args:
-         *         filename: Screenshot filename
-         */
-        get: operations["get_screenshot_api_screenshots__filename__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -899,6 +544,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{thread_id}/continue-research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Continue Research Session */
+        post: operations["continue_research_session_api_sessions__thread_id__continue_research_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sessions/{thread_id}/evidence": {
         parameters: {
             query?: never;
@@ -1047,26 +709,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/support/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Support Chat
-         * @description Simple customer support chat backed by Mem0 memory.
-         */
-        post: operations["support_chat_api_support_chat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/tasks/active": {
         parameters: {
             query?: never;
@@ -1197,250 +839,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/triggers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Triggers
-         * @description List all triggers with optional filtering.
-         */
-        get: operations["list_triggers_api_triggers_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/event": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Event Trigger
-         * @description Create a new event trigger.
-         */
-        post: operations["create_event_trigger_api_triggers_event_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/scheduled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Scheduled Trigger
-         * @description Create a new scheduled trigger with cron expression.
-         */
-        post: operations["create_scheduled_trigger_api_triggers_scheduled_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/webhook": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Webhook Trigger
-         * @description Create a new webhook trigger.
-         */
-        post: operations["create_webhook_trigger_api_triggers_webhook_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/{trigger_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Trigger
-         * @description Get a specific trigger by ID.
-         */
-        get: operations["get_trigger_api_triggers__trigger_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Trigger
-         * @description Delete a trigger.
-         */
-        delete: operations["delete_trigger_api_triggers__trigger_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/{trigger_id}/executions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Trigger Executions
-         * @description Get execution history for a trigger.
-         */
-        get: operations["get_trigger_executions_api_triggers__trigger_id__executions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/{trigger_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pause Trigger
-         * @description Pause a trigger.
-         */
-        post: operations["pause_trigger_api_triggers__trigger_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/triggers/{trigger_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resume Trigger
-         * @description Resume a paused trigger.
-         */
-        post: operations["resume_trigger_api_triggers__trigger_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tts/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Tts Status
-         * @description Get TTS service status.
-         */
-        get: operations["get_tts_status_api_tts_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tts/synthesize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Synthesize Speech
-         * @description Text-to-speech synthesis endpoint.
-         */
-        post: operations["synthesize_speech_api_tts_synthesize_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tts/voices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Tts Voices
-         * @description Get available TTS voices.
-         */
-        get: operations["get_tts_voices_api_tts_voices_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/webhook/{trigger_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Handle Webhook
-         * @description Handle incoming webhook requests.
-         */
-        post: operations["handle_webhook_api_webhook__trigger_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/health": {
         parameters: {
             query?: never;
@@ -1485,26 +883,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * ASRRequest
-         * @description ASR request with base64 audio data.
-         */
-        ASRRequest: {
-            /** Audio Data */
-            audio_data: string;
-            /**
-             * Format
-             * @default wav
-             */
-            format: string;
-            /** Language Hints */
-            language_hints?: string[] | null;
-            /**
-             * Sample Rate
-             * @default 16000
-             */
-            sample_rate: number;
-        };
         /** AgentHealthResponse */
         AgentHealthResponse: {
             /** Agent Ids */
@@ -1526,99 +904,6 @@ export interface components {
             /** Tool Registry Total Tools */
             tool_registry_total_tools: number;
         };
-        /**
-         * AgentProfile
-         * @description Lightweight “GPTs-like” agent profile.
-         *
-         *     Stored in a local JSON file (data/agents.json) to avoid DB migrations.
-         */
-        AgentProfile: {
-            /** Created At */
-            created_at?: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Enabled Tools */
-            enabled_tools?: {
-                [key: string]: boolean;
-            };
-            /** Id */
-            id: string;
-            /** Mcp Servers */
-            mcp_servers?: {
-                [key: string]: unknown;
-            } | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /** Name */
-            name: string;
-            /**
-             * System Prompt
-             * @default
-             */
-            system_prompt: string;
-            /** Updated At */
-            updated_at?: string;
-        };
-        /** AgentUpsertPayload */
-        AgentUpsertPayload: {
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /**
-             * Enabled Tools
-             * @default {}
-             */
-            enabled_tools: {
-                [key: string]: boolean;
-            };
-            /** Id */
-            id?: string | null;
-            /** Mcp Servers */
-            mcp_servers?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /** Name */
-            name: string;
-            /**
-             * System Prompt
-             * @default
-             */
-            system_prompt: string;
-        };
-        /** AgentsListResponse */
-        AgentsListResponse: {
-            /** Agents */
-            agents: components["schemas"]["AgentProfile"][];
-        };
-        /** Body_recognize_speech_upload_api_asr_upload_post */
-        Body_recognize_speech_upload_api_asr_upload_post: {
-            /** File */
-            file: string;
-        };
         /** Body_upload_document_api_documents_upload_post */
         Body_upload_document_api_documents_upload_post: {
             /** File */
@@ -1626,7 +911,7 @@ export interface components {
         };
         /**
          * CancelRequest
-         * @description 鍙栨秷浠诲姟璇锋眰
+         * @description Request body for cancelling a running task.
          */
         CancelRequest: {
             /**
@@ -1635,24 +920,47 @@ export interface components {
              */
             reason: string | null;
         };
-        /** ChatRequest */
-        ChatRequest: {
-            /** Agent Id */
-            agent_id?: string | null;
-            /** Images */
-            images?: components["schemas"]["ImagePayload"][] | null;
-            /** Messages */
-            messages: components["schemas"]["Message"][];
-            /** Model */
-            model?: string | null;
-            search_mode?: components["schemas"]["SearchMode"] | null;
+        /** CitationAnnotationResponse */
+        CitationAnnotationResponse: {
+            /** Citation Id */
+            citation_id: string;
+            /** Domain */
+            domain?: string | null;
+            /** End Char */
+            end_char: number;
             /**
-             * Stream
-             * @default true
+             * Evidence Ids
+             * @default []
              */
-            stream: boolean;
-            /** User Id */
-            user_id?: string | null;
+            evidence_ids: string[];
+            /** Id */
+            id: string;
+            /** Marker */
+            marker: string;
+            /**
+             * Occurrence
+             * @default 0
+             */
+            occurrence: number;
+            /** Provider */
+            provider?: string | null;
+            /** Publisheddate */
+            publishedDate?: string | null;
+            /** Rawurl */
+            rawUrl?: string | null;
+            /**
+             * Section
+             * @default
+             */
+            section: string;
+            /** Source Index */
+            source_index?: number | null;
+            /** Start Char */
+            start_char: number;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
         };
         /**
          * CommentRequest
@@ -1676,140 +984,89 @@ export interface components {
             /** Count */
             count: number;
         };
-        /** CreateEventTriggerRequest */
-        CreateEventTriggerRequest: {
+        /** ContinueResearchRequest */
+        ContinueResearchRequest: {
+            /** Instruction */
+            instruction?: string | null;
             /**
-             * Agent Id
-             * @default default
+             * Strategy
+             * @default supervisor_workers
              */
-            agent_id: string;
+            strategy: string;
+            /** Target Id */
+            target_id?: string | null;
+            /** Target Index */
+            target_index?: number | null;
+            /** Target Text */
+            target_text?: string | null;
             /**
-             * Debounce Seconds
-             * @default 0
+             * Target Type
+             * @description section | claim | source | gap
              */
-            debounce_seconds: number;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /**
-             * Event Filters
-             * @default {}
-             */
-            event_filters: {
-                [key: string]: unknown;
-            };
-            /** Event Source */
-            event_source?: string | null;
-            /** Event Type */
-            event_type: string;
-            /** Name */
-            name: string;
-            /**
-             * Tags
-             * @default []
-             */
-            tags: string[];
-            /** Task */
-            task: string;
-            /**
-             * Task Params
-             * @default {}
-             */
-            task_params: {
-                [key: string]: unknown;
-            };
-            /** User Id */
-            user_id?: string | null;
+            target_type: string;
         };
-        /** CreateScheduledTriggerRequest */
-        CreateScheduledTriggerRequest: {
-            /**
-             * Agent Id
-             * @default default
-             */
-            agent_id: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Name */
-            name: string;
-            /**
-             * Run Immediately
-             * @default false
-             */
-            run_immediately: boolean;
-            /** Schedule */
-            schedule: string;
-            /**
-             * Tags
-             * @default []
-             */
-            tags: string[];
-            /** Task */
-            task: string;
-            /**
-             * Task Params
-             * @default {}
-             */
-            task_params: {
+        /** ContinueResearchResponse */
+        ContinueResearchResponse: {
+            /** Continue Request */
+            continue_request: {
                 [key: string]: unknown;
             };
-            /**
-             * Timezone
-             * @default Asia/Shanghai
-             */
-            timezone: string;
-            /** User Id */
-            user_id?: string | null;
+            /** Resume Input */
+            resume_input: string;
+            /** Resume State */
+            resume_state: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Stream Payload */
+            stream_payload: {
+                [key: string]: unknown;
+            };
+            /** Success */
+            success: boolean;
+            /** Thread Id */
+            thread_id: string;
+            /** Update State */
+            update_state: {
+                [key: string]: unknown;
+            };
         };
-        /** CreateWebhookTriggerRequest */
-        CreateWebhookTriggerRequest: {
-            /**
-             * Agent Id
-             * @default default
-             */
-            agent_id: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /**
-             * Http Methods
-             * @default [
-             *       "POST"
-             *     ]
-             */
-            http_methods: string[];
-            /** Name */
-            name: string;
-            /** Rate Limit */
-            rate_limit?: number | null;
-            /**
-             * Require Auth
-             * @default false
-             */
-            require_auth: boolean;
-            /**
-             * Tags
-             * @default []
-             */
-            tags: string[];
-            /** Task */
-            task: string;
-            /**
-             * Task Params
-             * @default {}
-             */
-            task_params: {
+        /** DocumentDeleteResponse */
+        DocumentDeleteResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+        };
+        /** DocumentListResponse */
+        DocumentListResponse: {
+            /** Documents */
+            documents: {
                 [key: string]: unknown;
-            };
-            /** User Id */
-            user_id?: string | null;
+            }[];
+            /** Total Chunks */
+            total_chunks: number;
+        };
+        /** DocumentSearchResponse */
+        DocumentSearchResponse: {
+            /** Query */
+            query: string;
+            /** Results */
+            results: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** DocumentUploadResponse */
+        DocumentUploadResponse: {
+            /** Chunks */
+            chunks: number;
+            /** Filename */
+            filename: string;
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
         };
         /** EvidenceClaim */
         EvidenceClaim: {
@@ -1849,6 +1106,44 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** EvidenceItemResponse */
+        EvidenceItemResponse: {
+            /** Citation Id */
+            citation_id?: string | null;
+            /** Content Ref */
+            content_ref?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Freshness Score */
+            freshness_score?: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Metadata
+             * @default {}
+             */
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Provider */
+            provider?: string | null;
+            /** Published Date */
+            published_date?: string | null;
+            /** Quality Score */
+            quality_score?: number | null;
+            /** Query */
+            query?: string | null;
+            /** Retrieved At */
+            retrieved_at?: string | null;
+            /** Snippet */
+            snippet?: string | null;
+            /** Source Type */
+            source_type: string;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+        };
         /** EvidencePassageItem */
         EvidencePassageItem: {
             /** End Char */
@@ -1877,20 +1172,63 @@ export interface components {
         /** EvidenceResponse */
         EvidenceResponse: {
             /**
+             * Access Policy
+             * @default {}
+             */
+            access_policy: {
+                [key: string]: unknown;
+            };
+            /**
+             * Citation Annotations
+             * @default []
+             */
+            citation_annotations: components["schemas"]["CitationAnnotationResponse"][];
+            /**
              * Claims
              * @default []
              */
             claims: components["schemas"]["EvidenceClaim"][];
+            /**
+             * Continue Requests
+             * @default []
+             */
+            continue_requests: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Evidence Items
+             * @default []
+             */
+            evidence_items: components["schemas"]["EvidenceItemResponse"][];
+            /**
+             * Evidence Store
+             * @default {}
+             */
+            evidence_store: {
+                [key: string]: unknown;
+            };
             /**
              * Fetched Pages
              * @default []
              */
             fetched_pages: components["schemas"]["FetchedPageItem"][];
             /**
+             * Intermediate Steps
+             * @default []
+             */
+            intermediate_steps: components["schemas"]["IntermediateStepResponse"][];
+            /**
              * Passages
              * @default []
              */
             passages: components["schemas"]["EvidencePassageItem"][];
+            /**
+             * Quality Gates
+             * @default []
+             */
+            quality_gates: {
+                [key: string]: unknown;
+            }[];
             /**
              * Quality Summary
              * @default {}
@@ -1899,10 +1237,46 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Research Brief
+             * @default {}
+             */
+            research_brief: {
+                [key: string]: unknown;
+            };
+            /**
+             * Source Collections
+             * @default []
+             */
+            source_collections: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Source Routing
+             * @default {}
+             */
+            source_routing: {
+                [key: string]: unknown;
+            };
+            /**
              * Sources
              * @default []
              */
             sources: components["schemas"]["EvidenceSource"][];
+            /**
+             * Supervisor Decisions
+             * @default []
+             */
+            supervisor_decisions: components["schemas"]["SupervisorDecisionResponse"][];
+            /**
+             * Timeline
+             * @default []
+             */
+            timeline: components["schemas"]["TimelineEventResponse"][];
+            /**
+             * Worker Runs
+             * @default []
+             */
+            worker_runs: components["schemas"]["WorkerRunResponse"][];
         };
         /** EvidenceSource */
         EvidenceSource: {
@@ -1921,6 +1295,20 @@ export interface components {
             title: string;
             /** Url */
             url: string;
+        };
+        /** ExportTemplateItem */
+        ExportTemplateItem: {
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** ExportTemplatesResponse */
+        ExportTemplatesResponse: {
+            /** Templates */
+            templates: components["schemas"]["ExportTemplateItem"][];
         };
         /** FetchedPageItem */
         FetchedPageItem: {
@@ -1952,8 +1340,6 @@ export interface components {
         };
         /** GraphInterruptResumeRequest */
         GraphInterruptResumeRequest: {
-            /** Agent Id */
-            agent_id?: string | null;
             /** Model */
             model?: string | null;
             /** Payload */
@@ -1976,6 +1362,38 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** IntermediateStepResponse */
+        IntermediateStepResponse: {
+            /** Context Id */
+            context_id?: string | null;
+            /** Evidence Count */
+            evidence_count?: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Missing Topics
+             * @default []
+             */
+            missing_topics: string[];
+            /** Order */
+            order: number;
+            /** Reason */
+            reason?: string | null;
+            /** Result Count */
+            result_count?: number | null;
+            /** Round Index */
+            round_index?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Type */
+            type: string;
+            /** Worker Id */
+            worker_id?: string | null;
+        };
         /**
          * InterruptResumeRequest
          * @description Request to resume from an interrupt point.
@@ -1993,21 +1411,16 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** MCPConfigPayload */
-        MCPConfigPayload: {
-            /** Enable */
-            enable?: boolean | null;
-            /** Servers */
-            servers?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** Message */
-        Message: {
-            /** Content */
-            content: string;
-            /** Role */
-            role: string;
+        /** MemoryStatusResponse */
+        MemoryStatusResponse: {
+            /** Backend */
+            backend: string;
+            /** Checkpointer */
+            checkpointer: boolean;
+            /** Mem0 Enabled */
+            mem0_enabled: boolean;
+            /** Url Configured */
+            url_configured: boolean;
         };
         /** ProviderCircuitSnapshot */
         ProviderCircuitSnapshot: {
@@ -2040,10 +1453,18 @@ export interface components {
             /** Tracing Enabled */
             tracing_enabled: boolean;
         };
+        /** PublicConfigModels */
+        PublicConfigModels: {
+            /** Default */
+            default: string;
+            /** Options */
+            options: string[];
+        };
         /** PublicConfigResponse */
         PublicConfigResponse: {
             defaults: components["schemas"]["PublicConfigDefaults"];
             features: components["schemas"]["PublicConfigFeatures"];
+            models: components["schemas"]["PublicConfigModels"];
             streaming: components["schemas"]["PublicConfigStreaming"];
             /** Version */
             version: string;
@@ -2057,21 +1478,24 @@ export interface components {
         };
         /** PublicConfigStreaming */
         PublicConfigStreaming: {
-            browser: components["schemas"]["PublicConfigStreamEndpoint"];
-            chat: components["schemas"]["PublicConfigStreamEndpoint"];
-            events: components["schemas"]["PublicConfigStreamEndpoint"];
             research: components["schemas"]["PublicConfigStreamEndpoint"];
         };
         /** ResearchRequest */
         ResearchRequest: {
-            /** Agent Id */
-            agent_id?: string | null;
+            /** Deepsearch Config */
+            deepsearch_config?: {
+                [key: string]: unknown;
+            };
             /** Images */
             images?: components["schemas"]["ImagePayload"][] | null;
             /** Model */
             model?: string | null;
             /** Query */
             query: string;
+            /** Research Brief */
+            research_brief?: {
+                [key: string]: unknown;
+            };
             search_mode?: components["schemas"]["SearchMode"] | null;
             /** User Id */
             user_id?: string | null;
@@ -2131,41 +1555,6 @@ export interface components {
             run_id: string;
             /** Started At */
             started_at: string;
-        };
-        /** SandboxBrowserConfigured */
-        SandboxBrowserConfigured: {
-            /** E2B Api Key */
-            e2b_api_key: boolean;
-            /** E2B Code Interpreter */
-            e2b_code_interpreter: boolean;
-            /** Playwright */
-            playwright: boolean;
-            /** Sandbox Template Browser */
-            sandbox_template_browser: boolean;
-        };
-        /** SandboxBrowserDeepResult */
-        SandboxBrowserDeepResult: {
-            /** Error */
-            error?: string | null;
-            /** Frame Bytes */
-            frame_bytes?: number | null;
-            /** Latency Ms */
-            latency_ms: number;
-            /** Ok */
-            ok: boolean;
-        };
-        /** SandboxBrowserDiagnoseResponse */
-        SandboxBrowserDiagnoseResponse: {
-            /** Allow Internet */
-            allow_internet: boolean;
-            configured: components["schemas"]["SandboxBrowserConfigured"];
-            deep?: components["schemas"]["SandboxBrowserDeepResult"] | null;
-            /** Missing */
-            missing: string[];
-            /** Ready */
-            ready: boolean;
-            /** Sandbox Mode */
-            sandbox_mode: string;
         };
         /** SearchCacheClearResponse */
         SearchCacheClearResponse: {
@@ -2278,10 +1667,20 @@ export interface components {
         SessionSummary: {
             /** Created At */
             created_at: string;
+            /**
+             * Group Id
+             * @default
+             */
+            group_id: string;
             /** Has Report */
             has_report: boolean;
             /** Message Count */
             message_count: number;
+            /**
+             * Owner Id
+             * @default
+             */
+            owner_id: string;
             /** Revision Count */
             revision_count: number;
             /** Route */
@@ -2294,6 +1693,11 @@ export interface components {
             topic: string;
             /** Updated At */
             updated_at: string;
+            /**
+             * Visibility
+             * @default private
+             */
+            visibility: string;
         };
         /** SessionVersion */
         SessionVersion: {
@@ -2333,33 +1737,89 @@ export interface components {
              */
             permissions: string;
         };
-        /** SupportChatRequest */
-        SupportChatRequest: {
-            /** Message */
-            message: string;
+        /** SupervisorDecisionResponse */
+        SupervisorDecisionResponse: {
+            /** Action */
+            action: string;
             /**
-             * Stream
-             * @default false
+             * Failed Gates
+             * @default []
              */
-            stream: boolean;
+            failed_gates: string[];
             /**
-             * User Id
-             * @default default_user
+             * Missing Topics
+             * @default []
              */
-            user_id: string | null;
+            missing_topics: string[];
+            /**
+             * Next Worker Topics
+             * @default []
+             */
+            next_worker_topics: string[];
+            /**
+             * Quality Snapshot
+             * @default {}
+             */
+            quality_snapshot: {
+                [key: string]: unknown;
+            };
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Round Index */
+            round_index: number;
         };
-        /**
-         * TTSRequest
-         * @description TTS request payload.
-         */
-        TTSRequest: {
-            /** Text */
-            text: string;
+        /** TimelineEventResponse */
+        TimelineEventResponse: {
+            /** Citation Id */
+            citation_id?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            /** Epoch */
+            epoch?: number | null;
+            /** Event Type */
+            event_type: string;
+            /** Evidence Id */
+            evidence_id?: string | null;
+            /** Failed Count */
+            failed_count?: number | null;
+            /** Gate Count */
+            gate_count?: number | null;
+            /** Id */
+            id: string;
+            /** Order */
+            order: number;
+            /** Provider */
+            provider?: string | null;
             /**
-             * Voice
-             * @default longxiaochun
+             * Providers
+             * @default []
              */
-            voice: string;
+            providers: string[];
+            /** Publisheddate */
+            publishedDate?: string | null;
+            /** Query */
+            query?: string | null;
+            /** Rawurl */
+            rawUrl?: string | null;
+            /** Result Count */
+            result_count?: number | null;
+            /** Run Index */
+            run_index?: number | null;
+            /** Source Index */
+            source_index?: number | null;
+            /** Source Type */
+            source_type?: string | null;
+            /** Stage */
+            stage?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
         };
         /** ToolRegistryMostUsed */
         ToolRegistryMostUsed: {
@@ -2506,6 +1966,66 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["SessionVersion"][];
         };
+        /** WorkerRunResponse */
+        WorkerRunResponse: {
+            /** Completed At */
+            completed_at?: string | null;
+            /** Context Id */
+            context_id: string;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
+            /**
+             * Evidence Count
+             * @default 0
+             */
+            evidence_count: number;
+            /**
+             * Focus
+             * @default
+             */
+            focus: string;
+            /**
+             * Provider Breakdown
+             * @default {}
+             */
+            provider_breakdown: {
+                [key: string]: number;
+            };
+            /**
+             * Queries
+             * @default []
+             */
+            queries: string[];
+            /**
+             * Result Count
+             * @default 0
+             */
+            result_count: number;
+            /**
+             * Round Index
+             * @default 0
+             */
+            round_index: number;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Topic */
+            topic: string;
+            /** Worker Id */
+            worker_id: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2531,427 +2051,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    list_agents_api_agents_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentsListResponse"];
-                };
-            };
-        };
-    };
-    create_agent_api_agents_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentUpsertPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_agent_api_agents__agent_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_agent_api_agents__agent_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentUpsertPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_agent_api_agents__agent_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                agent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    recognize_speech_api_asr_recognize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ASRRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_asr_status_api_asr_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    recognize_speech_upload_api_asr_upload_post: {
-        parameters: {
-            query?: {
-                sample_rate?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_recognize_speech_upload_api_asr_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_browser_session_info_api_browser__thread_id__info_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    trigger_browser_screenshot_api_browser__thread_id__screenshot_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    chat_api_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_all_chats_api_chat_cancel_all_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    cancel_chat_api_chat_cancel__thread_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CancelRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    chat_sse_api_chat_sse_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2993,7 +2092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3025,7 +2124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentSearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3058,7 +2157,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentUploadResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3089,40 +2188,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stream_tool_events_api_events__thread_id__get: {
-        parameters: {
-            query?: {
-                last_event_id?: string | null;
-            };
-            header?: never;
-            path: {
-                thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DocumentDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3151,7 +2217,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ExportTemplatesResponse"];
                 };
             };
         };
@@ -3310,59 +2376,6 @@ export interface operations {
             };
         };
     };
-    get_mcp_config_api_mcp_config_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    update_mcp_config_api_mcp_config_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MCPConfigPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     memory_status_api_memory_status_get: {
         parameters: {
             query?: never;
@@ -3378,21 +2391,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MemoryStatusResponse"];
                 };
             };
         };
     };
-    research_api_research_post: {
+    cancel_all_research_api_research_cancel_all_post: {
         parameters: {
-            query: {
-                query: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    cancel_research_api_research_cancel__thread_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CancelRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -3485,120 +2522,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunMetricsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sandbox_browser_diagnose_api_sandbox_browser_diagnose_get: {
-        parameters: {
-            query?: {
-                deep?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SandboxBrowserDiagnoseResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_screenshots_api_screenshots_get: {
-        parameters: {
-            query?: {
-                thread_id?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cleanup_screenshots_api_screenshots_cleanup_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_screenshot_api_screenshots__filename__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                filename: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -3841,6 +2764,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    continue_research_session_api_sessions__thread_id__continue_research_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinueResearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinueResearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4144,39 +3102,6 @@ export interface operations {
             };
         };
     };
-    support_chat_api_support_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SupportChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_active_tasks_api_tasks_active_get: {
         parameters: {
             query?: never;
@@ -4316,399 +3241,6 @@ export interface operations {
             header?: never;
             path: {
                 thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_triggers_api_triggers_get: {
-        parameters: {
-            query?: {
-                trigger_type?: string | null;
-                status?: string | null;
-                user_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_event_trigger_api_triggers_event_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateEventTriggerRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_scheduled_trigger_api_triggers_scheduled_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateScheduledTriggerRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_webhook_trigger_api_triggers_webhook_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateWebhookTriggerRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_trigger_api_triggers__trigger_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_trigger_api_triggers__trigger_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_trigger_executions_api_triggers__trigger_id__executions_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pause_trigger_api_triggers__trigger_id__pause_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resume_trigger_api_triggers__trigger_id__resume_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                trigger_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_tts_status_api_tts_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    synthesize_speech_api_tts_synthesize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TTSRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_tts_voices_api_tts_voices_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    handle_webhook_api_webhook__trigger_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                trigger_id: string;
             };
             cookie?: never;
         };

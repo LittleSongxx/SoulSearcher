@@ -11,9 +11,9 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class CacheEntry:
     """A cached search result entry."""
 
     query: str
-    results: List[Dict[str, Any]]
+    results: list[dict[str, Any]]
     timestamp: float
     hit_count: int = 0
 
@@ -85,7 +85,7 @@ class SearchCache:
 
         return None
 
-    def get(self, query: str) -> Optional[List[Dict[str, Any]]]:
+    def get(self, query: str) -> Optional[list[dict[str, Any]]]:
         """
         Get cached results for a query.
 
@@ -122,7 +122,7 @@ class SearchCache:
             self.misses += 1
             return None
 
-    def set(self, query: str, results: List[Dict[str, Any]]) -> None:
+    def set(self, query: str, results: list[dict[str, Any]]) -> None:
         """Cache search results for a query."""
         with self._lock:
             query_hash = self._query_hash(query)
@@ -153,7 +153,7 @@ class SearchCache:
                 del self._cache[k]
             return len(expired_keys)
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         with self._lock:
             total_requests = self.hits + self.similar_hits + self.misses
@@ -216,7 +216,7 @@ class QueryDeduplicator:
         """Normalize query for comparison."""
         return " ".join(query.lower().split())
 
-    def deduplicate(self, queries: List[str]) -> Tuple[List[str], List[str]]:
+    def deduplicate(self, queries: list[str]) -> tuple[list[str], list[str]]:
         """
         Deduplicate a list of queries.
 
@@ -226,11 +226,11 @@ class QueryDeduplicator:
         if not queries:
             return [], []
 
-        unique: List[str] = []
-        duplicates: List[str] = []
+        unique: list[str] = []
+        duplicates: list[str] = []
         # Use dict for O(1) exact match lookup, list for similarity check
         seen_exact: set = set()
-        seen_normalized: List[str] = []
+        seen_normalized: list[str] = []
 
         for query in queries:
             normalized = self._normalize(query)

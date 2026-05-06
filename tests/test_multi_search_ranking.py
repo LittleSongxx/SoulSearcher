@@ -1,10 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from tools.search.multi_search import MultiSearchOrchestrator, SearchResult
 
 
 def _days_ago(days: int) -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    return (datetime.now(UTC) - timedelta(days=days)).isoformat()
 
 
 def test_freshness_ranking_boosts_recent_results_for_time_sensitive_queries(monkeypatch):

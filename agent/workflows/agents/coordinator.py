@@ -8,7 +8,7 @@ Orchestrates the research workflow, deciding when to gather more info vs. synthe
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -72,7 +72,7 @@ class CoordinatorDecision:
 
     action: CoordinatorAction
     reasoning: str
-    priority_topics: List[str]
+    priority_topics: list[str]
 
 
 class ResearchCoordinator:
@@ -85,7 +85,7 @@ class ResearchCoordinator:
     - Research budget (epochs remaining)
     """
 
-    def __init__(self, llm: BaseChatModel, config: Dict[str, Any] = None):
+    def __init__(self, llm: BaseChatModel, config: dict[str, Any] = None):
         self.llm = llm
         self.config = config or {}
 

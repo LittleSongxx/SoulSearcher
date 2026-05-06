@@ -18,8 +18,9 @@ import inspect
 import json
 import logging
 from abc import ABC
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,10 @@ class ToolResult:
 
     success: bool
     output: str
-    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
+    metadata: Optional[dict[str, Any]] = field(default_factory=dict)
     error: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return asdict(self)
 
@@ -55,7 +56,7 @@ class ToolResult:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ToolResult":
+    def from_dict(cls, data: dict[str, Any]) -> "ToolResult":
         """Create ToolResult from dictionary."""
         return cls(**data)
 
@@ -97,8 +98,8 @@ class WeaverTool(ABC):
 
     def __init__(self):
         """Initialize tool and register schemas."""
-        self._schemas: Dict[str, Dict[str, Any]] = {}
-        self._methods: Dict[str, Callable] = {}
+        self._schemas: dict[str, dict[str, Any]] = {}
+        self._methods: dict[str, Callable] = {}
         self._register_schemas()
 
     def _register_schemas(self):
@@ -119,7 +120,7 @@ class WeaverTool(ABC):
                 self._methods[name] = method
                 logger.debug(f"Registered tool method: {name} with schema: {schema.get('name')}")
 
-    def get_schemas(self) -> Dict[str, Dict[str, Any]]:
+    def get_schemas(self) -> dict[str, dict[str, Any]]:
         """
         Get all registered tool schemas.
 
@@ -140,13 +141,13 @@ class WeaverTool(ABC):
         """
         return self._methods.get(name)
 
-    def list_methods(self) -> List[str]:
+    def list_methods(self) -> list[str]:
         """List all registered method names."""
         return list(self._methods.keys())
 
     # Helper methods for creating responses
 
-    def success_response(self, data: Any, metadata: Optional[Dict[str, Any]] = None) -> ToolResult:
+    def success_response(self, data: Any, metadata: Optional[dict[str, Any]] = None) -> ToolResult:
         """
         Create a success ToolResult.
 
@@ -167,7 +168,7 @@ class WeaverTool(ABC):
         return ToolResult(success=True, output=output, metadata=metadata or {}, error=None)
 
     def fail_response(
-        self, error_msg: str, metadata: Optional[Dict[str, Any]] = None
+        self, error_msg: str, metadata: Optional[dict[str, Any]] = None
     ) -> ToolResult:
         """
         Create a failure ToolResult.
@@ -184,7 +185,7 @@ class WeaverTool(ABC):
         )
 
     def partial_response(
-        self, data: Any, warning: str, metadata: Optional[Dict[str, Any]] = None
+        self, data: Any, warning: str, metadata: Optional[dict[str, Any]] = None
     ) -> ToolResult:
         """
         Create a partial success ToolResult (succeeded but with warnings).
@@ -289,7 +290,7 @@ def validate_tool_result(result: Any) -> ToolResult:
     return ToolResult(success=True, output=str(result), metadata={})
 
 
-def merge_tool_results(results: List[ToolResult]) -> ToolResult:
+def merge_tool_results(results: list[ToolResult]) -> ToolResult:
     """
     Merge multiple ToolResults into one.
 
@@ -377,7 +378,7 @@ if __name__ == "__main__":
                 return self.success_response({"expression": expression, "result": result})
             except Exception as e:
                 return self.fail_response(
-                    f"Calculation failed: {str(e)}",
+                    f"Calculation failed: {e!s}",
                     metadata={"expression": expression, "error_type": type(e).__name__},
                 )
 

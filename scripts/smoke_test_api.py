@@ -27,7 +27,7 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event, Thread
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -74,7 +74,14 @@ def _normalize_socks_proxy_env() -> None:
     Many environments export SOCKS proxies as `socks://host:port`, while httpx
     expects an explicit version scheme (e.g. `socks5://`).
     """
-    for key in ("ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"):
+    for key in (
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+    ):
         raw = (os.environ.get(key) or "").strip()
         if not raw:
             continue
@@ -95,7 +102,7 @@ def _truncate(text: str, limit: int = 220) -> str:
     return text[:limit] + ("..." if len(text) > limit else "")
 
 
-def _try_json(resp: httpx.Response) -> Dict[str, Any]:
+def _try_json(resp: httpx.Response) -> dict[str, Any]:
     try:
         data = resp.json()
         if isinstance(data, dict):
@@ -107,7 +114,7 @@ def _try_json(resp: httpx.Response) -> Dict[str, Any]:
 
 def _client(base_url: str) -> httpx.Client:
     _normalize_socks_proxy_env()
-    headers: Dict[str, str] = {}
+    headers: dict[str, str] = {}
 
     internal_key = _env("WEAVER_INTERNAL_API_KEY", "")
     if not internal_key and _WEAVER_SETTINGS is not None:
@@ -117,7 +124,9 @@ def _client(base_url: str) -> httpx.Client:
         # Optional identity header used by Weaver when internal auth is enabled.
         user_header = _env("WEAVER_AUTH_USER_HEADER", "")
         if not user_header and _WEAVER_SETTINGS is not None:
-            user_header = (getattr(_WEAVER_SETTINGS, "auth_user_header", "") or "").strip()
+            user_header = (
+                getattr(_WEAVER_SETTINGS, "auth_user_header", "") or ""
+            ).strip()
         headers[user_header or "X-Weaver-User"] = _env("WEAVER_TEST_USER", "smoke")
 
     return httpx.Client(
@@ -177,7 +186,6 @@ def _check_chat_sse(client: httpx.Client) -> CheckResult:
         }
 
         got_event = False
-        got_done = False
         with client.stream("POST", "/api/chat/sse", json=payload) as resp:
             resp.raise_for_status()
             for line in resp.iter_lines():
@@ -186,7 +194,6 @@ def _check_chat_sse(client: httpx.Client) -> CheckResult:
                 if line.startswith("event:"):
                     got_event = True
                 if line.startswith("event: done"):
-                    got_done = True
                     break
                 # Stop early once we've confirmed we can parse frames.
                 if got_event and time.time() - t0 > 8.0:
@@ -302,7 +309,7 @@ def _check_chat_deep_cancel(base_url: str) -> CheckResult:
     stream_ready = Event()
     watcher_done = Event()
 
-    state: Dict[str, Any] = {
+    state: dict[str, Any] = {
         "thread_id": None,
         "got_event": False,
         "got_cancelled": False,
@@ -353,19 +360,28 @@ def _check_chat_deep_cancel(base_url: str) -> CheckResult:
 
     # Wait until we have thread_id (or error)
     if not stream_ready.wait(timeout=8.0):
-        return CheckResult("chat_deep_cancel", False, "stream did not start", time.time() - t0)
+        return CheckResult(
+            "chat_deep_cancel", False, "stream did not start", time.time() - t0
+        )
 
     thread_id = (state.get("thread_id") or "").strip()
     if state.get("error"):
         return CheckResult(
-            "chat_deep_cancel", False, f"stream_error={state['error']}", time.time() - t0
+            "chat_deep_cancel",
+            False,
+            f"stream_error={state['error']}",
+            time.time() - t0,
         )
     if not thread_id:
-        return CheckResult("chat_deep_cancel", False, "missing X-Thread-ID header", time.time() - t0)
+        return CheckResult(
+            "chat_deep_cancel", False, "missing X-Thread-ID header", time.time() - t0
+        )
 
     try:
         with _client(base_url) as c:
-            cr = c.post(f"/api/chat/cancel/{thread_id}", json={"reason": "smoke test cancel"})
+            cr = c.post(
+                f"/api/chat/cancel/{thread_id}", json={"reason": "smoke test cancel"}
+            )
             data = _try_json(cr)
             if cr.status_code >= 400:
                 msg = data.get("error") or data.get("detail") or cr.text
@@ -383,7 +399,12 @@ def _check_chat_deep_cancel(base_url: str) -> CheckResult:
                     time.time() - t0,
                 )
     except Exception as e:
-        return CheckResult("chat_deep_cancel", False, f"cancel_error={_compact_error(e)}", time.time() - t0)
+        return CheckResult(
+            "chat_deep_cancel",
+            False,
+            f"cancel_error={_compact_error(e)}",
+            time.time() - t0,
+        )
 
     # Wait briefly for the watcher to observe cancelled/done.
     watcher_done.wait(timeout=20.0)
@@ -405,7 +426,9 @@ def _check_provider_serper() -> CheckResult:
     t0 = time.time()
     configured = bool(_env("SERPER_API_KEY", ""))
     if not configured and _WEAVER_SETTINGS is not None:
-        configured = bool((getattr(_WEAVER_SETTINGS, "serper_api_key", "") or "").strip())
+        configured = bool(
+            (getattr(_WEAVER_SETTINGS, "serper_api_key", "") or "").strip()
+        )
     if not configured:
         return CheckResult("provider_serper", True, "not_configured", time.time() - t0)
     try:
@@ -420,16 +443,22 @@ def _check_provider_serper() -> CheckResult:
             time.time() - t0,
         )
     except Exception as e:
-        return CheckResult("provider_serper", False, _compact_error(e), time.time() - t0)
+        return CheckResult(
+            "provider_serper", False, _compact_error(e), time.time() - t0
+        )
 
 
 def _check_provider_firecrawl() -> CheckResult:
     t0 = time.time()
     configured = bool(_env("FIRECRAWL_API_KEY", ""))
     if not configured and _WEAVER_SETTINGS is not None:
-        configured = bool((getattr(_WEAVER_SETTINGS, "firecrawl_api_key", "") or "").strip())
+        configured = bool(
+            (getattr(_WEAVER_SETTINGS, "firecrawl_api_key", "") or "").strip()
+        )
     if not configured:
-        return CheckResult("provider_firecrawl", True, "not_configured", time.time() - t0)
+        return CheckResult(
+            "provider_firecrawl", True, "not_configured", time.time() - t0
+        )
     try:
         from tools.search.providers import firecrawl_search
 
@@ -442,7 +471,9 @@ def _check_provider_firecrawl() -> CheckResult:
             time.time() - t0,
         )
     except Exception as e:
-        return CheckResult("provider_firecrawl", False, _compact_error(e), time.time() - t0)
+        return CheckResult(
+            "provider_firecrawl", False, _compact_error(e), time.time() - t0
+        )
 
 
 def _check_provider_e2b() -> CheckResult:
@@ -463,7 +494,11 @@ def _check_provider_e2b() -> CheckResult:
         return CheckResult(
             "provider_e2b",
             ok,
-            (f"stdout={_truncate(str(stdout), 40)!r}" if ok else f"error={_truncate(str((res or {}).get('error') or ''))}"),
+            (
+                f"stdout={_truncate(str(stdout), 40)!r}"
+                if ok
+                else f"error={_truncate(str((res or {}).get('error') or ''))}"
+            ),
             time.time() - t0,
         )
     except Exception as e:
@@ -477,8 +512,12 @@ def main() -> int:
         default=_env("WEAVER_BASE_URL", "http://127.0.0.1:8001"),
         help="Backend base URL (default from WEAVER_BASE_URL or http://127.0.0.1:8001)",
     )
-    ap.add_argument("--skip-web", action="store_true", help="Skip slow web-search chat check")
-    ap.add_argument("--skip-tts", action="store_true", help="Skip /api/tts/synthesize check")
+    ap.add_argument(
+        "--skip-web", action="store_true", help="Skip slow web-search chat check"
+    )
+    ap.add_argument(
+        "--skip-tts", action="store_true", help="Skip /api/tts/synthesize check"
+    )
     ap.add_argument(
         "--skip-deep",
         action="store_true",

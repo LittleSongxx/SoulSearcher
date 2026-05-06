@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 from statistics import mean
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 from eval.deep_research_benchmark.schemas import MetricSummary
 

@@ -17,13 +17,11 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import logging
-import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -120,7 +118,7 @@ class _SandboxFilesBaseTool(BaseTool):
             return session._handles.sandbox
         return None
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event."""
         if not self.emit_events:
             return
@@ -131,7 +129,7 @@ class _SandboxFilesBaseTool(BaseTool):
             except Exception as e:
                 logger.warning(f"[sandbox_files] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -148,7 +146,7 @@ class _SandboxFilesBaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -189,7 +187,7 @@ class SandboxCreateFileTool(_SandboxFilesBaseTool):
         file_path: str,
         file_contents: str,
         permissions: str = "644",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("create_file", {"file_path": file_path})
 
         try:
@@ -261,7 +259,7 @@ class SandboxReadFileTool(_SandboxFilesBaseTool):
         self,
         file_path: str,
         max_lines: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("read_file", {"file_path": file_path})
 
         try:
@@ -318,7 +316,7 @@ class SandboxUpdateFileTool(_SandboxFilesBaseTool):
         self,
         file_path: str,
         file_contents: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("update_file", {"file_path": file_path})
 
         try:
@@ -380,7 +378,7 @@ class SandboxStrReplaceTool(_SandboxFilesBaseTool):
         file_path: str,
         old_str: str,
         new_str: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "str_replace",
             {
@@ -411,7 +409,7 @@ class SandboxStrReplaceTool(_SandboxFilesBaseTool):
             # Check occurrences
             occurrences = content.count(old_str)
             if occurrences == 0:
-                return {"success": False, "error": f"String not found in file."}
+                return {"success": False, "error": "String not found in file."}
             if occurrences > 1:
                 lines = [i + 1 for i, line in enumerate(content.split("\n")) if old_str in line]
                 return {
@@ -459,7 +457,7 @@ class SandboxDeleteFileTool(_SandboxFilesBaseTool):
     description: str = "Delete a file from the sandbox."
     args_schema: type[BaseModel] = DeleteFileInput
 
-    def _run(self, file_path: str) -> Dict[str, Any]:
+    def _run(self, file_path: str) -> dict[str, Any]:
         start_time = self._emit_tool_start("delete_file", {"file_path": file_path})
 
         try:
@@ -515,7 +513,7 @@ class SandboxListFilesTool(_SandboxFilesBaseTool):
         path: str = "",
         recursive: bool = False,
         max_depth: int = 3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("list_files", {"path": path, "recursive": recursive})
 
         try:
@@ -602,7 +600,7 @@ class SandboxUploadFileTool(_SandboxFilesBaseTool):
         self,
         file_path: str,
         content_base64: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("upload_file", {"file_path": file_path})
 
         try:
@@ -661,7 +659,7 @@ class SandboxDownloadFileTool(_SandboxFilesBaseTool):
     )
     args_schema: type[BaseModel] = DownloadFileInput
 
-    def _run(self, file_path: str) -> Dict[str, Any]:
+    def _run(self, file_path: str) -> dict[str, Any]:
         start_time = self._emit_tool_start("download_file", {"file_path": file_path})
 
         try:
@@ -696,7 +694,7 @@ class SandboxDownloadFileTool(_SandboxFilesBaseTool):
 def build_sandbox_files_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build sandbox file tools for a thread.
 

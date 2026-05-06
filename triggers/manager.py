@@ -10,9 +10,10 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 from .models import (
     BaseTrigger,
@@ -24,10 +25,11 @@ from .models import (
     TriggerType,
     WebhookTrigger,
 )
-from .scheduler import TriggerScheduler, get_scheduler
-from .webhook import WebhookHandler, get_webhook_handler
+from .scheduler import get_scheduler
+from .webhook import get_webhook_handler
 
 logger = logging.getLogger(__name__)
+
 
 def _default_storage_path() -> str:
     """
@@ -65,16 +67,18 @@ class TriggerManager:
         self.storage_path = Path(storage_path) if storage_path else None
 
         # Trigger storage
-        self.triggers: Dict[str, BaseTrigger] = {}
-        self.executions: List[TriggerExecution] = []
+        self.triggers: dict[str, BaseTrigger] = {}
+        self.executions: list[TriggerExecution] = []
 
         # Sub-managers
         self.scheduler = get_scheduler()
         self.webhook_handler = get_webhook_handler()
 
         # Event triggers
-        self.event_triggers: Dict[str, List[EventTrigger]] = {}  # event_type -> triggers
-        self.event_callbacks: Dict[str, Callable] = {}
+        self.event_triggers: dict[str, list[EventTrigger]] = (
+            {}
+        )  # event_type -> triggers
+        self.event_callbacks: dict[str, Callable] = {}
 
         # Execution callback (called when any trigger fires)
         self.execution_callback: Optional[Callable] = None
@@ -101,7 +105,7 @@ class TriggerManager:
 
     def set_execution_callback(
         self,
-        callback: Callable[[BaseTrigger, Dict[str, Any]], Any],
+        callback: Callable[[BaseTrigger, dict[str, Any]], Any],
     ):
         """
         Set the callback for trigger execution.
@@ -234,7 +238,7 @@ class TriggerManager:
         trigger_type: Optional[TriggerType] = None,
         status: Optional[TriggerStatus] = None,
         user_id: Optional[str] = None,
-    ) -> List[BaseTrigger]:
+    ) -> list[BaseTrigger]:
         """List triggers with optional filtering."""
         triggers = list(self.triggers.values())
 
@@ -253,11 +257,11 @@ class TriggerManager:
         self,
         trigger_id: str,
         method: str,
-        body: Optional[Dict[str, Any]] = None,
-        query_params: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None,
+        body: Optional[dict[str, Any]] = None,
+        query_params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
         auth_header: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Handle incoming webhook request."""
         return await self.webhook_handler.handle_request(
             trigger_id=trigger_id,
@@ -271,7 +275,7 @@ class TriggerManager:
     async def emit_event(
         self,
         event_type: str,
-        event_data: Dict[str, Any],
+        event_data: dict[str, Any],
         source: Optional[str] = None,
     ):
         """
@@ -308,7 +312,7 @@ class TriggerManager:
         self,
         trigger_id: Optional[str] = None,
         limit: int = 50,
-    ) -> List[TriggerExecution]:
+    ) -> list[TriggerExecution]:
         """Get execution history."""
         executions = self.executions
 
@@ -323,7 +327,7 @@ class TriggerManager:
     async def _on_trigger_fired(
         self,
         trigger: BaseTrigger,
-        params: Optional[Dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
     ):
         """Called when a trigger fires."""
         params = params or {}
@@ -352,12 +356,14 @@ class TriggerManager:
                 )
 
                 if asyncio.iscoroutinefunction(self.execution_callback):
-                    result = await self.execution_callback(trigger, execution.task_params)
+                    await self.execution_callback(trigger, execution.task_params)
                 else:
-                    result = self.execution_callback(trigger, execution.task_params)
+                    self.execution_callback(trigger, execution.task_params)
 
                 execution.mark_success(result={"status": "completed"})
-                logger.info(f"[trigger_manager] Trigger '{trigger.name}' completed successfully")
+                logger.info(
+                    f"[trigger_manager] Trigger '{trigger.name}' completed successfully"
+                )
 
             except Exception as e:
                 execution.mark_failed(str(e))
@@ -379,7 +385,7 @@ class TriggerManager:
                 t for t in self.event_triggers[trigger.event_type] if t.id != trigger.id
             ]
 
-    def _match_filters(self, data: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+    def _match_filters(self, data: dict[str, Any], filters: dict[str, Any]) -> bool:
         """Check if data matches the filters."""
         for key, expected in filters.items():
             # Support nested keys with dot notation
@@ -419,11 +425,13 @@ class TriggerManager:
             return
 
         try:
-            with open(self.storage_path, "r", encoding="utf-8") as f:
+            with open(self.storage_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             for trigger_data in data.get("triggers", []):
-                trigger_type = TriggerType(trigger_data.get("trigger_type", "scheduled"))
+                trigger_type = TriggerType(
+                    trigger_data.get("trigger_type", "scheduled")
+                )
 
                 if trigger_type == TriggerType.SCHEDULED:
                     trigger = ScheduledTrigger.from_dict(trigger_data)
@@ -436,7 +444,9 @@ class TriggerManager:
 
                 self.triggers[trigger.id] = trigger
 
-            logger.info(f"[trigger_manager] Loaded {len(self.triggers)} triggers from storage")
+            logger.info(
+                f"[trigger_manager] Loaded {len(self.triggers)} triggers from storage"
+            )
 
         except Exception as e:
             logger.error(f"[trigger_manager] Failed to load triggers: {e}")

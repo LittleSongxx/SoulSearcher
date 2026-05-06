@@ -8,14 +8,14 @@ into the most appropriate execution mode.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
-from agent.core.llm_factory import create_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from agent.core.llm_factory import create_chat_model
 from common.config import settings
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class RouteDecision(BaseModel):
         le=1.0,
         description="Confidence level of this routing decision (0-1)",
     )
-    suggested_queries: List[str] = Field(
+    suggested_queries: list[str] = Field(
         default_factory=list,
         description="For 'deep' or 'web' routes, suggested search queries",
     )
@@ -133,7 +133,7 @@ class SmartRouter:
     def route(
         self,
         query: str,
-        images: Optional[List[Dict[str, Any]]] = None,
+        images: Optional[list[dict[str, Any]]] = None,
         context: Optional[str] = None,
         config: Optional[RunnableConfig] = None,
     ) -> RouteDecision:
@@ -179,11 +179,11 @@ class SmartRouter:
             logger.warning(f"[smart_router] failed: {e}, using fallback")
             return RouteDecision(
                 route=self.fallback_route,
-                reasoning=f"Routing failed: {str(e)}",
+                reasoning=f"Routing failed: {e!s}",
                 confidence=0.5,
             )
 
-    def detect_tool_requirements(self, query: str) -> List[str]:
+    def detect_tool_requirements(self, query: str) -> list[str]:
         """
         Detect which tools might be needed for a query.
 
@@ -303,11 +303,11 @@ def get_smart_router() -> SmartRouter:
 
 def smart_route(
     query: str,
-    images: Optional[List[Dict[str, Any]]] = None,
+    images: Optional[list[dict[str, Any]]] = None,
     context: Optional[str] = None,
     config: Optional[RunnableConfig] = None,
     override_mode: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Smart routing function for use in graph nodes.
 

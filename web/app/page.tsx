@@ -1,9 +1,5 @@
-import { Chat } from '@/components/chat/Chat'
+import { ResearchWorkspace } from '@/components/research/ResearchWorkspace'
 
 export default function Home() {
-  return (
-    <main className="h-screen">
-      <Chat />
-    </main>
-  )
+  return <ResearchWorkspace />
 }

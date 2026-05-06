@@ -4,7 +4,6 @@ System prompt assembler for Weaver agents.
 Default pack: deepsearch (behavior templates + research prompts)
 """
 
-from typing import Dict
 
 from common.config import settings
 from prompts.templates.deepsearch import get_behavior_prompt
@@ -352,7 +351,7 @@ Your goal: Create a report that is **accurate, comprehensive, and highly readabl
 """
 
 
-def get_agent_prompt(mode: str = "default", context: Dict = None) -> str:
+def get_agent_prompt(mode: str = "default", context: dict = None) -> str:
     """
     Assemble the appropriate prompt based on mode and context.
     Defaults to deepsearch behavior pack if not specified.

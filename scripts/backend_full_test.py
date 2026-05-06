@@ -22,14 +22,14 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _run(cmd: List[str], *, cwd: Optional[Path] = None, env: Optional[Dict[str, str]] = None) -> int:
+def _run(cmd: list[str], *, cwd: Optional[Path] = None, env: Optional[dict[str, str]] = None) -> int:
     print(f"[full-test] $ {' '.join(cmd)}")
     proc = subprocess.run(cmd, cwd=str(cwd) if cwd else None, env=env)
     return int(proc.returncode)
@@ -40,7 +40,7 @@ def _default_report_path() -> Path:
     return _repo_root() / "logs" / f"backend_full_test_{ts}.json"
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--timeout", type=float, default=60.0, help="Live API request timeout seconds")
     p.add_argument("--no-ws", action="store_true", help="Skip WebSocket checks in live sweep")
@@ -52,7 +52,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     args = parse_args(argv)
 
     report_path = Path(args.out) if args.out else _default_report_path()
@@ -61,7 +61,7 @@ def main(argv: List[str]) -> int:
     # 1) Unit tests
     unit_rc = _run([sys.executable, "-m", "pytest", "-q"], cwd=_repo_root())
     if unit_rc != 0:
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "ok": False,
             "unit_tests": {"ok": False, "exit_code": unit_rc},
             "live_api": {"ok": None, "exit_code": None},
@@ -84,7 +84,7 @@ def main(argv: List[str]) -> int:
         live_cmd.insert(2, "--ws")
     live_rc = _run(live_cmd, cwd=_repo_root(), env=os.environ.copy())
 
-    payload2: Dict[str, Any] = {
+    payload2: dict[str, Any] = {
         "ok": unit_rc == 0 and live_rc == 0,
         "unit_tests": {"ok": unit_rc == 0, "exit_code": unit_rc},
         "live_api": {"ok": live_rc == 0, "exit_code": live_rc, "report": str(live_report)},

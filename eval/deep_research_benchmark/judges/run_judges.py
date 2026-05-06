@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import multiprocessing as mp
 import queue
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 from eval.deep_research_benchmark.dataset import load_tasks
 from eval.deep_research_benchmark.judges.base import env_int
@@ -14,7 +15,7 @@ from eval.deep_research_benchmark.judges.report_judge import score_report
 from eval.deep_research_benchmark.schemas import BenchmarkTask, JudgeScore
 
 
-def _read_json(path: Path) -> Dict[str, Any]:
+def _read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -150,7 +151,7 @@ def judge_run(run_dir: str | Path, *, judge_model: str = "") -> list[JudgeScore]
         raise ValueError("results.json must contain a list")
 
     output_path = root / "judge_scores.json"
-    scores: List[JudgeScore] = [score for score in _load_scores(output_path) if score.status == "scored"]
+    scores: list[JudgeScore] = [score for score in _load_scores(output_path) if score.status == "scored"]
     existing = {_score_key(score) for score in scores}
     total_cases = len([item for item in results if isinstance(item, dict)])
     for case_index, result in enumerate(results, start=1):

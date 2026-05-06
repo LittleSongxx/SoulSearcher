@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain.tools import BaseTool
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 _CLIENTS: Optional[MCPClients] = None
 
 
-def _parse_servers(servers: Any) -> Dict[str, Any]:
+def _parse_servers(servers: Any) -> dict[str, Any]:
     if isinstance(servers, str):
         try:
             return json.loads(servers)
@@ -23,15 +23,15 @@ def _parse_servers(servers: Any) -> Dict[str, Any]:
 
 
 async def init_mcp_tools(
-    servers_override: Optional[Dict[str, Any]] = None,
+    servers_override: Optional[dict[str, Any]] = None,
     enabled: Optional[bool] = None,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Initialize MCP tools with evented proxy tools.
     """
     global _CLIENTS
     servers_cfg = servers_override if servers_override is not None else settings.mcp_servers
-    servers: Dict[str, Any] = _parse_servers(servers_cfg)
+    servers: dict[str, Any] = _parse_servers(servers_cfg)
     use_mcp = enabled if enabled is not None else settings.enable_mcp
 
     if not use_mcp or not servers:
@@ -66,8 +66,8 @@ async def init_mcp_tools(
 
 
 async def reload_mcp_tools(
-    servers_config: Dict[str, Any], enabled: Optional[bool] = None
-) -> List[BaseTool]:
+    servers_config: dict[str, Any], enabled: Optional[bool] = None
+) -> list[BaseTool]:
     await close_mcp_tools()
     return await init_mcp_tools(servers_override=servers_config, enabled=enabled)
 

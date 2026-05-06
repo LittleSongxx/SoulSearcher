@@ -1,11 +1,11 @@
 import logging
 import textwrap
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from agent.core.llm_factory import create_chat_model
 from langchain.tools import tool
 from langchain_core.prompts import ChatPromptTemplate
 
+from agent.core.llm_factory import create_chat_model
 from common.config import settings
 from tools.search.tavily_key_pool import get_tavily_key_pool
 
@@ -52,7 +52,7 @@ def _summarize_content(raw_content: str) -> Optional[str]:
 
 
 @tool
-def tavily_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+def tavily_search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
     """
     Perform a deep search using Tavily API.
 
@@ -66,7 +66,7 @@ def tavily_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
     try:
         try:
             from tavily import TavilyClient  # type: ignore
-        except Exception as e:
+        except Exception:
             logger.error(
                 "Missing dependency: tavily-python. Install with `pip install tavily-python`."
             )
@@ -144,14 +144,14 @@ def tavily_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         return results
 
     except Exception as e:
-        logger.error(f"Tavily search error: {str(e)}")
+        logger.error(f"Tavily search error: {e!s}")
         # Return empty list to let upstream fallback gracefully
         return []
 
 
 def search_multiple_queries(
-    queries: List[str], max_results_per_query: int = 5
-) -> List[Dict[str, Any]]:
+    queries: list[str], max_results_per_query: int = 5
+) -> list[dict[str, Any]]:
     """
     Execute multiple search queries in parallel.
 

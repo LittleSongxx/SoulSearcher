@@ -3,7 +3,6 @@ Factory to create LangChain agents with official middleware (selector, retry, li
 """
 
 import logging
-from typing import List
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
@@ -18,8 +17,8 @@ from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 
 from agent.core.llm_factory import create_chat_model
-from common.config import settings
 from agent.workflows.provider_safe_middleware import ProviderSafeToolSelectorMiddleware
+from common.config import settings
 from tools.code.code_executor import execute_python_code
 from tools.core.registry import get_registered_tools
 
@@ -81,8 +80,8 @@ def _build_todo_middleware() -> TodoListMiddleware:
     return TodoListMiddleware(**kwargs)
 
 
-def _build_middlewares() -> List:
-    mws: List = []
+def _build_middlewares() -> list:
+    mws: list = []
 
     # Tool selector
     if settings.tool_selector:
@@ -175,13 +174,13 @@ def _build_middlewares() -> List:
     return mws
 
 
-def build_writer_agent(model: str | None = None) -> tuple[object, List[BaseTool]]:
+def build_writer_agent(model: str | None = None) -> tuple[object, list[BaseTool]]:
     """
     Create a tool-calling agent for writer node with configured middleware.
     Returns (agent, tools) so caller can inspect selected toolset.
     """
     model_name = (model or settings.primary_model).strip()
-    tools: List[BaseTool] = [execute_python_code]
+    tools: list[BaseTool] = [execute_python_code]
     tools.extend(get_registered_tools())
 
     agent = create_agent(
@@ -193,7 +192,7 @@ def build_writer_agent(model: str | None = None) -> tuple[object, List[BaseTool]
 
 
 def build_tool_agent(
-    *, model: str, tools: List[BaseTool], temperature: float = 0.7
+    *, model: str, tools: list[BaseTool], temperature: float = 0.7
 ) -> object:
     """
     Create a generic tool-calling agent using the shared middleware stack.

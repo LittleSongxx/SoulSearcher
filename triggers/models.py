@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 class TriggerType(str, Enum):
@@ -58,7 +58,7 @@ class BaseTrigger:
     # Agent configuration
     agent_id: str = "default"  # Which agent to use
     task: str = ""  # Task/prompt to execute
-    task_params: Dict[str, Any] = field(default_factory=dict)
+    task_params: dict[str, Any] = field(default_factory=dict)
 
     # Execution settings
     timeout_seconds: int = 300
@@ -74,9 +74,9 @@ class BaseTrigger:
 
     # User/Owner
     user_id: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert trigger to dictionary."""
         return {
             "id": self.id,
@@ -102,7 +102,7 @@ class BaseTrigger:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "BaseTrigger":
+    def from_dict(cls, data: dict[str, Any]) -> BaseTrigger:
         """Create trigger from dictionary."""
         data = data.copy()
 
@@ -147,7 +147,7 @@ class ScheduledTrigger(BaseTrigger):
     # Next scheduled run
     next_run_at: Optional[datetime] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -177,20 +177,20 @@ class WebhookTrigger(BaseTrigger):
 
     # Webhook configuration
     endpoint_path: str = ""  # Custom endpoint path (auto-generated if empty)
-    http_methods: List[str] = field(default_factory=lambda: ["POST"])
+    http_methods: list[str] = field(default_factory=lambda: ["POST"])
     require_auth: bool = False  # Require authentication
     auth_token: Optional[str] = None  # Secret token for validation
 
     # Request processing
     extract_body: bool = True  # Include request body in task_params
     extract_query: bool = True  # Include query params
-    extract_headers: List[str] = field(default_factory=list)  # Headers to extract
+    extract_headers: list[str] = field(default_factory=list)  # Headers to extract
 
     # Rate limiting
     rate_limit: Optional[int] = None  # Max requests per minute
     rate_limit_window: int = 60  # Window in seconds
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -220,14 +220,14 @@ class EventTrigger(BaseTrigger):
     # Event configuration
     event_type: str = ""  # Event type to listen for
     event_source: Optional[str] = None  # Filter by source
-    event_filters: Dict[str, Any] = field(default_factory=dict)  # JSON path filters
+    event_filters: dict[str, Any] = field(default_factory=dict)  # JSON path filters
 
     # Debouncing
     debounce_seconds: int = 0  # Minimum time between triggers
     batch_events: bool = False  # Batch multiple events
     batch_window_seconds: int = 10
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -263,17 +263,17 @@ class TriggerExecution:
     agent_id: str = ""
     thread_id: Optional[str] = None
     task: str = ""
-    task_params: Dict[str, Any] = field(default_factory=dict)
+    task_params: dict[str, Any] = field(default_factory=dict)
 
     # Results
-    result: Optional[Dict[str, Any]] = None
+    result: Optional[dict[str, Any]] = None
     output_text: Optional[str] = None
 
     # Retry info
     retry_attempt: int = 0
     max_retries: int = 3
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "trigger_id": self.trigger_id,
@@ -293,7 +293,7 @@ class TriggerExecution:
             "max_retries": self.max_retries,
         }
 
-    def mark_success(self, result: Optional[Dict[str, Any]] = None, output: Optional[str] = None):
+    def mark_success(self, result: Optional[dict[str, Any]] = None, output: Optional[str] = None):
         """Mark execution as successful."""
         self.status = "success"
         self.completed_at = datetime.now()

@@ -2,10 +2,11 @@
 Prompt 优化配置模块
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 
 class TaskType(Enum):
@@ -41,7 +42,7 @@ class OptimizationConfig:
     task_name: str
     task_type: TaskType = TaskType.CUSTOM
     init_prompt: str = ""
-    eval_function: Optional[Callable[[List[Dict]], tuple]] = None
+    eval_function: Optional[Callable[[list[dict]], tuple]] = None
 
     # 优化参数
     epochs: int = 3
@@ -138,7 +139,7 @@ class OptimizationConfig:
             **kwargs,
         )
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """
         验证配置是否完整
 
@@ -164,7 +165,7 @@ class OptimizationConfig:
 
         return errors
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "task_name": self.task_name,

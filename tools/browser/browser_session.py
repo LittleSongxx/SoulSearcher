@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Optional
 from urllib.parse import quote_plus, urljoin, urlparse
 
 import httpx
@@ -17,7 +17,7 @@ DEFAULT_UA = (
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _extract_title(html: str) -> str:
@@ -41,10 +41,10 @@ def _strip_html(html: str) -> str:
     return text
 
 
-def _extract_links(html: str, base_url: str, limit: int = 30) -> List[Dict[str, str]]:
+def _extract_links(html: str, base_url: str, limit: int = 30) -> list[dict[str, str]]:
     if not html:
         return []
-    links: List[Dict[str, str]] = []
+    links: list[dict[str, str]] = []
     seen: set[str] = set()
     for m in re.finditer(
         r"<a\s+[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", html, flags=re.I | re.S
@@ -77,7 +77,7 @@ class BrowserPage:
     url: str
     title: str
     text: str
-    links: List[Dict[str, str]]
+    links: list[dict[str, str]]
     fetched_at: str
 
 
@@ -92,7 +92,7 @@ class BrowserSession:
     def __init__(self, *, timeout_s: float = 20.0):
         self.timeout_s = timeout_s
         self.current: Optional[BrowserPage] = None
-        self.history: List[BrowserPage] = []
+        self.history: list[BrowserPage] = []
         self._client: Optional[httpx.Client] = None
 
     def _get_client(self) -> httpx.Client:
@@ -163,7 +163,7 @@ class BrowserSession:
 class BrowserSessionManager:
     def __init__(self):
         self._lock = threading.Lock()
-        self._sessions: Dict[str, BrowserSession] = {}
+        self._sessions: dict[str, BrowserSession] = {}
 
     def get(self, thread_id: str) -> BrowserSession:
         thread_id = (thread_id or "").strip() or "default"

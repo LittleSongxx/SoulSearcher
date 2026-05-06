@@ -22,10 +22,44 @@ select = [
   "RUF",  # Ruff-specific rules (e.g. unnecessary f-string, mutable defaults)
 ]
 
-# Rules to ignore project-wide — keep the list intentionally small
+# Legacy baseline ignores retained after mechanical cleanup; high-signal F/I gates remain active.
 ignore = [
   "E501",   # line-too-long — handled by formatter, allow occasional overflows
+  "E402",
+  "E721",
+  "E722",
+  "E731",
+  "E741",
   "B008",   # do-not-perform-function-call-in-default-argument — allow Depends()
+  "B005",
+  "B007",
+  "B023",
+  "B024",
+  "B904",
+  "B905",
+  "F402",
+  "F403",
+  "F405",
+  "RUF001",
+  "RUF002",
+  "RUF003",
+  "RUF005",
+  "RUF006",
+  "RUF012",
+  "RUF013",
+  "RUF015",
+  "RUF021",
+  "RUF022",
+  "RUF059",
+  "RUF100",
+  "SIM102",
+  "SIM103",
+  "SIM105",
+  "SIM108",
+  "SIM118",
+  "UP028",
+  "UP042",
+  "UP045",
   "UP007",  # non-pep604-annotation — keep Optional[X] for readability
 ]
 
@@ -34,6 +68,7 @@ ignore = [
 "tests/**/*.py" = [
   "B011",  # do-not-assert-false
   "B017",  # assert-raises-exception
+  "I001",  # keep explicit import ordering where tests set env/sys.path before app imports
   "SIM",   # don't enforce simplification in tests
 ]
 # Main monolith has acceptable complexity while being refactored

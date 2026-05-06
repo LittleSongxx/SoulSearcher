@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Optional
 
 from agent.workflows.research_brief import ResearchBrief
 
@@ -10,14 +11,14 @@ from agent.workflows.research_brief import ResearchBrief
 class StrategyDecision:
     strategy: str
     reason: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     confidence: float = 1.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def _cfg(config: Dict[str, Any]) -> Dict[str, Any]:
+def _cfg(config: dict[str, Any]) -> dict[str, Any]:
     value = config.get("configurable") if isinstance(config, dict) else {}
     return value if isinstance(value, dict) else {}
 
@@ -28,7 +29,7 @@ def _truthy(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _explicit_strategy(config: Dict[str, Any]) -> str:
+def _explicit_strategy(config: dict[str, Any]) -> str:
     cfg = _cfg(config)
     value = cfg.get("deepsearch_strategy") or cfg.get("strategy")
     strategy = str(value or "").strip().lower().replace("-", "_")
@@ -45,7 +46,7 @@ def _explicit_strategy(config: Dict[str, Any]) -> str:
     return aliases.get(strategy, strategy)
 
 
-def _explicit_mode(config: Dict[str, Any]) -> str:
+def _explicit_mode(config: dict[str, Any]) -> str:
     mode = str(_cfg(config).get("deepsearch_mode") or "").strip().lower().replace("-", "_")
     if mode == "reflection":
         return "reflection_loop"
@@ -57,7 +58,7 @@ def _explicit_mode(config: Dict[str, Any]) -> str:
 def select_deepsearch_strategy(
     *,
     brief: ResearchBrief,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     settings: Any,
     simple_query_detector: Optional[Callable[[str], bool]] = None,
 ) -> StrategyDecision:

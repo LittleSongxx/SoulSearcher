@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Any, Dict, Iterable, List
-
+from collections.abc import Iterable
+from typing import Any
 
 _APPROVE_ACTIONS = {"approve", "approved", "accept", "accepted"}
 _EDIT_ACTIONS = {"edit", "edited", "revise", "revised"}
@@ -11,11 +11,11 @@ _REJECT_ACTIONS = {"reject", "rejected", "cancel", "cancelled"}
 
 
 def apply_sectioned_report_review(
-    report_plan: Dict[str, Any],
-    review_payload: Dict[str, Any] | None,
+    report_plan: dict[str, Any],
+    review_payload: dict[str, Any] | None,
     *,
     approval_required: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     base_sections = [section for section in report_plan.get("sections") or [] if isinstance(section, dict)]
     review = review_payload if isinstance(review_payload, dict) else {}
     action = str(review.get("action") or review.get("status") or "").strip().lower()
@@ -31,7 +31,7 @@ def apply_sectioned_report_review(
     return _review_result("auto_approved", base_sections, should_execute=True, review_payload=review)
 
 
-def build_section_search_query(topic: str, section: Dict[str, Any], *, follow_up_reason: str = "") -> str:
+def build_section_search_query(topic: str, section: dict[str, Any], *, follow_up_reason: str = "") -> str:
     title = str(section.get("title") or "").strip()
     focus = str(section.get("focus") or title or "evidence").strip()
     query = f"{topic} {focus} evidence sources"
@@ -41,17 +41,17 @@ def build_section_search_query(topic: str, section: Dict[str, Any], *, follow_up
 
 
 def grade_section_content(
-    section: Dict[str, Any],
+    section: dict[str, Any],
     content: str,
-    evidence_items: Iterable[Dict[str, Any]],
+    evidence_items: Iterable[dict[str, Any]],
     *,
     min_chars: int = 120,
     min_evidence: int = 1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     text = str(content or "").strip()
     evidence_count = len([item for item in evidence_items or [] if isinstance(item, dict)])
     research_required = bool(section.get("research_required", True))
-    reasons: List[str] = []
+    reasons: list[str] = []
     if len(text) < max(1, int(min_chars or 1)):
         reasons.append("section_too_short")
     if research_required and evidence_count < max(0, int(min_evidence or 0)):
@@ -69,8 +69,8 @@ def grade_section_content(
     }
 
 
-def compile_sectioned_report(section_results: List[Dict[str, Any]]) -> str:
-    blocks: List[str] = []
+def compile_sectioned_report(section_results: list[dict[str, Any]]) -> str:
+    blocks: list[str] = []
     for result in section_results or []:
         if not isinstance(result, dict):
             continue
@@ -84,11 +84,11 @@ def compile_sectioned_report(section_results: List[Dict[str, Any]]) -> str:
 
 def _review_result(
     status: str,
-    sections: List[Dict[str, Any]],
+    sections: list[dict[str, Any]],
     *,
     should_execute: bool,
-    review_payload: Dict[str, Any],
-) -> Dict[str, Any]:
+    review_payload: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "review_status": status,
         "should_execute": should_execute,
@@ -98,9 +98,9 @@ def _review_result(
     }
 
 
-def _merge_edited_sections(base_sections: List[Dict[str, Any]], edited_sections: Iterable[Any]) -> List[Dict[str, Any]]:
+def _merge_edited_sections(base_sections: list[dict[str, Any]], edited_sections: Iterable[Any]) -> list[dict[str, Any]]:
     base_by_id = {str(section.get("section_id") or ""): dict(section) for section in base_sections}
-    output: List[Dict[str, Any]] = []
+    output: list[dict[str, Any]] = []
     for raw in edited_sections or []:
         if not isinstance(raw, dict):
             continue
@@ -117,7 +117,7 @@ def _merge_edited_sections(base_sections: List[Dict[str, Any]], edited_sections:
     return [dict(section) for section in base_sections]
 
 
-def _stable_section_id(section: Dict[str, Any]) -> str:
+def _stable_section_id(section: dict[str, Any]) -> str:
     raw = "|".join([str(section.get("title") or ""), str(section.get("focus") or "")])
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
     return f"section_edit_{digest}"

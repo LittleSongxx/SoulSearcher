@@ -17,13 +17,12 @@ execute the tools, inject results back into the conversation, and call
 the LLM again - all automatically until a natural stop point is reached.
 """
 
-import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
-from agent.parsers.xml_parser import XMLToolCall
 from tools.core.base import ToolResult
 
 logger = logging.getLogger(__name__)
@@ -52,8 +51,8 @@ class ContinuationState:
     stop_reason: Optional[str] = None
 
     # History
-    finish_reasons: List[str] = field(default_factory=list)
-    tool_call_history: List[Dict[str, Any]] = field(default_factory=list)
+    finish_reasons: list[str] = field(default_factory=list)
+    tool_call_history: list[dict[str, Any]] = field(default_factory=list)
 
     # Timestamps
     started_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -68,7 +67,7 @@ class ContinuationState:
         """Record a finish reason."""
         self.finish_reasons.append(reason)
 
-    def add_tool_calls(self, calls: List[Any], results: List[ToolResult]):
+    def add_tool_calls(self, calls: list[Any], results: list[ToolResult]):
         """Record tool calls and their results."""
         for call, result in zip(calls, results):
             self.total_tool_calls += 1
@@ -100,7 +99,7 @@ class ContinuationState:
         self.should_continue = False
         self.stop_reason = reason
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "iteration_count": self.iteration_count,
@@ -171,7 +170,7 @@ class ContinuationDecider:
         state: ContinuationState,
         finish_reason: Optional[str],
         has_tool_calls: bool,
-        tool_results: Optional[List[ToolResult]] = None,
+        tool_results: Optional[list[ToolResult]] = None,
     ) -> tuple[bool, Optional[str]]:
         """
         Determine if continuation should happen.
@@ -246,11 +245,11 @@ class ToolResultInjector:
 
     def inject_results(
         self,
-        messages: List[Dict[str, Any]],
-        tool_calls: List[Any],
-        tool_results: List[ToolResult],
+        messages: list[dict[str, Any]],
+        tool_calls: list[Any],
+        tool_results: list[ToolResult],
         format_type: Literal["xml", "native"] = "xml",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Inject tool results into message list.
 
@@ -277,8 +276,8 @@ class ToolResultInjector:
             raise ValueError(f"Unknown injection strategy: {self.strategy}")
 
     def _inject_as_user_message(
-        self, messages: List[Dict[str, Any]], tool_calls: List[Any], tool_results: List[ToolResult]
-    ) -> List[Dict[str, Any]]:
+        self, messages: list[dict[str, Any]], tool_calls: list[Any], tool_results: list[ToolResult]
+    ) -> list[dict[str, Any]]:
         """
         Inject results as user messages.
 
@@ -316,8 +315,8 @@ class ToolResultInjector:
         return messages
 
     def _inject_as_assistant_message(
-        self, messages: List[Dict[str, Any]], tool_calls: List[Any], tool_results: List[ToolResult]
-    ) -> List[Dict[str, Any]]:
+        self, messages: list[dict[str, Any]], tool_calls: list[Any], tool_results: list[ToolResult]
+    ) -> list[dict[str, Any]]:
         """
         Inject results as assistant messages.
 
@@ -344,8 +343,8 @@ class ToolResultInjector:
         return messages
 
     def _inject_as_tool_message(
-        self, messages: List[Dict[str, Any]], tool_calls: List[Any], tool_results: List[ToolResult]
-    ) -> List[Dict[str, Any]]:
+        self, messages: list[dict[str, Any]], tool_calls: list[Any], tool_results: list[ToolResult]
+    ) -> list[dict[str, Any]]:
         """
         Inject results as tool messages.
 
@@ -407,12 +406,12 @@ class ContinuationHandler:
 
     async def handle_continuation(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         llm_callable: Callable,
         tool_executor: Callable,
         initial_response: Any,
         session_id: str = "default",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Handle auto-continuation loop.
 
@@ -486,7 +485,7 @@ class ContinuationHandler:
 
             except Exception as e:
                 logger.error(f"[{session_id}] LLM call failed: {e}", exc_info=True)
-                state.stop(f"llm_error: {str(e)}")
+                state.stop(f"llm_error: {e!s}")
                 break
 
         # Return final result
@@ -514,7 +513,7 @@ class ContinuationHandler:
 
         # Dict format
         if isinstance(response, dict):
-            if "choices" in response and response["choices"]:
+            if response.get("choices"):
                 return response["choices"][0].get("finish_reason")
             if "finish_reason" in response:
                 return response["finish_reason"]
@@ -525,7 +524,7 @@ class ContinuationHandler:
 
         return None
 
-    def _extract_tool_calls(self, response: Any) -> List[Any]:
+    def _extract_tool_calls(self, response: Any) -> list[Any]:
         """
         Extract tool calls from LLM response.
 
@@ -544,7 +543,7 @@ class ContinuationHandler:
                 tool_calls.extend(response["tool_calls"])
 
             # Check in choices
-            if "choices" in response and response["choices"]:
+            if response.get("choices"):
                 message = response["choices"][0].get("message", {})
                 if "tool_calls" in message:
                     tool_calls.extend(message["tool_calls"])

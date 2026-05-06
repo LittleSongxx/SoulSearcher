@@ -14,12 +14,11 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -31,10 +30,10 @@ logger = logging.getLogger(__name__)
 # Per-thread state to keep screenshots human-like:
 # - De-dupe identical screenshots across tool calls
 # - Accumulate small scroll/arrow interactions into meaningful captures
-_SB_THREAD_STATE: Dict[str, Dict[str, Any]] = {}
+_SB_THREAD_STATE: dict[str, dict[str, Any]] = {}
 
 
-def _get_thread_state(thread_id: str) -> Dict[str, Any]:
+def _get_thread_state(thread_id: str) -> dict[str, Any]:
     tid = (thread_id or "").strip() or "default"
     state = _SB_THREAD_STATE.get(tid)
     if state is None:
@@ -84,7 +83,7 @@ class _SbBrowserTool(BaseTool):
     def _page(self):
         return self._session().get_page()
 
-    def _page_info(self) -> Dict[str, str]:
+    def _page_info(self) -> dict[str, str]:
         page = self._page()
         title = ""
         try:
@@ -121,7 +120,7 @@ class _SbBrowserTool(BaseTool):
         self,
         action: str,
         full_page: bool = True,
-    ) -> Tuple[Dict[str, Any], str]:
+    ) -> tuple[dict[str, Any], str]:
         """
         Take screenshot, save to disk, and return URL (base64 fallback).
 
@@ -143,7 +142,7 @@ class _SbBrowserTool(BaseTool):
                 image_hash,
             )
 
-        result: Dict[str, Any] = {"mime_type": "image/png"}
+        result: dict[str, Any] = {"mime_type": "image/png"}
 
         # Save to disk if screenshot service is available
         if self.save_screenshots:
@@ -173,7 +172,7 @@ class _SbBrowserTool(BaseTool):
 
         return result, image_hash
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event (synchronous version for tool execution)."""
         if not self.emit_events:
             return
@@ -188,7 +187,7 @@ class _SbBrowserTool(BaseTool):
         except Exception as e:
             logger.warning(f"[sb_browser] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event and return start time."""
         start_time = time.time()
         self._emit_event(
@@ -216,7 +215,7 @@ class _SbBrowserTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -235,7 +234,7 @@ class _SbBrowserTool(BaseTool):
 
     def _emit_screenshot(
         self,
-        screenshot_data: Dict[str, Any],
+        screenshot_data: dict[str, Any],
         action: str,
         *,
         image_hash: Optional[str] = None,
@@ -301,8 +300,8 @@ class SbBrowserNavigateTool(_SbBrowserTool):
         wait_until: str = "domcontentloaded",
         wait_ms: int = 1000,
         full_page: bool = False,
-    ) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    ) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("navigate", {"url": url})
             self._emit_progress("navigate", f"goto {url}")
             state = _get_thread_state(self.thread_id)
@@ -333,7 +332,7 @@ class SbBrowserNavigateTool(_SbBrowserTool):
             except Exception as e:
                 # Even on navigation failure, try to capture a screenshot of the
                 # current page/error state so the UI has something actionable.
-                result: Dict[str, Any] = {"error": str(e), "url": url}
+                result: dict[str, Any] = {"error": str(e), "url": url}
                 try:
                     info = self._page_info()
                     screenshot, screenshot_hash = self._screenshot_with_save(
@@ -370,8 +369,8 @@ class SbBrowserClickTool(_SbBrowserTool):
         text: Optional[str] = None,
         wait_ms: int = 800,
         full_page: bool = False,
-    ) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    ) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("click", {"selector": selector, "text": text})
             self._emit_progress("click", selector or text or "")
 
@@ -443,8 +442,8 @@ class SbBrowserTypeTool(_SbBrowserTool):
         press_enter: bool = False,
         wait_ms: int = 800,
         full_page: bool = False,
-    ) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    ) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start(
                 "type",
                 {
@@ -474,7 +473,7 @@ class SbBrowserTypeTool(_SbBrowserTool):
                 self._emit_progress("type", "after_type_wait")
 
                 info = self._page_info()
-                screenshot: Dict[str, Any] = {}
+                screenshot: dict[str, Any] = {}
                 screenshot_hash: Optional[str] = None
                 screenshot_action = "submit" if press_enter else "type"
                 if press_enter:
@@ -516,8 +515,8 @@ class SbBrowserPressTool(_SbBrowserTool):
     )
     args_schema: type[BaseModel] = SbBrowserPressInput
 
-    def _run(self, keys: str, wait_ms: int = 500, full_page: bool = False) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    def _run(self, keys: str, wait_ms: int = 500, full_page: bool = False) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("press", {"keys": keys})
             self._emit_progress("press", keys)
 
@@ -534,7 +533,7 @@ class SbBrowserPressTool(_SbBrowserTool):
                     token in keys_upper
                     for token in ("ENTER", "PAGEDOWN", "PAGEUP", "HOME", "END", "SPACE")
                 )
-                screenshot: Dict[str, Any] = {}
+                screenshot: dict[str, Any] = {}
                 screenshot_hash: Optional[str] = None
                 state = _get_thread_state(self.thread_id)
                 if meaningful:
@@ -583,8 +582,8 @@ class SbBrowserScrollTool(_SbBrowserTool):
     )
     args_schema: type[BaseModel] = SbBrowserScrollInput
 
-    def _run(self, amount: int, wait_ms: int = 500, full_page: bool = False) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    def _run(self, amount: int, wait_ms: int = 500, full_page: bool = False) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("scroll", {"amount": amount})
             self._emit_progress("scroll", str(amount))
 
@@ -603,7 +602,7 @@ class SbBrowserScrollTool(_SbBrowserTool):
                     else None
                 )
                 threshold = int((int(viewport_h) if viewport_h else 800) * 0.75)
-                screenshot: Dict[str, Any] = {}
+                screenshot: dict[str, Any] = {}
                 screenshot_hash: Optional[str] = None
                 state = _get_thread_state(self.thread_id)
                 state["scroll_accum"] = int(state.get("scroll_accum") or 0) + amt
@@ -638,8 +637,8 @@ class SbBrowserExtractTextTool(_SbBrowserTool):
     description: str = "Extract visible text from the current sandbox browser page."
     args_schema: type[BaseModel] = SbBrowserExtractTextInput
 
-    def _run(self, max_chars: int = 5000) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    def _run(self, max_chars: int = 5000) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("extract_text", {"max_chars": max_chars})
             self._emit_progress("extract_text", f"max_chars={max_chars}")
 
@@ -674,8 +673,8 @@ class SbBrowserScreenshotTool(_SbBrowserTool):
     description: str = "Take a screenshot of the current sandbox browser page."
     args_schema: type[BaseModel] = SbBrowserScreenshotInput
 
-    def _run(self, full_page: bool = False) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    def _run(self, full_page: bool = False) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("screenshot", {"full_page": full_page})
             self._emit_progress("screenshot", "capturing")
 
@@ -704,8 +703,8 @@ class SbBrowserResetTool(_SbBrowserTool):
     name: str = "sb_browser_reset"
     description: str = "Close and reset the sandbox browser session (kills the sandbox)."
 
-    def _run(self) -> Dict[str, Any]:
-        def _impl() -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start("reset", {})
             self._emit_progress("reset", "closing session")
 
@@ -729,7 +728,7 @@ def build_sandbox_browser_tools(
     thread_id: str,
     emit_events: bool = True,
     save_screenshots: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build sandbox browser tools for a thread.
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Quick E2E test for hierarchical coordinator mode."""
 import asyncio
-import json
 import os
 import sys
 import time

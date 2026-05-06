@@ -13,10 +13,9 @@ Inspired by Manus's "compact vs full representation" strategy:
 import hashlib
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from common.config import settings
 
@@ -37,9 +36,9 @@ def _content_hash(content: str) -> str:
 
 
 def offload_content(
-    item: Dict[str, Any],
+    item: dict[str, Any],
     thread_id: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Offload a single scraped_content item if it exceeds the threshold.
 
@@ -94,16 +93,16 @@ def offload_content(
 
 
 def offload_content_list(
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     thread_id: str = "",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Offload a list of scraped_content items."""
     if not settings.context_offloading:
         return items
     return [offload_content(item, thread_id) for item in items]
 
 
-def load_offloaded_content(path_or_item: Any) -> Dict[str, Any]:
+def load_offloaded_content(path_or_item: Any) -> dict[str, Any]:
     """
     Load the full content for an offloaded item.
 
@@ -129,8 +128,8 @@ def load_offloaded_content(path_or_item: Any) -> Dict[str, Any]:
 
 
 def load_all_offloaded(
-    items: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Load full content for all offloaded items in a list."""
     result = []
     for item in items:

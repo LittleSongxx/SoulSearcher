@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from common.research_events import build_research_run_event
 from common.sse import format_sse_event
 
 
@@ -32,5 +33,9 @@ def translate_legacy_line_to_sse(line: str, *, seq: int) -> str:
     if not isinstance(event_type, str) or not event_type.strip():
         return ""
 
-    return format_sse_event(event=event_type, data=payload, event_id=seq)
+    payload.setdefault(
+        "research_event",
+        build_research_run_event(event_type, payload.get("data"), seq=seq),
+    )
 
+    return format_sse_event(event=event_type, data=payload, event_id=seq)

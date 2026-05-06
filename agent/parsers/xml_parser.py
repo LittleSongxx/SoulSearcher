@@ -26,8 +26,8 @@ Design inspired by Manus AgentPress XMLToolParser.
 import json
 import logging
 import re
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,11 @@ class XMLToolCall:
     """
 
     function_name: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     raw_xml: str = ""
     call_id: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format."""
         return {
             "function_name": self.function_name,
@@ -58,7 +58,7 @@ class XMLToolCall:
             "call_id": self.call_id,
         }
 
-    def to_openai_format(self) -> Dict[str, Any]:
+    def to_openai_format(self) -> dict[str, Any]:
         """
         Convert to OpenAI function calling format.
 
@@ -111,7 +111,7 @@ class XMLToolParser:
         self.parsed_calls = 0
         self.parse_errors = 0
 
-    def parse_content(self, content: str) -> List[XMLToolCall]:
+    def parse_content(self, content: str) -> list[XMLToolCall]:
         """
         Parse XML tool calls from content.
 
@@ -217,8 +217,8 @@ class XMLToolParser:
         return value
 
     def parse_streaming_content(
-        self, accumulated_content: str, previous_calls: List[XMLToolCall]
-    ) -> List[XMLToolCall]:
+        self, accumulated_content: str, previous_calls: list[XMLToolCall]
+    ) -> list[XMLToolCall]:
         """
         Parse tool calls from streaming content.
 
@@ -253,7 +253,7 @@ class XMLToolParser:
         """
         return bool(self.FUNCTION_CALLS_PATTERN.search(content))
 
-    def extract_thinking_and_calls(self, content: str) -> tuple[Optional[str], List[XMLToolCall]]:
+    def extract_thinking_and_calls(self, content: str) -> tuple[Optional[str], list[XMLToolCall]]:
         """
         Extract both thinking/reasoning text and tool calls.
 
@@ -299,7 +299,7 @@ class XMLToolParser:
 
         return True, None
 
-    def get_statistics(self) -> Dict[str, int]:
+    def get_statistics(self) -> dict[str, int]:
         """
         Get parsing statistics.
 
@@ -312,7 +312,7 @@ class XMLToolParser:
 # Utility functions
 
 
-def convert_xml_to_openai_format(xml_calls: List[XMLToolCall]) -> List[Dict[str, Any]]:
+def convert_xml_to_openai_format(xml_calls: list[XMLToolCall]) -> list[dict[str, Any]]:
     """
     Convert XML tool calls to OpenAI function calling format.
 
@@ -329,7 +329,7 @@ def convert_xml_to_openai_format(xml_calls: List[XMLToolCall]) -> List[Dict[str,
 
 def extract_tool_calls_from_response(
     response_content: str, format_type: str = "auto"
-) -> tuple[Optional[str], List[XMLToolCall]]:
+) -> tuple[Optional[str], list[XMLToolCall]]:
     """
     Extract tool calls from LLM response content.
 
@@ -369,7 +369,7 @@ Let me search for that information.
     parser = XMLToolParser()
     calls = parser.parse_content(xml_content_1)
 
-    print(f"\nTest 1: Simple tool call")
+    print("\nTest 1: Simple tool call")
     print(f"Found {len(calls)} tool call(s)")
     for call in calls:
         print(f"  Function: {call.function_name}")
@@ -398,7 +398,7 @@ asyncio.run(main())
 
     calls2 = parser.parse_content(xml_content_2)
 
-    print(f"\nTest 2: Multiple tool calls")
+    print("\nTest 2: Multiple tool calls")
     print(f"Found {len(calls2)} tool call(s)")
     for i, call in enumerate(calls2, 1):
         print(f"\n  Call {i}:")
@@ -421,12 +421,12 @@ asyncio.run(main())
 
     calls3 = parser.parse_content(xml_content_3)
 
-    print(f"\nTest 3: Type inference")
+    print("\nTest 3: Type inference")
     if calls3:
         call = calls3[0]
-        print(f"  Parameters and types:")
+        print("  Parameters and types:")
         for name, value in call.parameters.items():
-            print(f"    {name}: {type(value).__name__} = {repr(value)}")
+            print(f"    {name}: {type(value).__name__} = {value!r}")
 
     # Test case 4: Thinking + tool calls
     xml_content_4 = """
@@ -442,18 +442,18 @@ then execute some code to process it.
 
     thinking, calls4 = parser.extract_thinking_and_calls(xml_content_4)
 
-    print(f"\nTest 4: Thinking + tool calls")
+    print("\nTest 4: Thinking + tool calls")
     print(f"  Thinking: {thinking[:100] if thinking else 'None'}...")
     print(f"  Tool calls: {len(calls4)}")
 
     # Statistics
-    print(f"\nParser statistics:")
+    print("\nParser statistics:")
     stats = parser.get_statistics()
     for key, value in stats.items():
         print(f"  {key}: {value}")
 
     # Test validation
-    print(f"\nTest 5: Validation")
+    print("\nTest 5: Validation")
     if calls:
         is_valid, error = parser.validate_tool_call(calls[0])
         print(f"  Valid: {is_valid}")
@@ -461,9 +461,9 @@ then execute some code to process it.
             print(f"  Error: {error}")
 
     # Test OpenAI format conversion
-    print(f"\nTest 6: OpenAI format conversion")
+    print("\nTest 6: OpenAI format conversion")
     openai_format = convert_xml_to_openai_format(calls[:1])
-    print(f"  OpenAI format:")
+    print("  OpenAI format:")
     print(f"  {json.dumps(openai_format, indent=2)}")
 
     print("\n" + "=" * 60)

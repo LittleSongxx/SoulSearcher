@@ -7,10 +7,10 @@ Consolidates duplicated parsing functions from deepsearch and other modules.
 import ast
 import re
 import textwrap
-from typing import Any, Dict, List
+from typing import Any
 
 
-def parse_list_output(text: str) -> List[str]:
+def parse_list_output(text: str) -> list[str]:
     """
     Parse python-list-like output into a string list.
 
@@ -51,7 +51,7 @@ def parse_list_output(text: str) -> List[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
-def format_search_results(results: List[Dict[str, Any]]) -> str:
+def format_search_results(results: list[dict[str, Any]]) -> str:
     """
     Format search results for prompt consumption.
 
@@ -61,7 +61,7 @@ def format_search_results(results: List[Dict[str, Any]]) -> str:
     Returns:
         Formatted string with numbered results
     """
-    blocks: List[str] = []
+    blocks: list[str] = []
     for idx, r in enumerate(results, 1):
         blocks.append(
             textwrap.dedent(
@@ -92,7 +92,7 @@ def extract_response_content(response: Any) -> str:
     return getattr(response, "content", "") or ""
 
 
-def parse_json_from_text(text: str) -> Dict[str, Any]:
+def parse_json_from_text(text: str) -> dict[str, Any]:
     """
     Extract and parse JSON from text that may contain markdown code fences.
 

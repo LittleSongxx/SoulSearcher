@@ -8,8 +8,8 @@ multiple evidence dimensions instead of relying only on LLM sampling.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from datetime import UTC, datetime, timedelta
+from typing import Any, Optional
 
 _PUBLISHED_DATE_FIELDS = (
     "published_date",
@@ -160,13 +160,13 @@ def is_time_sensitive_topic(topic: str) -> bool:
     return bool(_YEAR_RE.search(text))
 
 
-def query_dimensions(query: str) -> Set[str]:
+def query_dimensions(query: str) -> set[str]:
     """Infer coverage dimensions represented by a query."""
     text = str(query or "").strip()
     if not text:
         return set()
 
-    dims: Set[str] = set()
+    dims: set[str] = set()
 
     if is_time_sensitive_topic(text):
         dims.add("freshness")
@@ -188,7 +188,7 @@ def query_dimensions(query: str) -> Set[str]:
     return dims
 
 
-def analyze_query_coverage(queries: List[str]) -> Dict[str, Any]:
+def analyze_query_coverage(queries: list[str]) -> dict[str, Any]:
     """Compute dimension coverage score for generated research queries."""
     hits = {name: 0 for name in _QUERY_DIMENSIONS}
 
@@ -213,7 +213,7 @@ def analyze_query_coverage(queries: List[str]) -> Dict[str, Any]:
     }
 
 
-def _seed_templates(topic: str, year: int) -> List[Dict[str, str]]:
+def _seed_templates(topic: str, year: int) -> list[dict[str, str]]:
     if _is_cjk_text(topic):
         return [
             {"dimension": "freshness", "query": f"{topic} 最新进展 {year}"},
@@ -237,10 +237,10 @@ def _seed_templates(topic: str, year: int) -> List[Dict[str, str]]:
 
 def backfill_diverse_queries(
     topic: str,
-    existing_queries: List[str],
-    historical_queries: List[str],
+    existing_queries: list[str],
+    historical_queries: list[str],
     query_num: int,
-) -> List[str]:
+) -> list[str]:
     """
     Backfill query list with deterministic dimension seeds.
 
@@ -254,7 +254,7 @@ def backfill_diverse_queries(
         if isinstance(q, str) and str(q).strip()
     }
 
-    final_queries: List[str] = []
+    final_queries: list[str] = []
     for query in existing_queries or []:
         q = str(query or "").strip()
         if not q:
@@ -290,15 +290,15 @@ def backfill_diverse_queries(
 
 def _coerce_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _parse_relative_datetime(text: str, now: Optional[datetime] = None) -> Optional[datetime]:
     value = str(text or "").strip().lower()
     if not value:
         return None
-    base = _coerce_utc(now or datetime.now(timezone.utc))
+    base = _coerce_utc(now or datetime.now(UTC))
 
     if re.search(r"\bjust now\b|\btoday\b|刚刚|今天", value):
         return base
@@ -347,9 +347,9 @@ def _parse_relative_datetime(text: str, now: Optional[datetime] = None) -> Optio
     return None
 
 
-def _date_candidates(text: str) -> List[str]:
+def _date_candidates(text: str) -> list[str]:
     value = str(text or "")
-    candidates: List[str] = []
+    candidates: list[str] = []
     patterns = (
         r"\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b",
         r"20\d{2}年\d{1,2}月\d{1,2}日?",
@@ -378,7 +378,7 @@ def _parse_datetime(
         if timestamp > 10_000_000_000:
             timestamp = timestamp / 1000.0
         try:
-            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            return datetime.fromtimestamp(timestamp, tz=UTC)
         except (OSError, OverflowError, ValueError):
             return None
     text = str(value).strip()
@@ -422,7 +422,7 @@ def _parse_datetime(
                 int(zh_match.group(1)),
                 int(zh_match.group(2)),
                 int(zh_match.group(3)),
-                tzinfo=timezone.utc,
+                tzinfo=UTC,
             )
         except ValueError:
             return None
@@ -436,9 +436,9 @@ def _parse_datetime(
 
 
 def result_published_datetime(
-    result: Dict[str, Any],
+    result: dict[str, Any],
     *,
-    run: Optional[Dict[str, Any]] = None,
+    run: Optional[dict[str, Any]] = None,
     now: Optional[datetime] = None,
 ) -> Optional[datetime]:
     containers = [result]
@@ -463,7 +463,7 @@ def result_published_datetime(
     return None
 
 
-def summarize_freshness(search_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+def summarize_freshness(search_runs: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize freshness distribution from collected search results."""
     total_results = 0
     known_count = 0
@@ -472,7 +472,7 @@ def summarize_freshness(search_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     fresh_30_count = 0
     stale_180_count = 0
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for run in search_runs or []:
         results = run.get("results") if isinstance(run, dict) else []

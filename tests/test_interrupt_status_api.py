@@ -1,11 +1,11 @@
 import uuid
-from typing_extensions import TypedDict
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 from langgraph.types import interrupt
+from typing_extensions import TypedDict
 
 
 class StatusState(TypedDict, total=False):

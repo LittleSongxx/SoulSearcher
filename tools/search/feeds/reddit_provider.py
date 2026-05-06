@@ -11,7 +11,8 @@ Supports:
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from importlib.util import find_spec
+from typing import Any, Optional
 
 from common.config import settings
 from tools.search.multi_search import SearchProvider, SearchResult
@@ -53,12 +54,7 @@ class RedditProvider(SearchProvider):
         client_secret = getattr(settings, "reddit_client_secret", "")
         if not (client_id and client_secret):
             return False
-        try:
-            import praw
-
-            return True
-        except ImportError:
-            return False
+        return find_spec("praw") is not None
 
     def search(
         self,
@@ -67,7 +63,7 @@ class RedditProvider(SearchProvider):
         subreddit: Optional[str] = None,
         sort: str = "relevance",
         time_filter: str = "all",
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         Search Reddit posts.
 
@@ -106,7 +102,7 @@ class RedditProvider(SearchProvider):
                 # Calculate score based on upvotes and comments
                 upvote_score = min(1.0, post.score / 10000)
                 comment_score = min(1.0, post.num_comments / 1000)
-                combined_score = (upvote_score * 0.6 + comment_score * 0.4)
+                combined_score = upvote_score * 0.6 + comment_score * 0.4
 
                 # Build snippet
                 snippet = post.selftext[:500] if post.selftext else post.title
@@ -151,7 +147,7 @@ class RedditProvider(SearchProvider):
 
     def get_hot_posts(
         self, subreddit: str = "all", max_results: int = 10
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """
         Get hot posts from a subreddit.
 
@@ -173,7 +169,7 @@ class RedditProvider(SearchProvider):
             for post in sub.hot(limit=max_results):
                 upvote_score = min(1.0, post.score / 10000)
                 comment_score = min(1.0, post.num_comments / 1000)
-                combined_score = (upvote_score * 0.6 + comment_score * 0.4)
+                combined_score = upvote_score * 0.6 + comment_score * 0.4
 
                 results.append(
                     SearchResult(
@@ -201,7 +197,7 @@ class RedditProvider(SearchProvider):
 
     def get_post_comments(
         self, post_url: str, max_comments: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get top comments from a Reddit post.
 
@@ -222,14 +218,18 @@ class RedditProvider(SearchProvider):
 
             comments = []
             for comment in submission.comments[:max_comments]:
-                comments.append({
-                    "id": comment.id,
-                    "author": str(comment.author) if comment.author else "[deleted]",
-                    "body": comment.body,
-                    "score": comment.score,
-                    "created_utc": self._format_timestamp(comment.created_utc),
-                    "is_op": comment.is_submitter,
-                })
+                comments.append(
+                    {
+                        "id": comment.id,
+                        "author": (
+                            str(comment.author) if comment.author else "[deleted]"
+                        ),
+                        "body": comment.body,
+                        "score": comment.score,
+                        "created_utc": self._format_timestamp(comment.created_utc),
+                        "is_op": comment.is_submitter,
+                    }
+                )
 
             return comments
 

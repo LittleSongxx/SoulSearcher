@@ -5,9 +5,8 @@ Stores and retrieves document embeddings using ChromaDB.
 """
 
 import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from tools.rag.document_loader import Document
 
@@ -79,9 +78,9 @@ class VectorStore:
 
     def add_documents(
         self,
-        documents: List[Document],
-        embeddings: Optional[List[List[float]]] = None,
-    ) -> List[str]:
+        documents: list[Document],
+        embeddings: Optional[list[list[float]]] = None,
+    ) -> list[str]:
         """
         Add documents to the vector store.
 
@@ -126,10 +125,10 @@ class VectorStore:
     def search(
         self,
         query: str,
-        query_embedding: Optional[List[float]] = None,
+        query_embedding: Optional[list[float]] = None,
         n_results: int = 5,
-        filter_metadata: Optional[Dict[str, Any]] = None,
-    ) -> List[Tuple[Document, float]]:
+        filter_metadata: Optional[dict[str, Any]] = None,
+    ) -> list[tuple[Document, float]]:
         """
         Search for similar documents.
 
@@ -184,8 +183,8 @@ class VectorStore:
 
     def delete_documents(
         self,
-        ids: Optional[List[str]] = None,
-        filter_metadata: Optional[Dict[str, Any]] = None,
+        ids: Optional[list[str]] = None,
+        filter_metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         """
         Delete documents from the vector store.
@@ -235,7 +234,7 @@ class VectorStore:
         self,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         List documents in the store.
 

@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 from agent.core.processor_config import AgentProcessorConfig
 from agent.workflows.response_handler import ResponseHandler
@@ -91,7 +91,7 @@ class MockLLMResponseGenerator:
     def __init__(self):
         self.call_count = 0
 
-    async def __call__(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def __call__(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """Simulate LLM call based on conversation state."""
         self.call_count += 1
 
@@ -199,7 +199,7 @@ async def example_basic_auto_continuation():
     mock_llm = MockLLMResponseGenerator()
 
     print(f"\nConfiguration: {config.summary()}")
-    print(f"\nStarting auto-continuation loop...\n")
+    print("\nStarting auto-continuation loop...\n")
 
     # Process with auto-continuation
     iteration_count = 0
@@ -235,7 +235,7 @@ async def example_basic_auto_continuation():
             print(f"\n[STOP] Reason: {event['reason']}")
 
         elif event_type == "continuation_complete":
-            print(f"\n[COMPLETE] Auto-continuation finished:")
+            print("\n[COMPLETE] Auto-continuation finished:")
             print(f"  Total iterations: {event['total_iterations']}")
             print(f"  Total tool calls: {event['total_tool_calls']}")
             print(f"  Stop reason: {event['stop_reason']}")
@@ -298,7 +298,7 @@ async def example_max_iterations():
     mock_llm = AlwaysToolsLLM()
 
     print(f"\nMax iterations set to: {config.max_auto_continues}")
-    print(f"Starting loop...\n")
+    print("Starting loop...\n")
 
     async for event in handler.process_with_auto_continue(
         messages=messages, llm_callable=mock_llm, session_id="example-2"
@@ -390,7 +390,7 @@ async def example_parallel_execution():
     mock_llm = MultiToolLLM()
 
     print(f"\nExecution strategy: {config.tool_execution_strategy}")
-    print(f"Starting...\n")
+    print("Starting...\n")
 
     import time
 
@@ -406,7 +406,7 @@ async def example_parallel_execution():
         elif event.get("type") == "continuation_complete":
             elapsed = time.time() - start_time
             print(f"\n[COMPLETE] Total time: {elapsed:.2f}s")
-            print(f"  (Parallel execution is faster than sequential)")
+            print("  (Parallel execution is faster than sequential)")
 
 
 # ==================== Integration Summary ====================

@@ -15,7 +15,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -36,13 +36,13 @@ class ExtractedFact:
 class CompressedKnowledge:
     """Structured compressed knowledge from research."""
     topic: str
-    facts: List[ExtractedFact] = field(default_factory=list)
-    statistics: List[Dict[str, Any]] = field(default_factory=list)
-    key_entities: List[str] = field(default_factory=list)
-    subtopics: Dict[str, List[ExtractedFact]] = field(default_factory=dict)
+    facts: list[ExtractedFact] = field(default_factory=list)
+    statistics: list[dict[str, Any]] = field(default_factory=list)
+    key_entities: list[str] = field(default_factory=list)
+    subtopics: dict[str, list[ExtractedFact]] = field(default_factory=dict)
     summary: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "topic": self.topic,
             "facts": [
@@ -105,15 +105,15 @@ class ResearchCompressor:
     Reduces raw scraped content to essential facts with citations.
     """
 
-    def __init__(self, llm: BaseChatModel, config: Dict[str, Any] = None):
+    def __init__(self, llm: BaseChatModel, config: dict[str, Any] = None):
         self.llm = llm
         self.config = config or {}
 
     def compress(
         self,
         topic: str,
-        scraped_content: List[Dict[str, Any]],
-        summary_notes: List[str] = None,
+        scraped_content: list[dict[str, Any]],
+        summary_notes: list[str] = None,
     ) -> CompressedKnowledge:
         """
         Compress research content into structured knowledge.

@@ -15,7 +15,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
@@ -71,9 +71,9 @@ class ModelConfig:
     timeout: Optional[int] = None
     api_key: Optional[str] = None
     base_url: Optional[str] = None
-    extra_params: Dict[str, Any] = field(default_factory=dict)
+    extra_params: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "provider": self.provider.value,
             "model_name": self.model_name,
@@ -124,8 +124,8 @@ class ModelRouter:
     def __init__(
         self,
         default_provider: ModelProvider = ModelProvider.OPENAI,
-        task_model_map: Optional[Dict[TaskType, ModelConfig]] = None,
-        fallback_configs: Optional[Dict[str, List[ModelConfig]]] = None,
+        task_model_map: Optional[dict[TaskType, ModelConfig]] = None,
+        fallback_configs: Optional[dict[str, list[ModelConfig]]] = None,
     ):
         """
         Initialize the ModelRouter.
@@ -138,7 +138,7 @@ class ModelRouter:
         self.default_provider = default_provider
         self.task_model_map = task_model_map or {}
         self.fallback_configs = fallback_configs or {}
-        self.usage_stats: List[ModelUsageStats] = []
+        self.usage_stats: list[ModelUsageStats] = []
 
         # Load from settings
         self._load_from_settings()
@@ -244,7 +244,7 @@ class ModelRouter:
     def get_model_name(
         self,
         task_type: TaskType,
-        config: Optional[Dict[str, Any]] = None,
+        config: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Get model name for a task, respecting runtime config overrides.
@@ -288,7 +288,7 @@ class ModelRouter:
         self,
         task_type: TaskType,
         temperature_override: Optional[float] = None,
-        config_override: Optional[Dict[str, Any]] = None,
+        config_override: Optional[dict[str, Any]] = None,
     ) -> BaseChatModel:
         """
         Build and return a chat model for the specified task.
@@ -317,7 +317,7 @@ class ModelRouter:
         self,
         config: ModelConfig,
         temperature: float,
-        extra_params: Dict[str, Any],
+        extra_params: dict[str, Any],
     ) -> BaseChatModel:
         """Create a chat model instance from config."""
         provider = config.provider
@@ -414,7 +414,7 @@ class ModelRouter:
 
             return ChatOpenAI(**params)
 
-    def get_fallback_chain(self, model_name: str) -> List[ModelConfig]:
+    def get_fallback_chain(self, model_name: str) -> list[ModelConfig]:
         """Get fallback models for a given model."""
         return self.fallback_configs.get(model_name, [])
 
@@ -422,7 +422,7 @@ class ModelRouter:
         self,
         task_type: TaskType,
         temperature_override: Optional[float] = None,
-    ) -> Tuple[BaseChatModel, List[BaseChatModel]]:
+    ) -> tuple[BaseChatModel, list[BaseChatModel]]:
         """
         Build primary model and its fallback chain.
 
@@ -449,7 +449,7 @@ class ModelRouter:
         """Record model usage statistics."""
         self.usage_stats.append(stats)
 
-    def get_usage_summary(self) -> Dict[str, Any]:
+    def get_usage_summary(self) -> dict[str, Any]:
         """Get summary of model usage."""
         if not self.usage_stats:
             return {"total_calls": 0}
@@ -495,7 +495,7 @@ def get_model_router() -> ModelRouter:
 def get_model_for_task(
     task_type: TaskType,
     temperature: Optional[float] = None,
-    config: Optional[Dict[str, Any]] = None,
+    config: Optional[dict[str, Any]] = None,
 ) -> BaseChatModel:
     """
     Convenience function to get a model for a specific task type.
@@ -512,7 +512,7 @@ def get_model_for_task(
     return router.build_model(task_type, temperature, config)
 
 
-def build_research_models(config: Dict[str, Any] = None) -> Dict[str, BaseChatModel]:
+def build_research_models(config: dict[str, Any] = None) -> dict[str, BaseChatModel]:
     """
     Build all models needed for research workflow.
 

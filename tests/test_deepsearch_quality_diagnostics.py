@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from agent.workflows import deepsearch_optimized
 
@@ -69,7 +69,7 @@ def _patch_basics(monkeypatch, search_results):
 
 
 def test_quality_summary_exposes_query_and_freshness_diagnostics(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "Recent",
@@ -116,7 +116,7 @@ def test_quality_summary_exposes_query_and_freshness_diagnostics(monkeypatch):
 
 
 def test_time_sensitive_topics_trigger_low_freshness_warning(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "Old1",
@@ -158,7 +158,7 @@ def test_time_sensitive_topics_trigger_low_freshness_warning(monkeypatch):
 
 
 def test_freshness_warning_respects_min_known_threshold(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "Old1",
@@ -204,7 +204,7 @@ def test_freshness_warning_respects_min_known_threshold(monkeypatch):
 
 
 def test_deepsearch_emits_search_and_quality_update_events(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "Recent",
@@ -266,7 +266,7 @@ def test_deepsearch_emits_search_and_quality_update_events(monkeypatch):
 
 
 def test_deepsearch_emits_epoch_lifecycle_events(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "Recent",
@@ -609,9 +609,9 @@ def test_deepsearch_tree_emits_search_quality_and_tree_events(monkeypatch):
                         "title": "Tree source",
                         "url": "https://example.com/tree",
                         "provider": "serper",
-                        "published_date": datetime.now(timezone.utc).isoformat(),
+                        "published_date": datetime.now(UTC).isoformat(),
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             ]
 
@@ -703,9 +703,9 @@ def test_deepsearch_tree_emits_search_during_tree_execution(monkeypatch):
                         "title": "Tree source",
                         "url": "https://example.com/tree",
                         "provider": "serper",
-                        "published_date": datetime.now(timezone.utc).isoformat(),
+                        "published_date": datetime.now(UTC).isoformat(),
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             ]
 
@@ -748,7 +748,7 @@ def test_deepsearch_tree_emits_search_during_tree_execution(monkeypatch):
                 "title": "Tree source",
                 "url": "https://example.com/tree",
                 "provider": "serper",
-                "published_date": datetime.now(timezone.utc).isoformat(),
+                "published_date": datetime.now(UTC).isoformat(),
             }
         ],
     )
@@ -787,7 +787,7 @@ def test_deepsearch_linear_respects_single_query_budget(monkeypatch):
                 "summary": "Paris",
                 "score": 0.9,
                 "provider": "serper",
-                "published_date": datetime.now(timezone.utc).isoformat(),
+                "published_date": datetime.now(UTC).isoformat(),
             }
         ],
     )
@@ -821,7 +821,7 @@ def test_deepsearch_linear_can_disable_browser_visualization(monkeypatch):
                 "summary": "Paris",
                 "score": 0.9,
                 "provider": "serper",
-                "published_date": datetime.now(timezone.utc).isoformat(),
+                "published_date": datetime.now(UTC).isoformat(),
             }
         ],
     )
@@ -859,7 +859,7 @@ def test_deepsearch_linear_can_disable_browser_visualization(monkeypatch):
 
 
 def test_deepsearch_search_event_respects_result_limit_setting(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "S1",
@@ -922,7 +922,7 @@ def test_deepsearch_search_event_respects_result_limit_setting(monkeypatch):
 
 
 def test_deepsearch_linear_complete_event_dedupes_canonical_source_urls(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "S1",
@@ -990,9 +990,9 @@ def test_deepsearch_tree_complete_event_dedupes_canonical_source_urls(monkeypatc
                         "title": "Tree source A",
                         "url": "https://example.com/tree?utm_source=feed",
                         "provider": "serper",
-                        "published_date": datetime.now(timezone.utc).isoformat(),
+                        "published_date": datetime.now(UTC).isoformat(),
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
                 {
                     "query": "tree query",
@@ -1000,9 +1000,9 @@ def test_deepsearch_tree_complete_event_dedupes_canonical_source_urls(monkeypatc
                         "title": "Tree source B",
                         "url": "https://EXAMPLE.com/tree/",
                         "provider": "serper",
-                        "published_date": datetime.now(timezone.utc).isoformat(),
+                        "published_date": datetime.now(UTC).isoformat(),
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             ]
 
@@ -1065,7 +1065,7 @@ def test_deepsearch_tree_complete_event_dedupes_canonical_source_urls(monkeypatc
 
 
 def test_deepsearch_linear_quality_counts_use_canonical_url_dedup(monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     search_results = [
         {
             "title": "S1",
@@ -1116,7 +1116,7 @@ def test_deepsearch_tree_quality_source_count_uses_canonical_dedup(monkeypatch):
                         "title": "Tree source A",
                         "url": "https://example.com/tree?utm_source=feed",
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
                 {
                     "query": "tree query",
@@ -1124,7 +1124,7 @@ def test_deepsearch_tree_quality_source_count_uses_canonical_dedup(monkeypatch):
                         "title": "Tree source B",
                         "url": "https://EXAMPLE.com/tree/",
                     },
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             ]
 

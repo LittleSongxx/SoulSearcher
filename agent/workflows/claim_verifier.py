@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Optional
 
 from agent.workflows.source_registry import SourceRegistry
 from agent.workflows.structural_text import is_structural_text
@@ -132,10 +132,10 @@ def _num_key(value: float) -> str:
     return str(round(value, 4)).rstrip("0").rstrip(".").replace(".", "_")
 
 
-def _numeric_alias_tokens(text: str) -> Set[str]:
+def _numeric_alias_tokens(text: str) -> set[str]:
     value = text or ""
     lower = value.lower()
-    tokens: Set[str] = set()
+    tokens: set[str] = set()
 
     for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:%|percent|per\s+cent)", lower):
         tokens.add(f"pct_{_num_key(float(match.group(1)))}")
@@ -297,10 +297,10 @@ _SEMANTIC_ALIAS_PATTERNS = {
 }
 
 
-def _semantic_alias_tokens(text: str) -> Set[str]:
+def _semantic_alias_tokens(text: str) -> set[str]:
     value = text or ""
     lower = value.lower()
-    tokens: Set[str] = set()
+    tokens: set[str] = set()
     for token, patterns in _SEMANTIC_ALIAS_PATTERNS.items():
         if any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in patterns):
             tokens.add(token)
@@ -317,8 +317,8 @@ class ClaimStatus(str, Enum):
 class ClaimCheck:
     claim: str
     status: ClaimStatus
-    evidence_urls: List[str] = field(default_factory=list)
-    evidence_passages: List[Dict[str, Any]] = field(default_factory=list)
+    evidence_urls: list[str] = field(default_factory=list)
+    evidence_passages: list[dict[str, Any]] = field(default_factory=list)
     score: float = 0.0
     notes: str = ""
 
@@ -333,14 +333,14 @@ class ClaimVerifier:
     def _is_structural_heading_candidate(self, raw: str, text: str) -> bool:
         return is_structural_text(raw, text)
 
-    def extract_claims(self, report: str, max_claims: int = 10) -> List[str]:
+    def extract_claims(self, report: str, max_claims: int = 10) -> list[str]:
         if not report:
             return []
 
         body = re.split(r"^##\s*(?:参考来源|References)\b", report, maxsplit=1, flags=re.MULTILINE | re.IGNORECASE)[0]
         candidates = re.split(r"(?<=[。！？.!?])\s+|\n+", body)
-        claims: List[str] = []
-        seen: Set[str] = set()
+        claims: list[str] = []
+        seen: set[str] = set()
 
         for sentence in candidates:
             raw_sentence = sentence.strip()
@@ -371,23 +371,23 @@ class ClaimVerifier:
     def verify_report(
         self,
         report: str,
-        scraped_content: List[Dict[str, Any]],
+        scraped_content: list[dict[str, Any]],
         max_claims: int = 10,
-        passages: Optional[List[Dict[str, Any]]] = None,
-    ) -> List[ClaimCheck]:
+        passages: Optional[list[dict[str, Any]]] = None,
+    ) -> list[ClaimCheck]:
         claims = self.extract_claims(report, max_claims=max_claims)
         if not claims:
             return []
         evidence = self._extract_evidence(scraped_content, passages=passages)
         return [self.verify_claim(claim, evidence) for claim in claims]
 
-    def verify_claim(self, claim: str, evidence: List[Dict[str, Any]]) -> ClaimCheck:
+    def verify_claim(self, claim: str, evidence: list[dict[str, Any]]) -> ClaimCheck:
         claim_tokens = self._tokenize(claim)
         if not claim_tokens:
             return ClaimCheck(claim=claim, status=ClaimStatus.UNSUPPORTED)
 
-        supported: List[tuple[int, str, Dict[str, Any]]] = []
-        contradicted: List[tuple[int, str, Dict[str, Any]]] = []
+        supported: list[tuple[int, str, dict[str, Any]]] = []
+        contradicted: list[tuple[int, str, dict[str, Any]]] = []
         best_overlap = 0
 
         for item in evidence:
@@ -399,7 +399,7 @@ class ClaimVerifier:
                 continue
 
             best_overlap = max(best_overlap, overlap)
-            passage_payload: Dict[str, Any] = {
+            passage_payload: dict[str, Any] = {
                 "url": url,
             }
             snippet_hash = str(item.get("snippet_hash") or "").strip()
@@ -464,11 +464,11 @@ class ClaimVerifier:
 
     def _extract_evidence(
         self,
-        scraped_content: List[Dict[str, Any]],
+        scraped_content: list[dict[str, Any]],
         *,
-        passages: Optional[List[Dict[str, Any]]] = None,
-    ) -> List[Dict[str, Any]]:
-        evidence: List[Dict[str, Any]] = []
+        passages: Optional[list[dict[str, Any]]] = None,
+    ) -> list[dict[str, Any]]:
+        evidence: list[dict[str, Any]] = []
         source_registry = SourceRegistry()
 
         if passages:
@@ -488,7 +488,7 @@ class ClaimVerifier:
                 ).strip()
                 if not text:
                     continue
-                item: Dict[str, Any] = {
+                item: dict[str, Any] = {
                     "url": canonical_url,
                     "text": text,
                 }
@@ -521,7 +521,7 @@ class ClaimVerifier:
                     evidence.append({"url": canonical_url, "text": text})
         return evidence
 
-    def _tokenize(self, text: str) -> Set[str]:
+    def _tokenize(self, text: str) -> set[str]:
         value = re.sub(
             r"\[(?:S?\d+(?:-\d+)?)(?:\s*[,，;；]\s*S?\d+(?:-\d+)?)*\]",
             " ",

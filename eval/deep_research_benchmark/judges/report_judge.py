@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from eval.deep_research_benchmark.judges.base import clamp_score, env_int, get_judge_llm, invoke_text
+from eval.deep_research_benchmark.judges.base import (
+    clamp_score,
+    env_int,
+    get_judge_llm,
+    invoke_text,
+)
 from eval.deep_research_benchmark.judges.rubric import (
     REPORT_JUDGE_PROMPT_VERSION,
     REPORT_RUBRIC_PROMPT,

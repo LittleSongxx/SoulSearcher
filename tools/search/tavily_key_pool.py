@@ -17,7 +17,7 @@ Supports:
 
 import logging
 import threading
-from typing import List, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ _QUOTA_ERROR_PATTERNS = (
 class TavilyKeyPool:
     """Thread-safe Tavily API key pool with automatic rotation."""
 
-    def __init__(self, keys: List[str]):
+    def __init__(self, keys: list[str]):
         self._all_keys = [k.strip() for k in keys if k.strip()]
         self._lock = threading.Lock()
         self._current_index = 0
@@ -144,7 +144,7 @@ def get_tavily_key_pool() -> TavilyKeyPool:
 
         from common.config import settings
 
-        keys: List[str] = []
+        keys: list[str] = []
 
         # 1. Check TAVILY_API_KEYS (comma-separated, higher priority)
         multi_keys = getattr(settings, "tavily_api_keys", "") or ""

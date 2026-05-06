@@ -7,14 +7,14 @@ Handles HTTP webhook requests and triggers agent execution.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import hmac
 import inspect
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 from .models import TriggerStatus, WebhookTrigger
 
@@ -25,7 +25,7 @@ class RateLimiter:
     """Simple in-memory rate limiter."""
 
     def __init__(self):
-        self.requests: Dict[str, List[float]] = defaultdict(list)
+        self.requests: dict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, key: str, limit: int, window: int) -> bool:
         """
@@ -62,14 +62,14 @@ class WebhookHandler:
     """
 
     def __init__(self):
-        self.triggers: Dict[str, WebhookTrigger] = {}
-        self.callbacks: Dict[str, Callable] = {}
+        self.triggers: dict[str, WebhookTrigger] = {}
+        self.callbacks: dict[str, Callable] = {}
         self.rate_limiter = RateLimiter()
 
     def add_trigger(
         self,
         trigger: WebhookTrigger,
-        callback: Callable[[WebhookTrigger, Dict[str, Any]], Any],
+        callback: Callable[[WebhookTrigger, dict[str, Any]], Any],
     ) -> str:
         """
         Add a webhook trigger.
@@ -116,7 +116,7 @@ class WebhookHandler:
                 return trigger
         return None
 
-    def list_triggers(self) -> List[WebhookTrigger]:
+    def list_triggers(self) -> list[WebhookTrigger]:
         """List all webhook triggers."""
         return list(self.triggers.values())
 
@@ -124,11 +124,11 @@ class WebhookHandler:
         self,
         trigger_id: str,
         method: str,
-        body: Optional[Dict[str, Any]] = None,
-        query_params: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None,
+        body: Optional[dict[str, Any]] = None,
+        query_params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
         auth_header: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Handle an incoming webhook request.
 

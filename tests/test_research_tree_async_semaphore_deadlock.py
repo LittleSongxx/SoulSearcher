@@ -1,6 +1,6 @@
 import asyncio
 
-from agent.workflows.research_tree import TreeExplorer, TreeExplorationBudgetExceeded
+from agent.workflows.research_tree import TreeExplorationBudgetExceeded, TreeExplorer
 from common.config import settings
 
 

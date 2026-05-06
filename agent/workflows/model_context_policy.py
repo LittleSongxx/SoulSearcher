@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Mapping, Optional
-
+from typing import Any, Optional
 
 _DEFAULT_CONTEXT_WINDOW = 128_000
 _TOKEN_LIMIT_ERROR_MARKERS = (
@@ -51,7 +51,7 @@ class ModelContextPolicy:
     reserved_tokens: int
     usable_tokens: int
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -84,7 +84,7 @@ def build_model_context_policy(
     )
 
 
-def build_deepsearch_context_policy(models: Mapping[str, str]) -> Dict[str, Any]:
+def build_deepsearch_context_policy(models: Mapping[str, str]) -> dict[str, Any]:
     stages = []
     for stage in ("planning", "research", "compression", "writing", "verifier"):
         model = str(models.get(stage) or models.get("research") or models.get("writing") or "").strip()

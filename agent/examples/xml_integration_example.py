@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncio
 import json
-from typing import Any, AsyncGenerator, Dict
+from typing import Any
 
 from agent.core.processor_config import AgentProcessorConfig
 from agent.parsers.xml_parser import XMLToolParser
@@ -80,8 +80,8 @@ async def mock_execute_code(code: str) -> ToolResult:
 
 
 async def process_llm_response_with_xml_tools(
-    llm_response_text: str, tool_registry: Dict[str, Any], config: AgentProcessorConfig
-) -> Dict[str, Any]:
+    llm_response_text: str, tool_registry: dict[str, Any], config: AgentProcessorConfig
+) -> dict[str, Any]:
     """
     Process LLM response that may contain XML tool calls.
 
@@ -121,7 +121,10 @@ async def process_llm_response_with_xml_tools(
         handler = ResponseHandler(tool_registry=tool_registry, config=config)
 
         if config.tool_execution_strategy == "parallel":
-            tasks = [handler._execute_single_tool(call, "demo-session") for call in tool_calls]
+            tasks = [
+                handler._execute_single_tool(call, "demo-session")
+                for call in tool_calls
+            ]
             tool_results = await asyncio.gather(*tasks)
         else:
             for i, call in enumerate(tool_calls, 1):
@@ -132,7 +135,9 @@ async def process_llm_response_with_xml_tools(
                 print(f"      Success: {result.success}")
                 if result.success:
                     preview = (
-                        result.output[:100] + "..." if len(result.output) > 100 else result.output
+                        result.output[:100] + "..."
+                        if len(result.output) > 100
+                        else result.output
                     )
                     print(f"      Output: {preview}")
                 else:
@@ -168,7 +173,7 @@ async def simulate_agent_with_xml_tools():
     print("\n" + "=" * 70)
     print("XML Tool Calling Integration Demo")
     print("=" * 70)
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  {config.summary()}")
     print(f"  Available tools: {list(tool_registry.keys())}")
 
@@ -189,7 +194,9 @@ I'll search for information about Python async programming.
 </function_calls>
 """
 
-    result_1 = await process_llm_response_with_xml_tools(llm_response_1, tool_registry, config)
+    result_1 = await process_llm_response_with_xml_tools(
+        llm_response_1, tool_registry, config
+    )
 
     # ===== Turn 2: LLM analyzes results =====
 
@@ -231,9 +238,9 @@ asyncio.run(demo())
 
     # Test parallel execution
     config.tool_execution_strategy = "parallel"
-    print(f"\nSwitched to parallel execution mode")
+    print("\nSwitched to parallel execution mode")
 
-    result_2 = await process_llm_response_with_xml_tools(llm_response_2, tool_registry, config)
+    await process_llm_response_with_xml_tools(llm_response_2, tool_registry, config)
 
     # ===== Summary =====
 
@@ -241,7 +248,8 @@ asyncio.run(demo())
     print("Integration Summary")
     print("=" * 70)
 
-    print(f"""
+    print(
+        """
 ✅ XML Tool Calling Components:
    - XMLToolParser: Parses XML <function_calls> format
    - AgentProcessorConfig: Configures behavior (Claude vs OpenAI modes)
@@ -265,7 +273,8 @@ asyncio.run(demo())
    - Set AGENT_XML_TOOL_CALLING=true in .env for XML mode
    - Set AGENT_TOOL_EXECUTION_STRATEGY=sequential|parallel
    - Set AGENT_AUTO_CONTINUE=true for automatic continuation
-""")
+"""
+    )
 
 
 # ==================== Main ====================
@@ -280,7 +289,8 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("[OK] Integration examples completed!")
     print("=" * 70)
-    print("""
+    print(
+        """
 Next Steps:
 1. Review the integration points above
 2. Integrate into agent/nodes.py when ready
@@ -288,4 +298,5 @@ Next Steps:
 4. Monitor performance and adjust configuration
 
 For full integration, see: docs/XML_INTEGRATION_GUIDE.md
-""")
+"""
+    )

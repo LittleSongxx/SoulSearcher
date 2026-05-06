@@ -12,7 +12,7 @@ Why this exists:
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain.tools import tool
 
@@ -31,11 +31,11 @@ from tools.search.search import tavily_search
 logger = logging.getLogger(__name__)
 
 
-def _tavily(query: str, max_results: int) -> List[Dict[str, Any]]:
+def _tavily(query: str, max_results: int) -> list[dict[str, Any]]:
     return tavily_search.invoke({"query": query, "max_results": max_results})
 
 
-def _duckduckgo(query: str, max_results: int) -> List[Dict[str, Any]]:
+def _duckduckgo(query: str, max_results: int) -> list[dict[str, Any]]:
     from tools.search.multi_search import DuckDuckGoProvider
 
     provider = DuckDuckGoProvider()
@@ -57,7 +57,7 @@ def _duckduckgo(query: str, max_results: int) -> List[Dict[str, Any]]:
 
 def _normalize_multi_search_results(
     query: str, max_results: int
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     from tools.search.multi_search import get_search_orchestrator
 
     results = get_search_orchestrator().search(query=query, max_results=max_results)
@@ -114,8 +114,8 @@ def run_fallback_search(
     *,
     query: str,
     max_results: int = 5,
-    engines: Optional[List[str]] = None,
-) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+    engines: Optional[list[str]] = None,
+) -> tuple[Optional[str], list[dict[str, Any]]]:
     """
     Run a multi-engine API search and return (engine_used, results).
 
@@ -154,8 +154,8 @@ def run_fallback_search(
 def fallback_search(
     query: str,
     max_results: int = 5,
-    engines: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    engines: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """
     Multi-engine search with fallback.
 

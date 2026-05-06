@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, List
+from collections.abc import Iterable
+from typing import Any
 
 
 def _text(value: Any) -> str:
@@ -12,7 +13,7 @@ def _tokens(text: str) -> set[str]:
     return {token for token in re.findall(r"[a-z0-9\u4e00-\u9fff]+", str(text or "").lower()) if len(token) > 1}
 
 
-def _evidence_text(item: Dict[str, Any]) -> str:
+def _evidence_text(item: dict[str, Any]) -> str:
     values = [
         item.get("claim"),
         item.get("quote"),
@@ -27,10 +28,10 @@ def _evidence_text(item: Dict[str, Any]) -> str:
 
 def build_brief_coverage_artifact(
     *,
-    research_brief: Dict[str, Any],
-    fact_cards: Iterable[Dict[str, Any]] | None = None,
-    evidence_items: Iterable[Dict[str, Any]] | None = None,
-) -> Dict[str, Any]:
+    research_brief: dict[str, Any],
+    fact_cards: Iterable[dict[str, Any]] | None = None,
+    evidence_items: Iterable[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     fields = []
     seen = set()
     for field in research_brief.get("expected_fields") or []:
@@ -52,7 +53,7 @@ def build_brief_coverage_artifact(
     if not evidence_rows:
         evidence_rows = [item for item in (evidence_items or []) if isinstance(item, dict)]
     evidence_texts = [_evidence_text(item) for item in evidence_rows]
-    field_results: List[Dict[str, Any]] = []
+    field_results: list[dict[str, Any]] = []
     for field in fields:
         field_tokens = _tokens(field)
         matched = False

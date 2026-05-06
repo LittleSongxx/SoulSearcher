@@ -12,10 +12,11 @@ import logging
 import threading
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class AgentRun:
 
     # Event queue for streaming
     _event_queue: Optional[asyncio.Queue] = field(default=None, repr=False)
-    _listeners: List[Callable] = field(default_factory=list, repr=False)
+    _listeners: list[Callable] = field(default_factory=list, repr=False)
 
     def __post_init__(self):
         self._event_queue = asyncio.Queue()
@@ -127,12 +128,12 @@ class AgentRun:
         logger.info(f"Agent run {self.id} cancelled: {reason}")
         self._push_event({"type": "status", "status": "cancelled", "reason": reason})
 
-    def push_event(self, event: Dict[str, Any]) -> None:
+    def push_event(self, event: dict[str, Any]) -> None:
         """Push an event to the queue for streaming."""
         self.event_count += 1
         self._push_event(event)
 
-    def _push_event(self, event: Dict[str, Any]) -> None:
+    def _push_event(self, event: dict[str, Any]) -> None:
         """Internal event push with timestamp."""
         event["timestamp"] = datetime.now().isoformat()
         event["run_id"] = self.id
@@ -153,13 +154,13 @@ class AgentRun:
             except Exception as e:
                 logger.warning(f"Event listener error: {e}")
 
-    async def get_event(self, timeout: float = 30.0) -> Optional[Dict[str, Any]]:
+    async def get_event(self, timeout: float = 30.0) -> Optional[dict[str, Any]]:
         """Get next event from queue with timeout."""
         if not self._event_queue:
             return None
         try:
             return await asyncio.wait_for(self._event_queue.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     def add_listener(self, listener: Callable) -> None:
@@ -171,7 +172,7 @@ class AgentRun:
         if listener in self._listeners:
             self._listeners.remove(listener)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API responses."""
         return {
             "id": self.id,
@@ -203,7 +204,7 @@ class AgentRunRegistry:
         self.max_runs = max_runs
         self.ttl_seconds = ttl_seconds
         self._runs: OrderedDict[str, AgentRun] = OrderedDict()
-        self._thread_index: Dict[str, str] = {}  # thread_id -> run_id
+        self._thread_index: dict[str, str] = {}  # thread_id -> run_id
         self._lock = threading.RLock()
 
     def create(
@@ -275,7 +276,7 @@ class AgentRunRegistry:
         user_id: Optional[str] = None,
         status: Optional[AgentRunStatus] = None,
         limit: int = 50,
-    ) -> List[AgentRun]:
+    ) -> list[AgentRun]:
         """List runs with optional filtering."""
         with self._lock:
             runs = list(self._runs.values())
@@ -315,7 +316,7 @@ class AgentRunRegistry:
 
         return len(expired_ids)
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get registry statistics."""
         with self._lock:
             status_counts = {}

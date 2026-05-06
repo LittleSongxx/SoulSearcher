@@ -12,7 +12,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 from agent.workflows.source_registry import SourceRegistry
@@ -75,15 +75,15 @@ class SearchResult:
 class AggregatedResults:
     """Aggregated and tiered search results."""
 
-    tier_1: List[SearchResult] = field(default_factory=list)  # High relevance
-    tier_2: List[SearchResult] = field(default_factory=list)  # Medium relevance
-    tier_3: List[SearchResult] = field(default_factory=list)  # Low relevance / backup
+    tier_1: list[SearchResult] = field(default_factory=list)  # High relevance
+    tier_2: list[SearchResult] = field(default_factory=list)  # Medium relevance
+    tier_3: list[SearchResult] = field(default_factory=list)  # Low relevance / backup
 
     total_before: int = 0
     total_after: int = 0
     duplicates_removed: int = 0
 
-    def all_results(self) -> List[SearchResult]:
+    def all_results(self) -> list[SearchResult]:
         """Get all results in tier order."""
         return self.tier_1 + self.tier_2 + self.tier_3
 
@@ -93,15 +93,15 @@ class AggregatedResults:
         max_tier_2: int = 3,
         max_tier_3: int = 2,
         max_content_length: int = 500,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """
         Format results as context for the writer.
 
         Returns:
             (research_context, sources_table)
         """
-        blocks: List[str] = []
-        sources: List[str] = []
+        blocks: list[str] = []
+        sources: list[str] = []
 
         # Tier 1 - Primary sources
         if self.tier_1:
@@ -166,7 +166,7 @@ class ResultAggregator:
 
     def aggregate(
         self,
-        scraped_content: List[Dict[str, Any]],
+        scraped_content: list[dict[str, Any]],
         original_query: str = "",
     ) -> AggregatedResults:
         """
@@ -224,9 +224,9 @@ class ResultAggregator:
             duplicates_removed=duplicates_removed,
         )
 
-    def _normalize_results(self, scraped_content: List[Dict[str, Any]]) -> List[SearchResult]:
+    def _normalize_results(self, scraped_content: list[dict[str, Any]]) -> list[SearchResult]:
         """Convert raw scraped content to normalized SearchResult objects."""
-        results: List[SearchResult] = []
+        results: list[SearchResult] = []
         source_registry = SourceRegistry()
 
         for idx, item in enumerate(scraped_content):
@@ -264,9 +264,9 @@ class ResultAggregator:
 
         return results
 
-    def _dedupe_by_url(self, results: List[SearchResult]) -> List[SearchResult]:
+    def _dedupe_by_url(self, results: list[SearchResult]) -> list[SearchResult]:
         """Remove duplicates based on URL hash."""
-        seen: Dict[str, SearchResult] = {}
+        seen: dict[str, SearchResult] = {}
         for res in results:
             url_hash = res.url_hash
             if url_hash not in seen:
@@ -277,13 +277,13 @@ class ResultAggregator:
                     seen[url_hash] = res
         return list(seen.values())
 
-    def _dedupe_by_similarity(self, results: List[SearchResult]) -> List[SearchResult]:
+    def _dedupe_by_similarity(self, results: list[SearchResult]) -> list[SearchResult]:
         """Remove near-duplicates based on content similarity."""
         if len(results) <= 1:
             return results
 
         # Group by fingerprint first (fast exact match)
-        fingerprint_groups: Dict[str, List[SearchResult]] = {}
+        fingerprint_groups: dict[str, list[SearchResult]] = {}
         for res in results:
             fp = res.content_fingerprint
             if fp not in fingerprint_groups:
@@ -291,7 +291,7 @@ class ResultAggregator:
             fingerprint_groups[fp].append(res)
 
         # Take best from each fingerprint group
-        candidates: List[SearchResult] = []
+        candidates: list[SearchResult] = []
         for group in fingerprint_groups.values():
             # Keep the one with most content
             best = max(group, key=lambda x: len(x.content))
@@ -299,8 +299,8 @@ class ResultAggregator:
 
         # Optimized similarity check using set-based tracking
         # Avoid O(N) list.remove() by tracking kept indices
-        kept_indices: List[int] = []
-        similarity_cache: Dict[tuple, float] = {}
+        kept_indices: list[int] = []
+        similarity_cache: dict[tuple, float] = {}
 
         for i, res in enumerate(candidates):
             is_duplicate = False
@@ -337,9 +337,9 @@ class ResultAggregator:
 
     def _score_relevance(
         self,
-        results: List[SearchResult],
+        results: list[SearchResult],
         original_query: str,
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         """Score results by relevance to the original query."""
         if not original_query:
             # Without original query, use position-based scoring
@@ -389,7 +389,7 @@ class ResultAggregator:
 
         return results
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """Simple tokenization for matching."""
         # Remove punctuation and split
         text = re.sub(r"[^\w\s]", " ", text.lower())

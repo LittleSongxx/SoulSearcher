@@ -1,22 +1,30 @@
 import { useState, useRef, useCallback } from 'react'
 import { Message, Artifact, ToolInvocation, ImageAttachment, ProcessEvent, RunMetrics, MessageSource } from '@/types/chat'
 import { getApiBaseUrl } from '@/lib/api'
-import { createChatStreamState, consumeChatStreamChunk, getChatStreamPath, getChatStreamProtocol } from '@/lib/chatStreamProtocol'
+import { createResearchStreamState, consumeResearchStreamChunk, getResearchStreamProtocol } from '@/lib/researchStreamProtocol'
 
 interface UseChatStreamProps {
   selectedModel: string
-  searchMode: string
-  skillId: string | null
 }
 
-export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStreamProps) {
+const RESEARCH_SEARCH_MODE = {
+  useWebSearch: true,
+  useAgent: true,
+  useDeepSearch: true,
+}
+
+const RESEARCH_DEEPSEARCH_CONFIG = {
+  deepsearch_strategy: 'supervisor_workers',
+}
+
+export function useChatStream({ selectedModel }: UseChatStreamProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [currentStatus, setCurrentStatus] = useState<string>('')
   const [artifacts, setArtifacts] = useState<Artifact[]>([])
   const [pendingInterrupt, setPendingInterrupt] = useState<any>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
-  
+
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleStop = useCallback(async () => {
@@ -24,7 +32,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
     if (threadId) {
       try {
         await fetch(
-          `${getApiBaseUrl()}/api/chat/cancel/${threadId}`,
+          `${getApiBaseUrl()}/api/research/cancel/${threadId}`,
           { method: 'POST' }
         )
         setCurrentStatus('已发送取消请求...')
@@ -45,11 +53,13 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
   const processChat = useCallback(async (messageHistory: Message[], images?: ImageAttachment[]) => {
     setIsLoading(true)
     abortControllerRef.current = new AbortController()
-    const streamProtocol = getChatStreamProtocol()
+    const streamProtocol = getResearchStreamProtocol()
+    const latestUserMessage = [...messageHistory].reverse().find((m) => m.role === 'user')
+    const query = String(latestUserMessage?.content || '').trim()
 
     try {
       const response = await fetch(
-        `${getApiBaseUrl()}${getChatStreamPath(streamProtocol)}`,
+        `${getApiBaseUrl()}/api/research/sse`,
         {
           method: 'POST',
           headers: {
@@ -57,11 +67,10 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
             'Accept': 'text/event-stream',
           },
           body: JSON.stringify({
-            messages: messageHistory.map(m => ({ role: m.role, content: m.content })),
-            stream: true,
+            query,
             model: selectedModel,
-            search_mode: searchMode,
-            skill_id: skillId || undefined,
+            search_mode: RESEARCH_SEARCH_MODE,
+            deepsearch_config: RESEARCH_DEEPSEARCH_CONFIG,
             images: (images || []).map(img => ({
               name: img.name,
               mime: img.mime,
@@ -85,13 +94,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
       }
 
       const threadHeader = response.headers.get('X-Thread-ID') || response.headers.get('x-thread-id')
-      console.log('[useChatStream] Response headers:', {
-        'X-Thread-ID': response.headers.get('X-Thread-ID'),
-        'x-thread-id': response.headers.get('x-thread-id'),
-        threadHeader
-      })
       if (threadHeader) {
-        console.log('[useChatStream] Setting threadId:', threadHeader)
         setThreadId(threadHeader)
       }
 
@@ -129,12 +132,6 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
         setCurrentStatus(next)
       }
 
-      console.log('[useChatStream] Creating assistant message:', {
-        id: assistantMessage.id,
-        role: assistantMessage.role,
-        currentMessagesCount: messages.length
-      })
-
       setMessages((prev) => [...prev, assistantMessage])
 
       const pushProcessEvent = (type: string, payload: any) => {
@@ -165,25 +162,24 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
         )
       }
 
-      const streamState = createChatStreamState(streamProtocol)
+      const streamState = createResearchStreamState(streamProtocol)
       let interrupted = false
       while (true) {
         const { done, value } = await reader.read()
         const chunk = done ? decoder.decode() : decoder.decode(value, { stream: true })
-        const events = consumeChatStreamChunk(streamProtocol, streamState, chunk, { flush: done })
+        const events = consumeResearchStreamChunk(streamProtocol, streamState, chunk, { flush: done })
 
         for (const data of events) {
+          const researchEvent = data.research_event
+          if (researchEvent) {
+            pushProcessEvent('research_event', researchEvent)
+          }
           if (data.type === 'status') {
             setCurrentStatus(data.data.text)
             pushProcessEvent('status', data.data)
             syncAssistantMessage()
           } else if (data.type === 'text') {
             assistantMessage.content += data.data.content
-            console.log('[useChatStream] Updating message (text):', {
-              id: assistantMessage.id,
-              role: assistantMessage.role,
-              contentLength: assistantMessage.content.length
-            })
             syncAssistantMessage()
           } else if (data.type === 'message') {
             assistantMessage.content = data.data.content
@@ -298,6 +294,11 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
           } else if (data.type === 'research_tree_update') {
             pushProcessEvent('research_tree_update', data.data)
             syncAssistantMessage()
+          } else if (data.type === 'brief_created') {
+            const goal = data.data?.research_brief?.clarified_goal || data.data?.research_brief?.original_query
+            if (goal) setAutoStatus(`研究范围已确认：${goal}`)
+            pushProcessEvent('brief_created', data.data)
+            syncAssistantMessage()
           } else if (
             [
               'thinking',
@@ -361,7 +362,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
       setCurrentStatus('')
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        console.log('Request aborted')
+        return
       } else {
         console.error('Error:', error)
         setMessages((prev) => [
@@ -380,7 +381,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
       setIsLoading(false)
       abortControllerRef.current = null
     }
-  }, [selectedModel, searchMode, skillId])
+  }, [selectedModel])
 
   const handleApproveInterrupt = useCallback(async () => {
     if (!pendingInterrupt || !threadId) return
@@ -397,7 +398,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
             thread_id: threadId,
             payload: { tool_approved: true, tool_calls: toolCalls },
             model: selectedModel,
-            search_mode: searchMode
+            search_mode: RESEARCH_SEARCH_MODE
           })
         }
       )
@@ -426,7 +427,7 @@ export function useChatStream({ selectedModel, searchMode, skillId }: UseChatStr
       setIsLoading(false)
       setCurrentStatus('')
     }
-  }, [pendingInterrupt, threadId, selectedModel, searchMode])
+  }, [pendingInterrupt, threadId, selectedModel])
 
   return {
     messages,

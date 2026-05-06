@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from agent.workflows.research_brief import ResearchBrief
-
 
 _FOCUS_HINTS = {
     "citation_coverage": "补充可直接引用的一手来源和关键数据出处",
@@ -17,8 +16,8 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _unique(values: List[str]) -> List[str]:
-    output: List[str] = []
+def _unique(values: list[str]) -> list[str]:
+    output: list[str] = []
     seen = set()
     for value in values:
         text = _text(value)
@@ -32,13 +31,13 @@ def _unique(values: List[str]) -> List[str]:
 def gap_queries_from_quality_gates(
     *,
     brief: ResearchBrief,
-    quality_gates: List[Dict[str, Any]],
-    claims: List[Dict[str, Any]] | None = None,
+    quality_gates: list[dict[str, Any]],
+    claims: list[dict[str, Any]] | None = None,
     max_queries: int = 4,
-) -> List[str]:
+) -> list[str]:
     topic = brief.clarified_goal or brief.original_query
-    candidates: List[str] = []
-    gate_hints: List[str] = []
+    candidates: list[str] = []
+    gate_hints: list[str] = []
     for gate in quality_gates or []:
         if not isinstance(gate, dict) or gate.get("status") != "fail":
             continue

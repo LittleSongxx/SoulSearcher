@@ -5,9 +5,23 @@ Provides a LangChain-compatible tool for searching local documents.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from langchain_core.tools import BaseTool, tool
+try:
+    from langchain_core.tools import BaseTool, tool
+except ModuleNotFoundError:
+
+    class BaseTool:
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    def tool(func=None, **_kwargs):
+        if func is None:
+            return lambda wrapped: wrapped
+        return func
+
+
 from pydantic import BaseModel, Field
 
 from tools.rag.document_loader import DocumentLoader
@@ -61,7 +75,7 @@ class RAGTool:
         file_path: str = None,
         content: bytes = None,
         filename: str = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Add a document to the RAG store.
 
@@ -119,7 +133,7 @@ class RAGTool:
         query: str,
         n_results: int = 5,
         filter_source: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for relevant document chunks.
 
@@ -152,11 +166,11 @@ class RAGTool:
             for doc, score in results
         ]
 
-    def list_documents(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_documents(self, limit: int = 100) -> list[dict[str, Any]]:
         """List all documents in the store."""
         return self.vector_store.list_documents(limit=limit)
 
-    def delete_document(self, source: str) -> Dict[str, Any]:
+    def delete_document(self, source: str) -> dict[str, Any]:
         """
         Delete all chunks from a specific source.
 
@@ -195,7 +209,9 @@ def get_rag_tool(*, collection_name: Optional[str] = None) -> Optional[RAGTool]:
 
     try:
         base_collection = getattr(settings, "rag_collection_name", "weaver_documents")
-        resolved_collection = (collection_name or base_collection or "weaver_documents").strip()
+        resolved_collection = (
+            collection_name or base_collection or "weaver_documents"
+        ).strip()
 
         existing = _RAG_BY_COLLECTION.get(resolved_collection)
         if existing is not None:
@@ -204,7 +220,9 @@ def get_rag_tool(*, collection_name: Optional[str] = None) -> Optional[RAGTool]:
         rag = RAGTool(
             collection_name=resolved_collection,
             persist_directory=getattr(settings, "rag_store_path", None),
-            embedding_model=getattr(settings, "rag_embedding_model", "text-embedding-3-small"),
+            embedding_model=getattr(
+                settings, "rag_embedding_model", "text-embedding-3-small"
+            ),
             chunk_size=getattr(settings, "rag_chunk_size", 1000),
             chunk_overlap=getattr(settings, "rag_chunk_overlap", 200),
         )
@@ -231,7 +249,9 @@ class RAGSearchTool(BaseTool):
     def _run(self, query: str, n_results: int = 5) -> str:
         from common.config import settings
 
-        if (getattr(settings, "internal_api_key", "") or "").strip() and not self.collection_name:
+        if (
+            getattr(settings, "internal_api_key", "") or ""
+        ).strip() and not self.collection_name:
             return "RAG search requires a scoped collection in internal-auth mode."
 
         return _run_rag_search(

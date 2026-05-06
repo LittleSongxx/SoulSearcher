@@ -26,9 +26,10 @@ import socket
 import sys
 import tempfile
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Optional
 
 import httpx
 
@@ -46,7 +47,7 @@ class SmokeResult:
 
 
 # These are populated at runtime (after the server is up) by calling status endpoints.
-_SERVICE_FLAGS: Dict[str, bool] = {"asr_enabled": True, "tts_enabled": True}
+_SERVICE_FLAGS: dict[str, bool] = {"asr_enabled": True, "tts_enabled": True}
 _REQ_SEQ = 0
 
 
@@ -64,8 +65,8 @@ def _next_test_ip() -> str:
     return f"203.0.113.{last_octet}"
 
 
-def _default_headers(extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    headers: Dict[str, str] = {}
+def _default_headers(extra: Optional[dict[str, str]] = None) -> dict[str, str]:
+    headers: dict[str, str] = {}
     if extra:
         headers.update({str(k): str(v) for k, v in extra.items() if v is not None})
     headers.setdefault("X-Forwarded-For", _next_test_ip())
@@ -112,7 +113,7 @@ def _find_free_port(host: str) -> int:
         return int(sock.getsockname()[1])
 
 
-def _env_for_server(*, tmp_root: Path) -> Dict[str, str]:
+def _env_for_server(*, tmp_root: Path) -> dict[str, str]:
     env = dict(os.environ)
 
     # Avoid proxy leakage into the backend subprocess.
@@ -152,7 +153,7 @@ async def _start_uvicorn(
     port: int,
     tmp_root: Path,
     log_level: str,
-) -> Tuple[asyncio.subprocess.Process, Path, Any]:
+) -> tuple[asyncio.subprocess.Process, Path, Any]:
     cmd = [
         sys.executable,
         "-m",
@@ -193,7 +194,7 @@ async def _stop_process(proc: asyncio.subprocess.Process, *, timeout_s: float = 
     try:
         await asyncio.wait_for(proc.wait(), timeout=timeout_s)
         return
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pass
 
     try:
@@ -204,7 +205,7 @@ async def _stop_process(proc: asyncio.subprocess.Process, *, timeout_s: float = 
     try:
         await asyncio.wait_for(proc.wait(), timeout=timeout_s)
         return
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pass
 
     try:
@@ -295,9 +296,9 @@ async def _raw_request(
     params: Optional[dict] = None,
     json_body: Any = None,
     files: Any = None,
-    headers: Optional[Dict[str, str]] = None,
+    headers: Optional[dict[str, str]] = None,
     timeout_s: float,
-) -> Tuple[SmokeResult, Optional[httpx.Response]]:
+) -> tuple[SmokeResult, Optional[httpx.Response]]:
     url = str(client.base_url)[:-1] + path
     start_total = time.perf_counter()
 
@@ -449,7 +450,7 @@ async def _request_stream(
                         last_body_snip = _snippet(
                             first.decode("utf-8", errors="replace"), limit=160
                         )
-                    except (asyncio.TimeoutError, httpx.ReadTimeout):
+                    except (TimeoutError, httpx.ReadTimeout):
                         note = "stream: no chunk within timeout (ok)"
                     except StopAsyncIteration:
                         note = "stream: ended immediately"
@@ -616,7 +617,7 @@ async def _scenario_calls(
     client: httpx.AsyncClient,
     *,
     timeout_s: float,
-) -> Tuple[List[SmokeResult], Dict[str, str], List[Tuple[str, str]]]:
+) -> tuple[list[SmokeResult], dict[str, str], list[tuple[str, str]]]:
     """
     Call a few endpoints with valid payloads to exercise deeper paths.
 
@@ -625,9 +626,9 @@ async def _scenario_calls(
       - ids dict with keys like: agent_id, scheduled_trigger_id, webhook_trigger_id, share_id, thread_id
       - list of (method, openapi-path) pairs already exercised
     """
-    results: List[SmokeResult] = []
-    ids: Dict[str, str] = {}
-    done: set[Tuple[str, str]] = set()
+    results: list[SmokeResult] = []
+    ids: dict[str, str] = {}
+    done: set[tuple[str, str]] = set()
 
     # Basic health
     res, _ = await _raw_request(client, method="GET", path="/health", timeout_s=timeout_s)
@@ -948,17 +949,17 @@ async def _sweep_all_routes(
     client: httpx.AsyncClient,
     *,
     timeout_s: float,
-    ids: Dict[str, str],
-    already_done: Iterable[Tuple[str, str]],
-) -> List[SmokeResult]:
+    ids: dict[str, str],
+    already_done: Iterable[tuple[str, str]],
+) -> list[SmokeResult]:
     done = set((m.upper(), p) for (m, p) in already_done)
 
     openapi = await client.get("/openapi.json", timeout=timeout_s)
     openapi.raise_for_status()
     spec = openapi.json()
 
-    paths: Dict[str, Any] = spec.get("paths", {}) if isinstance(spec, dict) else {}
-    results: List[SmokeResult] = []
+    paths: dict[str, Any] = spec.get("paths", {}) if isinstance(spec, dict) else {}
+    results: list[SmokeResult] = []
 
     def pick_id(name: str) -> str:
         return ids.get(name) or f"smoke_{name}"
@@ -1088,8 +1089,8 @@ async def run_smoke(
     base_url: str,
     timeout_s: float,
     include_ws: bool,
-) -> List[SmokeResult]:
-    results: List[SmokeResult] = []
+) -> list[SmokeResult]:
+    results: list[SmokeResult] = []
     async with httpx.AsyncClient(base_url=base_url, trust_env=False) as client:
         # Run a few "deeper" scenario calls first.
         scenario, ids, already_done = await _scenario_calls(client, timeout_s=timeout_s)
@@ -1132,7 +1133,7 @@ async def run_smoke(
     return results
 
 
-def _write_report(path: Path, results: List[SmokeResult]) -> None:
+def _write_report(path: Path, results: list[SmokeResult]) -> None:
     payload = [
         {
             "method": r.method,
@@ -1150,7 +1151,7 @@ def _write_report(path: Path, results: List[SmokeResult]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--base-url", default="", help="Base URL (for --no-start). Example: http://127.0.0.1:8000")
     p.add_argument("--no-start", action="store_true", help="Do not start uvicorn; use --base-url")
@@ -1163,7 +1164,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-async def amain(argv: List[str]) -> int:
+async def amain(argv: list[str]) -> int:
     args = parse_args(argv)
 
     if args.no_start and not args.base_url:

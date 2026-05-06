@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -28,7 +28,7 @@ class _BrowserTool(BaseTool):
     def _session(self):
         return browser_sessions.get((self.thread_id or "").strip() or "default")
 
-    def _emit(self, event_type: ToolEventType, data: Dict[str, Any]):
+    def _emit(self, event_type: ToolEventType, data: dict[str, Any]):
         emitter = get_emitter_sync(self.thread_id)
         try:
             emitter.emit_sync(event_type, data)
@@ -147,7 +147,7 @@ class BrowserSearchTool(_BrowserTool):
     )
     args_schema: type[BaseModel] = BrowserSearchInput
 
-    def _run(self, query: str, engine: str = "duckduckgo", max_links: int = 10) -> Dict[str, Any]:
+    def _run(self, query: str, engine: str = "duckduckgo", max_links: int = 10) -> dict[str, Any]:
         self._progress("search", f"{engine} {query}")
         self._emit(
             ToolEventType.TOOL_START,
@@ -174,7 +174,7 @@ class BrowserNavigateTool(_BrowserTool):
     description: str = "Open a URL in the lightweight browser session and extract title/text/links."
     args_schema: type[BaseModel] = BrowserNavigateInput
 
-    def _run(self, url: str, max_links: int = 10) -> Dict[str, Any]:
+    def _run(self, url: str, max_links: int = 10) -> dict[str, Any]:
         self._progress("navigate", url)
         self._emit(ToolEventType.TOOL_START, {"tool": self.name, "args": {"url": url}})
         page = self._session().navigate(url=url)
@@ -203,7 +203,7 @@ class BrowserClickTool(_BrowserTool):
     description: str = "Click a link from the current page by 1-based index and navigate to it."
     args_schema: type[BaseModel] = BrowserClickInput
 
-    def _run(self, index: int, max_links: int = 10) -> Dict[str, Any]:
+    def _run(self, index: int, max_links: int = 10) -> dict[str, Any]:
         session = self._session()
         if not session.current:
             raise ValueError("No current page. Use browser_search or browser_navigate first.")
@@ -239,7 +239,7 @@ class BrowserBackTool(_BrowserTool):
     name: str = "browser_back"
     description: str = "Go back to the previous page in this browser session."
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         self._emit(ToolEventType.TOOL_START, {"tool": self.name})
         page = self._session().back()
         self._maybe_emit_screenshot(page_url=page.url, action="back")
@@ -260,7 +260,7 @@ class BrowserExtractTextTool(_BrowserTool):
     description: str = "Return the extracted text of the current page."
     args_schema: type[BaseModel] = BrowserExtractTextInput
 
-    def _run(self, max_chars: int = 3000) -> Dict[str, Any]:
+    def _run(self, max_chars: int = 3000) -> dict[str, Any]:
         session = self._session()
         if not session.current:
             raise ValueError("No current page. Use browser_search or browser_navigate first.")
@@ -281,7 +281,7 @@ class BrowserListLinksTool(_BrowserTool):
     description: str = "List extracted links from the current page."
     args_schema: type[BaseModel] = BrowserListLinksInput
 
-    def _run(self, max_links: int = 10) -> Dict[str, Any]:
+    def _run(self, max_links: int = 10) -> dict[str, Any]:
         session = self._session()
         if not session.current:
             raise ValueError("No current page. Use browser_search or browser_navigate first.")
@@ -297,7 +297,7 @@ class BrowserResetTool(_BrowserTool):
     name: str = "browser_reset"
     description: str = "Reset the browser session (clears current page and history)."
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         self._emit(ToolEventType.TOOL_START, {"tool": self.name})
         browser_sessions.reset(self.thread_id)
         return {"status": "reset", "thread_id": self.thread_id}
@@ -319,7 +319,7 @@ class BrowserScreenshotTool(_BrowserTool):
 
     def _run(
         self, url: Optional[str] = None, full_page: bool = True, wait_ms: int = 1500
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         target = (url or "").strip()
         if not target:
             session = self._session()
@@ -394,7 +394,7 @@ class BrowserScreenshotTool(_BrowserTool):
         except Exception:
             pass
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "url": target,  # page URL (kept for backwards compatibility)
             "page_url": target,
             "screenshot_url": screenshot_url,
@@ -406,7 +406,7 @@ class BrowserScreenshotTool(_BrowserTool):
         return result
 
 
-def build_browser_tools(thread_id: str) -> List[BaseTool]:
+def build_browser_tools(thread_id: str) -> list[BaseTool]:
     """
     Create per-request browser tools bound to a thread_id.
     """

@@ -19,12 +19,10 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
-import base64
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -60,7 +58,7 @@ class _SandboxSheetsBaseTool(BaseTool):
             return session._handles.sandbox
         return None
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event."""
         if not self.emit_events:
             return
@@ -71,7 +69,7 @@ class _SandboxSheetsBaseTool(BaseTool):
             except Exception as e:
                 logger.warning(f"[sandbox_sheets] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -88,7 +86,7 @@ class _SandboxSheetsBaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -127,7 +125,7 @@ class CreateSpreadsheetInput(BaseModel):
         description="Path for the spreadsheet file (e.g., 'reports/data.xlsx' or 'output.csv')"
     )
     sheet_name: str = Field(default="Sheet1", description="Name of the initial sheet")
-    headers: Optional[List[str]] = Field(
+    headers: Optional[list[str]] = Field(
         default=None, description="Optional list of column headers"
     )
 
@@ -147,8 +145,8 @@ class SandboxCreateSpreadsheetTool(_SandboxSheetsBaseTool):
         self,
         file_path: str,
         sheet_name: str = "Sheet1",
-        headers: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        headers: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("create_spreadsheet", {"file_path": file_path})
 
         try:
@@ -221,7 +219,7 @@ class WriteDataInput(BaseModel):
     """Input for write_data."""
 
     file_path: str = Field(description="Path to the spreadsheet file")
-    data: List[List[Any]] = Field(description="2D array of data to write (rows x columns)")
+    data: list[list[Any]] = Field(description="2D array of data to write (rows x columns)")
     start_row: int = Field(default=1, description="Starting row (1-based)")
     start_col: int = Field(default=1, description="Starting column (1-based)")
     sheet_name: Optional[str] = Field(default=None, description="Sheet name (for Excel)")
@@ -241,11 +239,11 @@ class SandboxWriteDataTool(_SandboxSheetsBaseTool):
     def _run(
         self,
         file_path: str,
-        data: List[List[Any]],
+        data: list[list[Any]],
         start_row: int = 1,
         start_col: int = 1,
         sheet_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "write_data",
             {
@@ -268,7 +266,7 @@ class SandboxWriteDataTool(_SandboxSheetsBaseTool):
                 lines = []
                 for row in data:
                     line = ",".join(
-                        f'"{str(cell)}"' if "," in str(cell) else str(cell) for cell in row
+                        f'"{cell!s}"' if "," in str(cell) else str(cell) for cell in row
                     )
                     lines.append(line)
 
@@ -368,7 +366,7 @@ class SandboxFormatCellsTool(_SandboxSheetsBaseTool):
         bg_color: Optional[str] = None,
         border: bool = False,
         sheet_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "format_cells",
             {
@@ -481,7 +479,7 @@ class SandboxCreateChartTool(_SandboxSheetsBaseTool):
         y_axis_title: str = "",
         position: str = "E1",
         sheet_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "create_chart",
             {
@@ -589,7 +587,7 @@ class SandboxAddSheetTool(_SandboxSheetsBaseTool):
         file_path: str,
         sheet_name: str,
         position: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "add_sheet",
             {
@@ -679,7 +677,7 @@ class SandboxReadSpreadsheetTool(_SandboxSheetsBaseTool):
         sheet_name: Optional[str] = None,
         max_rows: int = 100,
         start_row: int = 1,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("read_spreadsheet", {"file_path": file_path})
 
         try:
@@ -782,7 +780,7 @@ class SandboxAddFormulaTool(_SandboxSheetsBaseTool):
         cell: str,
         formula: str,
         sheet_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "add_formula",
             {
@@ -841,7 +839,7 @@ print("SUCCESS")
 def build_sandbox_sheets_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build sandbox spreadsheet tools for a thread.
 

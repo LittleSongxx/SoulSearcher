@@ -1,23 +1,29 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 from agent.workflows.evidence import build_evidence_items
 from agent.workflows.research_brief import ResearchBrief
+from agent.workflows.source_routing import (
+    build_source_routing_policy,
+    source_policy_from_routing,
+)
 
-
-SearchFunc = Callable[[str, int, Dict[str, Any], Optional[List[str]]], List[Dict[str, Any]]]
+SearchFunc = Callable[
+    [str, int, dict[str, Any], Optional[list[str]]], list[dict[str, Any]]
+]
 
 
 @dataclass
 class ProviderSearchResult:
     provider: str
     query: str
-    results: List[Dict[str, Any]] = field(default_factory=list)
-    evidence_items: List[Dict[str, Any]] = field(default_factory=list)
+    results: list[dict[str, Any]] = field(default_factory=list)
+    evidence_items: list[dict[str, Any]] = field(default_factory=list)
     error: str = ""
 
 
@@ -31,9 +37,9 @@ class ProviderCapability:
     local_docs: bool = False
     mcp: bool = False
     requires_auth: bool = False
-    tool_whitelist: List[str] = field(default_factory=list)
+    tool_whitelist: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "web_search": self.web_search,
@@ -50,19 +56,27 @@ class ProviderCapability:
 class WebEvidenceProvider:
     name = "web"
 
-    def __init__(self, search_func: SearchFunc, provider_profile: Optional[List[str]] = None):
+    def __init__(
+        self, search_func: SearchFunc, provider_profile: Optional[list[str]] = None
+    ):
         self.search_func = search_func
         self.provider_profile = provider_profile
 
-    def search(self, query: str, max_results: int, config: Dict[str, Any]) -> ProviderSearchResult:
+    def search(
+        self, query: str, max_results: int, config: dict[str, Any]
+    ) -> ProviderSearchResult:
         try:
-            results = self.search_func(query, max_results, config, self.provider_profile)
+            results = self.search_func(
+                query, max_results, config, self.provider_profile
+            )
             results = results if isinstance(results, list) else []
             return ProviderSearchResult(
                 provider=self.name,
                 query=query,
                 results=results,
-                evidence_items=build_evidence_items(search_runs=[{"query": query, "results": results}]),
+                evidence_items=build_evidence_items(
+                    search_runs=[{"query": query, "results": results}]
+                ),
             )
         except Exception as exc:
             return ProviderSearchResult(provider=self.name, query=query, error=str(exc))
@@ -74,16 +88,22 @@ class RAGEvidenceProvider:
     def __init__(self, collection_name: Optional[str] = None):
         self.collection_name = collection_name
 
-    def search(self, query: str, max_results: int, config: Dict[str, Any]) -> ProviderSearchResult:
+    def search(
+        self, query: str, max_results: int, config: dict[str, Any]
+    ) -> ProviderSearchResult:
         try:
             from tools.rag.rag_tool import get_rag_tool
 
             rag = get_rag_tool(collection_name=self.collection_name)
             if rag is None:
-                return ProviderSearchResult(provider=self.name, query=query, error="rag_not_enabled")
+                return ProviderSearchResult(
+                    provider=self.name, query=query, error="rag_not_enabled"
+                )
             results = rag.search(query, n_results=max_results)
             results = results if isinstance(results, list) else []
-            enriched = [dict(item, query=query) for item in results if isinstance(item, dict)]
+            enriched = [
+                dict(item, query=query) for item in results if isinstance(item, dict)
+            ]
             return ProviderSearchResult(
                 provider=self.name,
                 query=query,
@@ -97,18 +117,22 @@ class RAGEvidenceProvider:
 class MCPEvidenceProvider:
     name = "mcp"
 
-    def search(self, query: str, max_results: int, config: Dict[str, Any]) -> ProviderSearchResult:
+    def search(
+        self, query: str, max_results: int, config: dict[str, Any]
+    ) -> ProviderSearchResult:
         cfg = _configurable(config)
         if bool(cfg.get("mcp_auth_required") or cfg.get("mcp_requires_auth")):
-            return ProviderSearchResult(provider=self.name, query=query, error="mcp_auth_required")
+            return ProviderSearchResult(
+                provider=self.name, query=query, error="mcp_auth_required"
+            )
         raw_results = cfg.get("mcp_evidence_results") or cfg.get("mcp_results") or []
         if isinstance(raw_results, dict):
             raw_results = raw_results.get(query) or raw_results.get("results") or []
         if not isinstance(raw_results, list):
             raw_results = []
         allowed_tools = _mcp_tools_to_include(cfg)
-        results: List[Dict[str, Any]] = []
-        evidence_items: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
+        evidence_items: list[dict[str, Any]] = []
         for item in raw_results:
             if not isinstance(item, dict):
                 continue
@@ -125,22 +149,31 @@ class MCPEvidenceProvider:
             if len(results) >= max(1, int(max_results or 1)):
                 break
         if not results:
-            return ProviderSearchResult(provider=self.name, query=query, error="mcp_evidence_provider_not_configured")
-        return ProviderSearchResult(provider=self.name, query=query, results=results, evidence_items=evidence_items)
+            return ProviderSearchResult(
+                provider=self.name,
+                query=query,
+                error="mcp_evidence_provider_not_configured",
+            )
+        return ProviderSearchResult(
+            provider=self.name,
+            query=query,
+            results=results,
+            evidence_items=evidence_items,
+        )
 
 
-def _configurable(config: Dict[str, Any]) -> Dict[str, Any]:
+def _configurable(config: dict[str, Any]) -> dict[str, Any]:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     return cfg if isinstance(cfg, dict) else {}
 
 
-def _rag_collection_from_config(config: Dict[str, Any]) -> Optional[str]:
+def _rag_collection_from_config(config: dict[str, Any]) -> Optional[str]:
     cfg = _configurable(config)
     value = cfg.get("rag_collection_name") or cfg.get("collection_name")
     return str(value).strip() if value else None
 
 
-def _mcp_tools_to_include(cfg: Dict[str, Any]) -> List[str]:
+def _mcp_tools_to_include(cfg: dict[str, Any]) -> list[str]:
     value = cfg.get("mcp_tools_to_include") or cfg.get("mcp_tool_whitelist") or []
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
@@ -149,14 +182,22 @@ def _mcp_tools_to_include(cfg: Dict[str, Any]) -> List[str]:
     return []
 
 
-def _mcp_tool_name(item: Dict[str, Any]) -> str:
-    return str(item.get("tool") or item.get("tool_name") or item.get("name") or "").strip()
+def _mcp_tool_name(item: dict[str, Any]) -> str:
+    return str(
+        item.get("tool") or item.get("tool_name") or item.get("name") or ""
+    ).strip()
 
 
-def _mcp_evidence_item(item: Dict[str, Any], *, query: str) -> Dict[str, Any]:
+def _mcp_evidence_item(item: dict[str, Any], *, query: str) -> dict[str, Any]:
     tool_name = _mcp_tool_name(item)
     title = str(item.get("title") or tool_name or "MCP evidence").strip()
-    snippet = str(item.get("snippet") or item.get("content") or item.get("text") or item.get("result") or "").strip()
+    snippet = str(
+        item.get("snippet")
+        or item.get("content")
+        or item.get("text")
+        or item.get("result")
+        or ""
+    ).strip()
     document_id = str(item.get("document_id") or item.get("id") or tool_name).strip()
     raw = "|".join([tool_name, title, snippet[:200], query])
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
@@ -167,18 +208,40 @@ def _mcp_evidence_item(item: Dict[str, Any], *, query: str) -> Dict[str, Any]:
         "document_id": document_id,
         "title": title,
         "snippet": snippet,
-        "retrieved_at": str(item.get("retrieved_at") or datetime.now(timezone.utc).isoformat()),
+        "retrieved_at": str(
+            item.get("retrieved_at") or datetime.now(UTC).isoformat()
+        ),
         "query": query,
         "metadata": {
             key: value
             for key, value in item.items()
-            if key not in {"id", "document_id", "title", "snippet", "content", "text", "result", "retrieved_at"}
+            if key
+            not in {
+                "id",
+                "document_id",
+                "title",
+                "snippet",
+                "content",
+                "text",
+                "result",
+                "retrieved_at",
+            }
         },
     }
 
 
-def select_provider_names(brief: ResearchBrief, config: Dict[str, Any]) -> List[str]:
+def select_provider_names(brief: ResearchBrief, config: dict[str, Any]) -> list[str]:
     cfg = _configurable(config)
+    routing = build_source_routing_policy(brief=brief, config=config)
+    raw_routing = getattr(brief, "source_routing", None)
+    if not isinstance(raw_routing, dict) or not raw_routing:
+        brief.source_routing = routing
+        brief.source_policy = source_policy_from_routing(routing)
+    routed_providers = routing.get("providers") if isinstance(routing, dict) else None
+    if isinstance(routed_providers, list) and routed_providers:
+        return [
+            str(part).strip().lower() for part in routed_providers if str(part).strip()
+        ]
     override = cfg.get("evidence_providers") or cfg.get("source_providers")
     if isinstance(override, str) and override.strip():
         names = [part.strip().lower() for part in override.split(",") if part.strip()]
@@ -186,7 +249,10 @@ def select_provider_names(brief: ResearchBrief, config: Dict[str, Any]) -> List[
     if isinstance(override, list):
         names = [str(part).strip().lower() for part in override if str(part).strip()]
         return names or ["web"]
-    policy = (brief.source_policy or "web").strip().lower()
+    policy = (
+        source_policy_from_routing(routing)
+        or (brief.source_policy or "web").strip().lower()
+    )
     if policy in {"rag", "local"}:
         return ["rag"]
     if policy in {"hybrid", "private-first"}:
@@ -199,66 +265,90 @@ def select_provider_names(brief: ResearchBrief, config: Dict[str, Any]) -> List[
 def build_evidence_providers(
     *,
     brief: ResearchBrief,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     search_func: SearchFunc,
-    provider_profile: Optional[List[str]] = None,
-) -> List[Any]:
-    providers: List[Any] = []
+    provider_profile: Optional[list[str]] = None,
+) -> list[Any]:
+    providers: list[Any] = []
     for name in select_provider_names(brief, config):
         if name == "web":
-            providers.append(WebEvidenceProvider(search_func=search_func, provider_profile=provider_profile))
+            providers.append(
+                WebEvidenceProvider(
+                    search_func=search_func, provider_profile=provider_profile
+                )
+            )
         elif name in {"rag", "local"}:
-            providers.append(RAGEvidenceProvider(collection_name=_rag_collection_from_config(config)))
+            providers.append(
+                RAGEvidenceProvider(collection_name=_rag_collection_from_config(config))
+            )
         elif name == "mcp":
             providers.append(MCPEvidenceProvider())
-    return providers or [WebEvidenceProvider(search_func=search_func, provider_profile=provider_profile)]
+    return providers or [
+        WebEvidenceProvider(search_func=search_func, provider_profile=provider_profile)
+    ]
 
 
-def provider_capability(provider: Any, config: Optional[Dict[str, Any]] = None) -> ProviderCapability:
+def provider_capability(
+    provider: Any, config: Optional[dict[str, Any]] = None
+) -> ProviderCapability:
     name = str(getattr(provider, "name", "") or "").strip().lower()
     cfg = _configurable(config or {})
     if name == "web":
-        native_search = bool(cfg.get("native_web_search") or cfg.get("deepsearch_native_web_search"))
-        return ProviderCapability(name=name, web_search=True, native_web_search=native_search)
+        native_search = bool(
+            cfg.get("native_web_search") or cfg.get("deepsearch_native_web_search")
+        )
+        return ProviderCapability(
+            name=name, web_search=True, native_web_search=native_search
+        )
     if name == "rag":
         return ProviderCapability(name=name, local_docs=True, raw_content=True)
     if name == "mcp":
         return ProviderCapability(
             name=name,
             mcp=True,
-            requires_auth=bool(cfg.get("mcp_auth_required") or cfg.get("mcp_requires_auth")),
+            requires_auth=bool(
+                cfg.get("mcp_auth_required") or cfg.get("mcp_requires_auth")
+            ),
             tool_whitelist=_mcp_tools_to_include(cfg),
         )
     return ProviderCapability(name=name or "unknown")
 
 
 def build_provider_capability_artifact(
-    providers: List[Any],
-    config: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    capabilities = [provider_capability(provider, config).to_dict() for provider in providers or []]
+    providers: list[Any],
+    config: Optional[dict[str, Any]] = None,
+    source_routing: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    capabilities = [
+        provider_capability(provider, config).to_dict() for provider in providers or []
+    ]
     return {
         "schema_version": 1,
         "provider_count": len(capabilities),
         "providers": capabilities,
+        "source_routing": (
+            source_routing
+            if isinstance(source_routing, dict)
+            else build_source_routing_policy(config=config)
+        ),
     }
 
 
 def search_with_evidence_providers(
     *,
-    providers: List[Any],
+    providers: list[Any],
     query: str,
     max_results: int,
-    config: Dict[str, Any],
-) -> List[ProviderSearchResult]:
-    outputs: List[ProviderSearchResult] = []
+    config: dict[str, Any],
+) -> list[ProviderSearchResult]:
+    outputs: list[ProviderSearchResult] = []
     for provider in providers:
         outputs.append(provider.search(query, max_results, config))
     return outputs
 
 
-def merge_provider_results(outputs: List[ProviderSearchResult]) -> List[Dict[str, Any]]:
-    merged: List[Dict[str, Any]] = []
+def merge_provider_results(outputs: list[ProviderSearchResult]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
     for output in outputs:
         for item in output.results:
             if not isinstance(item, dict):
@@ -271,8 +361,10 @@ def merge_provider_results(outputs: List[ProviderSearchResult]) -> List[Dict[str
     return merged
 
 
-def merge_provider_evidence(outputs: List[ProviderSearchResult]) -> List[Dict[str, Any]]:
-    merged: List[Dict[str, Any]] = []
+def merge_provider_evidence(
+    outputs: list[ProviderSearchResult],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
     seen = set()
     for output in outputs:
         for item in output.evidence_items:

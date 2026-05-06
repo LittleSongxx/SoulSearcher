@@ -15,12 +15,13 @@ import functools
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class TraceSpan:
     error: Optional[str] = None
 
     # Custom attributes
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    attributes: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration_ms(self) -> float:
@@ -89,7 +90,7 @@ class TraceSpan:
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "span_id": self.span_id,
@@ -117,24 +118,24 @@ class Trace:
     """
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4())[:16])
     thread_id: str = ""
-    spans: List[TraceSpan] = field(default_factory=list)
+    spans: list[TraceSpan] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
 
     def add_span(self, span: TraceSpan) -> None:
         """Add a span to the trace."""
         self.spans.append(span)
 
-    def get_root_spans(self) -> List[TraceSpan]:
+    def get_root_spans(self) -> list[TraceSpan]:
         """Get all root-level spans (no parent)."""
         return [s for s in self.spans if s.parent_id is None]
 
-    def get_children(self, parent_id: str) -> List[TraceSpan]:
+    def get_children(self, parent_id: str) -> list[TraceSpan]:
         """Get child spans of a parent."""
         return [s for s in self.spans if s.parent_id == parent_id]
 
-    def build_tree(self) -> List[Dict[str, Any]]:
+    def build_tree(self) -> list[dict[str, Any]]:
         """Build a tree structure of spans."""
-        def build_node(span: TraceSpan) -> Dict[str, Any]:
+        def build_node(span: TraceSpan) -> dict[str, Any]:
             node = span.to_dict()
             children = self.get_children(span.span_id)
             if children:
@@ -143,7 +144,7 @@ class Trace:
 
         return [build_node(s) for s in self.get_root_spans()]
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary statistics for the trace."""
         total_llm_calls = sum(1 for s in self.spans if s.kind == SpanKind.LLM_CALL)
         total_tool_calls = sum(1 for s in self.spans if s.kind == SpanKind.TOOL_CALL)
@@ -183,7 +184,7 @@ class Trace:
             "models": model_stats,
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "trace_id": self.trace_id,
@@ -209,7 +210,7 @@ class TraceStore:
             max_traces_per_thread: Maximum traces to keep per thread
             max_total_traces: Maximum total traces across all threads
         """
-        self._traces: Dict[str, List[Trace]] = {}
+        self._traces: dict[str, list[Trace]] = {}
         self._lock = Lock()
         self._max_per_thread = max_traces_per_thread
         self._max_total = max_total_traces
@@ -239,7 +240,7 @@ class TraceStore:
                         del self._traces[oldest_thread]
                 total = sum(len(t) for t in self._traces.values())
 
-    def get_traces(self, thread_id: str) -> List[Trace]:
+    def get_traces(self, thread_id: str) -> list[Trace]:
         """Get all traces for a thread."""
         with self._lock:
             return list(self._traces.get(thread_id, []))
@@ -260,7 +261,7 @@ class TraceStore:
         with self._lock:
             self._traces.clear()
 
-    def get_all_thread_ids(self) -> List[str]:
+    def get_all_thread_ids(self) -> list[str]:
         """Get all thread IDs with traces."""
         with self._lock:
             return list(self._traces.keys())
@@ -277,7 +278,7 @@ class TracingContext:
         self.thread_id = thread_id
         self.store = store
         self.trace = Trace(thread_id=thread_id)
-        self._span_stack: List[TraceSpan] = []
+        self._span_stack: list[TraceSpan] = []
 
     @property
     def current_span(self) -> Optional[TraceSpan]:
@@ -289,7 +290,7 @@ class TracingContext:
         name: str,
         kind: SpanKind = SpanKind.CUSTOM,
         model: str = "",
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Optional[dict[str, Any]] = None,
     ) -> TraceSpan:
         """Start a new span, nested under the current one if any."""
         parent_id = self.current_span.span_id if self.current_span else None
@@ -318,7 +319,7 @@ class TracingContext:
         name: str,
         kind: SpanKind = SpanKind.CUSTOM,
         model: str = "",
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: Optional[dict[str, Any]] = None,
     ):
         """Context manager for a span."""
         span = self.start_span(name, kind, model, attributes)
@@ -491,7 +492,7 @@ def record_span(
     duration_ms: float = 0,
     status: SpanStatus = SpanStatus.SUCCESS,
     error: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
+    attributes: Optional[dict[str, Any]] = None,
 ) -> None:
     """
     Record a span manually (for cases where decorators don't work).
@@ -516,21 +517,21 @@ def record_span(
     ctx.end_span(status, error)
 
 
-def get_trace(thread_id: str) -> Optional[Dict[str, Any]]:
+def get_trace(thread_id: str) -> Optional[dict[str, Any]]:
     """Get the latest trace for a thread as a dict."""
     store = get_trace_store()
     trace = store.get_latest_trace(thread_id)
     return trace.to_dict() if trace else None
 
 
-def get_trace_summary(thread_id: str) -> Optional[Dict[str, Any]]:
+def get_trace_summary(thread_id: str) -> Optional[dict[str, Any]]:
     """Get the summary of the latest trace for a thread."""
     store = get_trace_store()
     trace = store.get_latest_trace(thread_id)
     return trace.get_summary() if trace else None
 
 
-def get_all_traces(thread_id: str) -> List[Dict[str, Any]]:
+def get_all_traces(thread_id: str) -> list[dict[str, Any]]:
     """Get all traces for a thread."""
     store = get_trace_store()
     traces = store.get_traces(thread_id)

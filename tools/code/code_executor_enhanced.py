@@ -15,7 +15,7 @@ Features:
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from common.config import settings
 from tools.core.base import ToolResult, WeaverTool, tool_schema
@@ -126,7 +126,7 @@ class CodeExecutorTool(WeaverTool):
             success = not execution.error
 
             # Check for matplotlib/image output
-            images: List[Dict[str, Any]] = []
+            images: list[dict[str, Any]] = []
             if execution.results:
                 for res in execution.results:
                     if hasattr(res, "png") and res.png:
@@ -182,9 +182,9 @@ class CodeExecutorTool(WeaverTool):
                 },
             )
         except Exception as e:
-            logger.error(f"Code execution error: {str(e)}")
+            logger.error(f"Code execution error: {e!s}")
             return self.fail_response(
-                f"Sandbox error: {str(e)}",
+                f"Sandbox error: {e!s}",
                 metadata={"error_type": type(e).__name__, "code_length": len(code)},
             )
 
@@ -217,7 +217,7 @@ class CodeExecutorTool(WeaverTool):
     )
     def visualize(
         self,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         chart_type: str = "bar",
         title: str = "Data Visualization",
         x_label: str = "",
@@ -372,7 +372,7 @@ plt.show()
 
 
 # Backward compatibility: keep original function signature
-def execute_python_code(code: str) -> Dict[str, Any]:
+def execute_python_code(code: str) -> dict[str, Any]:
     """
     Legacy function for backward compatibility.
 
@@ -407,7 +407,7 @@ def execute_python_code(code: str) -> Dict[str, Any]:
         }
 
 
-def create_visualization(data: Dict[str, Any], chart_type: str = "bar") -> Dict[str, Any]:
+def create_visualization(data: dict[str, Any], chart_type: str = "bar") -> dict[str, Any]:
     """
     Legacy function for backward compatibility.
 

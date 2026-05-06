@@ -20,7 +20,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCH_FILE = ROOT / "eval" / "benchmarks" / "v7_tasks.jsonl"
@@ -98,9 +97,9 @@ ENV_SNAPSHOT_KEYS = (
 )
 
 
-def read_dotenv_values() -> Dict[str, str]:
+def read_dotenv_values() -> dict[str, str]:
     env_file = ROOT / ".env"
-    values: Dict[str, str] = {}
+    values: dict[str, str] = {}
     if not env_file.exists():
         return values
     for raw in env_file.read_text(encoding="utf-8-sig").splitlines():
@@ -114,9 +113,9 @@ def read_dotenv_values() -> Dict[str, str]:
     return values
 
 
-def env_snapshot() -> Dict[str, str]:
+def env_snapshot() -> dict[str, str]:
     dotenv = read_dotenv_values()
-    snapshot: Dict[str, str] = {}
+    snapshot: dict[str, str] = {}
     for key in ENV_SNAPSHOT_KEYS:
         value = RUNNER_ENV.get(key, os.environ.get(key, dotenv.get(key, "")))
         snapshot[key] = value
@@ -165,7 +164,7 @@ def _parse_child_result(stdout: str, stderr: str, returncode: int) -> dict:
     }
 
 
-def _terminate_process_group(proc: subprocess.Popen) -> Tuple[str, str]:
+def _terminate_process_group(proc: subprocess.Popen) -> tuple[str, str]:
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -267,7 +266,7 @@ def _is_timeout_retryable(result: dict) -> bool:
     return status == "timeout" or "subprocess timeout" in error
 
 
-def _load_existing_completed(out_file: Path) -> Tuple[List[dict], set]:
+def _load_existing_completed(out_file: Path) -> tuple[list[dict], set]:
     if not out_file.exists():
         return [], set()
     existing = json.loads(out_file.read_text(encoding="utf-8"))

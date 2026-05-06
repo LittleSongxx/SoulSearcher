@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -14,11 +14,11 @@ class BenchmarkTask:
 
     task_id: str
     query: str
-    constraints: Dict[str, Any] = field(default_factory=dict)
-    expected_fields: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    constraints: dict[str, Any] = field(default_factory=dict)
+    expected_fields: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.task_id,
             "query": self.query,
@@ -28,7 +28,7 @@ class BenchmarkTask:
         }
 
 
-def _validate_task(raw: Dict[str, Any], line_number: int) -> BenchmarkTask:
+def _validate_task(raw: dict[str, Any], line_number: int) -> BenchmarkTask:
     if not isinstance(raw, dict):
         raise ValueError(f"Line {line_number}: expected object")
 
@@ -63,10 +63,10 @@ def _validate_task(raw: Dict[str, Any], line_number: int) -> BenchmarkTask:
     )
 
 
-def load_benchmark_tasks(path: str | Path, max_cases: Optional[int] = None) -> List[BenchmarkTask]:
+def load_benchmark_tasks(path: str | Path, max_cases: Optional[int] = None) -> list[BenchmarkTask]:
     """Load benchmark tasks from JSONL with schema validation."""
 
-    tasks: List[BenchmarkTask] = []
+    tasks: list[BenchmarkTask] = []
     input_path = Path(path)
     if not input_path.exists():
         raise FileNotFoundError(f"Benchmark file not found: {input_path}")

@@ -11,10 +11,9 @@ Key features:
 - Support both sync and async execution
 """
 
-import inspect
-import json
 import logging
-from typing import Any, Callable, Dict, List, Optional, Type
+from collections.abc import Callable
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from pydantic import BaseModel, Field, create_model
@@ -25,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def create_pydantic_model_from_schema(
-    schema: Dict[str, Any], model_name: str = "DynamicInput"
-) -> Type[BaseModel]:
+    schema: dict[str, Any], model_name: str = "DynamicInput"
+) -> type[BaseModel]:
     """
     Create a Pydantic model from a JSON schema.
 
@@ -90,7 +89,7 @@ def create_pydantic_model_from_schema(
 
 def weaver_tool_to_langchain(
     weaver_tool: WeaverTool, method_name: Optional[str] = None, return_direct: bool = False
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Convert WeaverTool instance to LangChain BaseTool(s).
 
@@ -140,8 +139,8 @@ def weaver_tool_to_langchain(
                     return result.output
 
                 except Exception as e:
-                    logger.error(f"Tool execution error in {tool_name}: {str(e)}")
-                    raise ToolException(f"Tool execution failed: {str(e)}")
+                    logger.error(f"Tool execution error in {tool_name}: {e!s}")
+                    raise ToolException(f"Tool execution failed: {e!s}")
 
             return wrapper
 
@@ -226,8 +225,8 @@ def wrap_langchain_tool_with_tool_result(langchain_tool: BaseTool) -> BaseTool:
 
 
 def batch_convert_weaver_tools(
-    weaver_tools: List[WeaverTool], return_direct: bool = False
-) -> List[BaseTool]:
+    weaver_tools: list[WeaverTool], return_direct: bool = False
+) -> list[BaseTool]:
     """
     Convert multiple WeaverTool instances to LangChain tools in batch.
 
@@ -283,7 +282,7 @@ if __name__ == "__main__":
         result = search_langchain.invoke(
             {"query": "artificial intelligence", "max_results": 3, "search_type": "general"}
         )
-        print(f"   Search result (first 200 chars):")
+        print("   Search result (first 200 chars):")
         print(f"   {result[:200]}...")
     except Exception as e:
         print(f"   Error: {e}")
@@ -295,7 +294,7 @@ if __name__ == "__main__":
             result = analyze_langchain.invoke(
                 {"data": [1, 2, 3, 4, 5], "operations": ["mean", "std"]}
             )
-            print(f"\n   Analysis result:")
+            print("\n   Analysis result:")
             print(f"   {result}")
         except Exception as e:
             print(f"   Error: {e}")

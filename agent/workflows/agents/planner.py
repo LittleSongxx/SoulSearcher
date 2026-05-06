@@ -5,7 +5,7 @@ Generates and refines structured research plans.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -56,7 +56,7 @@ class ResearchPlanner:
     - Refine plans based on findings
     """
 
-    def __init__(self, llm: BaseChatModel, config: Dict[str, Any] = None):
+    def __init__(self, llm: BaseChatModel, config: dict[str, Any] = None):
         self.llm = llm
         self.config = config or {}
 
@@ -65,15 +65,14 @@ class ResearchPlanner:
         topic: str,
         num_queries: int = 5,
         existing_knowledge: str = "",
-        existing_queries: List[str] = None,
-    ) -> List[Dict[str, Any]]:
+        existing_queries: list[str] = None,
+    ) -> list[dict[str, Any]]:
         """
         Create a research plan.
 
         Returns:
             List of query dicts with 'query', 'aspect', 'priority'
         """
-        import json
 
         prompt = ChatPromptTemplate.from_messages([
             ("user", PLANNER_PROMPT)
@@ -94,10 +93,10 @@ class ResearchPlanner:
     def refine_plan(
         self,
         topic: str,
-        gaps: List[str],
-        existing_queries: List[str],
+        gaps: list[str],
+        existing_queries: list[str],
         num_queries: int = 3,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Refine research plan based on identified knowledge gaps.
 
@@ -147,7 +146,7 @@ class ResearchPlanner:
 
         return self._parse_plan(content)
 
-    def _parse_plan(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_plan(self, content: str) -> list[dict[str, Any]]:
         """Parse plan from LLM output."""
         import json
         import re

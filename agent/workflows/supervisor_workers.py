@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 from agent.workflows.query_strategy import backfill_diverse_queries
 from agent.workflows.research_brief import ResearchBrief
@@ -14,12 +15,12 @@ class WorkerTask:
     worker_id: str
     topic: str
     focus: str
-    queries: List[str]
+    queries: list[str]
     round_index: int
     context_id: str
     status: str = "pending"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -29,18 +30,18 @@ class WorkerRun:
     context_id: str
     topic: str
     focus: str
-    queries: List[str]
+    queries: list[str]
     round_index: int
     result_count: int = 0
     evidence_count: int = 0
     summary: str = ""
-    provider_breakdown: Dict[str, int] = field(default_factory=dict)
+    provider_breakdown: dict[str, int] = field(default_factory=dict)
     status: str = "completed"
     started_at: str = ""
     completed_at: str = ""
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
@@ -49,12 +50,12 @@ class SupervisorDecision:
     round_index: int
     action: str
     reason: str
-    missing_topics: List[str] = field(default_factory=list)
-    next_worker_topics: List[str] = field(default_factory=list)
-    failed_gates: List[str] = field(default_factory=list)
-    quality_snapshot: Dict[str, Any] = field(default_factory=dict)
+    missing_topics: list[str] = field(default_factory=list)
+    next_worker_topics: list[str] = field(default_factory=list)
+    failed_gates: list[str] = field(default_factory=list)
+    quality_snapshot: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
@@ -67,8 +68,8 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _unique(items: Iterable[str]) -> List[str]:
-    output: List[str] = []
+def _unique(items: Iterable[str]) -> list[str]:
+    output: list[str] = []
     seen = set()
     for item in items or []:
         text = _text(item)
@@ -79,8 +80,8 @@ def _unique(items: Iterable[str]) -> List[str]:
     return output
 
 
-def _provider_breakdown(results: List[Dict[str, Any]]) -> Dict[str, int]:
-    counts: Dict[str, int] = {}
+def _provider_breakdown(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
     for result in results or []:
         if not isinstance(result, dict):
             continue
@@ -89,8 +90,8 @@ def _provider_breakdown(results: List[Dict[str, Any]]) -> Dict[str, int]:
     return counts
 
 
-def _role_candidates(brief: ResearchBrief) -> List[str]:
-    roles: List[str] = []
+def _role_candidates(brief: ResearchBrief) -> list[str]:
+    roles: list[str] = []
     constraints = brief.constraints if isinstance(brief.constraints, dict) else {}
     source_constraints = constraints.get("source_constraints") if isinstance(constraints.get("source_constraints"), dict) else {}
     judge_rubric = constraints.get("judge_rubric") if isinstance(constraints.get("judge_rubric"), dict) else {}
@@ -126,9 +127,9 @@ def build_worker_tasks(
     round_index: int,
     max_workers: int,
     queries_per_worker: int,
-    historical_queries: Optional[List[str]] = None,
-    missing_topics: Optional[List[str]] = None,
-) -> List[WorkerTask]:
+    historical_queries: Optional[list[str]] = None,
+    missing_topics: Optional[list[str]] = None,
+) -> list[WorkerTask]:
     topic = brief.clarified_goal or brief.original_query
     focus_candidates = _unique(
         list(missing_topics or [])
@@ -139,7 +140,7 @@ def build_worker_tasks(
     if not focus_candidates:
         focus_candidates = [topic]
 
-    tasks: List[WorkerTask] = []
+    tasks: list[WorkerTask] = []
     used_queries = list(historical_queries or [])
     worker_count = max(1, int(max_workers or 1))
     query_count = max(1, int(queries_per_worker or 1))
@@ -166,13 +167,13 @@ def build_worker_tasks(
 def build_worker_run(
     *,
     task: WorkerTask,
-    results: List[Dict[str, Any]],
-    evidence_items: List[Dict[str, Any]],
+    results: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
     summary: str,
-    errors: Optional[List[str]] = None,
+    errors: Optional[list[str]] = None,
     started_at: str = "",
 ) -> WorkerRun:
-    completed_at = datetime.now(timezone.utc).isoformat()
+    completed_at = datetime.now(UTC).isoformat()
     return WorkerRun(
         worker_id=task.worker_id,
         context_id=task.context_id,
@@ -195,16 +196,16 @@ def decide_supervisor_next_step(
     *,
     round_index: int,
     max_rounds: int,
-    worker_runs: List[Dict[str, Any]],
-    gate_payload: List[Dict[str, Any]],
-    diagnostics: Dict[str, Any],
+    worker_runs: list[dict[str, Any]],
+    gate_payload: list[dict[str, Any]],
+    diagnostics: dict[str, Any],
 ) -> SupervisorDecision:
     failed_gates = [
         _text(gate.get("name"))
         for gate in gate_payload or []
         if isinstance(gate, dict) and gate.get("status") == "fail"
     ]
-    missing_topics: List[str] = []
+    missing_topics: list[str] = []
     for gate in gate_payload or []:
         if not isinstance(gate, dict):
             continue
@@ -282,10 +283,10 @@ def decide_supervisor_next_step(
 
 def build_intermediate_steps(
     *,
-    worker_runs: List[Dict[str, Any]],
-    supervisor_decisions: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    steps: List[Dict[str, Any]] = []
+    worker_runs: list[dict[str, Any]],
+    supervisor_decisions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
     for run in worker_runs or []:
         if not isinstance(run, dict):
             continue

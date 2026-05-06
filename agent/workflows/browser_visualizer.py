@@ -15,8 +15,9 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlparse
-from typing import Any, Dict, Iterable, List, Optional
 
 from common.config import settings
 
@@ -24,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 _VISITED_LOCK = threading.Lock()
-_VISITED_URLS: Dict[str, set[str]] = {}
+_VISITED_URLS: dict[str, set[str]] = {}
 _VISUALIZE_LOCK = threading.Lock()
 _VISUALIZE_IN_FLIGHT: set[str] = set()
-_LAST_VISUALIZE_AT: Dict[str, float] = {}
+_LAST_VISUALIZE_AT: dict[str, float] = {}
 
 
-def _resolve_thread_id(state: Dict[str, Any], config: Dict[str, Any]) -> str:
+def _resolve_thread_id(state: dict[str, Any], config: dict[str, Any]) -> str:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     thread_id = ""
     if isinstance(cfg, dict):
@@ -125,8 +126,8 @@ def _should_skip_url(url: str) -> bool:
 
 def show_browser_status_page(
     *,
-    state: Dict[str, Any],
-    config: Dict[str, Any],
+    state: dict[str, Any],
+    config: dict[str, Any],
     title: str,
     detail: str = "",
 ) -> None:
@@ -285,13 +286,13 @@ def show_browser_status_page(
 
 def visualize_urls_from_results(
     *,
-    state: Dict[str, Any],
-    config: Dict[str, Any],
-    results: List[Dict[str, Any]],
+    state: dict[str, Any],
+    config: dict[str, Any],
+    results: list[dict[str, Any]],
     max_urls: int,
     reason: str,
 ) -> None:
-    urls: List[str] = []
+    urls: list[str] = []
     for r in results or []:
         if not isinstance(r, dict):
             continue
@@ -303,8 +304,8 @@ def visualize_urls_from_results(
 
 def visualize_urls(
     *,
-    state: Dict[str, Any],
-    config: Dict[str, Any],
+    state: dict[str, Any],
+    config: dict[str, Any],
     urls: Iterable[str],
     max_urls: int,
     reason: str,

@@ -5,15 +5,15 @@ import os
 import threading
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class AgentProfile(BaseModel):
@@ -32,12 +32,12 @@ class AgentProfile(BaseModel):
     model: str = ""
 
     # Minimal tool toggles (the runtime still enforces global safety settings).
-    enabled_tools: Dict[str, bool] = Field(default_factory=dict)
+    enabled_tools: dict[str, bool] = Field(default_factory=dict)
 
     # Optional per-agent MCP config override (same shape as MCP_SERVERS JSON).
-    mcp_servers: Optional[Dict[str, Any]] = None
+    mcp_servers: Optional[dict[str, Any]] = None
 
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str = Field(default_factory=_utc_now_iso)
     updated_at: str = Field(default_factory=_utc_now_iso)
 
@@ -79,7 +79,7 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
     tmp.replace(path)
 
 
-def load_agents(paths: Optional[AgentsStorePaths] = None) -> List[AgentProfile]:
+def load_agents(paths: Optional[AgentsStorePaths] = None) -> list[AgentProfile]:
     """
     Load agent profiles. Returns empty list if no file exists.
     """
@@ -90,7 +90,7 @@ def load_agents(paths: Optional[AgentsStorePaths] = None) -> List[AgentProfile]:
         raw = json.loads(paths.file.read_text(encoding="utf-8") or "[]")
         if not isinstance(raw, list):
             return []
-        profiles: List[AgentProfile] = []
+        profiles: list[AgentProfile] = []
         for item in raw:
             if not isinstance(item, dict):
                 continue
@@ -101,7 +101,7 @@ def load_agents(paths: Optional[AgentsStorePaths] = None) -> List[AgentProfile]:
         return profiles
 
 
-def save_agents(profiles: List[AgentProfile], paths: Optional[AgentsStorePaths] = None) -> None:
+def save_agents(profiles: list[AgentProfile], paths: Optional[AgentsStorePaths] = None) -> None:
     paths = paths or default_store_paths()
     payload = [p.model_dump(mode="json") for p in profiles]
     with _LOCK:
@@ -112,7 +112,7 @@ def ensure_default_agent(
     *,
     default_profile: AgentProfile,
     paths: Optional[AgentsStorePaths] = None,
-) -> List[AgentProfile]:
+) -> list[AgentProfile]:
     """
     Ensure the store exists and contains `default_profile.id`.
     Returns the full updated list.
@@ -140,7 +140,7 @@ def upsert_agent(profile: AgentProfile, paths: Optional[AgentsStorePaths] = None
     profiles = load_agents(paths)
     now = _utc_now_iso()
 
-    updated: List[AgentProfile] = []
+    updated: list[AgentProfile] = []
     replaced = False
     for p in profiles:
         if p.id != profile.id:

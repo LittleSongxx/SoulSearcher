@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any
 
 from langchain_core.tools import BaseTool
 
@@ -27,7 +28,9 @@ class EventedTool(BaseTool):
 
     def __init__(self, original: Any, thread_id: str = "default", **kwargs):
         name = getattr(original, "name", None) or getattr(original, "__name__", None)
-        description = getattr(original, "description", "") or getattr(original, "__doc__", "")
+        description = getattr(original, "description", "") or getattr(
+            original, "__doc__", ""
+        )
         # Preserve args schema when available (helps tool selection)
         args_schema = getattr(original, "args_schema", None)
         super().__init__(
@@ -41,7 +44,7 @@ class EventedTool(BaseTool):
         self.original = original
         self.thread_id = thread_id
 
-    def _emit_sync(self, event_type: ToolEventType, data: Dict[str, Any]):
+    def _emit_sync(self, event_type: ToolEventType, data: dict[str, Any]):
         """Best-effort async emit from sync context."""
         emitter = get_emitter_sync(self.thread_id)
         emitter.emit_sync(event_type, data)
@@ -57,7 +60,12 @@ class EventedTool(BaseTool):
             duration = (time.time() - start) * 1000
             self._emit_sync(
                 ToolEventType.TOOL_RESULT,
-                {"tool": self.name, "result": result, "success": True, "duration_ms": duration},
+                {
+                    "tool": self.name,
+                    "result": result,
+                    "success": True,
+                    "duration_ms": duration,
+                },
             )
             return result
         except Exception as e:
@@ -84,7 +92,12 @@ class EventedTool(BaseTool):
             duration = (time.time() - start) * 1000
             await emitter.emit(
                 ToolEventType.TOOL_RESULT,
-                {"tool": self.name, "result": result, "success": True, "duration_ms": duration},
+                {
+                    "tool": self.name,
+                    "result": result,
+                    "success": True,
+                    "duration_ms": duration,
+                },
             )
             return result
         except Exception as e:
@@ -99,7 +112,11 @@ class EventedTool(BaseTool):
         # BaseTool instance
         if isinstance(self.original, BaseTool):
             # If tool_input missing but kwargs provided, treat kwargs as the input payload
-            payload = tool_input if tool_input is not None else (kwargs if kwargs else tool_input)
+            payload = (
+                tool_input
+                if tool_input is not None
+                else (kwargs if kwargs else tool_input)
+            )
             return (
                 self.original.run(payload, **kwargs)
                 if payload is not None
@@ -119,14 +136,20 @@ class EventedTool(BaseTool):
             # If original supports arun, prefer it
             if hasattr(self.original, "arun"):
                 payload = (
-                    tool_input if tool_input is not None else (kwargs if kwargs else tool_input)
+                    tool_input
+                    if tool_input is not None
+                    else (kwargs if kwargs else tool_input)
                 )
                 return (
                     await self.original.arun(payload, **kwargs)
                     if payload is not None
                     else await self.original.arun({})
                 )
-            payload = tool_input if tool_input is not None else (kwargs if kwargs else tool_input)
+            payload = (
+                tool_input
+                if tool_input is not None
+                else (kwargs if kwargs else tool_input)
+            )
             return (
                 self.original.run(payload, **kwargs)
                 if payload is not None
@@ -144,11 +167,12 @@ class EventedTool(BaseTool):
         return result
 
 
-def wrap_tools_with_events(tools: Iterable[Any], thread_id: str = "default") -> List[Any]:
+def wrap_tools_with_events(
+    tools: Iterable[Any], thread_id: str = "default"
+) -> list[Any]:
     """Wrap a list of tools with EventedTool, skipping ones already evented."""
-    wrapped: List[Any] = []
+    wrapped: list[Any] = []
     for tool in tools:
-        name = getattr(tool, "name", None) or getattr(tool, "__name__", None)
         # Many first-party tools already emit tool_* events (and expose a switch
         # like `emit_events`). Avoid double-emitting start/result/error.
         if (

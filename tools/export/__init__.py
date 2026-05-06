@@ -17,8 +17,8 @@ from tools.export.markdown_converter import (
 
 __all__ = [
     "MarkdownConverter",
+    "export_report",
+    "to_docx",
     "to_html",
     "to_pdf",
-    "to_docx",
-    "export_report",
 ]

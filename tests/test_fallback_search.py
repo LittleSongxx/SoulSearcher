@@ -1,4 +1,3 @@
-import pytest
 
 from tools.search import fallback_search
 

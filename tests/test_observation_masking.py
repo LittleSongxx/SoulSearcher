@@ -1,6 +1,5 @@
 """Tests for observation masking in middleware."""
 
-import pytest
 from unittest.mock import patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage

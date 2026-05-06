@@ -6,9 +6,10 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import Any, Optional, TypeVar
 from urllib.parse import urlparse, urlunparse
 
 from common.config import settings
@@ -64,7 +65,7 @@ _E2B_PLACEHOLDER_KEYS = {
     "e2b_39ce8c3d299470afd09b42629c436edec32728d8",
 }
 _E2B_DISABLED_REASON: Optional[str] = None
-_E2B_SECURE_ACCESS_COMPAT: Dict[str, bool] = {}
+_E2B_SECURE_ACCESS_COMPAT: dict[str, bool] = {}
 
 
 def _require_e2b() -> None:
@@ -262,7 +263,7 @@ class SandboxBrowserSession:
         self._screencast_running = False
         self._screencast_cdp_session: Optional[Any] = None
         self._screencast_latest_frame: Optional[str] = None  # base64 JPEG/PNG from CDP
-        self._screencast_latest_metadata: Dict[str, Any] = {}
+        self._screencast_latest_metadata: dict[str, Any] = {}
         self._screencast_latest_ts: float = 0.0
         self._screencast_frame_id: int = 0
         self._screencast_error: Optional[str] = None
@@ -306,7 +307,7 @@ class SandboxBrowserSession:
             timeout = _sandbox_timeout_seconds()
             port = _chrome_port()
 
-            metadata: Dict[str, str] = {
+            metadata: dict[str, str] = {
                 "weaver": "sandbox_browser",
                 "thread_id": self.thread_id,
             }
@@ -319,7 +320,7 @@ class SandboxBrowserSession:
                 # In that case we retry with `secure=False` and remember the outcome to avoid
                 # repeated 400s during browser streaming.
                 def _create(*, secure: Optional[bool] = None):
-                    kwargs: Dict[str, Any] = {
+                    kwargs: dict[str, Any] = {
                         "template": template,
                         "timeout": timeout,
                         "api_key": settings.e2b_api_key,
@@ -361,9 +362,9 @@ class SandboxBrowserSession:
             # NOTE: pgrep can match itself when the pattern appears in argv, so we
             # filter by browser name after.
             check = sandbox.commands.run(
-                "pgrep -af 'remote-debugging-port={port}' | "
+                f"pgrep -af 'remote-debugging-port={port}' | "
                 "grep -E '(chrome|chromium)' | "
-                "grep -v pgrep || echo not_running".format(port=port)
+                "grep -v pgrep || echo not_running"
             )
             if "not_running" in (getattr(check, "stdout", "") or ""):
                 sandbox.commands.run(_chrome_start_cmd(port), timeout=600)
@@ -477,7 +478,7 @@ class SandboxBrowserSession:
         with self._lock:
             return self._handles is not None
 
-    def peek_info(self) -> Optional[Dict[str, str]]:
+    def peek_info(self) -> Optional[dict[str, str]]:
         """
         Best-effort: return lightweight info if the session is already active.
 
@@ -489,7 +490,7 @@ class SandboxBrowserSession:
             return None
         return {"cdp_endpoint": h.cdp_endpoint}
 
-    def get_info(self) -> Dict[str, str]:
+    def get_info(self) -> dict[str, str]:
         h = self._ensure_sandbox_and_page()
         return {
             "cdp_endpoint": h.cdp_endpoint,
@@ -532,7 +533,7 @@ class SandboxBrowserSession:
                 self._screencast_frame_id = 0
                 self._screencast_error = None
 
-            def _handle_frame(params: Dict[str, Any]) -> None:
+            def _handle_frame(params: dict[str, Any]) -> None:
                 # NOTE: this callback is invoked by Playwright's internal event
                 # dispatch. Keep it fast and never touch asyncio here.
                 with self._screencast_lock:
@@ -626,7 +627,7 @@ class SandboxBrowserSession:
         finally:
             logger.info(f"[sandbox_browser] CDP screencast stopped thread={self.thread_id}")
 
-    def get_screencast_frame(self) -> Optional[Dict[str, Any]]:
+    def get_screencast_frame(self) -> Optional[dict[str, Any]]:
         """
         Get the latest screencast frame (base64 image), if available.
 
@@ -661,7 +662,7 @@ class SandboxBrowserSession:
             "error": err,
         }
 
-    def peek_screencast_frame(self) -> Optional[Dict[str, Any]]:
+    def peek_screencast_frame(self) -> Optional[dict[str, Any]]:
         """
         Thread-safe peek at the latest CDP screencast frame.
 
@@ -741,12 +742,12 @@ class SandboxBrowserSessionManager:
         # may run in a thread pool, so we keep a dedicated session per
         # (conversation thread_id, worker thread ident) to avoid cross-thread
         # usage that triggers greenlet errors.
-        self._sessions: Dict[tuple[str, int], SandboxBrowserSession] = {}
+        self._sessions: dict[tuple[str, int], SandboxBrowserSession] = {}
         # Additionally, provide an opt-in per-thread single-worker executor so
         # async FastAPI endpoints (WebSocket, screenshots) can safely interact
         # with the sync Playwright API without running it on the asyncio loop.
-        self._executors: Dict[str, ThreadPoolExecutor] = {}
-        self._executor_thread_id: Dict[str, int] = {}
+        self._executors: dict[str, ThreadPoolExecutor] = {}
+        self._executor_thread_id: dict[str, int] = {}
 
     def _normalize_thread_id(self, thread_id: str) -> str:
         return (thread_id or "").strip() or "default"
@@ -819,7 +820,7 @@ class SandboxBrowserSessionManager:
             executor, functools.partial(self._run_and_record, thread_id, bound)
         )
 
-    def peek_screencast_frame(self, thread_id: str) -> Optional[Dict[str, Any]]:
+    def peek_screencast_frame(self, thread_id: str) -> Optional[dict[str, Any]]:
         """
         Thread-safe peek at the latest CDP screencast frame for `thread_id`.
 

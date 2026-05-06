@@ -15,7 +15,7 @@ import copy
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +33,14 @@ class SubAgentContext:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     # Isolated state fields (deep copied from parent)
-    messages: List[Any] = field(default_factory=list)
-    research_plan: List[str] = field(default_factory=list)
-    summary_notes: List[str] = field(default_factory=list)
+    messages: list[Any] = field(default_factory=list)
+    research_plan: list[str] = field(default_factory=list)
+    summary_notes: list[str] = field(default_factory=list)
 
     # Accumulated results (to be merged back)
-    scraped_content: List[Dict[str, Any]] = field(default_factory=list)
-    sources: List[Dict[str, str]] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    scraped_content: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[dict[str, str]] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
     # Read-only context (shared reference)
     input: str = ""
@@ -52,7 +52,7 @@ class SubAgentContext:
     is_complete: bool = False
     is_cancelled: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for state storage."""
         return {
             "scope_id": self.scope_id,
@@ -77,11 +77,11 @@ class ContextManager:
     """
 
     def __init__(self):
-        self.contexts: Dict[str, SubAgentContext] = {}
+        self.contexts: dict[str, SubAgentContext] = {}
 
     def fork(
         self,
-        parent_state: Dict[str, Any],
+        parent_state: dict[str, Any],
         scope_id: str,
         parent_scope_id: Optional[str] = None,
         inherit_messages: bool = False,
@@ -127,10 +127,10 @@ class ContextManager:
 
     def merge(
         self,
-        parent_state: Dict[str, Any],
+        parent_state: dict[str, Any],
         child_context: SubAgentContext,
         merge_messages: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Merge child context results back to parent state.
 
@@ -197,7 +197,7 @@ class ContextManager:
             del self.contexts[scope_id]
             logger.debug(f"[ContextManager] Removed context: {scope_id}")
 
-    def get_active_contexts(self) -> List[SubAgentContext]:
+    def get_active_contexts(self) -> list[SubAgentContext]:
         """Get all active (non-complete) contexts."""
         return [c for c in self.contexts.values() if not c.is_complete]
 
@@ -209,10 +209,10 @@ class ContextManager:
 
 
 def fork_state(
-    parent_state: Dict[str, Any],
+    parent_state: dict[str, Any],
     scope_id: str,
     clear_messages: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a forked state dictionary for a sub-agent.
 
@@ -254,10 +254,10 @@ def fork_state(
 
 
 def merge_state(
-    parent_state: Dict[str, Any],
-    child_state: Dict[str, Any],
+    parent_state: dict[str, Any],
+    child_state: dict[str, Any],
     scope_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Merge child state results back to parent.
 

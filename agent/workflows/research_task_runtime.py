@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
-
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 _TERMINAL_STATUSES = {"completed", "failed", "timed_out", "cancelled"}
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _stable_text(value: Any) -> str:
@@ -24,7 +24,7 @@ def _parse_datetime(value: str) -> Optional[datetime]:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
+        return parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -38,7 +38,7 @@ class ResearchSubtaskRun:
     round_index: int
     topic: str
     focus: str
-    queries: List[str]
+    queries: list[str]
     status: str = "pending"
     started_at: str = ""
     updated_at: str = ""
@@ -46,12 +46,12 @@ class ResearchSubtaskRun:
     duration_seconds: float = 0.0
     result_count: int = 0
     evidence_count: int = 0
-    raw_notes: List[str] = field(default_factory=list)
+    raw_notes: list[str] = field(default_factory=list)
     compressed_summary: str = ""
-    errors: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
@@ -59,13 +59,13 @@ class ResearchTaskRuntime:
     def __init__(self, *, mode: str, parent_id: str = "deepsearch_supervisor") -> None:
         self.mode = mode
         self.parent_id = parent_id
-        self._subtasks: Dict[str, ResearchSubtaskRun] = {}
-        self._events: List[Dict[str, Any]] = []
+        self._subtasks: dict[str, ResearchSubtaskRun] = {}
+        self._events: list[dict[str, Any]] = []
 
-    def register_tasks(self, tasks: Iterable[Any], *, metadata: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def register_tasks(self, tasks: Iterable[Any], *, metadata: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
         return [self.register_task(task, metadata=metadata) for task in tasks]
 
-    def register_task(self, task: Any, *, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def register_task(self, task: Any, *, metadata: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         worker_id = _stable_text(getattr(task, "worker_id", ""))
         run = ResearchSubtaskRun(
             subtask_id=worker_id,
@@ -84,7 +84,7 @@ class ResearchTaskRuntime:
         self._record_event(run, "registered")
         return run.to_dict()
 
-    def start_task(self, worker_id: str, *, started_at: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def start_task(self, worker_id: str, *, started_at: Optional[str] = None, metadata: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         run = self._subtasks[worker_id]
         run.status = "running"
         run.started_at = started_at or _utc_now_iso()
@@ -101,10 +101,10 @@ class ResearchTaskRuntime:
         result_count: int = 0,
         evidence_count: int = 0,
         compressed_summary: str = "",
-        raw_notes: Optional[List[str]] = None,
-        errors: Optional[List[str]] = None,
+        raw_notes: Optional[list[str]] = None,
+        errors: Optional[list[str]] = None,
         completed_at: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         status = "failed" if errors else "completed"
         return self.finish_task(
             worker_id,
@@ -125,10 +125,10 @@ class ResearchTaskRuntime:
         result_count: int = 0,
         evidence_count: int = 0,
         compressed_summary: str = "",
-        raw_notes: Optional[List[str]] = None,
-        errors: Optional[List[str]] = None,
+        raw_notes: Optional[list[str]] = None,
+        errors: Optional[list[str]] = None,
         completed_at: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if status not in _TERMINAL_STATUSES:
             raise ValueError(f"Unsupported terminal status: {status}")
         run = self._subtasks[worker_id]
@@ -144,9 +144,9 @@ class ResearchTaskRuntime:
         self._record_event(run, status)
         return run.to_dict()
 
-    def to_artifact(self) -> Dict[str, Any]:
+    def to_artifact(self) -> dict[str, Any]:
         subtasks = [run.to_dict() for run in self._subtasks.values()]
-        status_counts: Dict[str, int] = {}
+        status_counts: dict[str, int] = {}
         for run in self._subtasks.values():
             status_counts[run.status] = status_counts.get(run.status, 0) + 1
         return {
@@ -159,8 +159,8 @@ class ResearchTaskRuntime:
             "events": list(self._events),
         }
 
-    def finish_open_tasks(self, *, status: str, error: str = "") -> List[Dict[str, Any]]:
-        finished: List[Dict[str, Any]] = []
+    def finish_open_tasks(self, *, status: str, error: str = "") -> list[dict[str, Any]]:
+        finished: list[dict[str, Any]] = []
         for worker_id, run in list(self._subtasks.items()):
             if run.status in _TERMINAL_STATUSES:
                 continue

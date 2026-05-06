@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any
 
-
-ModelResolver = Callable[[str, Dict[str, Any]], str]
+ModelResolver = Callable[[str, dict[str, Any]], str]
 
 
 @dataclass
@@ -15,11 +15,11 @@ class DeepSearchModelStage:
     source: str
     override_key: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
-_STAGE_TASKS: List[Tuple[str, str, List[str]]] = [
+_STAGE_TASKS: list[tuple[str, str, list[str]]] = [
     ("supervisor_model", "planning", ["deepsearch_supervisor_model", "supervisor_model", "planner_model", "planning_model"]),
     ("query_model", "query_gen", ["deepsearch_query_model", "query_model", "query_gen_model"]),
     ("search_summary_model", "synthesis", ["deepsearch_search_summary_model", "search_summary_model", "summary_model", "synthesis_model"]),
@@ -31,12 +31,12 @@ _STAGE_TASKS: List[Tuple[str, str, List[str]]] = [
 
 
 def build_deepsearch_model_profile(
-    config: Dict[str, Any],
+    config: dict[str, Any],
     model_resolver: ModelResolver,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     cfg = _configurable(config)
-    stages: List[DeepSearchModelStage] = []
-    models: Dict[str, str] = {}
+    stages: list[DeepSearchModelStage] = []
+    models: dict[str, str] = {}
     for stage, task_type, override_keys in _STAGE_TASKS:
         model, source, override_key = _resolve_stage_model(
             stage=stage,
@@ -66,7 +66,7 @@ def build_deepsearch_model_profile(
     }
 
 
-def _configurable(config: Dict[str, Any]) -> Dict[str, Any]:
+def _configurable(config: dict[str, Any]) -> dict[str, Any]:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     return cfg if isinstance(cfg, dict) else {}
 
@@ -75,11 +75,11 @@ def _resolve_stage_model(
     *,
     stage: str,
     task_type: str,
-    override_keys: List[str],
-    config: Dict[str, Any],
-    cfg: Dict[str, Any],
+    override_keys: list[str],
+    config: dict[str, Any],
+    cfg: dict[str, Any],
     model_resolver: ModelResolver,
-) -> Tuple[str, str, str]:
+) -> tuple[str, str, str]:
     for key in override_keys:
         value = cfg.get(key)
         if isinstance(value, str) and value.strip():

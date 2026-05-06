@@ -5,7 +5,6 @@ Usage:
     python test_prompt_comparison.py
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -29,7 +28,7 @@ def test_prompt_lengths():
     simple_agent = simple_mgr.get_agent_prompt()
     simple_writer = simple_mgr.get_writer_prompt()
 
-    print(f"\n📊 Simple Prompts:")
+    print("\n📊 Simple Prompts:")
     print(f"  Agent:  {len(simple_agent):>6} chars")
     print(f"  Writer: {len(simple_writer):>6} chars")
     print(f"  Total:  {len(simple_agent) + len(simple_writer):>6} chars")
@@ -44,7 +43,7 @@ def test_prompt_lengths():
     )
     enhanced_writer = enhanced_mgr.get_writer_prompt()
 
-    print(f"\n📈 Enhanced Prompts:")
+    print("\n📈 Enhanced Prompts:")
     print(f"  Agent:  {len(enhanced_agent):>6} chars (~{len(enhanced_agent) // 4} tokens)")
     print(f"  Writer: {len(enhanced_writer):>6} chars (~{len(enhanced_writer) // 4} tokens)")
     print(
@@ -55,7 +54,7 @@ def test_prompt_lengths():
     agent_increase = ((len(enhanced_agent) - len(simple_agent)) / len(simple_agent)) * 100
     writer_increase = ((len(enhanced_writer) - len(simple_writer)) / len(simple_writer)) * 100
 
-    print(f"\n📊 Size Increase:")
+    print("\n📊 Size Increase:")
     print(f"  Agent:  +{agent_increase:.1f}%")
     print(f"  Writer: +{writer_increase:.1f}%")
 
@@ -67,14 +66,14 @@ def test_prompt_lengths():
     simple_cost = (simple_tokens / 1000) * cost_per_1k
     enhanced_cost = (enhanced_tokens / 1000) * cost_per_1k
 
-    print(f"\n💰 Cost per Call (GPT-4 input rates):")
+    print("\n💰 Cost per Call (GPT-4 input rates):")
     print(f"  Simple:   ${simple_cost:.6f}")
     print(f"  Enhanced: ${enhanced_cost:.6f}")
     print(
         f"  Increase: ${enhanced_cost - simple_cost:.6f} (+{((enhanced_cost - simple_cost) / simple_cost) * 100:.1f}%)"
     )
 
-    print(f"\n💸 Cost for 1000 Calls:")
+    print("\n💸 Cost for 1000 Calls:")
     print(f"  Simple:   ${simple_cost * 1000:.4f}")
     print(f"  Enhanced: ${enhanced_cost * 1000:.4f}")
     print(f"  Increase: ${(enhanced_cost - simple_cost) * 1000:.4f}")
@@ -195,7 +194,7 @@ Always include DOI links when available."""
 
     retrieved = mgr.get_agent_prompt()
 
-    print(f"\n✅ Custom Prompt Test:")
+    print("\n✅ Custom Prompt Test:")
     print(f"  Set Length:      {len(custom_agent)} chars")
     print(f"  Retrieved Length: {len(retrieved)} chars")
     print(f"  Match:           {'✓ Exact match' if custom_agent == retrieved else '✗ Mismatch'}")

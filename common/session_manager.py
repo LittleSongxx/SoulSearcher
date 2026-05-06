@@ -9,7 +9,7 @@ import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SessionInfo:
     """Summary information about a research session."""
+
     thread_id: str
     status: str  # pending, running, completed, cancelled, failed
     topic: str
@@ -26,8 +27,11 @@ class SessionInfo:
     has_report: bool
     revision_count: int
     message_count: int
+    owner_id: str = ""
+    group_id: str = ""
+    visibility: str = "private"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "thread_id": self.thread_id,
             "status": self.status,
@@ -38,19 +42,23 @@ class SessionInfo:
             "has_report": self.has_report,
             "revision_count": self.revision_count,
             "message_count": self.message_count,
+            "owner_id": self.owner_id,
+            "group_id": self.group_id,
+            "visibility": self.visibility,
         }
 
 
 @dataclass
 class SessionState:
     """Full state snapshot of a research session."""
+
     thread_id: str
-    state: Dict[str, Any]
+    state: dict[str, Any]
     checkpoint_ts: str
     parent_checkpoint_id: Optional[str]
-    deepsearch_artifacts: Dict[str, Any] = field(default_factory=dict)
+    deepsearch_artifacts: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "thread_id": self.thread_id,
             "checkpoint_ts": self.checkpoint_ts,
@@ -59,16 +67,23 @@ class SessionState:
             "deepsearch_artifacts": self.deepsearch_artifacts,
         }
 
-    def _sanitize_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def _sanitize_state(self, state: dict[str, Any]) -> dict[str, Any]:
         """Sanitize state for JSON serialization."""
         sanitized = {}
         for k, v in state.items():
             if k == "messages":
                 # Convert messages to serializable format
-                sanitized[k] = [
-                    {"type": getattr(m, "type", "unknown"), "content": getattr(m, "content", str(m))[:500]}
-                    for m in v[:20]  # Limit to last 20 messages
-                ] if isinstance(v, list) else []
+                sanitized[k] = (
+                    [
+                        {
+                            "type": getattr(m, "type", "unknown"),
+                            "content": getattr(m, "content", str(m))[:500],
+                        }
+                        for m in v[:20]  # Limit to last 20 messages
+                    ]
+                    if isinstance(v, list)
+                    else []
+                )
             elif k in ("scraped_content", "pending_tool_calls"):
                 # Summarize large lists
                 sanitized[k] = f"[{len(v)} items]" if isinstance(v, list) else v
@@ -83,6 +98,7 @@ class SessionState:
                 # Try to include as-is, fall back to string representation
                 try:
                     import json
+
                     json.dumps(v)
                     sanitized[k] = v
                 except (TypeError, ValueError):
@@ -115,7 +131,7 @@ class SessionManager:
         limit: int = 50,
         status_filter: Optional[str] = None,
         user_id_filter: Optional[str] = None,
-    ) -> List[SessionInfo]:
+    ) -> list[SessionInfo]:
         """
         List all sessions.
 
@@ -145,7 +161,9 @@ class SessionManager:
 
             seen_threads = set()
 
-            for cp_info in checkpoints[:limit * 2]:  # Get extra to account for duplicates
+            for cp_info in checkpoints[
+                : limit * 2
+            ]:  # Get extra to account for duplicates
                 try:
                     if isinstance(cp_info, tuple):
                         config, checkpoint = cp_info
@@ -173,10 +191,15 @@ class SessionManager:
 
                     if user_id_filter:
                         owner = state.get("user_id")
-                        if not isinstance(owner, str) or owner.strip() != user_id_filter:
+                        if (
+                            not isinstance(owner, str)
+                            or owner.strip() != user_id_filter
+                        ):
                             continue
 
-                    session_info = self._build_session_info(thread_id, state, checkpoint)
+                    session_info = self._build_session_info(
+                        thread_id, state, checkpoint
+                    )
 
                     # Apply status filter
                     if status_filter and session_info.status != status_filter:
@@ -248,7 +271,9 @@ class SessionManager:
             if hasattr(checkpoint_tuple, "parent_config"):
                 parent_config = checkpoint_tuple.parent_config
                 if parent_config:
-                    parent_id = parent_config.get("configurable", {}).get("checkpoint_id")
+                    parent_id = parent_config.get("configurable", {}).get(
+                        "checkpoint_id"
+                    )
 
             deepsearch_artifacts = self._extract_deepsearch_artifacts(state)
 
@@ -300,7 +325,7 @@ class SessionManager:
             logger.error(f"Error deleting session {thread_id}: {e}")
             return False
 
-    def can_resume(self, thread_id: str) -> Tuple[bool, str]:
+    def can_resume(self, thread_id: str) -> tuple[bool, str]:
         """
         Check if a session can be resumed.
 
@@ -329,8 +354,8 @@ class SessionManager:
         self,
         thread_id: str,
         additional_input: Optional[str] = None,
-        update_state: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        update_state: Optional[dict[str, Any]] = None,
+    ) -> Optional[dict[str, Any]]:
         """
         Build a restored state payload for session resumption.
 
@@ -360,7 +385,9 @@ class SessionManager:
                 restored["quality_summary"] = artifacts.get("quality_summary")
             if artifacts.get("query_coverage") and not restored.get("query_coverage"):
                 restored["query_coverage"] = artifacts.get("query_coverage")
-            if artifacts.get("freshness_summary") and not restored.get("freshness_summary"):
+            if artifacts.get("freshness_summary") and not restored.get(
+                "freshness_summary"
+            ):
                 restored["freshness_summary"] = artifacts.get("freshness_summary")
 
         restored["resumed_from_checkpoint"] = True
@@ -370,7 +397,7 @@ class SessionManager:
     def _build_session_info(
         self,
         thread_id: str,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         checkpoint_tuple: Any,
     ) -> SessionInfo:
         """Build SessionInfo from state and checkpoint."""
@@ -387,6 +414,9 @@ class SessionManager:
 
         messages = state.get("messages", [])
         message_count = len(messages) if isinstance(messages, list) else 0
+        owner_id = str(state.get("user_id") or state.get("owner_id") or "").strip()
+        group_id = str(state.get("group_id") or "").strip()
+        visibility = str(state.get("visibility") or "private").strip() or "private"
 
         created_at = state.get("started_at", "")
         updated_at = state.get("ended_at", "")
@@ -407,9 +437,12 @@ class SessionManager:
             has_report=has_report,
             revision_count=revision_count,
             message_count=message_count,
+            owner_id=owner_id,
+            group_id=group_id,
+            visibility=visibility,
         )
 
-    def _extract_deepsearch_artifacts(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_deepsearch_artifacts(self, state: dict[str, Any]) -> dict[str, Any]:
         """Extract canonical deepsearch artifacts from state snapshot."""
         if not isinstance(state, dict):
             return {}
@@ -418,7 +451,7 @@ class SessionManager:
         scraped_content = state.get("scraped_content", [])
         final_report = state.get("final_report") or state.get("draft_report") or ""
 
-        def _maybe_extract_sources() -> List[Dict[str, Any]]:
+        def _maybe_extract_sources() -> list[dict[str, Any]]:
             if not isinstance(scraped_content, list) or not scraped_content:
                 return []
             try:
@@ -428,11 +461,11 @@ class SessionManager:
             except Exception:
                 return []
 
-        def _maybe_extract_claims() -> List[Dict[str, Any]]:
+        def _maybe_extract_claims() -> list[dict[str, Any]]:
             if not isinstance(final_report, str) or not final_report.strip():
                 return []
             scraped_list = scraped_content if isinstance(scraped_content, list) else []
-            passages_list: Optional[List[Dict[str, Any]]] = None
+            passages_list: Optional[list[dict[str, Any]]] = None
             try:
                 from agent.workflows.claim_verifier import ClaimVerifier
 
@@ -450,7 +483,7 @@ class SessionManager:
                     scraped_list,
                     passages=passages_list,
                 )
-                claims: List[Dict[str, Any]] = []
+                claims: list[dict[str, Any]] = []
                 for check in checks:
                     claims.append(
                         {
@@ -480,10 +513,14 @@ class SessionManager:
                     enriched["claims"] = claims
             return enriched
 
-        queries = state.get("research_plan", []) if isinstance(state.get("research_plan", []), list) else []
+        queries = (
+            state.get("research_plan", [])
+            if isinstance(state.get("research_plan", []), list)
+            else []
+        )
         research_tree = state.get("research_tree")
 
-        quality_summary: Dict[str, Any] = {}
+        quality_summary: dict[str, Any] = {}
         raw_quality = state.get("quality_summary")
         if isinstance(raw_quality, dict) and raw_quality:
             quality_summary = raw_quality
@@ -491,7 +528,11 @@ class SessionManager:
             summary_count = len(state.get("summary_notes", []) or [])
             source_count = len(state.get("scraped_content", []) or [])
             quality_overall_score = state.get("quality_overall_score")
-            if summary_count > 0 or source_count > 0 or quality_overall_score is not None:
+            if (
+                summary_count > 0
+                or source_count > 0
+                or quality_overall_score is not None
+            ):
                 quality_summary = {
                     "summary_count": summary_count,
                     "source_count": source_count,
@@ -530,9 +571,7 @@ class SessionManager:
         claims = _maybe_extract_claims()
 
         return {
-            "mode": state.get("deepsearch_mode")
-            or state.get("route")
-            or "deepsearch",
+            "mode": state.get("deepsearch_mode") or state.get("route") or "deepsearch",
             "queries": queries,
             "research_tree": research_tree,
             "quality_summary": quality_summary,

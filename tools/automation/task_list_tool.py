@@ -17,17 +17,14 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
-import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -83,8 +80,8 @@ class TaskListManager:
     def __init__(self, thread_id: str, emit_events: bool = True):
         self.thread_id = thread_id
         self.emit_events = emit_events
-        self.sections: List[Section] = []
-        self.tasks: List[Task] = []
+        self.sections: list[Section] = []
+        self.tasks: list[Task] = []
         self._storage_path = Path(TASK_STORAGE_DIR) / f"{thread_id}.json"
         self._ensure_storage_dir()
 
@@ -92,7 +89,7 @@ class TaskListManager:
         """Ensure storage directory exists."""
         Path(TASK_STORAGE_DIR).mkdir(parents=True, exist_ok=True)
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit a task event for visualization."""
         if not self.emit_events:
             return
@@ -110,7 +107,7 @@ class TaskListManager:
         """Load task list from storage."""
         try:
             if self._storage_path.exists():
-                with open(self._storage_path, "r", encoding="utf-8") as f:
+                with open(self._storage_path, encoding="utf-8") as f:
                     data = json.load(f)
 
                 self.sections = [Section(**s) for s in data.get("sections", [])]
@@ -230,7 +227,7 @@ class TaskListManager:
                 return task
         return None
 
-    def get_all_tasks(self) -> List[Dict[str, Any]]:
+    def get_all_tasks(self) -> list[dict[str, Any]]:
         """Get all tasks grouped by section."""
         result = []
         for section in self.sections:
@@ -262,7 +259,7 @@ class TaskListManager:
 
         return result
 
-    def get_progress_summary(self) -> Dict[str, Any]:
+    def get_progress_summary(self) -> dict[str, Any]:
         """Get task completion progress."""
         total = len(self.tasks)
         completed = sum(1 for t in self.tasks if t.status == TaskStatus.COMPLETED)
@@ -294,7 +291,7 @@ class TaskListManager:
 
 
 # Global task list managers by thread_id
-_managers: Dict[str, TaskListManager] = {}
+_managers: dict[str, TaskListManager] = {}
 
 
 def get_task_manager(thread_id: str) -> TaskListManager:
@@ -314,7 +311,7 @@ def get_task_manager(thread_id: str) -> TaskListManager:
 class CreateTasksInput(BaseModel):
     """Input for creating tasks."""
 
-    sections: List[Dict[str, Any]] = Field(
+    sections: list[dict[str, Any]] = Field(
         description="List of sections with tasks. Each section has 'title' and 'tasks' (list of task content strings)."
     )
 
@@ -348,7 +345,7 @@ class CreateTasksTool(BaseTool):
     args_schema: type[BaseModel] = CreateTasksInput
     thread_id: str = "default"
 
-    def _run(self, sections: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _run(self, sections: list[dict[str, Any]]) -> dict[str, Any]:
         manager = get_task_manager(self.thread_id)
 
         # Clear existing tasks
@@ -390,7 +387,7 @@ class ViewTasksTool(BaseTool):
     args_schema: type[BaseModel] = ViewTasksInput
     thread_id: str = "default"
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         manager = get_task_manager(self.thread_id)
         return {
             "task_list": manager.get_all_tasks(),
@@ -421,7 +418,7 @@ class UpdateTaskTool(BaseTool):
         status: str,
         progress: Optional[int] = None,
         result: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         manager = get_task_manager(self.thread_id)
 
         try:
@@ -465,7 +462,7 @@ class GetNextTaskTool(BaseTool):
     args_schema: type[BaseModel] = GetNextTaskInput
     thread_id: str = "default"
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         manager = get_task_manager(self.thread_id)
         task = manager.get_next_pending_task()
 
@@ -484,7 +481,7 @@ class GetNextTaskTool(BaseTool):
             }
 
 
-def build_task_list_tools(thread_id: str) -> List[BaseTool]:
+def build_task_list_tools(thread_id: str) -> list[BaseTool]:
     """
     Build task list tools for a thread.
 

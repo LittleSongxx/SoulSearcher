@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG: Dict[str, Any] = {
+DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG: dict[str, Any] = {
     "deepsearch_strategy": "supervisor_workers",
     "deepsearch_mode": "supervisor_workers",
     "deepsearch_supervisor_rounds": 3,
@@ -59,14 +59,14 @@ class BenchmarkTask:
     domain: str = "general"
     task_type: str = "open_research"
     difficulty: str = "medium"
-    expected_dimensions: List[str] = field(default_factory=list)
+    expected_dimensions: list[str] = field(default_factory=list)
     freshness_requirement: str = ""
     must_cite: bool = True
-    judge_rubric: Dict[str, Any] = field(default_factory=dict)
-    source_constraints: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    judge_rubric: dict[str, Any] = field(default_factory=dict)
+    source_constraints: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -81,14 +81,14 @@ class RunConfig:
     timeout_s: float = 900.0
     concurrency: int = 1
     user_id: str = "benchmark_user"
-    deepsearch_config: Dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG))
+    deepsearch_config: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG))
 
     def __post_init__(self) -> None:
         merged = dict(DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG)
         merged.update(self.deepsearch_config or {})
         self.deepsearch_config = merged
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["dataset_path"] = str(self.dataset_path)
         payload["output_dir"] = str(self.output_dir)
@@ -102,7 +102,7 @@ class SSEEvent:
     event_id: Optional[str] = None
     received_at: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -123,11 +123,11 @@ class CaseRunResult:
     report_path: str = ""
     evidence_path: str = ""
     run_metrics_path: str = ""
-    evidence: Dict[str, Any] = field(default_factory=dict)
-    run_metrics: Dict[str, Any] = field(default_factory=dict)
-    raw: Dict[str, Any] = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
+    run_metrics: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -138,12 +138,12 @@ class JudgeScore:
     status: str
     score: Optional[float] = None
     passed: Optional[bool] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     raw_response: str = ""
     error: str = ""
     judged_at: str = field(default_factory=utc_now_iso)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -170,11 +170,11 @@ class MetricSummary:
     avg_claims_checked: Optional[float] = None
     avg_claims_supported: Optional[float] = None
     avg_claims_unsupported: Optional[float] = None
-    by_language: Dict[str, Any] = field(default_factory=dict)
-    by_domain: Dict[str, Any] = field(default_factory=dict)
+    by_language: dict[str, Any] = field(default_factory=dict)
+    by_domain: dict[str, Any] = field(default_factory=dict)
     p50_duration_s: Optional[float] = None
     p90_duration_s: Optional[float] = None
     mean_duration_s: Optional[float] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)

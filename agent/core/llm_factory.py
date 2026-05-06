@@ -7,7 +7,7 @@ Replaces duplicated _chat_model() functions.
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from langchain_openai import ChatOpenAI
 
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 def create_chat_model_params(
     model: str,
     temperature: float,
-    extra_body: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    extra_body: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """Build ChatOpenAI parameters honoring model-specific app-config overrides."""
     llm_cfg = settings.llm_config_for_model(model)
     base_url = (
@@ -38,7 +38,7 @@ def create_chat_model_params(
     else:
         api_key = settings.openai_api_key
 
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "temperature": temperature,
         "model": model,
         "api_key": api_key,
@@ -57,7 +57,7 @@ def create_chat_model_params(
     elif base_url:
         params["base_url"] = base_url
 
-    merged_extra: Dict[str, Any] = {}
+    merged_extra: dict[str, Any] = {}
     if settings.openai_extra_body:
         try:
             merged_extra.update(json.loads(settings.openai_extra_body))
@@ -74,7 +74,7 @@ def create_chat_model_params(
 def create_chat_model(
     model: str,
     temperature: float,
-    extra_body: Optional[Dict[str, Any]] = None,
+    extra_body: Optional[dict[str, Any]] = None,
 ) -> ChatOpenAI:
     """
     Create a ChatOpenAI instance with proper configuration.

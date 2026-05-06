@@ -7,7 +7,9 @@ import main
 
 
 @pytest.mark.asyncio
-async def test_cancel_all_only_cancels_principal_tasks_when_internal_auth_enabled(monkeypatch):
+async def test_cancel_all_only_cancels_principal_tasks_when_internal_auth_enabled(
+    monkeypatch,
+):
     monkeypatch.setitem(main.settings.__dict__, "internal_api_key", "test-key")
     monkeypatch.setitem(main.settings.__dict__, "auth_user_header", "X-Weaver-User")
 
@@ -16,8 +18,12 @@ async def test_cancel_all_only_cancels_principal_tasks_when_internal_auth_enable
     thread_bob = f"thread_bob_{suffix}"
 
     # Create active tokens (pending) for two users.
-    await main.cancellation_manager.create_token(thread_alice, metadata={"user_id": "alice"})
-    await main.cancellation_manager.create_token(thread_bob, metadata={"user_id": "bob"})
+    await main.cancellation_manager.create_token(
+        thread_alice, metadata={"user_id": "alice"}
+    )
+    await main.cancellation_manager.create_token(
+        thread_bob, metadata={"user_id": "bob"}
+    )
 
     # Bind thread ownership.
     main.set_thread_owner(thread_alice, "alice")
@@ -26,7 +32,7 @@ async def test_cancel_all_only_cancels_principal_tasks_when_internal_auth_enable
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         resp = await ac.post(
-            "/api/chat/cancel-all",
+            "/api/research/cancel-all",
             headers={
                 "Authorization": "Bearer test-key",
                 "X-Weaver-User": "alice",
@@ -48,7 +54,9 @@ async def test_cancel_all_only_cancels_principal_tasks_when_internal_auth_enable
 
 
 @pytest.mark.asyncio
-async def test_active_tasks_is_filtered_by_principal_when_internal_auth_enabled(monkeypatch):
+async def test_active_tasks_is_filtered_by_principal_when_internal_auth_enabled(
+    monkeypatch,
+):
     monkeypatch.setitem(main.settings.__dict__, "internal_api_key", "test-key")
     monkeypatch.setitem(main.settings.__dict__, "auth_user_header", "X-Weaver-User")
 
@@ -56,8 +64,12 @@ async def test_active_tasks_is_filtered_by_principal_when_internal_auth_enabled(
     thread_alice = f"thread_alice_{suffix}"
     thread_bob = f"thread_bob_{suffix}"
 
-    await main.cancellation_manager.create_token(thread_alice, metadata={"user_id": "alice"})
-    await main.cancellation_manager.create_token(thread_bob, metadata={"user_id": "bob"})
+    await main.cancellation_manager.create_token(
+        thread_alice, metadata={"user_id": "alice"}
+    )
+    await main.cancellation_manager.create_token(
+        thread_bob, metadata={"user_id": "bob"}
+    )
     main.set_thread_owner(thread_alice, "alice")
     main.set_thread_owner(thread_bob, "bob")
 
@@ -80,42 +92,3 @@ async def test_active_tasks_is_filtered_by_principal_when_internal_auth_enabled(
     # Cleanup.
     await main.cancellation_manager.cancel(thread_alice, "test cleanup")
     await main.cancellation_manager.cancel(thread_bob, "test cleanup")
-
-
-@pytest.mark.asyncio
-async def test_screenshots_list_requires_thread_id_when_internal_auth_enabled(monkeypatch):
-    monkeypatch.setitem(main.settings.__dict__, "internal_api_key", "test-key")
-    monkeypatch.setitem(main.settings.__dict__, "auth_user_header", "X-Weaver-User")
-
-    transport = ASGITransport(app=main.app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.get(
-            "/api/screenshots",
-            headers={
-                "Authorization": "Bearer test-key",
-                "X-Weaver-User": "alice",
-            },
-        )
-
-    assert resp.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_screenshots_list_forbidden_for_other_user_when_internal_auth_enabled(monkeypatch):
-    monkeypatch.setitem(main.settings.__dict__, "internal_api_key", "test-key")
-    monkeypatch.setitem(main.settings.__dict__, "auth_user_header", "X-Weaver-User")
-
-    thread_id = f"thread_{uuid.uuid4().hex}"
-    main.set_thread_owner(thread_id, "alice")
-
-    transport = ASGITransport(app=main.app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.get(
-            f"/api/screenshots?thread_id={thread_id}",
-            headers={
-                "Authorization": "Bearer test-key",
-                "X-Weaver-User": "bob",
-            },
-        )
-
-    assert resp.status_code == 403

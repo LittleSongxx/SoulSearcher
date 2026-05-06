@@ -14,7 +14,7 @@ Key Features:
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
@@ -41,11 +41,11 @@ class DomainClassification:
     domain: ResearchDomain
     confidence: float
     reasoning: str
-    search_hints: List[str] = field(default_factory=list)
-    suggested_sources: List[str] = field(default_factory=list)
-    language_hints: List[str] = field(default_factory=list)
+    search_hints: list[str] = field(default_factory=list)
+    suggested_sources: list[str] = field(default_factory=list)
+    language_hints: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "domain": self.domain.value,
             "confidence": self.confidence,
@@ -141,7 +141,7 @@ class DomainClassificationResponse(BaseModel):
     domain: str = Field(description="The research domain: scientific, legal, financial, technical, medical, business, historical, or general")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence in the classification (0-1)")
     reasoning: str = Field(description="Brief explanation for the classification")
-    search_hints: List[str] = Field(default_factory=list, description="Domain-specific search query suggestions")
+    search_hints: list[str] = Field(default_factory=list, description="Domain-specific search query suggestions")
 
 
 CLASSIFICATION_PROMPT = """
@@ -179,11 +179,11 @@ class DomainClassifier:
     Uses LLM to identify the domain and provide specialized search hints.
     """
 
-    def __init__(self, llm: BaseChatModel, config: Dict[str, Any] = None):
+    def __init__(self, llm: BaseChatModel, config: dict[str, Any] = None):
         self.llm = llm
         self.config = config or {}
 
-    def classify(self, query: str, images: List[Dict[str, Any]] = None) -> DomainClassification:
+    def classify(self, query: str, images: list[dict[str, Any]] = None) -> DomainClassification:
         """
         Classify a research query by domain.
 
@@ -293,7 +293,7 @@ class DomainClassifier:
 def classify_domain(
     query: str,
     llm: BaseChatModel,
-    config: Dict[str, Any] = None,
+    config: dict[str, Any] = None,
 ) -> DomainClassification:
     """
     Convenience function to classify a query's domain.
@@ -311,9 +311,9 @@ def classify_domain(
 
 
 def build_provider_profile(
-    suggested_sources: Optional[List[str]],
+    suggested_sources: Optional[list[str]],
     domain: ResearchDomain = ResearchDomain.GENERAL,
-) -> List[str]:
+) -> list[str]:
     """
     Build a provider profile for multi-search from domain and source hints.
 
@@ -324,7 +324,7 @@ def build_provider_profile(
     Returns:
         Ordered list of provider names to prioritize.
     """
-    profile: List[str] = []
+    profile: list[str] = []
 
     def add_provider(name: Optional[str]) -> None:
         if not name:

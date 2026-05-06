@@ -21,13 +21,12 @@ Requirements:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import importlib.util
 import io
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -150,7 +149,7 @@ class _ComputerUseTool(BaseTool):
     emit_events: bool = True
     save_screenshots: bool = True
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event for visualization."""
         if not self.emit_events:
             return
@@ -164,7 +163,7 @@ class _ComputerUseTool(BaseTool):
         except Exception as e:
             logger.warning(f"[computer_use] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -181,7 +180,7 @@ class _ComputerUseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -197,7 +196,7 @@ class _ComputerUseTool(BaseTool):
             },
         )
 
-    def _take_screenshot(self, action: str) -> Dict[str, Any]:
+    def _take_screenshot(self, action: str) -> dict[str, Any]:
         """Take a screenshot and optionally save it."""
         if not PYAUTOGUI_AVAILABLE:
             return {"error": "pyautogui not available"}
@@ -252,7 +251,7 @@ class _ComputerUseTool(BaseTool):
             logger.error(f"[computer_use] Screenshot failed: {e}")
             return {"error": str(e)}
 
-    def _get_screen_size(self) -> Tuple[int, int]:
+    def _get_screen_size(self) -> tuple[int, int]:
         """Get screen dimensions."""
         if PYAUTOGUI_AVAILABLE:
             return _pyautogui().size()
@@ -273,7 +272,7 @@ class MoveMouseTool(_ComputerUseTool):
     description: str = "Move the mouse cursor to specified screen coordinates."
     args_schema: type[BaseModel] = MoveMouseInput
 
-    def _run(self, x: int, y: int) -> Dict[str, Any]:
+    def _run(self, x: int, y: int) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -327,7 +326,7 @@ class ClickTool(_ComputerUseTool):
         y: int,
         button: str = "left",
         clicks: int = 1,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -380,7 +379,7 @@ class TypeTextTool(_ComputerUseTool):
     )
     args_schema: type[BaseModel] = TypeTextInput
 
-    def _run(self, text: str, interval: float = 0.02) -> Dict[str, Any]:
+    def _run(self, text: str, interval: float = 0.02) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -433,7 +432,7 @@ class PressKeyTool(_ComputerUseTool):
     """
     args_schema: type[BaseModel] = PressKeyInput
 
-    def _run(self, keys: str) -> Dict[str, Any]:
+    def _run(self, keys: str) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -484,7 +483,7 @@ class ScrollTool(_ComputerUseTool):
     description: str = "Scroll the screen up or down."
     args_schema: type[BaseModel] = ScrollInput
 
-    def _run(self, direction: str, amount: int = 3) -> Dict[str, Any]:
+    def _run(self, direction: str, amount: int = 3) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -532,7 +531,7 @@ class ScreenshotTool(_ComputerUseTool):
     description: str = "Take a screenshot of the current screen state."
     args_schema: type[BaseModel] = ScreenshotInput
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -571,7 +570,7 @@ class GetScreenInfoTool(_ComputerUseTool):
     description: str = "Get screen dimensions and mouse position."
     args_schema: type[BaseModel] = GetScreenInfoInput
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -619,7 +618,7 @@ class DragTool(_ComputerUseTool):
         end_x: int,
         end_y: int,
         duration: float = 0.5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if not PYAUTOGUI_AVAILABLE:
             return {"success": False, "error": "pyautogui not installed"}
 
@@ -665,7 +664,7 @@ def build_computer_use_tools(
     thread_id: str,
     emit_events: bool = True,
     save_screenshots: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build computer use tools for a thread.
 

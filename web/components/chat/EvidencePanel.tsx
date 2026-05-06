@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, CheckCircle2, ExternalLink, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getApiBaseUrl } from '@/lib/api'
+import { fetchResearchEvidence } from '@/lib/researchApiClient'
 import { EvidenceClaim, EvidenceResponse, EvidenceSource } from '@/types/evidence'
 
 interface ContinueTarget {
@@ -71,13 +71,7 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
     setIsLoading(true)
     setError('')
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/sessions/${threadId}/evidence`)
-      if (response.status === 404) {
-        setData(null)
-        return
-      }
-      if (!response.ok) throw new Error(`Evidence request failed: ${response.status}`)
-      setData(await response.json())
+      setData(await fetchResearchEvidence(threadId))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load evidence')
     } finally {

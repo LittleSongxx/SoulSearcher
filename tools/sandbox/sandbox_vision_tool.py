@@ -18,12 +18,10 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
-import base64
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -59,7 +57,7 @@ class _SandboxVisionBaseTool(BaseTool):
             return session._handles.sandbox
         return None
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event."""
         if not self.emit_events:
             return
@@ -70,7 +68,7 @@ class _SandboxVisionBaseTool(BaseTool):
             except Exception as e:
                 logger.warning(f"[sandbox_vision] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -87,7 +85,7 @@ class _SandboxVisionBaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -103,7 +101,7 @@ class _SandboxVisionBaseTool(BaseTool):
             },
         )
 
-    def _ensure_dependencies(self, sandbox, packages: List[str]) -> bool:
+    def _ensure_dependencies(self, sandbox, packages: list[str]) -> bool:
         """Ensure required packages are installed in sandbox."""
         try:
             for pkg in packages:
@@ -142,7 +140,7 @@ class SandboxExtractTextTool(_SandboxVisionBaseTool):
         self,
         image_path: str,
         language: str = "eng",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("extract_text", {"image_path": image_path})
 
         try:
@@ -219,7 +217,7 @@ class SandboxGetImageInfoTool(_SandboxVisionBaseTool):
     )
     args_schema: type[BaseModel] = GetImageInfoInput
 
-    def _run(self, image_path: str) -> Dict[str, Any]:
+    def _run(self, image_path: str) -> dict[str, Any]:
         start_time = self._emit_tool_start("get_image_info", {"image_path": image_path})
 
         try:
@@ -333,7 +331,7 @@ class SandboxResizeImageTool(_SandboxVisionBaseTool):
         width: Optional[int] = None,
         height: Optional[int] = None,
         quality: int = 85,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "resize_image",
             {
@@ -454,7 +452,7 @@ class SandboxConvertImageTool(_SandboxVisionBaseTool):
         image_path: str,
         output_path: str,
         quality: int = 85,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "convert_image",
             {
@@ -577,7 +575,7 @@ class SandboxCropImageTool(_SandboxVisionBaseTool):
         top: int,
         right: int,
         bottom: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "crop_image",
             {
@@ -668,7 +666,7 @@ class SandboxReadQRCodeTool(_SandboxVisionBaseTool):
     )
     args_schema: type[BaseModel] = ReadQRCodeInput
 
-    def _run(self, image_path: str) -> Dict[str, Any]:
+    def _run(self, image_path: str) -> dict[str, Any]:
         start_time = self._emit_tool_start("read_qr_code", {"image_path": image_path})
 
         try:
@@ -753,7 +751,7 @@ class SandboxCompareImagesTool(_SandboxVisionBaseTool):
         self,
         image1_path: str,
         image2_path: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "compare_images",
             {
@@ -860,7 +858,7 @@ except Exception as e:
 def build_sandbox_vision_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build sandbox vision tools for a thread.
 

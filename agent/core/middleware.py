@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 from langchain_core.messages import BaseMessage, ToolMessage
 
@@ -58,7 +59,7 @@ async def async_retry_call(
     return None
 
 
-def enforce_tool_call_limit(state: Dict[str, Any], limit: int) -> None:
+def enforce_tool_call_limit(state: dict[str, Any], limit: int) -> None:
     """
     Increment and enforce per-run tool call limit stored on state.
     limit=0 means unlimited.
@@ -71,7 +72,7 @@ def enforce_tool_call_limit(state: Dict[str, Any], limit: int) -> None:
         raise RuntimeError(f"Tool call limit exceeded ({count}/{limit})")
 
 
-def maybe_strip_tool_messages(messages: List[BaseMessage]) -> List[BaseMessage]:
+def maybe_strip_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
     """
     Optionally remove ToolMessage from history to save tokens.
     """
@@ -80,7 +81,7 @@ def maybe_strip_tool_messages(messages: List[BaseMessage]) -> List[BaseMessage]:
     return [m for m in messages if not isinstance(m, ToolMessage)]
 
 
-def mask_old_observations(messages: List[BaseMessage]) -> List[BaseMessage]:
+def mask_old_observations(messages: list[BaseMessage]) -> list[BaseMessage]:
     """
     Hybrid observation masking: keep recent tool observations in full,
     replace older ones with compact placeholders.
@@ -106,7 +107,7 @@ def mask_old_observations(messages: List[BaseMessage]) -> List[BaseMessage]:
     # The last `window` ToolMessages stay intact; older ones get masked
     keep_set = set(tool_indices[-window:]) if window else set()
 
-    result: List[BaseMessage] = []
+    result: list[BaseMessage] = []
     for i, msg in enumerate(messages):
         if isinstance(msg, ToolMessage) and i not in keep_set:
             content = getattr(msg, "content", "") or ""

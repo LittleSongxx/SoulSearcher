@@ -17,19 +17,16 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional
-from urllib.parse import quote_plus, urljoin
+from typing import Any, Literal, Optional
+from urllib.parse import quote_plus
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-
-from common.config import settings
 
 from .sandbox_browser_session import sandbox_browser_sessions
 
@@ -82,7 +79,7 @@ def _safe_page_text(page, *, max_chars: int = 5000) -> str:
     if budget <= 0:
         return ""
 
-    parts: List[str] = []
+    parts: list[str] = []
     try:
         text = page.inner_text("body", timeout=2000) or ""
         if text:
@@ -102,7 +99,7 @@ def _safe_page_text(page, *, max_chars: int = 5000) -> str:
     return joined[:budget]
 
 
-def _looks_like_antibot_challenge(page, engine_config: Optional[Dict[str, str]] = None) -> bool:
+def _looks_like_antibot_challenge(page, engine_config: Optional[dict[str, str]] = None) -> bool:
     """
     Heuristic detection for anti-bot interstitials (captcha / "are you human" pages).
 
@@ -166,8 +163,8 @@ def _looks_like_antibot_challenge(page, engine_config: Optional[Dict[str, str]] 
     return False
 
 
-def _tavily_to_results(tavily_results: Any, max_results: int) -> List[Dict[str, Any]]:
-    fallback_results: List[Dict[str, Any]] = []
+def _tavily_to_results(tavily_results: Any, max_results: int) -> list[dict[str, Any]]:
+    fallback_results: list[dict[str, Any]] = []
     if not isinstance(tavily_results, list):
         return fallback_results
     for idx, item in enumerate(tavily_results[:max_results], 1):
@@ -186,7 +183,7 @@ def _tavily_to_results(tavily_results: Any, max_results: int) -> List[Dict[str, 
     return fallback_results
 
 
-def _normalize_api_results(results: Any, max_results: int) -> List[Dict[str, Any]]:
+def _normalize_api_results(results: Any, max_results: int) -> list[dict[str, Any]]:
     """
     Normalize results from different API search providers into the sandbox schema.
 
@@ -195,7 +192,7 @@ def _normalize_api_results(results: Any, max_results: int) -> List[Dict[str, Any
     if not isinstance(results, list):
         return []
 
-    normalized: List[Dict[str, Any]] = []
+    normalized: list[dict[str, Any]] = []
     for idx, item in enumerate(results[: max(1, int(max_results or 10))], 1):
         if not isinstance(item, dict):
             continue
@@ -228,7 +225,7 @@ def _normalize_api_results(results: Any, max_results: int) -> List[Dict[str, Any
 
 
 def _render_results_html(
-    query: str, results: List[Dict[str, Any]], *, source: str = "tavily"
+    query: str, results: list[dict[str, Any]], *, source: str = "tavily"
 ) -> str:
     """Render a simple HTML page to visualize search results (avoids captcha pages)."""
     import html as _html
@@ -474,7 +471,7 @@ class SearchResults:
 
     query: str
     engine: str
-    results: List[SearchResult] = field(default_factory=list)
+    results: list[SearchResult] = field(default_factory=list)
     total_results: int = 0
     screenshot_url: Optional[str] = None
     page_url: Optional[str] = None
@@ -507,7 +504,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
     def _page(self):
         return self._session().get_page()
 
-    def _page_info(self) -> Dict[str, str]:
+    def _page_info(self) -> dict[str, str]:
         page = self._page()
         title = ""
         try:
@@ -525,7 +522,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
         self,
         action: str,
         full_page: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Take screenshot, save to disk, and return URL (base64 fallback)."""
         page = self._page()
         try:
@@ -534,7 +531,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
             )
         except TypeError:
             png_bytes = page.screenshot(full_page=bool(full_page))
-        result: Dict[str, Any] = {"mime_type": "image/png"}
+        result: dict[str, Any] = {"mime_type": "image/png"}
 
         if self.save_screenshots:
             service = _get_screenshot_service()
@@ -563,7 +560,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
 
         return result
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event (synchronous version)."""
         if not self.emit_events:
             return
@@ -578,7 +575,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
         except Exception as e:
             logger.warning(f"[sandbox_search] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event and return start time."""
         start_time = time.time()
         self._emit_event(
@@ -595,7 +592,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -612,7 +609,7 @@ class _SandboxWebSearchBaseTool(BaseTool):
             },
         )
 
-    def _emit_screenshot(self, screenshot_data: Dict[str, Any], action: str) -> None:
+    def _emit_screenshot(self, screenshot_data: dict[str, Any], action: str) -> None:
         """Emit screenshot event (URL preferred, base64 fallback)."""
         url = screenshot_data.get("screenshot_url")
         image = screenshot_data.get("image")
@@ -685,10 +682,10 @@ class SandboxWebSearchTool(_SandboxWebSearchBaseTool):
         engine: str = "duckduckgo",
         max_results: int = 10,
         wait_ms: int = 2000,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute the search."""
 
-        def _impl() -> Dict[str, Any]:
+        def _impl() -> dict[str, Any]:
             start_time = self._emit_tool_start(
                 "search",
                 {
@@ -910,9 +907,9 @@ class SandboxWebSearchTool(_SandboxWebSearchBaseTool):
     def _parse_search_results(
         self,
         page,
-        config: Dict[str, str],
+        config: dict[str, str],
         max_results: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Parse search results from the page."""
         results = []
 
@@ -1014,7 +1011,7 @@ class SandboxSearchAndClickTool(_SandboxWebSearchBaseTool):
         result_index: int = 1,
         engine: str = "duckduckgo",
         wait_ms: int = 3000,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return sandbox_browser_sessions.run_sync(
             self.thread_id,
             self._run_impl,
@@ -1030,7 +1027,7 @@ class SandboxSearchAndClickTool(_SandboxWebSearchBaseTool):
         result_index: int = 1,
         engine: str = "duckduckgo",
         wait_ms: int = 3000,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute search and click."""
         start_time = self._emit_tool_start(
             "search_and_click",
@@ -1078,8 +1075,8 @@ class SandboxSearchAndClickTool(_SandboxWebSearchBaseTool):
                 clicked_url = str(clicked.get("url") or "")
                 clicked_title = str(clicked.get("title") or "")
 
-                search_screenshot: Dict[str, Any] = {}
-                dest_screenshot: Dict[str, Any] = {}
+                search_screenshot: dict[str, Any] = {}
+                dest_screenshot: dict[str, Any] = {}
                 destination_error: Optional[str] = None
 
                 try:
@@ -1256,7 +1253,7 @@ class SandboxSearchAndClickTool(_SandboxWebSearchBaseTool):
             tavily_results = tavily_search.invoke(
                 {"query": query, "max_results": max(10, int(result_index or 1))}
             )
-            fallback_results: List[Dict[str, Any]] = []
+            fallback_results: list[dict[str, Any]] = []
             if isinstance(tavily_results, list):
                 for idx, item in enumerate(tavily_results[: max(10, int(result_index or 1))], 1):
                     if not isinstance(item, dict):
@@ -1279,8 +1276,8 @@ class SandboxSearchAndClickTool(_SandboxWebSearchBaseTool):
             clicked_url = str(clicked.get("url") or "")
             clicked_title = str(clicked.get("title") or "")
 
-            search_screenshot: Dict[str, Any] = {}
-            dest_screenshot: Dict[str, Any] = {}
+            search_screenshot: dict[str, Any] = {}
+            dest_screenshot: dict[str, Any] = {}
             destination_error: Optional[str] = None
 
             try:
@@ -1370,14 +1367,14 @@ class SandboxExtractSearchResultsTool(_SandboxWebSearchBaseTool):
     )
     args_schema: type[BaseModel] = SandboxExtractSearchResultsInput
 
-    def _run(self, max_results: int = 10) -> Dict[str, Any]:
+    def _run(self, max_results: int = 10) -> dict[str, Any]:
         return sandbox_browser_sessions.run_sync(
             self.thread_id,
             self._run_impl,
             max_results=max_results,
         )
 
-    def _run_impl(self, max_results: int = 10) -> Dict[str, Any]:
+    def _run_impl(self, max_results: int = 10) -> dict[str, Any]:
         """Extract results from current page."""
         start_time = self._emit_tool_start("extract_results", {"max_results": max_results})
 
@@ -1441,9 +1438,9 @@ class SandboxExtractSearchResultsTool(_SandboxWebSearchBaseTool):
     def _parse_results_with_config(
         self,
         page,
-        config: Dict[str, str],
+        config: dict[str, str],
         max_results: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Parse using search engine config."""
         results = []
 
@@ -1500,7 +1497,7 @@ class SandboxExtractSearchResultsTool(_SandboxWebSearchBaseTool):
 
         return results
 
-    def _parse_results_generic(self, page, max_results: int) -> List[Dict[str, Any]]:
+    def _parse_results_generic(self, page, max_results: int) -> list[dict[str, Any]]:
         """Generic result extraction."""
         results = []
 
@@ -1549,7 +1546,7 @@ def build_sandbox_web_search_tools(
     thread_id: str,
     emit_events: bool = True,
     save_screenshots: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build sandbox web search tools for a thread.
 

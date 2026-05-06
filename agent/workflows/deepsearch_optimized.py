@@ -24,7 +24,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -33,26 +33,21 @@ from langchain_openai import ChatOpenAI
 from agent.core.llm_factory import create_chat_model
 from agent.core.reflexion import extract_reflexion_focus, generate_reflexion_feedback
 from agent.core.search_cache import get_search_cache
-from agent.workflows.domain_router import ResearchDomain, build_provider_profile
-from agent.workflows.evidence_passages import split_into_passages
-from agent.workflows.knowledge_gap import KnowledgeGapAnalyzer
+from agent.workflows.brief_coverage import build_brief_coverage_artifact
 from agent.workflows.citation_artifacts import (
     build_citation_annotations,
     build_timeline_artifacts,
 )
-from agent.workflows.brief_coverage import build_brief_coverage_artifact
 from agent.workflows.claim_ledger import (
     build_claim_ledger,
     format_claim_ledger_for_writer,
     serialize_claim_checks,
     summarize_claim_checks,
 )
+from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
+from agent.workflows.domain_router import ResearchDomain, build_provider_profile
 from agent.workflows.evidence import build_evidence_items
-from agent.workflows.fact_cards import (
-    build_fact_cards,
-    format_fact_cards_for_writer,
-    repair_citations_with_fact_cards,
-)
+from agent.workflows.evidence_passages import split_into_passages
 from agent.workflows.evidence_providers import (
     build_evidence_providers,
     build_provider_capability_artifact,
@@ -60,7 +55,12 @@ from agent.workflows.evidence_providers import (
     merge_provider_results,
     search_with_evidence_providers,
 )
-from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
+from agent.workflows.fact_cards import (
+    build_fact_cards,
+    format_fact_cards_for_writer,
+    repair_citations_with_fact_cards,
+)
+from agent.workflows.knowledge_gap import KnowledgeGapAnalyzer
 from agent.workflows.model_context_policy import build_deepsearch_context_policy
 from agent.workflows.parsing_utils import format_search_results, parse_list_output
 from agent.workflows.quality_gates import (
@@ -75,13 +75,18 @@ from agent.workflows.query_strategy import (
     is_time_sensitive_topic,
     summarize_freshness,
 )
-from agent.workflows.research_reflection import gap_queries_from_quality_gates
-from agent.workflows.research_brief import ResearchBrief, brief_topic, build_research_brief
+from agent.workflows.report_plan import (
+    build_sectioned_report_artifact,
+    build_sectioned_report_plan,
+)
+from agent.workflows.research_brief import (
+    brief_topic,
+    build_research_brief,
+)
 from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_artifact
+from agent.workflows.research_reflection import gap_queries_from_quality_gates
 from agent.workflows.research_task_runtime import ResearchTaskRuntime
-from agent.workflows.structural_text import is_structural_text
 from agent.workflows.research_tree import TreeExplorationBudgetExceeded, TreeExplorer
-from agent.workflows.report_plan import build_sectioned_report_artifact, build_sectioned_report_plan
 from agent.workflows.sectioned_report import (
     apply_sectioned_report_review,
     build_section_search_query,
@@ -89,9 +94,14 @@ from agent.workflows.sectioned_report import (
     grade_section_content,
 )
 from agent.workflows.source_curator import curate_sources
-from agent.workflows.source_url_utils import canonicalize_source_url, compact_unique_sources
+from agent.workflows.source_routing import build_source_routing_policy
+from agent.workflows.source_url_utils import (
+    canonicalize_source_url,
+    compact_unique_sources,
+)
 from agent.workflows.stage_metrics import StageMetricsRecorder, warn_slow_stages
 from agent.workflows.strategy_selector import select_deepsearch_strategy
+from agent.workflows.structural_text import is_structural_text
 from agent.workflows.supervisor_workers import (
     build_intermediate_steps,
     build_worker_run,
@@ -187,7 +197,7 @@ _BROAD_RESEARCH_CUES = (
 )
 
 
-def _check_cancel(state: Dict[str, Any]) -> None:
+def _check_cancel(state: dict[str, Any]) -> None:
     """Respect cancellation flags/tokens."""
     if state.get("is_cancelled"):
         raise asyncio.CancelledError("Task was cancelled (flag)")
@@ -208,7 +218,7 @@ def _normalize_deepsearch_mode(value: Any) -> str:
     return "auto"
 
 
-def _resolve_deepsearch_mode(config: Dict[str, Any]) -> str:
+def _resolve_deepsearch_mode(config: dict[str, Any]) -> str:
     """
     Resolve deepsearch mode with precedence:
     1. request/configurable.deepsearch_mode
@@ -223,14 +233,14 @@ def _resolve_deepsearch_mode(config: Dict[str, Any]) -> str:
     return _normalize_deepsearch_mode(getattr(settings, "deepsearch_mode", "auto"))
 
 
-def _configurable_value(config: Dict[str, Any], key: str) -> Any:
+def _configurable_value(config: dict[str, Any], key: str) -> Any:
     cfg = config.get("configurable") or {}
     if isinstance(cfg, dict):
         return cfg.get(key)
     return None
 
 
-def _configurable_int(config: Dict[str, Any], key: str, default: int) -> int:
+def _configurable_int(config: dict[str, Any], key: str, default: int) -> int:
     value = _configurable_value(config, key)
     if value is None:
         return default
@@ -240,7 +250,7 @@ def _configurable_int(config: Dict[str, Any], key: str, default: int) -> int:
         return default
 
 
-def _configurable_float(config: Dict[str, Any], key: str, default: float) -> float:
+def _configurable_float(config: dict[str, Any], key: str, default: float) -> float:
     value = _configurable_value(config, key)
     if value is None:
         return default
@@ -250,7 +260,7 @@ def _configurable_float(config: Dict[str, Any], key: str, default: float) -> flo
         return default
 
 
-def _configurable_bool(config: Dict[str, Any], key: str, default: bool) -> bool:
+def _configurable_bool(config: dict[str, Any], key: str, default: bool) -> bool:
     value = _configurable_value(config, key)
     if value is None:
         return bool(default)
@@ -259,7 +269,7 @@ def _configurable_bool(config: Dict[str, Any], key: str, default: bool) -> bool:
     return bool(value)
 
 
-def _browser_visualization_enabled(config: Dict[str, Any]) -> bool:
+def _browser_visualization_enabled(config: dict[str, Any]) -> bool:
     value = _configurable_value(config, "deepsearch_visualize_browser")
     if value is None:
         return bool(getattr(settings, "deepsearch_visualize_browser", True))
@@ -300,9 +310,9 @@ def _resolve_search_strategy() -> SearchStrategy:
 
 
 def _normalize_multi_search_results(
-    results: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    normalized: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
     for r in results:
         if not isinstance(r, dict):
             continue
@@ -340,7 +350,7 @@ def _normalize_multi_search_results(
     return normalized
 
 
-def _resolve_provider_profile(state: Dict[str, Any]) -> Optional[List[str]]:
+def _resolve_provider_profile(state: dict[str, Any]) -> Optional[list[str]]:
     """Build provider profile from domain routing metadata if present."""
     domain_config = state.get("domain_config") or {}
     suggested_sources = domain_config.get("suggested_sources", [])
@@ -358,9 +368,9 @@ def _cache_query_key(
     query: str,
     max_results: int,
     strategy: SearchStrategy,
-    provider_profile: Optional[List[str]] = None,
+    provider_profile: Optional[list[str]] = None,
 ) -> str:
-    profile = ",".join((provider_profile or []))
+    profile = ",".join(provider_profile or [])
     return f"deepsearch::{strategy.value}::{max_results}::{profile}::{query}"
 
 
@@ -370,7 +380,7 @@ def _estimate_tokens_from_text(text: str) -> int:
     return max(1, len(str(text)) // 4)
 
 
-def _estimate_tokens_from_results(results: List[Dict[str, Any]]) -> int:
+def _estimate_tokens_from_results(results: list[dict[str, Any]]) -> int:
     tokens = 0
     for result in results or []:
         if not isinstance(result, dict):
@@ -418,9 +428,9 @@ def _should_skip_expensive_postprocessing(
 def _search_query(
     query: str,
     max_results: int,
-    config: Dict[str, Any],
-    provider_profile: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    config: dict[str, Any],
+    provider_profile: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """Search with multi-provider orchestration first, then Tavily fallback."""
     strategy = _resolve_search_strategy()
     cache = get_search_cache()
@@ -431,7 +441,7 @@ def _search_query(
         return copy.deepcopy(cached)
 
     try:
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "query": query,
             "max_results": max_results,
             "strategy": strategy,
@@ -462,7 +472,7 @@ def _search_query(
         return []
 
 
-def _selected_model(config: Dict[str, Any], fallback: str) -> str:
+def _selected_model(config: dict[str, Any], fallback: str) -> str:
     cfg = config.get("configurable") or {}
     if isinstance(cfg, dict):
         val = cfg.get("model")
@@ -471,7 +481,7 @@ def _selected_model(config: Dict[str, Any], fallback: str) -> str:
     return fallback
 
 
-def _selected_reasoning_model(config: Dict[str, Any], fallback: str) -> str:
+def _selected_reasoning_model(config: dict[str, Any], fallback: str) -> str:
     cfg = config.get("configurable") or {}
     if isinstance(cfg, dict):
         val = cfg.get("reasoning_model")
@@ -480,7 +490,7 @@ def _selected_reasoning_model(config: Dict[str, Any], fallback: str) -> str:
     return fallback
 
 
-def _model_for_task(task_type: str, config: Dict[str, Any]) -> str:
+def _model_for_task(task_type: str, config: dict[str, Any]) -> str:
     """
     Get model name for a specific task type using the ModelRouter.
 
@@ -504,12 +514,12 @@ def _model_for_task(task_type: str, config: Dict[str, Any]) -> str:
 def _generate_queries(
     llm: ChatOpenAI,
     topic: str,
-    have_query: List[str],
-    summary_notes: List[str],
+    have_query: list[str],
+    summary_notes: list[str],
     query_num: int,
-    config: Dict[str, Any],
-    missing_topics: Optional[List[str]] = None,
-) -> List[str]:
+    config: dict[str, Any],
+    missing_topics: Optional[list[str]] = None,
+) -> list[str]:
     """Generate new search queries based on topic, existing knowledge, and knowledge gaps.
 
     If missing_topics is provided (from gap analysis), prioritizes those areas.
@@ -532,7 +542,7 @@ def _generate_queries(
     queries = _parse_list_output(content)
     # Deduplicate and trim
     seen = set(q.lower() for q in have_query)
-    clean: List[str] = []
+    clean: list[str] = []
     for q in queries:
         if not q:
             continue
@@ -554,12 +564,12 @@ def _generate_queries(
 def _pick_relevant_urls(
     llm: ChatOpenAI,
     topic: str,
-    summary_notes: List[str],
-    results: List[Dict[str, Any]],
+    summary_notes: list[str],
+    results: list[dict[str, Any]],
     max_urls: int,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     selected_urls_set: set,  # Use set for O(1) lookup
-) -> List[str]:
+) -> list[str]:
     """Pick relevant URLs from search results, excluding already selected ones."""
     if not results:
         return []
@@ -600,7 +610,7 @@ def _pick_relevant_urls(
         ]
 
     # Clamp and dedupe
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for u in urls:
         if not isinstance(u, str):
@@ -618,10 +628,10 @@ def _pick_relevant_urls(
 def _summarize_new_knowledge(
     llm: ChatOpenAI,
     topic: str,
-    summary_notes: List[str],
-    chosen_results: List[Dict[str, Any]],
-    config: Dict[str, Any],
-) -> Tuple[bool, str]:
+    summary_notes: list[str],
+    chosen_results: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> tuple[bool, str]:
     """Summarize new knowledge and judge if information is sufficient."""
     if not chosen_results:
         return False, ""
@@ -649,8 +659,8 @@ def _summarize_new_knowledge(
 def _final_report(
     llm: ChatOpenAI,
     topic: str,
-    summary_notes: List[str],
-    config: Dict[str, Any],
+    summary_notes: list[str],
+    config: dict[str, Any],
     *,
     sources: str = "",
 ) -> str:
@@ -666,10 +676,10 @@ def _final_report(
 
 
 def _reorder_search_runs_for_citations(
-    search_runs: List[Dict[str, Any]],
+    search_runs: list[dict[str, Any]],
     *,
-    preferred_urls: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    preferred_urls: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
     """
     Stable reorder to improve citation/source relevance.
 
@@ -697,8 +707,8 @@ def _reorder_search_runs_for_citations(
         if not preferred_canonical:
             return list(search_runs)
 
-        preferred_runs: List[Dict[str, Any]] = []
-        other_runs: List[Dict[str, Any]] = []
+        preferred_runs: list[dict[str, Any]] = []
+        other_runs: list[dict[str, Any]] = []
 
         for run in search_runs:
             if not isinstance(run, dict):
@@ -708,8 +718,8 @@ def _reorder_search_runs_for_citations(
             if not isinstance(results, list):
                 results = []
 
-            preferred_results: List[Any] = []
-            other_results: List[Any] = []
+            preferred_results: list[Any] = []
+            other_results: list[Any] = []
             for r in results:
                 if not isinstance(r, dict):
                     other_results.append(r)
@@ -741,10 +751,18 @@ def _canonical_text_url(value: Any) -> str:
     return canonicalize_source_url(value) or str(value or "").strip()
 
 
-def _item_snippet(item: Dict[str, Any]) -> str:
+def _item_snippet(item: dict[str, Any]) -> str:
     if not isinstance(item, dict):
         return ""
-    for key in ("snippet", "quote", "text", "summary", "content", "raw_excerpt", "markdown"):
+    for key in (
+        "snippet",
+        "quote",
+        "text",
+        "summary",
+        "content",
+        "raw_excerpt",
+        "markdown",
+    ):
         text = _inline_text(item.get(key))
         if text:
             return text
@@ -761,18 +779,24 @@ def _is_low_value_evidence_text(text: str) -> bool:
         return True
     if "verify you are human" in lowered:
         return True
-    if "cookie" in lowered and any(token in lowered for token in ("accept", "consent", "preferences", "manage cookies")):
+    if "cookie" in lowered and any(
+        token in lowered
+        for token in ("accept", "consent", "preferences", "manage cookies")
+    ):
         return True
     return False
 
 
-def _split_claim_sentences(text: str) -> List[str]:
-    sentences: List[str] = []
+def _split_claim_sentences(text: str) -> list[str]:
+    sentences: list[str] = []
     for line in str(text or "").splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        parts = [match.group(0) for match in re.finditer(r".+?(?:[。！？!?]|[.!?](?=\s|$))|.+$", stripped)]
+        parts = [
+            match.group(0)
+            for match in re.finditer(r".+?(?:[。！？!?]|[.!?](?=\s|$))|.+$", stripped)
+        ]
         if parts:
             sentences.extend(part.strip() for part in parts if part.strip())
         else:
@@ -793,7 +817,7 @@ _CITATION_REF_PATTERN = re.compile(
 )
 
 
-def _evidence_rank(item: Dict[str, Any]) -> float:
+def _evidence_rank(item: dict[str, Any]) -> float:
     if not isinstance(item, dict):
         return -1e9
     snippet = _item_snippet(item)
@@ -801,7 +825,11 @@ def _evidence_rank(item: Dict[str, Any]) -> float:
         return -1e9
     score = 0.0
     try:
-        score += float(item.get("quality_score") if item.get("quality_score") is not None else item.get("score") or 0.0)
+        score += float(
+            item.get("quality_score")
+            if item.get("quality_score") is not None
+            else item.get("score") or 0.0
+        )
     except (TypeError, ValueError):
         pass
     source_type = str(item.get("source_type") or "").lower()
@@ -829,23 +857,31 @@ def _evidence_rank(item: Dict[str, Any]) -> float:
 def _has_quantitative_signal(text: str) -> bool:
     value = str(text or "")
     return bool(
-        re.search(r"\d{4}|\d+%|\d+\.\d+|\b(?:data|statistics|benchmark|survey|report)\b|数据|统计|基准|报告", value, re.IGNORECASE)
+        re.search(
+            r"\d{4}|\d+%|\d+\.\d+|\b(?:data|statistics|benchmark|survey|report)\b|数据|统计|基准|报告",
+            value,
+            re.IGNORECASE,
+        )
     )
 
 
 def _filter_and_cap_evidence_items(
-    evidence_items: List[Dict[str, Any]],
-    config: Dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+    config: dict[str, Any],
     *,
     cap_key: str = "deepsearch_evidence_item_cap",
     default_cap: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     if not evidence_items:
         return []
     cap = _configurable_int(
         config,
         cap_key,
-        int(default_cap if default_cap is not None else getattr(settings, cap_key, 160) or 160),
+        int(
+            default_cap
+            if default_cap is not None
+            else getattr(settings, cap_key, 160) or 160
+        ),
     )
     min_chars = max(
         0,
@@ -855,8 +891,8 @@ def _filter_and_cap_evidence_items(
             int(getattr(settings, "deepsearch_min_evidence_snippet_chars", 40) or 40),
         ),
     )
-    ranked: List[Tuple[float, int, Dict[str, Any]]] = []
-    fallback: List[Tuple[float, int, Dict[str, Any]]] = []
+    ranked: list[tuple[float, int, dict[str, Any]]] = []
+    fallback: list[tuple[float, int, dict[str, Any]]] = []
     seen = set()
     for idx, item in enumerate(evidence_items or []):
         if not isinstance(item, dict):
@@ -865,7 +901,14 @@ def _filter_and_cap_evidence_items(
         url = _canonical_text_url(item.get("url"))
         key = str(item.get("id") or "").strip()
         if not key:
-            key = "|".join([url, str(item.get("document_id") or ""), str(item.get("content_ref") or ""), snippet[:160]])
+            key = "|".join(
+                [
+                    url,
+                    str(item.get("document_id") or ""),
+                    str(item.get("content_ref") or ""),
+                    snippet[:160],
+                ]
+            )
         if not key or key in seen:
             continue
         seen.add(key)
@@ -883,12 +926,18 @@ def _filter_and_cap_evidence_items(
     else:
         selected = rows[:cap]
         if len(selected) < min(cap, 5):
-            selected.extend(sorted(fallback, key=lambda row: (-row[0], row[1]))[: max(0, min(cap, 5) - len(selected))])
+            selected.extend(
+                sorted(fallback, key=lambda row: (-row[0], row[1]))[
+                    : max(0, min(cap, 5) - len(selected))
+                ]
+            )
     selected.sort(key=lambda row: row[1])
     return [item for _score, _idx, item in selected]
 
 
-def _cap_passages(passages: List[Dict[str, Any]], config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _cap_passages(
+    passages: list[dict[str, Any]], config: dict[str, Any]
+) -> list[dict[str, Any]]:
     if not passages:
         return []
     cap = _configurable_int(
@@ -913,8 +962,8 @@ def _cap_passages(passages: List[Dict[str, Any]], config: Dict[str, Any]) -> Lis
     return [item for _score, _idx, item in selected]
 
 
-def _source_index_by_canonical(sources: List[Dict[str, Any]]) -> Dict[str, int]:
-    mapping: Dict[str, int] = {}
+def _source_index_by_canonical(sources: list[dict[str, Any]]) -> dict[str, int]:
+    mapping: dict[str, int] = {}
     for idx, source in enumerate(sources or [], 1):
         if not isinstance(source, dict):
             continue
@@ -927,12 +976,12 @@ def _source_index_by_canonical(sources: List[Dict[str, Any]]) -> Dict[str, int]:
 
 def _source_evidence_snippets(
     *,
-    evidence_items: Optional[List[Dict[str, Any]]] = None,
-    passages: Optional[List[Dict[str, Any]]] = None,
+    evidence_items: Optional[list[dict[str, Any]]] = None,
+    passages: Optional[list[dict[str, Any]]] = None,
     max_per_source: int = 2,
-) -> Dict[str, List[str]]:
-    snippets: Dict[str, List[str]] = {}
-    rows: List[Dict[str, Any]] = []
+) -> dict[str, list[str]]:
+    snippets: dict[str, list[str]] = {}
+    rows: list[dict[str, Any]] = []
     rows.extend([item for item in evidence_items or [] if isinstance(item, dict)])
     rows.extend([item for item in passages or [] if isinstance(item, dict)])
     for item in rows:
@@ -951,16 +1000,16 @@ def _source_evidence_snippets(
 
 def _format_grounding_evidence_block(
     *,
-    results: Optional[List[Dict[str, Any]]] = None,
-    evidence_items: Optional[List[Dict[str, Any]]] = None,
-    sources: Optional[List[Dict[str, Any]]] = None,
-    config: Optional[Dict[str, Any]] = None,
+    results: Optional[list[dict[str, Any]]] = None,
+    evidence_items: Optional[list[dict[str, Any]]] = None,
+    sources: Optional[list[dict[str, Any]]] = None,
+    config: Optional[dict[str, Any]] = None,
     limit: int = 8,
 ) -> str:
     config = config or {}
     source_indices = _source_index_by_canonical(sources or [])
-    rows: List[Tuple[float, int, str]] = []
-    combined: List[Dict[str, Any]] = []
+    rows: list[tuple[float, int, str]] = []
+    combined: list[dict[str, Any]] = []
     combined.extend([item for item in evidence_items or [] if isinstance(item, dict)])
     combined.extend([item for item in results or [] if isinstance(item, dict)])
     for idx, item in enumerate(combined):
@@ -969,11 +1018,23 @@ def _format_grounding_evidence_block(
             continue
         url = _canonical_text_url(item.get("url"))
         ref = source_indices.get(url)
-        title = _inline_text(item.get("title") or item.get("page_title") or item.get("name")) or "Evidence"
-        evidence_id = _inline_text(item.get("id") or item.get("evidence_id") or item.get("content_ref") or item.get("snippet_hash"))
+        title = (
+            _inline_text(
+                item.get("title") or item.get("page_title") or item.get("name")
+            )
+            or "Evidence"
+        )
+        evidence_id = _inline_text(
+            item.get("id")
+            or item.get("evidence_id")
+            or item.get("content_ref")
+            or item.get("snippet_hash")
+        )
         prefix = f"[{ref}]" if isinstance(ref, int) else "未编号来源"
         suffix = f" evidence_id={evidence_id}" if evidence_id else ""
-        rows.append((_evidence_rank(item), idx, f"- {prefix} {title}: {snippet[:420]}{suffix}"))
+        rows.append(
+            (_evidence_rank(item), idx, f"- {prefix} {title}: {snippet[:420]}{suffix}")
+        )
     rows.sort(key=lambda row: (-row[0], row[1]))
     cap = max(
         1,
@@ -983,17 +1044,19 @@ def _format_grounding_evidence_block(
             int(getattr(settings, "deepsearch_section_evidence_cap", limit) or limit),
         ),
     )
-    return "\n".join(line for _score, _idx, line in rows[: min(cap, max(1, limit))]).strip()
+    return "\n".join(
+        line for _score, _idx, line in rows[: min(cap, max(1, limit))]
+    ).strip()
 
 
 def _format_sources_for_writer(
-    sources: List[Dict[str, Any]],
-    search_runs: List[Dict[str, Any]],
+    sources: list[dict[str, Any]],
+    search_runs: list[dict[str, Any]],
     *,
     limit: int,
-    evidence_items: Optional[List[Dict[str, Any]]] = None,
-    passages: Optional[List[Dict[str, Any]]] = None,
-    fact_cards: Optional[List[Dict[str, Any]]] = None,
+    evidence_items: Optional[list[dict[str, Any]]] = None,
+    passages: Optional[list[dict[str, Any]]] = None,
+    fact_cards: Optional[list[dict[str, Any]]] = None,
 ) -> str:
     """
     Render sources into a compact, numbered block for the writer prompt.
@@ -1007,7 +1070,7 @@ def _format_sources_for_writer(
     max_count = max(1, int(limit or 0)) if limit else len(sources)
     rendered_sources = sources[:max_count]
 
-    snippet_by_canonical: Dict[str, str] = {}
+    snippet_by_canonical: dict[str, str] = {}
     try:
         from agent.workflows.source_registry import SourceRegistry
 
@@ -1041,15 +1104,17 @@ def _format_sources_for_writer(
     except Exception:
         snippet_by_canonical = {}
 
-    source_evidence = _source_evidence_snippets(evidence_items=evidence_items, passages=passages)
-    fact_cards_by_source: Dict[int, List[Dict[str, Any]]] = {}
+    source_evidence = _source_evidence_snippets(
+        evidence_items=evidence_items, passages=passages
+    )
+    fact_cards_by_source: dict[int, list[dict[str, Any]]] = {}
     for card in fact_cards or []:
         if not isinstance(card, dict):
             continue
         source_index = card.get("source_index")
         if isinstance(source_index, int):
             fact_cards_by_source.setdefault(source_index, []).append(card)
-    lines: List[str] = []
+    lines: list[str] = []
     for idx, src in enumerate(rendered_sources, 1):
         if not isinstance(src, dict):
             continue
@@ -1101,7 +1166,7 @@ def _format_sources_for_writer(
 
 def _append_auto_references(
     report: str,
-    sources: List[Dict[str, Any]],
+    sources: list[dict[str, Any]],
     *,
     limit: int,
 ) -> str:
@@ -1115,7 +1180,7 @@ def _append_auto_references(
     max_count = max(1, int(limit or 0)) if limit else len(sources)
     rendered_sources = sources[:max_count]
 
-    items: List[str] = []
+    items: list[str] = []
     for idx, src in enumerate(rendered_sources, 1):
         if not isinstance(src, dict):
             continue
@@ -1132,8 +1197,8 @@ def _append_auto_references(
     return report.rstrip() + "\n\n" + block + "\n"
 
 
-def _source_urls_for_fetch(sources: List[Dict[str, Any]], *, limit: int) -> List[str]:
-    urls: List[str] = []
+def _source_urls_for_fetch(sources: list[dict[str, Any]], *, limit: int) -> list[str]:
+    urls: list[str] = []
     seen = set()
     for source in sources or []:
         if not isinstance(source, dict):
@@ -1149,7 +1214,9 @@ def _source_urls_for_fetch(sources: List[Dict[str, Any]], *, limit: int) -> List
     return urls
 
 
-def _estimate_citation_coverage(report: str, *, max_missing: Optional[int] = 5) -> Tuple[List[str], float]:
+def _estimate_citation_coverage(
+    report: str, *, max_missing: Optional[int] = 5
+) -> tuple[list[str], float]:
     if not report:
         return [], 1.0
     body = report.split("## 参考来源（自动生成）", 1)[0]
@@ -1161,8 +1228,8 @@ def _estimate_citation_coverage(report: str, *, max_missing: Optional[int] = 5) 
         r"according to|report|study|data|shows|found|announced",
         r"报告显示|研究显示|数据显示|统计显示|公告|发布|罚款|强制执行|义务将|法案规定|法案要求",
     )
-    claim_like: List[str] = []
-    uncited: List[str] = []
+    claim_like: list[str] = []
+    uncited: list[str] = []
     for line in body.splitlines():
         line_text = re.sub(r"\s+", " ", line).strip()
         if not line_text or is_structural_text(line, line_text):
@@ -1171,7 +1238,9 @@ def _estimate_citation_coverage(report: str, *, max_missing: Optional[int] = 5) 
         line_trailing_citation = False
         if citation_matches:
             tail = line_text[citation_matches[-1].end() :].strip()
-            line_trailing_citation = not tail or bool(re.fullmatch(r"[。！？.!?）)]*", tail))
+            line_trailing_citation = not tail or bool(
+                re.fullmatch(r"[。！？.!?）)]*", tail)
+            )
         for sentence in _split_claim_sentences(line_text):
             text = re.sub(r"\s+", " ", sentence).strip()
             if is_structural_text(sentence, text):
@@ -1180,7 +1249,9 @@ def _estimate_citation_coverage(report: str, *, max_missing: Optional[int] = 5) 
                 continue
             if any(re.search(marker, text, flags=re.IGNORECASE) for marker in markers):
                 claim_like.append(text)
-                if not line_trailing_citation and not _CITATION_REF_PATTERN.search(text):
+                if not line_trailing_citation and not _CITATION_REF_PATTERN.search(
+                    text
+                ):
                     uncited.append(text)
     if not claim_like:
         return [], 1.0
@@ -1194,12 +1265,12 @@ def _estimate_citation_coverage(report: str, *, max_missing: Optional[int] = 5) 
 
 def _verify_report_claims(
     report: str,
-    search_runs: List[Dict[str, Any]],
+    search_runs: list[dict[str, Any]],
     *,
-    passages: Optional[List[Dict[str, Any]]] = None,
-    fetched_pages: Optional[List[Dict[str, Any]]] = None,
-    config: Optional[Dict[str, Any]] = None,
-) -> Tuple[List[Any], List[Dict[str, Any]], Dict[str, int]]:
+    passages: Optional[list[dict[str, Any]]] = None,
+    fetched_pages: Optional[list[dict[str, Any]]] = None,
+    config: Optional[dict[str, Any]] = None,
+) -> tuple[list[Any], list[dict[str, Any]], dict[str, int]]:
     config = config or {}
     from agent.workflows.claim_verifier import ClaimVerifier
 
@@ -1207,12 +1278,18 @@ def _verify_report_claims(
         min_overlap_tokens=_configurable_int(
             config,
             "deepsearch_claim_verifier_min_overlap_tokens",
-            int(getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2),
+            int(
+                getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2)
+                or 2
+            ),
         ),
         max_evidence_per_claim=_configurable_int(
             config,
             "deepsearch_claim_verifier_max_evidence_per_claim",
-            int(getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3),
+            int(
+                getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3)
+                or 3
+            ),
         ),
     )
     use_passages = _configurable_bool(
@@ -1222,7 +1299,9 @@ def _verify_report_claims(
     )
     verifier_passages = list(passages or [])
     if fetched_pages:
-        verifier_passages.extend(page for page in fetched_pages if isinstance(page, dict))
+        verifier_passages.extend(
+            page for page in fetched_pages if isinstance(page, dict)
+        )
     checks = verifier.verify_report(
         report,
         search_runs,
@@ -1231,7 +1310,9 @@ def _verify_report_claims(
             _configurable_int(
                 config,
                 "deepsearch_claim_verifier_max_claims",
-                int(getattr(settings, "deepsearch_claim_verifier_max_claims", 10) or 10),
+                int(
+                    getattr(settings, "deepsearch_claim_verifier_max_claims", 10) or 10
+                ),
             ),
         ),
         passages=verifier_passages if use_passages and verifier_passages else None,
@@ -1244,14 +1325,15 @@ def _revise_report_for_claim_failures(
     *,
     topic: str,
     report: str,
-    claims: List[Dict[str, Any]],
+    claims: list[dict[str, Any]],
     sources: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> str:
     failing = [
         claim
         for claim in claims or []
-        if isinstance(claim, dict) and claim.get("status") in {"unsupported", "contradicted"}
+        if isinstance(claim, dict)
+        and claim.get("status") in {"unsupported", "contradicted"}
     ]
     if not failing:
         return report
@@ -1318,9 +1400,9 @@ def _claim_text_matches(sentence: str, claim: str) -> bool:
 
 def _apply_claim_grounding_gate(
     report: str,
-    claims: List[Dict[str, Any]],
-    config: Dict[str, Any],
-) -> Tuple[str, Dict[str, Any]]:
+    claims: list[dict[str, Any]],
+    config: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
     if not _configurable_bool(
         config,
         "deepsearch_claim_grounding_gate_enabled",
@@ -1330,21 +1412,23 @@ def _apply_claim_grounding_gate(
     failing = [
         str(claim.get("claim") or "").strip()
         for claim in claims or []
-        if isinstance(claim, dict) and claim.get("status") in {"unsupported", "contradicted"} and str(claim.get("claim") or "").strip()
+        if isinstance(claim, dict)
+        and claim.get("status") in {"unsupported", "contradicted"}
+        and str(claim.get("claim") or "").strip()
     ]
     if not failing or not report:
         return report, {"enabled": True, "removed_claim_count": 0}
     reference_heading = "## 参考来源（自动生成）"
     body, sep, refs = report.partition(reference_heading)
     removed = 0
-    output_lines: List[str] = []
+    output_lines: list[str] = []
     for line in body.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             output_lines.append(line)
             continue
         sentences = _split_claim_sentences(line)
-        kept: List[str] = []
+        kept: list[str] = []
         for sentence in sentences:
             if any(_claim_text_matches(sentence, claim) for claim in failing):
                 removed += 1
@@ -1358,36 +1442,49 @@ def _apply_claim_grounding_gate(
         revised = "未保留可验证的声明。"
     if sep:
         revised = f"{revised}\n\n{reference_heading}{refs}"
-    return (revised if removed else report), {"enabled": True, "removed_claim_count": removed}
+    return (revised if removed else report), {
+        "enabled": True,
+        "removed_claim_count": removed,
+    }
 
 
-def _citation_refs_from_trailing_line(line_text: str) -> List[str]:
+def _citation_refs_from_trailing_line(line_text: str) -> list[str]:
     citation_matches = list(_CITATION_REF_PATTERN.finditer(line_text))
     if not citation_matches:
         return []
     tail = line_text[citation_matches[-1].end() :].strip()
     if tail and not re.fullmatch(r"[。！？.!?）)]*", tail):
         return []
-    return [match.group(0) for match in citation_matches if match.group(0).startswith("[")]
+    return [
+        match.group(0) for match in citation_matches if match.group(0).startswith("[")
+    ]
 
 
-def _append_refs_to_uncited_line(line: str, refs: List[str]) -> str:
+def _append_refs_to_uncited_line(line: str, refs: list[str]) -> str:
     if not refs or _CITATION_REF_PATTERN.search(line):
         return line
     marker = "".join(dict.fromkeys(refs))
     match = re.search(r"([。！？.!?])(\s*)$", line)
     if match:
-        return f"{line[:match.start()].rstrip()}{marker}{match.group(1)}{match.group(2)}"
+        return (
+            f"{line[:match.start()].rstrip()}{marker}{match.group(1)}{match.group(2)}"
+        )
     return f"{line.rstrip()}{marker}"
 
 
-def _repair_citations_from_local_context(report: str, missing_claims: List[str], *, max_context_lines: int = 16) -> str:
-    missing = [str(claim or "").strip() for claim in missing_claims or [] if str(claim or "").strip()]
+def _repair_citations_from_local_context(
+    report: str, missing_claims: list[str], *, max_context_lines: int = 16
+) -> str:
+    missing = [
+        str(claim or "").strip()
+        for claim in missing_claims or []
+        if str(claim or "").strip()
+    ]
     if not report or not missing:
         return report
     missing_keys = {re.sub(r"\s+", " ", claim).strip() for claim in missing}
-    output: List[str] = []
-    recent_refs: List[str] = []
+    output: list[str] = []
+    recent_refs: list[str] = []
     recent_age = max_context_lines + 1
     for line in report.splitlines():
         line_text = re.sub(r"\s+", " ", line).strip()
@@ -1404,7 +1501,9 @@ def _repair_citations_from_local_context(report: str, missing_claims: List[str],
             and not _CITATION_REF_PATTERN.search(line_text)
             and any(claim in line_text for claim in missing_keys)
         )
-        repaired_line = _append_refs_to_uncited_line(line, recent_refs) if should_repair else line
+        repaired_line = (
+            _append_refs_to_uncited_line(line, recent_refs) if should_repair else line
+        )
         output.append(repaired_line)
         if current_refs:
             recent_refs = current_refs[-4:]
@@ -1420,9 +1519,9 @@ def _repair_report_citations(
     topic: str,
     report: str,
     sources: str,
-    missing_claims: List[str],
+    missing_claims: list[str],
     citation_coverage: float,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> str:
     if not missing_claims:
         return report
@@ -1435,7 +1534,9 @@ def _repair_report_citations(
     min_coverage = _configurable_float(
         config,
         "deepsearch_citation_repair_min_coverage",
-        float(getattr(settings, "deepsearch_citation_repair_min_coverage", 0.85) or 0.85),
+        float(
+            getattr(settings, "deepsearch_citation_repair_min_coverage", 0.85) or 0.85
+        ),
     )
     if citation_coverage >= min_coverage:
         return report
@@ -1472,13 +1573,13 @@ def _write_section_content(
     llm: ChatOpenAI,
     *,
     topic: str,
-    section: Dict[str, Any],
-    summary_notes: List[str],
-    section_results: List[Dict[str, Any]],
-    section_evidence: Optional[List[Dict[str, Any]]] = None,
-    report_sources: Optional[List[Dict[str, Any]]] = None,
+    section: dict[str, Any],
+    summary_notes: list[str],
+    section_results: list[dict[str, Any]],
+    section_evidence: Optional[list[dict[str, Any]]] = None,
+    report_sources: Optional[list[dict[str, Any]]] = None,
     sources: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> str:
     title = str(section.get("title") or "Section").strip()
     focus = str(section.get("focus") or title).strip()
@@ -1490,7 +1591,9 @@ def _write_section_content(
             int(getattr(settings, "deepsearch_section_results_cap", 6) or 6),
         ),
     )
-    evidence_text = _format_results(section_results[:section_result_cap]) if section_results else ""
+    evidence_text = (
+        _format_results(section_results[:section_result_cap]) if section_results else ""
+    )
     grounding_text = _format_grounding_evidence_block(
         results=section_results,
         evidence_items=section_evidence,
@@ -1548,17 +1651,17 @@ def _write_section_content(
 
 def _execute_sectioned_report_flow(
     *,
-    report_plan: Dict[str, Any],
+    report_plan: dict[str, Any],
     topic: str,
-    config: Dict[str, Any],
-    evidence_providers: List[Any],
+    config: dict[str, Any],
+    evidence_providers: list[Any],
     writer_llm: ChatOpenAI,
-    summary_notes: List[str],
+    summary_notes: list[str],
     sources_block: str,
-    report_sources: Optional[List[Dict[str, Any]]] = None,
+    report_sources: Optional[list[dict[str, Any]]] = None,
     per_query_results: int,
     emitter: Any,
-) -> Tuple[Dict[str, Any], str, List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> tuple[dict[str, Any], str, list[dict[str, Any]], list[dict[str, Any]]]:
     sectioned_report = build_sectioned_report_artifact(report_plan, config)
     if not sectioned_report.get("enabled"):
         return sectioned_report, "", [], []
@@ -1579,7 +1682,9 @@ def _execute_sectioned_report_flow(
         }
     )
     if not review_state.get("should_execute"):
-        sectioned_report["status"] = review_state.get("review_status") or "pending_approval"
+        sectioned_report["status"] = (
+            review_state.get("review_status") or "pending_approval"
+        )
         sectioned_report["execution_mode"] = "pending_review"
         return sectioned_report, "", [], []
 
@@ -1599,11 +1704,15 @@ def _execute_sectioned_report_flow(
             int(getattr(settings, "deepsearch_section_followups", 1) or 1),
         ),
     )
-    if _configurable_bool(
-        config,
-        "deepsearch_sectioned_report_adaptive",
-        bool(getattr(settings, "deepsearch_sectioned_report_adaptive", True)),
-    ) and _configurable_value(config, "deepsearch_sectioned_report_max_sections") is None:
+    if (
+        _configurable_bool(
+            config,
+            "deepsearch_sectioned_report_adaptive",
+            bool(getattr(settings, "deepsearch_sectioned_report_adaptive", True)),
+        )
+        and _configurable_value(config, "deepsearch_sectioned_report_max_sections")
+        is None
+    ):
         max_sections = min(
             max_sections,
             max(
@@ -1611,16 +1720,27 @@ def _execute_sectioned_report_flow(
                 _configurable_int(
                     config,
                     "deepsearch_sectioned_report_adaptive_max_sections",
-                    int(getattr(settings, "deepsearch_sectioned_report_adaptive_max_sections", 5) or 5),
+                    int(
+                        getattr(
+                            settings,
+                            "deepsearch_sectioned_report_adaptive_max_sections",
+                            5,
+                        )
+                        or 5
+                    ),
                 ),
             ),
         )
     min_chars = max(1, _configurable_int(config, "deepsearch_section_min_chars", 120))
-    min_evidence = max(0, _configurable_int(config, "deepsearch_section_min_evidence", 1))
-    section_results: List[Dict[str, Any]] = []
-    section_search_runs: List[Dict[str, Any]] = []
-    section_evidence_items: List[Dict[str, Any]] = []
-    for order, section in enumerate((review_state.get("sections") or [])[:max_sections], 1):
+    min_evidence = max(
+        0, _configurable_int(config, "deepsearch_section_min_evidence", 1)
+    )
+    section_results: list[dict[str, Any]] = []
+    section_search_runs: list[dict[str, Any]] = []
+    section_evidence_items: list[dict[str, Any]] = []
+    for order, section in enumerate(
+        (review_state.get("sections") or [])[:max_sections], 1
+    ):
         if not isinstance(section, dict):
             continue
         section_id = str(section.get("section_id") or f"section_{order}")
@@ -1628,11 +1748,16 @@ def _execute_sectioned_report_flow(
         _emit_event(
             emitter,
             "section_start",
-            {"section_id": section_id, "title": title, "order": order, "mode": "sectioned_report"},
+            {
+                "section_id": section_id,
+                "title": title,
+                "order": order,
+                "mode": "sectioned_report",
+            },
         )
-        search_queries: List[str] = []
-        results: List[Dict[str, Any]] = []
-        evidence: List[Dict[str, Any]] = []
+        search_queries: list[str] = []
+        results: list[dict[str, Any]] = []
+        evidence: list[dict[str, Any]] = []
         if bool(section.get("research_required", True)):
             query = build_section_search_query(topic, section)
             search_queries.append(query)
@@ -1646,7 +1771,14 @@ def _execute_sectioned_report_flow(
                         _configurable_int(
                             config,
                             "deepsearch_section_results_cap",
-                            int(getattr(settings, "deepsearch_section_results_cap", per_query_results) or per_query_results),
+                            int(
+                                getattr(
+                                    settings,
+                                    "deepsearch_section_results_cap",
+                                    per_query_results,
+                                )
+                                or per_query_results
+                            ),
                         ),
                     ),
                 ),
@@ -1658,7 +1790,9 @@ def _execute_sectioned_report_flow(
                     merge_provider_evidence(provider_outputs),
                     config,
                     cap_key="deepsearch_section_evidence_cap",
-                    default_cap=int(getattr(settings, "deepsearch_section_evidence_cap", 8) or 8),
+                    default_cap=int(
+                        getattr(settings, "deepsearch_section_evidence_cap", 8) or 8
+                    ),
                 )
             )
             section_search_runs.append(
@@ -1683,13 +1817,17 @@ def _execute_sectioned_report_flow(
             sources=sources_block,
             config=config,
         )
-        grade = grade_section_content(section, content, evidence, min_chars=min_chars, min_evidence=min_evidence)
-        follow_up_queries: List[str] = []
+        grade = grade_section_content(
+            section, content, evidence, min_chars=min_chars, min_evidence=min_evidence
+        )
+        follow_up_queries: list[str] = []
         followups_used = 0
         while grade.get("status") == "fail" and followups_used < max_followups:
             followups_used += 1
             reason = ",".join(grade.get("reasons") or ["insufficient_section_quality"])
-            follow_query = build_section_search_query(topic, section, follow_up_reason=reason)
+            follow_query = build_section_search_query(
+                topic, section, follow_up_reason=reason
+            )
             follow_up_queries.append(follow_query)
             provider_outputs = search_with_evidence_providers(
                 providers=evidence_providers,
@@ -1701,7 +1839,14 @@ def _execute_sectioned_report_flow(
                         _configurable_int(
                             config,
                             "deepsearch_section_results_cap",
-                            int(getattr(settings, "deepsearch_section_results_cap", per_query_results) or per_query_results),
+                            int(
+                                getattr(
+                                    settings,
+                                    "deepsearch_section_results_cap",
+                                    per_query_results,
+                                )
+                                or per_query_results
+                            ),
                         ),
                     ),
                 ),
@@ -1712,7 +1857,9 @@ def _execute_sectioned_report_flow(
                 merge_provider_evidence(provider_outputs),
                 config,
                 cap_key="deepsearch_section_evidence_cap",
-                default_cap=int(getattr(settings, "deepsearch_section_evidence_cap", 8) or 8),
+                default_cap=int(
+                    getattr(settings, "deepsearch_section_evidence_cap", 8) or 8
+                ),
             )
             results.extend(follow_results)
             evidence.extend(follow_evidence)
@@ -1739,7 +1886,13 @@ def _execute_sectioned_report_flow(
                 sources=sources_block,
                 config=config,
             )
-            grade = grade_section_content(section, content, evidence, min_chars=min_chars, min_evidence=min_evidence)
+            grade = grade_section_content(
+                section,
+                content,
+                evidence,
+                min_chars=min_chars,
+                min_evidence=min_evidence,
+            )
         section_evidence_items.extend(evidence)
         section_payload = {
             "section_id": section_id,
@@ -1783,10 +1936,15 @@ def _execute_sectioned_report_flow(
             "compiled_report_chars": len(compiled_report),
         }
     )
-    return sectioned_report, compiled_report, section_search_runs, section_evidence_items
+    return (
+        sectioned_report,
+        compiled_report,
+        section_search_runs,
+        section_evidence_items,
+    )
 
 
-def _hydrate_with_crawler(results: List[Dict[str, Any]]) -> None:
+def _hydrate_with_crawler(results: list[dict[str, Any]]) -> None:
     """Enrich results in-place with crawled content when Tavily lacks body text."""
     if not settings.deepsearch_enable_crawler or not results:
         return
@@ -1813,9 +1971,9 @@ def _hydrate_with_crawler(results: List[Dict[str, Any]]) -> None:
 
 
 def _build_fetcher_evidence(
-    urls: List[str],
-    config: Optional[Dict[str, Any]] = None,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    urls: list[str],
+    config: Optional[dict[str, Any]] = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     config = config or {}
     if not _configurable_bool(
         config,
@@ -1857,7 +2015,7 @@ def _build_fetcher_evidence(
             return True
         return False
 
-    def _passage_quality_score(passage: Dict[str, Any]) -> float:
+    def _passage_quality_score(passage: dict[str, Any]) -> float:
         text = passage.get("text") or ""
         if not isinstance(text, str):
             text = str(text)
@@ -1879,11 +2037,11 @@ def _build_fetcher_evidence(
         return float(score)
 
     def _select_passages(
-        passages: List[Dict[str, Any]], *, max_count: int
-    ) -> List[Dict[str, Any]]:
+        passages: list[dict[str, Any]], *, max_count: int
+    ) -> list[dict[str, Any]]:
         if not passages:
             return []
-        scored: List[tuple[float, Dict[str, Any]]] = [
+        scored: list[tuple[float, dict[str, Any]]] = [
             (_passage_quality_score(p), p) for p in passages
         ]
         candidates = [(s, p) for s, p in scored if s > -1e8]
@@ -1919,9 +2077,9 @@ def _build_fetcher_evidence(
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
     fetcher = ContentFetcher()
-    fetched_pages: List[Dict[str, Any]] = []
-    passages: List[Dict[str, Any]] = []
-    canonical_urls: List[str] = []
+    fetched_pages: list[dict[str, Any]] = []
+    passages: list[dict[str, Any]] = []
+    canonical_urls: list[str] = []
     seen: set = set()
     for url in urls or []:
         canonical_url = canonicalize_source_url(url)
@@ -1966,8 +2124,8 @@ def _safe_filename(name: str) -> str:
 
 
 def _build_quality_diagnostics(
-    topic: str, queries: List[str], search_runs: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+    topic: str, queries: list[str], search_runs: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Build query-coverage and freshness diagnostics for deepsearch runs."""
     query_coverage = analyze_query_coverage(queries)
     freshness_summary = summarize_freshness(search_runs)
@@ -2007,13 +2165,13 @@ def _build_quality_diagnostics(
 
 def _record_quality_gates(
     *,
-    diagnostics: Dict[str, Any],
-    quality_gate_history: List[Dict[str, Any]],
+    diagnostics: dict[str, Any],
+    quality_gate_history: list[dict[str, Any]],
     emitter: Any,
     epoch: int,
     stage: str,
-    quality_summary: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+    quality_summary: Optional[dict[str, Any]] = None,
+) -> list[dict[str, Any]]:
     gates = evaluate_quality_gates(
         diagnostics,
         quality_summary=quality_summary or {},
@@ -2034,8 +2192,8 @@ def _record_quality_gates(
     return serialized
 
 
-def _missing_topics_from_gate_payload(gates: List[Dict[str, Any]]) -> List[str]:
-    topics: List[str] = []
+def _missing_topics_from_gate_payload(gates: list[dict[str, Any]]) -> list[str]:
+    topics: list[str] = []
     seen = set()
     for gate in gates or []:
         if not isinstance(gate, dict):
@@ -2054,8 +2212,10 @@ def _missing_topics_from_gate_payload(gates: List[Dict[str, Any]]) -> List[str]:
     return topics
 
 
-def _merge_evidence_item_payloads(*groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    merged: List[Dict[str, Any]] = []
+def _merge_evidence_item_payloads(
+    *groups: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
     seen = set()
     for group in groups:
         for item in group or []:
@@ -2080,12 +2240,12 @@ def _merge_evidence_item_payloads(*groups: List[Dict[str, Any]]) -> List[Dict[st
 
 
 def _enrich_evidence_reliability_from_sources(
-    evidence_items: List[Dict[str, Any]],
-    sources: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    evidence_items: list[dict[str, Any]],
+    sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     if not evidence_items or not sources:
         return list(evidence_items or [])
-    source_scores: Dict[str, Tuple[Any, Any]] = {}
+    source_scores: dict[str, tuple[Any, Any]] = {}
     for source in sources or []:
         if not isinstance(source, dict):
             continue
@@ -2097,7 +2257,7 @@ def _enrich_evidence_reliability_from_sources(
                 source_scores[canonical] = (score, reasons)
     if not source_scores:
         return list(evidence_items or [])
-    enriched: List[Dict[str, Any]] = []
+    enriched: list[dict[str, Any]] = []
     for item in evidence_items or []:
         if not isinstance(item, dict):
             continue
@@ -2118,17 +2278,21 @@ def _enrich_evidence_reliability_from_sources(
 def _prewrite_gap_followup_queries(
     *,
     topic: str,
-    brief_coverage: Dict[str, Any],
+    brief_coverage: dict[str, Any],
     max_queries: int,
-) -> List[str]:
-    missing_fields = brief_coverage.get("missing_fields") if isinstance(brief_coverage, dict) else []
-    queries: List[str] = []
+) -> list[str]:
+    missing_fields = (
+        brief_coverage.get("missing_fields") if isinstance(brief_coverage, dict) else []
+    )
+    queries: list[str] = []
     seen = set()
     for field in missing_fields or []:
         text = str(field or "").strip()
         if not text:
             continue
-        query = re.sub(r"\s+", " ", f"{topic} {text} official evidence data sources").strip()
+        query = re.sub(
+            r"\s+", " ", f"{topic} {text} official evidence data sources"
+        ).strip()
         key = query.lower()
         if key in seen:
             continue
@@ -2140,11 +2304,11 @@ def _prewrite_gap_followup_queries(
 
 
 def _strategy_payload(
-    state: Dict[str, Any],
+    state: dict[str, Any],
     *,
     fallback_strategy: str,
     fallback_reason: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     decision = state.get("deepsearch_strategy_decision")
     if isinstance(decision, dict):
         payload = dict(decision)
@@ -2154,9 +2318,10 @@ def _strategy_payload(
     payload.setdefault("reason", fallback_reason)
     return payload
 
-def _merge_focus_hints(*hint_groups: Any, max_items: int = 6) -> List[str]:
+
+def _merge_focus_hints(*hint_groups: Any, max_items: int = 6) -> list[str]:
     limit = max(1, int(max_items or 1))
-    merged: List[str] = []
+    merged: list[str] = []
     seen = set()
 
     for group in hint_groups:
@@ -2185,8 +2350,8 @@ def _merge_focus_hints(*hint_groups: Any, max_items: int = 6) -> List[str]:
 
 
 def _quality_focus_hints(
-    diagnostics: Optional[Dict[str, Any]], max_items: int = 4
-) -> List[str]:
+    diagnostics: Optional[dict[str, Any]], max_items: int = 4
+) -> list[str]:
     data = diagnostics if isinstance(diagnostics, dict) else {}
     missing_dimensions = data.get("query_dimensions_missing", []) or []
     dimension_hints = {
@@ -2197,7 +2362,7 @@ def _quality_focus_hints(
         "implementation": "具体案例、交易结构与执行细节",
     }
 
-    hints: List[str] = [
+    hints: list[str] = [
         dimension_hints[str(dimension).strip().lower()]
         for dimension in missing_dimensions
         if str(dimension).strip().lower() in dimension_hints
@@ -2219,14 +2384,14 @@ def _run_progress_reflexion(
     topic: str,
     mode: str,
     round_num: int,
-    queries: List[str],
-    summary_notes: List[str],
-    diagnostics: Dict[str, Any],
-    chosen_results: List[Dict[str, Any]],
+    queries: list[str],
+    summary_notes: list[str],
+    diagnostics: dict[str, Any],
+    chosen_results: list[dict[str, Any]],
     llm: Any,
-    config: Dict[str, Any],
-    extra_focus: Optional[List[str]] = None,
-) -> Tuple[Optional[str], List[str]]:
+    config: dict[str, Any],
+    extra_focus: Optional[list[str]] = None,
+) -> tuple[Optional[str], list[str]]:
     progress_parts = [
         f"MODE: {mode}",
         f"ROUND: {round_num}",
@@ -2316,18 +2481,18 @@ def _run_progress_reflexion(
 
 def _build_reflexion_queries(
     topic: str,
-    focus_hints: List[str],
-    have_query: List[str],
+    focus_hints: list[str],
+    have_query: list[str],
     *,
     limit: int,
-) -> List[str]:
+) -> list[str]:
     max_queries = max(1, int(limit or 1))
     seen = {
         re.sub(r"\s+", " ", str(query or "")).strip().lower()
         for query in (have_query or [])
         if str(query or "").strip()
     }
-    queries: List[str] = []
+    queries: list[str] = []
 
     for hint in _merge_focus_hints(focus_hints, max_items=max_queries * 2):
         if topic and hint.lower() not in str(topic).lower():
@@ -2354,14 +2519,14 @@ def _build_reflexion_queries(
 
 
 def _build_feature_trace(
-    state: Dict[str, Any],
-    config: Dict[str, Any],
+    state: dict[str, Any],
+    config: dict[str, Any],
     *,
     executed_mode: str,
-    reflexion_feedbacks: Optional[List[str]] = None,
-    reflexion_focus: Optional[List[str]] = None,
-    backtrack_events: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[str, Any]:
+    reflexion_feedbacks: Optional[list[str]] = None,
+    reflexion_focus: Optional[list[str]] = None,
+    backtrack_events: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     runtime_cfg = cfg if isinstance(cfg, dict) else {}
     search_mode = runtime_cfg.get("search_mode") or {}
@@ -2415,7 +2580,7 @@ def _build_feature_trace(
     }
 
 
-def _resolve_event_emitter(state: Dict[str, Any], config: Dict[str, Any]) -> Any:
+def _resolve_event_emitter(state: dict[str, Any], config: dict[str, Any]) -> Any:
     """Resolve thread-scoped emitter if available (best effort)."""
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     thread_id = ""
@@ -2434,7 +2599,7 @@ def _resolve_event_emitter(state: Dict[str, Any], config: Dict[str, Any]) -> Any
         return None
 
 
-def _emit_event(emitter: Any, event_type: str, data: Dict[str, Any]) -> None:
+def _emit_event(emitter: Any, event_type: str, data: dict[str, Any]) -> None:
     """Emit an event from sync context without interrupting deepsearch flow."""
     if emitter is None:
         return
@@ -2445,13 +2610,13 @@ def _emit_event(emitter: Any, event_type: str, data: Dict[str, Any]) -> None:
 
 
 def _compact_search_results(
-    results: List[Dict[str, Any]], limit: int = 5
-) -> List[Dict[str, Any]]:
+    results: list[dict[str, Any]], limit: int = 5
+) -> list[dict[str, Any]]:
     return compact_unique_sources(results, limit=limit)
 
 
-def _provider_breakdown(results: List[Dict[str, Any]]) -> Dict[str, int]:
-    counts: Dict[str, int] = {}
+def _provider_breakdown(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
     for item in results or []:
         if not isinstance(item, dict):
             continue
@@ -2468,9 +2633,9 @@ def _event_results_limit() -> int:
 
 def _save_deepsearch_data(
     topic: str,
-    have_query: List[str],
-    summary_notes: List[str],
-    search_runs: List[Dict[str, Any]],
+    have_query: list[str],
+    summary_notes: list[str],
+    search_runs: list[dict[str, Any]],
     final_report: str,
     epoch: int,
 ) -> str:
@@ -2504,8 +2669,8 @@ def _save_deepsearch_data(
 
 
 def run_deepsearch_optimized(
-    state: Dict[str, Any], config: Dict[str, Any]
-) -> Dict[str, Any]:
+    state: dict[str, Any], config: dict[str, Any]
+) -> dict[str, Any]:
     """
     Optimized iterative deep-search pipeline.
 
@@ -2517,7 +2682,12 @@ def run_deepsearch_optimized(
     5. Maintains all_searched_urls and selected_urls
     """
     brief = build_research_brief(state, config)
+    source_routing = build_source_routing_policy(
+        brief=brief, config=config, state=state
+    )
+    brief.source_routing = source_routing
     state["research_brief"] = brief.to_dict()
+    state["source_routing"] = source_routing
     topic = brief.clarified_goal or state.get("input", "")
     topic_for_planning = brief_topic(brief)
     _check_cancel(state)
@@ -2567,12 +2737,12 @@ def run_deepsearch_optimized(
         _model_for_task("gap_analysis", config), temperature=0.2
     )
 
-    have_query: List[str] = []
-    summary_notes: List[str] = []
-    search_runs: List[Dict[str, Any]] = []
-    provider_evidence_items: List[Dict[str, Any]] = []
-    reflexion_feedbacks: List[str] = []
-    reflexion_focus_hints: List[str] = []
+    have_query: list[str] = []
+    summary_notes: list[str] = []
+    search_runs: list[dict[str, Any]] = []
+    provider_evidence_items: list[dict[str, Any]] = []
+    reflexion_feedbacks: list[str] = []
+    reflexion_focus_hints: list[str] = []
     provider_profile = _resolve_provider_profile(state)
     evidence_providers = build_evidence_providers(
         brief=brief,
@@ -2582,12 +2752,12 @@ def run_deepsearch_optimized(
     )
 
     # URL deduplication mechanism - use set for O(1) lookup
-    all_searched_urls: List[str] = []  # Ordered list for logging
+    all_searched_urls: list[str] = []  # Ordered list for logging
     all_searched_urls_set: set = set()  # Fast lookup
-    selected_urls: List[str] = []  # Already crawled URLs
+    selected_urls: list[str] = []  # Already crawled URLs
     selected_urls_set: set = set()  # Fast lookup
-    fetched_pages: List[Dict[str, Any]] = []
-    passages: List[Dict[str, Any]] = []
+    fetched_pages: list[dict[str, Any]] = []
+    passages: list[dict[str, Any]] = []
 
     logger.info(f"[deepsearch] topic='{topic}' epochs={max_epochs}")
     logger.info("[deepsearch] 开始优化版深度搜索")
@@ -2597,13 +2767,15 @@ def run_deepsearch_optimized(
     budget_stop_reason = ""
     emitter = _resolve_event_emitter(state, config)
     visualize_browser = _browser_visualization_enabled(config)
-    quality_gate_history: List[Dict[str, Any]] = []
+    quality_gate_history: list[dict[str, Any]] = []
     strategy_payload = _strategy_payload(
         state,
         fallback_strategy="linear",
         fallback_reason="explicit linear pipeline or auto fallback",
     )
-    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "linear"})
+    _emit_event(
+        emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "linear"}
+    )
     _emit_event(
         emitter,
         "strategy_selected",
@@ -2645,7 +2817,12 @@ def run_deepsearch_optimized(
                 query_start = time.time()
                 missing_topics = state.get("missing_topics", []) if epoch > 0 else []
                 queries = _generate_queries(
-                    planner_llm, topic_for_planning, have_query, summary_notes, query_num, config,
+                    planner_llm,
+                    topic_for_planning,
+                    have_query,
+                    summary_notes,
+                    query_num,
+                    config,
                     missing_topics=missing_topics,
                 )
                 if epoch == 0 and query_num > 1 and topic not in queries:
@@ -2663,7 +2840,7 @@ def run_deepsearch_optimized(
 
                 # ⏱️ Step 2: 并行搜索
                 search_start = time.time()
-                combined_results: List[Dict[str, Any]] = []
+                combined_results: list[dict[str, Any]] = []
                 for q in queries:
                     _check_cancel(state)
                     budget_stop_reason = _budget_stop_reason(
@@ -2702,7 +2879,9 @@ def run_deepsearch_optimized(
                         config=config,
                     )
                     results = merge_provider_results(provider_outputs)
-                    provider_evidence_items.extend(merge_provider_evidence(provider_outputs))
+                    provider_evidence_items.extend(
+                        merge_provider_evidence(provider_outputs)
+                    )
                     tokens_used += _estimate_tokens_from_results(results)
                     combined_results.extend(results)
                     search_runs.append(
@@ -2769,7 +2948,9 @@ def run_deepsearch_optimized(
 
                 if not combined_results:
                     logger.info(f"[deepsearch] Epoch {epoch + 1}: 无搜索结果，跳过本轮")
-                    epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+                    epoch_diagnostics = _build_quality_diagnostics(
+                        topic, have_query, search_runs
+                    )
                     gate_results = _record_quality_gates(
                         diagnostics=epoch_diagnostics,
                         quality_gate_history=quality_gate_history,
@@ -2777,7 +2958,9 @@ def run_deepsearch_optimized(
                         epoch=epoch + 1,
                         stage="epoch",
                     )
-                    gate_missing_topics = _missing_topics_from_gate_payload(gate_results)
+                    gate_missing_topics = _missing_topics_from_gate_payload(
+                        gate_results
+                    )
                     if gate_missing_topics:
                         state["missing_topics"] = gate_missing_topics
                     _emit_event(
@@ -2813,7 +2996,7 @@ def run_deepsearch_optimized(
                     config,
                     selected_urls_set,  # Pass set for O(1) lookup
                 )
-                normalized_chosen_urls: List[str] = []
+                normalized_chosen_urls: list[str] = []
                 normalized_chosen_set = set()
                 for url in chosen_urls:
                     canonical_url = canonicalize_source_url(url)
@@ -2832,14 +3015,17 @@ def run_deepsearch_optimized(
                     for r in combined_results
                     if isinstance(r, dict)
                     and not canonicalize_source_url(r.get("url"))
-                    and str(r.get("source_type") or r.get("provider") or "").lower() in {"rag", "local"}
+                    and str(r.get("source_type") or r.get("provider") or "").lower()
+                    in {"rag", "local"}
                 ]
 
                 if not chosen_urls and not non_url_results:
                     logger.warning(
                         f"[deepsearch] Epoch {epoch + 1}: No new URLs available, skipping"
                     )
-                    epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+                    epoch_diagnostics = _build_quality_diagnostics(
+                        topic, have_query, search_runs
+                    )
                     gate_results = _record_quality_gates(
                         diagnostics=epoch_diagnostics,
                         quality_gate_history=quality_gate_history,
@@ -2847,7 +3033,9 @@ def run_deepsearch_optimized(
                         epoch=epoch + 1,
                         stage="epoch",
                     )
-                    gate_missing_topics = _missing_topics_from_gate_payload(gate_results)
+                    gate_missing_topics = _missing_topics_from_gate_payload(
+                        gate_results
+                    )
                     if gate_missing_topics:
                         state["missing_topics"] = gate_missing_topics
                     _emit_event(
@@ -3040,7 +3228,9 @@ def run_deepsearch_optimized(
                 logger.info(
                     f"[deepsearch] Epoch {epoch + 1}: 总耗时 {epoch_duration:.2f}s"
                 )
-                epoch_diagnostics = _build_quality_diagnostics(topic, have_query, search_runs)
+                epoch_diagnostics = _build_quality_diagnostics(
+                    topic, have_query, search_runs
+                )
                 gate_results = _record_quality_gates(
                     diagnostics=epoch_diagnostics,
                     quality_gate_history=quality_gate_history,
@@ -3086,7 +3276,7 @@ def run_deepsearch_optimized(
                 raise  # 继续向上抛出
             except Exception as e:
                 logger.error(
-                    f"[deepsearch] Epoch {epoch + 1} 失败: {str(e)}", exc_info=True
+                    f"[deepsearch] Epoch {epoch + 1} 失败: {e!s}", exc_info=True
                 )
                 logger.error(traceback.format_exc())
                 logger.info("[deepsearch] 继续下一轮搜索...")
@@ -3102,7 +3292,7 @@ def run_deepsearch_optimized(
         report_sources_limit = int(
             getattr(settings, "deepsearch_report_sources_limit", 20) or 20
         )
-        all_sources: List[Dict[str, Any]] = []
+        all_sources: list[dict[str, Any]] = []
         try:
             from agent.workflows.evidence_extractor import extract_message_sources
 
@@ -3221,7 +3411,9 @@ def run_deepsearch_optimized(
         # _build_run_evidence_summary reads these from quality_summary; without them
         # the evidence_summary endpoint returns None for these metrics.
         try:
-            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(final_report)
+            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(
+                final_report
+            )
             quality_summary["citation_coverage"] = _citation_coverage
             quality_summary["citation_coverage_score"] = _citation_coverage
             quality_summary["missing_citation_claims"] = _missing_citation_claims
@@ -3283,6 +3475,8 @@ def run_deepsearch_optimized(
         deepsearch_artifacts = {
             "mode": "linear",
             "research_brief": brief.to_dict(),
+            "source_routing": source_routing,
+            "source_collections": source_routing.get("collections", []),
             "strategy_decision": strategy_payload,
             "queries": have_query,
             "research_tree": None,
@@ -3355,8 +3549,8 @@ def run_deepsearch_optimized(
 
 
 def run_deepsearch_tree(
-    state: Dict[str, Any], config: Dict[str, Any]
-) -> Dict[str, Any]:
+    state: dict[str, Any], config: dict[str, Any]
+) -> dict[str, Any]:
     """
     Tree-based deep search pipeline.
 
@@ -3366,7 +3560,12 @@ def run_deepsearch_tree(
     Inspired by GPT Researcher's tree exploration approach.
     """
     brief = build_research_brief(state, config)
+    source_routing = build_source_routing_policy(
+        brief=brief, config=config, state=state
+    )
+    brief.source_routing = source_routing
     state["research_brief"] = brief.to_dict()
+    state["source_routing"] = source_routing
     topic = brief.clarified_goal or state.get("input", "")
     _check_cancel(state)
 
@@ -3418,15 +3617,17 @@ def run_deepsearch_tree(
     )
     provider_profile = _resolve_provider_profile(state)
     emitter = _resolve_event_emitter(state, config)
-    search_runs: List[Dict[str, Any]] = []
+    search_runs: list[dict[str, Any]] = []
     live_search_events_emitted = 0
-    quality_gate_history: List[Dict[str, Any]] = []
+    quality_gate_history: list[dict[str, Any]] = []
     strategy_payload = _strategy_payload(
         state,
         fallback_strategy="tree",
         fallback_reason="explicit tree pipeline or auto broad research selection",
     )
-    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "tree"})
+    _emit_event(
+        emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "tree"}
+    )
     _emit_event(
         emitter,
         "strategy_selected",
@@ -3450,11 +3651,11 @@ def run_deepsearch_tree(
     budget_stop_reason = ""
     tokens_used = _estimate_tokens_from_text(topic)
     searches_used = 0
-    reflexion_feedbacks: List[str] = []
-    reflexion_focus_hints: List[str] = []
+    reflexion_feedbacks: list[str] = []
+    reflexion_focus_hints: list[str] = []
     tree = None
-    have_query: List[str] = []
-    backtrack_events: List[Dict[str, Any]] = []
+    have_query: list[str] = []
+    backtrack_events: list[dict[str, Any]] = []
     merged_summary = ""
 
     budget_stop_reason = _budget_stop_reason(
@@ -3672,7 +3873,7 @@ def run_deepsearch_tree(
             # Budget stops can interrupt branch completion; fall back to a cheap synthesis so
             # we still generate a useful final report from partial search results.
             try:
-                flat_results: List[Dict[str, Any]] = []
+                flat_results: list[dict[str, Any]] = []
                 for run in search_runs[-min(10, len(search_runs)) :]:
                     if not isinstance(run, dict):
                         continue
@@ -3689,7 +3890,7 @@ def run_deepsearch_tree(
             except Exception:
                 merged_summary = ""
         raw_sources = explorer.get_all_sources()
-        all_sources: List[str] = []
+        all_sources: list[str] = []
         all_sources_set = set()
         for source in raw_sources:
             canonical_source = canonicalize_source_url(source)
@@ -3757,7 +3958,7 @@ def run_deepsearch_tree(
                     have_query,
                     limit=min(2, max(1, queries_per_branch)),
                 )
-                reflexion_results: List[Dict[str, Any]] = []
+                reflexion_results: list[dict[str, Any]] = []
                 for query in reflexion_queries:
                     try:
                         results = _tree_search(
@@ -3803,7 +4004,7 @@ def run_deepsearch_tree(
         report_sources_limit = int(
             getattr(settings, "deepsearch_report_sources_limit", 20) or 20
         )
-        extracted_sources: List[Dict[str, Any]] = []
+        extracted_sources: list[dict[str, Any]] = []
         try:
             from agent.workflows.evidence_extractor import extract_message_sources
 
@@ -3944,7 +4145,11 @@ def run_deepsearch_tree(
             checks = verifier.verify_report(
                 final_report,
                 search_runs,
-                passages=(list(passages or []) + list(fetched_pages or [])) if use_passages else None,
+                passages=(
+                    (list(passages or []) + list(fetched_pages or []))
+                    if use_passages
+                    else None
+                ),
             )
             claims = [
                 {
@@ -3962,7 +4167,9 @@ def run_deepsearch_tree(
 
         # ---- Patch quality_summary with citation_coverage & claim_verifier stats ----
         try:
-            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(final_report)
+            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(
+                final_report
+            )
             quality_summary["citation_coverage"] = _citation_coverage
             quality_summary["citation_coverage_score"] = _citation_coverage
             quality_summary["missing_citation_claims"] = _missing_citation_claims
@@ -4126,7 +4333,7 @@ def run_deepsearch_tree(
                 if isinstance(run, dict) and str(run.get("query") or "").strip()
             ]
 
-        partial_results: List[Dict[str, Any]] = []
+        partial_results: list[dict[str, Any]] = []
         for run in search_runs[-min(10, len(search_runs)) :]:
             if not isinstance(run, dict):
                 continue
@@ -4159,7 +4366,7 @@ def run_deepsearch_tree(
             backtrack_events=backtrack_events,
         )
 
-        extracted_sources: List[Dict[str, Any]] = []
+        extracted_sources: list[dict[str, Any]] = []
         try:
             from agent.workflows.evidence_extractor import extract_message_sources
 
@@ -4259,9 +4466,16 @@ def run_deepsearch_tree(
         }
 
 
-def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def run_deepsearch_reflection_loop(
+    state: dict[str, Any], config: dict[str, Any]
+) -> dict[str, Any]:
     brief = build_research_brief(state, config)
+    source_routing = build_source_routing_policy(
+        brief=brief, config=config, state=state
+    )
+    brief.source_routing = source_routing
     state["research_brief"] = brief.to_dict()
+    state["source_routing"] = source_routing
     topic = brief.clarified_goal or state.get("input", "")
     topic_for_planning = brief_topic(brief)
     _check_cancel(state)
@@ -4303,7 +4517,11 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
         fallback_strategy="reflection_loop",
         fallback_reason="low cost iterative reflection strategy",
     )
-    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "reflection_loop"})
+    _emit_event(
+        emitter,
+        "brief_created",
+        {"research_brief": brief.to_dict(), "mode": "reflection_loop"},
+    )
     _emit_event(
         emitter,
         "strategy_selected",
@@ -4311,11 +4529,11 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
     )
 
     start_ts = time.time()
-    have_query: List[str] = []
-    summary_notes: List[str] = []
-    search_runs: List[Dict[str, Any]] = []
-    provider_evidence_items: List[Dict[str, Any]] = []
-    quality_gate_history: List[Dict[str, Any]] = []
+    have_query: list[str] = []
+    summary_notes: list[str] = []
+    search_runs: list[dict[str, Any]] = []
+    provider_evidence_items: list[dict[str, Any]] = []
+    quality_gate_history: list[dict[str, Any]] = []
     current_query = topic
     loops_completed = 0
 
@@ -4355,7 +4573,13 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
                 }
             )
             provider_breakdown = _provider_breakdown(results)
-            provider_name = "multi" if len(provider_breakdown) > 1 else (next(iter(provider_breakdown)) if provider_breakdown else "unknown")
+            provider_name = (
+                "multi"
+                if len(provider_breakdown) > 1
+                else (
+                    next(iter(provider_breakdown)) if provider_breakdown else "unknown"
+                )
+            )
             _emit_event(
                 emitter,
                 "search",
@@ -4363,7 +4587,9 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
                     "query": current_query,
                     "provider": provider_name,
                     "provider_breakdown": provider_breakdown,
-                    "results": _compact_search_results(results, limit=_event_results_limit()),
+                    "results": _compact_search_results(
+                        results, limit=_event_results_limit()
+                    ),
                     "count": len(results),
                     "mode": "reflection_loop",
                     "epoch": loops_completed,
@@ -4401,8 +4627,12 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
                 "research_node_complete",
                 {
                     "node_id": node_id,
-                    "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
-                    "sources": _compact_search_results(results, limit=_event_results_limit()),
+                    "summary": (
+                        summary_text[:1200] if isinstance(summary_text, str) else ""
+                    ),
+                    "sources": _compact_search_results(
+                        results, limit=_event_results_limit()
+                    ),
                     "quality": diagnostics,
                     "epoch": loops_completed,
                 },
@@ -4420,8 +4650,10 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
             )
             current_query = next_queries[0] if next_queries else topic
 
-        report_sources_limit = int(getattr(settings, "deepsearch_report_sources_limit", 20) or 20)
-        all_sources: List[Dict[str, Any]] = []
+        report_sources_limit = int(
+            getattr(settings, "deepsearch_report_sources_limit", 20) or 20
+        )
+        all_sources: list[dict[str, Any]] = []
         try:
             from agent.workflows.evidence_extractor import extract_message_sources
 
@@ -4435,11 +4667,15 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
             limit=report_sources_limit,
         )
         final_report = (
-            _final_report(writer_llm, topic, summary_notes, config, sources=sources_block)
+            _final_report(
+                writer_llm, topic, summary_notes, config, sources=sources_block
+            )
             if summary_notes
             else "未找到足够资料生成报告。"
         )
-        final_report = _append_auto_references(final_report, report_sources, limit=report_sources_limit)
+        final_report = _append_auto_references(
+            final_report, report_sources, limit=report_sources_limit
+        )
         _emit_event(
             emitter,
             "report_written",
@@ -4458,7 +4694,9 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
             "source_count": len(all_sources),
             "selected_url_count": 0,
             "budget_stop_reason": "",
-            "tokens_used": _estimate_tokens_from_text(topic + "\n".join(summary_notes) + final_report),
+            "tokens_used": _estimate_tokens_from_text(
+                topic + "\n".join(summary_notes) + final_report
+            ),
             "elapsed_seconds": elapsed,
             **diagnostics,
         }
@@ -4467,8 +4705,16 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
             from agent.workflows.claim_verifier import ClaimVerifier
 
             verifier = ClaimVerifier(
-                min_overlap_tokens=int(getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2),
-                max_evidence_per_claim=int(getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3),
+                min_overlap_tokens=int(
+                    getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2)
+                    or 2
+                ),
+                max_evidence_per_claim=int(
+                    getattr(
+                        settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3
+                    )
+                    or 3
+                ),
             )
             checks = verifier.verify_report(final_report, search_runs)
             claims = [
@@ -4485,11 +4731,23 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
         except Exception:
             claims = []
         quality_summary["claim_verifier_total"] = len(claims)
-        quality_summary["claim_verifier_verified"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "verified")
-        quality_summary["claim_verifier_unsupported"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "unsupported")
-        quality_summary["claim_verifier_contradicted"] = sum(1 for c in claims if isinstance(c, dict) and c.get("status") == "contradicted")
+        quality_summary["claim_verifier_verified"] = sum(
+            1 for c in claims if isinstance(c, dict) and c.get("status") == "verified"
+        )
+        quality_summary["claim_verifier_unsupported"] = sum(
+            1
+            for c in claims
+            if isinstance(c, dict) and c.get("status") == "unsupported"
+        )
+        quality_summary["claim_verifier_contradicted"] = sum(
+            1
+            for c in claims
+            if isinstance(c, dict) and c.get("status") == "contradicted"
+        )
         try:
-            missing_citation_claims, citation_coverage = _estimate_citation_coverage(final_report)
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+                final_report
+            )
             quality_summary["citation_coverage"] = citation_coverage
             quality_summary["citation_coverage_score"] = citation_coverage
             quality_summary["missing_citation_claims"] = missing_citation_claims
@@ -4567,9 +4825,16 @@ def run_deepsearch_reflection_loop(state: Dict[str, Any], config: Dict[str, Any]
         }
 
 
-def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def run_deepsearch_supervisor_workers(
+    state: dict[str, Any], config: dict[str, Any]
+) -> dict[str, Any]:
     brief = build_research_brief(state, config)
+    source_routing = build_source_routing_policy(
+        brief=brief, config=config, state=state
+    )
+    brief.source_routing = source_routing
     state["research_brief"] = brief.to_dict()
+    state["source_routing"] = source_routing
     topic = brief.clarified_goal or state.get("input", "")
     _check_cancel(state)
 
@@ -4629,11 +4894,17 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
 
     model_profile = build_deepsearch_model_profile(config, _model_for_task)
     model_map = model_profile.get("models", {})
-    planning_model = str(model_map.get("supervisor_model") or _model_for_task("planning", config))
-    research_model = str(model_map.get("worker_model") or _model_for_task("research", config))
+    planning_model = str(
+        model_map.get("supervisor_model") or _model_for_task("planning", config)
+    )
+    research_model = str(
+        model_map.get("worker_model") or _model_for_task("research", config)
+    )
     search_summary_model = str(model_map.get("search_summary_model") or research_model)
     compression_model = str(model_map.get("compression_model") or search_summary_model)
-    writing_model = str(model_map.get("writer_model") or _model_for_task("writing", config))
+    writing_model = str(
+        model_map.get("writer_model") or _model_for_task("writing", config)
+    )
     verifier_model = str(model_map.get("verifier_model") or research_model)
     context_policy = build_deepsearch_context_policy(
         {
@@ -4654,14 +4925,20 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         search_func=_search_query,
         provider_profile=provider_profile,
     )
-    provider_capabilities = build_provider_capability_artifact(evidence_providers, config)
+    provider_capabilities = build_provider_capability_artifact(
+        evidence_providers, config
+    )
     emitter = _resolve_event_emitter(state, config)
     strategy_payload = _strategy_payload(
         state,
         fallback_strategy="supervisor_workers",
         fallback_reason="explicit supervisor-workers multi-agent strategy",
     )
-    _emit_event(emitter, "brief_created", {"research_brief": brief.to_dict(), "mode": "supervisor_workers"})
+    _emit_event(
+        emitter,
+        "brief_created",
+        {"research_brief": brief.to_dict(), "mode": "supervisor_workers"},
+    )
     _emit_event(
         emitter,
         "strategy_selected",
@@ -4671,15 +4948,17 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
     start_ts = time.time()
     tokens_used = _estimate_tokens_from_text(topic)
     budget_stop_reason = ""
-    have_query: List[str] = []
-    summary_notes: List[str] = []
-    search_runs: List[Dict[str, Any]] = []
-    provider_evidence_items: List[Dict[str, Any]] = []
-    quality_gate_history: List[Dict[str, Any]] = []
-    worker_runs: List[Dict[str, Any]] = []
-    supervisor_decisions: List[Dict[str, Any]] = []
-    decision_log: List[Dict[str, Any]] = []
-    task_runtime = ResearchTaskRuntime(mode="supervisor_workers", parent_id="deepsearch_supervisor")
+    have_query: list[str] = []
+    summary_notes: list[str] = []
+    search_runs: list[dict[str, Any]] = []
+    provider_evidence_items: list[dict[str, Any]] = []
+    quality_gate_history: list[dict[str, Any]] = []
+    worker_runs: list[dict[str, Any]] = []
+    supervisor_decisions: list[dict[str, Any]] = []
+    decision_log: list[dict[str, Any]] = []
+    task_runtime = ResearchTaskRuntime(
+        mode="supervisor_workers", parent_id="deepsearch_supervisor"
+    )
     stage_metrics = StageMetricsRecorder()
     missing_topics = list(state.get("missing_topics", []) or [])
     rounds_completed = 0
@@ -4697,7 +4976,11 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             if budget_stop_reason:
                 break
 
-            stage = stage_metrics.start("supervisor_plan", round=round_index, missing_topic_count=len(missing_topics))
+            stage = stage_metrics.start(
+                "supervisor_plan",
+                round=round_index,
+                missing_topic_count=len(missing_topics),
+            )
             tasks = build_worker_tasks(
                 brief=brief,
                 round_index=round_index,
@@ -4719,7 +5002,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 },
             )
 
-            round_worker_runs: List[Dict[str, Any]] = []
+            round_worker_runs: list[dict[str, Any]] = []
             task_order = {task.worker_id: idx for idx, task in enumerate(tasks)}
             for task in tasks:
                 started_subtask = task_runtime.start_task(task.worker_id)
@@ -4739,10 +5022,10 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
 
             def _collect_worker_payload(task):
                 worker_started_at = datetime.now().isoformat()
-                task_results: List[Dict[str, Any]] = []
-                task_evidence: List[Dict[str, Any]] = []
-                task_search_runs: List[Dict[str, Any]] = []
-                errors: List[str] = []
+                task_results: list[dict[str, Any]] = []
+                task_evidence: list[dict[str, Any]] = []
+                task_search_runs: list[dict[str, Any]] = []
+                errors: list[str] = []
                 for query in task.queries:
                     try:
                         provider_outputs = search_with_evidence_providers(
@@ -4781,14 +5064,28 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     "errors": errors,
                 }
 
-            stage = stage_metrics.start("worker_search", round=round_index, worker_count=len(tasks), parallel_workers=parallel_workers)
+            stage = stage_metrics.start(
+                "worker_search",
+                round=round_index,
+                worker_count=len(tasks),
+                parallel_workers=parallel_workers,
+            )
             if parallel_workers > 1 and len(tasks) > 1:
-                with ThreadPoolExecutor(max_workers=min(parallel_workers, len(tasks))) as executor:
+                with ThreadPoolExecutor(
+                    max_workers=min(parallel_workers, len(tasks))
+                ) as executor:
                     task_payloads = list(executor.map(_collect_worker_payload, tasks))
             else:
                 task_payloads = [_collect_worker_payload(task) for task in tasks]
-            task_payloads.sort(key=lambda payload: task_order.get(payload["task"].worker_id, 0))
-            stage_metrics.finish(stage, result_count=sum(len(payload.get("results") or []) for payload in task_payloads))
+            task_payloads.sort(
+                key=lambda payload: task_order.get(payload["task"].worker_id, 0)
+            )
+            stage_metrics.finish(
+                stage,
+                result_count=sum(
+                    len(payload.get("results") or []) for payload in task_payloads
+                ),
+            )
 
             for payload in task_payloads:
                 _check_cancel(state)
@@ -4805,7 +5102,15 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     tokens_used += _estimate_tokens_from_results(results)
                     search_runs.append(search_run)
                     provider_breakdown = _provider_breakdown(results)
-                    provider_name = "multi" if len(provider_breakdown) > 1 else (next(iter(provider_breakdown)) if provider_breakdown else "unknown")
+                    provider_name = (
+                        "multi"
+                        if len(provider_breakdown) > 1
+                        else (
+                            next(iter(provider_breakdown))
+                            if provider_breakdown
+                            else "unknown"
+                        )
+                    )
                     _emit_event(
                         emitter,
                         "search",
@@ -4813,7 +5118,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                             "query": query,
                             "provider": provider_name,
                             "provider_breakdown": provider_breakdown,
-                            "results": _compact_search_results(results, limit=_event_results_limit()),
+                            "results": _compact_search_results(
+                                results, limit=_event_results_limit()
+                            ),
                             "count": len(results),
                             "mode": "supervisor_workers",
                             "round": round_index,
@@ -4822,7 +5129,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                         },
                     )
 
-                stage = stage_metrics.start("worker_compression", round=round_index, worker_id=task.worker_id)
+                stage = stage_metrics.start(
+                    "worker_compression", round=round_index, worker_id=task.worker_id
+                )
                 enough, summary_text = _summarize_new_knowledge(
                     critic_llm,
                     task.topic,
@@ -4830,7 +5139,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     task_results[: max(1, per_query_results)],
                     config,
                 )
-                stage_metrics.finish(stage, summary_chars=len(summary_text or ""), enough=bool(enough))
+                stage_metrics.finish(
+                    stage, summary_chars=len(summary_text or ""), enough=bool(enough)
+                )
                 if summary_text:
                     summary_notes.append(f"{task.focus}: {summary_text}")
                     tokens_used += _estimate_tokens_from_text(summary_text)
@@ -4864,7 +5175,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                         "result_count": len(task_results),
                         "evidence_count": len(task_evidence),
                         "errors": errors,
-                        "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
+                        "summary": (
+                            summary_text[:1200] if isinstance(summary_text, str) else ""
+                        ),
                         "timestamp": worker_run.get("completed_at"),
                     }
                 )
@@ -4885,8 +5198,12 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     "research_node_complete",
                     {
                         "node_id": task.worker_id,
-                        "summary": summary_text[:1200] if isinstance(summary_text, str) else "",
-                        "sources": _compact_search_results(task_results, limit=_event_results_limit()),
+                        "summary": (
+                            summary_text[:1200] if isinstance(summary_text, str) else ""
+                        ),
+                        "sources": _compact_search_results(
+                            task_results, limit=_event_results_limit()
+                        ),
                         "round": round_index,
                         "context_id": task.context_id,
                         "quality": {"enough": bool(enough), "errors": errors},
@@ -4965,7 +5282,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             for run in search_runs:
                 results = run.get("results") if isinstance(run, dict) else []
                 if isinstance(results, list):
-                    flat_results.extend([item for item in results if isinstance(item, dict)])
+                    flat_results.extend(
+                        [item for item in results if isinstance(item, dict)]
+                    )
             formatted = _format_results(flat_results[:10]) if flat_results else ""
             if formatted:
                 summary_notes.append(formatted)
@@ -4980,7 +5299,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "deepsearch_supervisor_fetch_source_limit",
             int(getattr(settings, "deepsearch_supervisor_fetch_source_limit", 8) or 8),
         )
-        all_sources: List[Dict[str, Any]] = []
+        all_sources: list[dict[str, Any]] = []
         try:
             from agent.workflows.evidence_extractor import extract_message_sources
 
@@ -4994,8 +5313,8 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         ):
             all_sources = curate_sources(all_sources, brief=brief)
         report_sources = all_sources[: max(1, report_sources_limit)]
-        fetched_pages: List[Dict[str, Any]] = []
-        passages: List[Dict[str, Any]] = []
+        fetched_pages: list[dict[str, Any]] = []
+        passages: list[dict[str, Any]] = []
         if _configurable_bool(
             config,
             "deepsearch_supervisor_fetch_passages",
@@ -5015,7 +5334,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 passages=passages,
             ),
         )
-        evidence_items = _enrich_evidence_reliability_from_sources(evidence_items, all_sources)
+        evidence_items = _enrich_evidence_reliability_from_sources(
+            evidence_items, all_sources
+        )
         evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
         fact_cards = build_fact_cards(
             evidence_items=evidence_items,
@@ -5028,7 +5349,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             min_quote_chars=_configurable_int(
                 config,
                 "deepsearch_fact_card_min_quote_chars",
-                int(getattr(settings, "deepsearch_fact_card_min_quote_chars", 40) or 40),
+                int(
+                    getattr(settings, "deepsearch_fact_card_min_quote_chars", 40) or 40
+                ),
             ),
         )
         fact_cards_for_writer = format_fact_cards_for_writer(
@@ -5044,7 +5367,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             fact_cards=fact_cards,
             evidence_items=evidence_items,
         )
-        prewrite_gap_queries: List[str] = []
+        prewrite_gap_queries: list[str] = []
         if _configurable_bool(
             config,
             "deepsearch_prewrite_gap_followup_enabled",
@@ -5056,13 +5379,18 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 max_queries=_configurable_int(
                     config,
                     "deepsearch_prewrite_gap_followup_queries",
-                    int(getattr(settings, "deepsearch_prewrite_gap_followup_queries", 2) or 2),
+                    int(
+                        getattr(settings, "deepsearch_prewrite_gap_followup_queries", 2)
+                        or 2
+                    ),
                 ),
             )
             if prewrite_gap_queries:
-                stage = stage_metrics.start("prewrite_gap_followup", query_count=len(prewrite_gap_queries))
-                followup_runs: List[Dict[str, Any]] = []
-                followup_evidence: List[Dict[str, Any]] = []
+                stage = stage_metrics.start(
+                    "prewrite_gap_followup", query_count=len(prewrite_gap_queries)
+                )
+                followup_runs: list[dict[str, Any]] = []
+                followup_evidence: list[dict[str, Any]] = []
                 for query in prewrite_gap_queries:
                     try:
                         provider_outputs = search_with_evidence_providers(
@@ -5072,9 +5400,13 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                             config=config,
                         )
                         results = merge_provider_results(provider_outputs)
-                        followup_evidence.extend(merge_provider_evidence(provider_outputs))
+                        followup_evidence.extend(
+                            merge_provider_evidence(provider_outputs)
+                        )
                     except Exception as exc:
-                        logger.warning(f"[deepsearch-supervisor] prewrite gap follow-up failed for query='{query[:80]}': {exc}")
+                        logger.warning(
+                            f"[deepsearch-supervisor] prewrite gap follow-up failed for query='{query[:80]}': {exc}"
+                        )
                         results = []
                     followup_runs.append(
                         {
@@ -5098,7 +5430,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                             "query": query,
                             "provider": "multi",
                             "provider_breakdown": _provider_breakdown(results),
-                            "results": _compact_search_results(results, limit=_event_results_limit()),
+                            "results": _compact_search_results(
+                                results, limit=_event_results_limit()
+                            ),
                             "count": len(results),
                             "mode": "supervisor_workers",
                             "round": rounds_completed,
@@ -5109,7 +5443,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 search_runs.extend(followup_runs)
                 provider_evidence_items.extend(followup_evidence)
                 try:
-                    from agent.workflows.evidence_extractor import extract_message_sources
+                    from agent.workflows.evidence_extractor import (
+                        extract_message_sources,
+                    )
 
                     all_sources = extract_message_sources(search_runs)
                 except Exception:
@@ -5130,7 +5466,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                         passages=passages,
                     ),
                 )
-                evidence_items = _enrich_evidence_reliability_from_sources(evidence_items, all_sources)
+                evidence_items = _enrich_evidence_reliability_from_sources(
+                    evidence_items, all_sources
+                )
                 evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
                 fact_cards = build_fact_cards(
                     evidence_items=evidence_items,
@@ -5143,7 +5481,12 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     min_quote_chars=_configurable_int(
                         config,
                         "deepsearch_fact_card_min_quote_chars",
-                        int(getattr(settings, "deepsearch_fact_card_min_quote_chars", 40) or 40),
+                        int(
+                            getattr(
+                                settings, "deepsearch_fact_card_min_quote_chars", 40
+                            )
+                            or 40
+                        ),
                     ),
                 )
                 fact_cards_for_writer = format_fact_cards_for_writer(
@@ -5151,7 +5494,10 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     max_cards=_configurable_int(
                         config,
                         "deepsearch_fact_card_writer_cap",
-                        int(getattr(settings, "deepsearch_fact_card_writer_cap", 40) or 40),
+                        int(
+                            getattr(settings, "deepsearch_fact_card_writer_cap", 40)
+                            or 40
+                        ),
                     ),
                 )
                 brief_coverage = build_brief_coverage_artifact(
@@ -5159,8 +5505,13 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     fact_cards=fact_cards,
                     evidence_items=evidence_items,
                 )
-                stage_metrics.finish(stage, source_count=len(all_sources), evidence_item_count=len(evidence_items), fact_card_count=len(fact_cards))
-        claim_ledger: List[Dict[str, Any]] = []
+                stage_metrics.finish(
+                    stage,
+                    source_count=len(all_sources),
+                    evidence_item_count=len(evidence_items),
+                    fact_card_count=len(fact_cards),
+                )
+        claim_ledger: list[dict[str, Any]] = []
         summary_notes_for_writer = list(summary_notes)
         if fact_cards_for_writer:
             summary_notes_for_writer.append(fact_cards_for_writer)
@@ -5178,17 +5529,32 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 max_claims=_configurable_int(
                     config,
                     "deepsearch_claim_ledger_max_claims",
-                    int(getattr(settings, "deepsearch_claim_ledger_max_claims", 24) or 24),
+                    int(
+                        getattr(settings, "deepsearch_claim_ledger_max_claims", 24)
+                        or 24
+                    ),
                 ),
                 min_overlap_tokens=_configurable_int(
                     config,
                     "deepsearch_claim_verifier_min_overlap_tokens",
-                    int(getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2) or 2),
+                    int(
+                        getattr(
+                            settings, "deepsearch_claim_verifier_min_overlap_tokens", 2
+                        )
+                        or 2
+                    ),
                 ),
                 max_evidence_per_claim=_configurable_int(
                     config,
                     "deepsearch_claim_verifier_max_evidence_per_claim",
-                    int(getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3) or 3),
+                    int(
+                        getattr(
+                            settings,
+                            "deepsearch_claim_verifier_max_evidence_per_claim",
+                            3,
+                        )
+                        or 3
+                    ),
                 ),
             )
             ledger_text = format_claim_ledger_for_writer(claim_ledger)
@@ -5231,8 +5597,12 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 if query and query not in have_query:
                     have_query.append(query)
         if section_evidence_items:
-            evidence_items = _merge_evidence_item_payloads(evidence_items, section_evidence_items)
-            evidence_items = _enrich_evidence_reliability_from_sources(evidence_items, all_sources)
+            evidence_items = _merge_evidence_item_payloads(
+                evidence_items, section_evidence_items
+            )
+            evidence_items = _enrich_evidence_reliability_from_sources(
+                evidence_items, all_sources
+            )
             evidence_items = _filter_and_cap_evidence_items(evidence_items, config)
             fact_cards = build_fact_cards(
                 evidence_items=evidence_items,
@@ -5245,7 +5615,10 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 min_quote_chars=_configurable_int(
                     config,
                     "deepsearch_fact_card_min_quote_chars",
-                    int(getattr(settings, "deepsearch_fact_card_min_quote_chars", 40) or 40),
+                    int(
+                        getattr(settings, "deepsearch_fact_card_min_quote_chars", 40)
+                        or 40
+                    ),
                 ),
             )
             fact_cards_for_writer = format_fact_cards_for_writer(
@@ -5256,17 +5629,31 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     int(getattr(settings, "deepsearch_fact_card_writer_cap", 40) or 40),
                 ),
             )
-        stage = stage_metrics.start("writer", sectioned=bool(sectioned_compiled_report), fact_card_count=len(fact_cards))
+        stage = stage_metrics.start(
+            "writer",
+            sectioned=bool(sectioned_compiled_report),
+            fact_card_count=len(fact_cards),
+        )
         draft_report = (
             sectioned_compiled_report
             if sectioned_compiled_report
-            else _final_report(writer_llm, topic, summary_notes_for_writer, config, sources=sources_block)
-            if summary_notes_for_writer
-            else "未找到足够资料生成报告。"
+            else (
+                _final_report(
+                    writer_llm,
+                    topic,
+                    summary_notes_for_writer,
+                    config,
+                    sources=sources_block,
+                )
+                if summary_notes_for_writer
+                else "未找到足够资料生成报告。"
+            )
         )
         stage_metrics.finish(stage, report_chars=len(draft_report or ""))
         try:
-            stage = stage_metrics.start("verifier", report_chars=len(draft_report or ""))
+            stage = stage_metrics.start(
+                "verifier", report_chars=len(draft_report or "")
+            )
             _checks, claims, claim_stats = _verify_report_claims(
                 draft_report,
                 search_runs,
@@ -5295,15 +5682,15 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 _configurable_int(
                     config,
                     "deepsearch_final_verifier_max_revisions",
-                    int(getattr(settings, "deepsearch_final_verifier_max_revisions", 1) or 1),
+                    int(
+                        getattr(settings, "deepsearch_final_verifier_max_revisions", 1)
+                        or 1
+                    ),
                 ),
             )
-            while (
-                final_revision_count < max_revisions
-                and (
-                    int(claim_stats.get("claim_verifier_unsupported") or 0) > 0
-                    or int(claim_stats.get("claim_verifier_contradicted") or 0) > 0
-                )
+            while final_revision_count < max_revisions and (
+                int(claim_stats.get("claim_verifier_unsupported") or 0) > 0
+                or int(claim_stats.get("claim_verifier_contradicted") or 0) > 0
             ):
                 draft_report = _revise_report_for_claim_failures(
                     writer_llm,
@@ -5334,11 +5721,17 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             ),
         )
         for _grounding_pass in range(max_grounding_passes):
-            gated_report, current_gate = _apply_claim_grounding_gate(draft_report, claims, config)
+            gated_report, current_gate = _apply_claim_grounding_gate(
+                draft_report, claims, config
+            )
             claim_grounding_gate = {
                 **claim_grounding_gate,
-                "enabled": current_gate.get("enabled", claim_grounding_gate.get("enabled", True)),
-                "removed_claim_count": int(claim_grounding_gate.get("removed_claim_count") or 0)
+                "enabled": current_gate.get(
+                    "enabled", claim_grounding_gate.get("enabled", True)
+                ),
+                "removed_claim_count": int(
+                    claim_grounding_gate.get("removed_claim_count") or 0
+                )
                 + int(current_gate.get("removed_claim_count") or 0),
             }
             if not current_gate.get("removed_claim_count"):
@@ -5360,12 +5753,18 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 and int(claim_stats.get("claim_verifier_contradicted") or 0) <= 0
             ):
                 break
-        missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
-        context_repaired_report = _repair_citations_from_local_context(draft_report, missing_citation_claims)
+        missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+            draft_report, max_missing=None
+        )
+        context_repaired_report = _repair_citations_from_local_context(
+            draft_report, missing_citation_claims
+        )
         context_citation_repair_applied = context_repaired_report != draft_report
         if context_citation_repair_applied:
             draft_report = context_repaired_report
-            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+                draft_report, max_missing=None
+            )
         repaired_report, fact_card_repair = repair_citations_with_fact_cards(
             draft_report,
             missing_citation_claims,
@@ -5374,7 +5773,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         fact_card_repair_applied = repaired_report != draft_report
         if fact_card_repair_applied:
             draft_report = repaired_report
-            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+                draft_report, max_missing=None
+            )
         repaired_report = _repair_report_citations(
             writer_llm,
             topic=topic,
@@ -5398,11 +5799,17 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             except Exception:
                 pass
             for _grounding_pass in range(max_grounding_passes):
-                repaired_gate_report, repaired_gate = _apply_claim_grounding_gate(draft_report, claims, config)
+                repaired_gate_report, repaired_gate = _apply_claim_grounding_gate(
+                    draft_report, claims, config
+                )
                 claim_grounding_gate = {
                     **claim_grounding_gate,
-                    "enabled": repaired_gate.get("enabled", claim_grounding_gate.get("enabled", True)),
-                    "removed_claim_count": int(claim_grounding_gate.get("removed_claim_count") or 0)
+                    "enabled": repaired_gate.get(
+                        "enabled", claim_grounding_gate.get("enabled", True)
+                    ),
+                    "removed_claim_count": int(
+                        claim_grounding_gate.get("removed_claim_count") or 0
+                    )
                     + int(repaired_gate.get("removed_claim_count") or 0),
                 }
                 if not repaired_gate.get("removed_claim_count"):
@@ -5424,8 +5831,12 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                     and int(claim_stats.get("claim_verifier_contradicted") or 0) <= 0
                 ):
                     break
-            missing_citation_claims, citation_coverage = _estimate_citation_coverage(draft_report, max_missing=None)
-        final_report = _append_auto_references(draft_report, report_sources, limit=report_sources_limit)
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+                draft_report, max_missing=None
+            )
+        final_report = _append_auto_references(
+            draft_report, report_sources, limit=report_sources_limit
+        )
         _emit_event(
             emitter,
             "report_written",
@@ -5436,8 +5847,12 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
                 "fact_card_count": len(fact_cards),
                 "claim_ledger_count": len(claim_ledger),
                 "final_revision_count": final_revision_count,
-                "claim_grounding_removed": claim_grounding_gate.get("removed_claim_count", 0),
-                "citation_repair_applied": citation_repair_applied or fact_card_repair_applied or context_citation_repair_applied,
+                "claim_grounding_removed": claim_grounding_gate.get(
+                    "removed_claim_count", 0
+                ),
+                "citation_repair_applied": citation_repair_applied
+                or fact_card_repair_applied
+                or context_citation_repair_applied,
             },
         )
 
@@ -5449,7 +5864,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             warn_after_s=_configurable_float(
                 config,
                 "deepsearch_stage_warn_after_s",
-                float(getattr(settings, "deepsearch_stage_warn_after_s", 120.0) or 120.0),
+                float(
+                    getattr(settings, "deepsearch_stage_warn_after_s", 120.0) or 120.0
+                ),
             ),
         )
         quality_summary = {
@@ -5457,7 +5874,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "supervisor_rounds_completed": rounds_completed,
             "worker_count": len(worker_runs),
             "subtask_count": task_runtime.to_artifact().get("subtask_count", 0),
-            "subtask_status_counts": task_runtime.to_artifact().get("status_counts", {}),
+            "subtask_status_counts": task_runtime.to_artifact().get(
+                "status_counts", {}
+            ),
             "decision_log_count": len(decision_log),
             "parallel_workers": parallel_workers,
             "worker_dispatch": "parallel" if parallel_workers > 1 else "sequential",
@@ -5467,7 +5886,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "sectioned_report_enabled": bool(sectioned_report.get("enabled")),
             "sectioned_report_status": sectioned_report.get("status", "disabled"),
             "sectioned_report_section_count": sectioned_report.get("section_count", 0),
-            "sectioned_report_search_run_count": sectioned_report.get("search_run_count", 0),
+            "sectioned_report_search_run_count": sectioned_report.get(
+                "search_run_count", 0
+            ),
             "summary_count": len(summary_notes),
             "source_count": len(all_sources),
             "selected_source_count": len(report_sources),
@@ -5481,8 +5902,12 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "claim_ledger_count": len(claim_ledger),
             "final_revision_count": final_revision_count,
             "claim_grounding_gate": claim_grounding_gate,
-            "claim_grounding_removed": claim_grounding_gate.get("removed_claim_count", 0),
-            "citation_repair_applied": citation_repair_applied or fact_card_repair_applied or context_citation_repair_applied,
+            "claim_grounding_removed": claim_grounding_gate.get(
+                "removed_claim_count", 0
+            ),
+            "citation_repair_applied": citation_repair_applied
+            or fact_card_repair_applied
+            or context_citation_repair_applied,
             "fact_card_citation_repair": fact_card_repair,
             "stage_metrics_stage_count": stage_metrics_artifact.get("stage_count", 0),
             "slow_stage_warning_count": len(slow_stage_warnings),
@@ -5490,7 +5915,10 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             "citation_coverage_score": citation_coverage,
             "missing_citation_claims": missing_citation_claims,
             "budget_stop_reason": budget_stop_reason or "",
-            "tokens_used": _estimate_tokens_from_text(topic + "\n".join(summary_notes) + final_report) + tokens_used,
+            "tokens_used": _estimate_tokens_from_text(
+                topic + "\n".join(summary_notes) + final_report
+            )
+            + tokens_used,
             "elapsed_seconds": elapsed,
             **diagnostics,
         }
@@ -5504,7 +5932,7 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
             epoch=rounds_completed,
             stage="final",
         )
-        continue_requests: List[Dict[str, Any]] = []
+        continue_requests: list[dict[str, Any]] = []
         if _configurable_bool(
             config,
             "deepsearch_reflection_gap_queries",
@@ -5562,6 +5990,8 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         deepsearch_artifacts = {
             "mode": "supervisor_workers",
             "research_brief": brief.to_dict(),
+            "source_routing": source_routing,
+            "source_collections": source_routing.get("collections", []),
             "strategy_decision": strategy_payload,
             "queries": have_query,
             "research_tree": None,
@@ -5617,7 +6047,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         }
     except asyncio.CancelledError:
         logger.warning("[deepsearch-supervisor] 收到取消信号，停止任务")
-        task_runtime.finish_open_tasks(status="cancelled", error="DeepSearch was cancelled")
+        task_runtime.finish_open_tasks(
+            status="cancelled", error="DeepSearch was cancelled"
+        )
         return {
             "is_cancelled": True,
             "is_complete": True,
@@ -5634,7 +6066,9 @@ def run_deepsearch_supervisor_workers(state: Dict[str, Any], config: Dict[str, A
         return run_deepsearch_optimized(state, config)
 
 
-def run_deepsearch_auto(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+def run_deepsearch_auto(
+    state: dict[str, Any], config: dict[str, Any]
+) -> dict[str, Any]:
     """
     Auto-select between tree and linear deep search based on settings.
 
@@ -5642,7 +6076,12 @@ def run_deepsearch_auto(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     to the optimized linear approach.
     """
     brief = build_research_brief(state, config)
+    source_routing = build_source_routing_policy(
+        brief=brief, config=config, state=state
+    )
+    brief.source_routing = source_routing
     state["research_brief"] = brief.to_dict()
+    state["source_routing"] = source_routing
     decision = select_deepsearch_strategy(
         brief=brief,
         config=config,
@@ -5652,7 +6091,7 @@ def run_deepsearch_auto(state: Dict[str, Any], config: Dict[str, Any]) -> Dict[s
     state["deepsearch_strategy_decision"] = decision.to_dict()
     strategy = decision.strategy
 
-    def _with_event_marker(result: Dict[str, Any]) -> Dict[str, Any]:
+    def _with_event_marker(result: dict[str, Any]) -> dict[str, Any]:
         if isinstance(result, dict) and not bool(result.get("is_cancelled")):
             result.setdefault("_deepsearch_events_emitted", True)
         return result

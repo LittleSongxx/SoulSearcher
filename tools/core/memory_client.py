@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from common.config import settings
 
@@ -142,7 +142,7 @@ def store_interaction(
 
 def fetch_memories(
     query: str = "*", user_id: Optional[str] = None, limit: Optional[int] = None
-) -> List[str]:
+) -> list[str]:
     """Retrieve memories (most recent first)."""
     user = _normalize_user_id(user_id)
     k = limit or settings.memory_top_k
@@ -175,7 +175,7 @@ def fetch_memories(
             if isinstance(results, dict):
                 results = results.get("results", [])
 
-            out: List[str] = []
+            out: list[str] = []
             if isinstance(results, list):
                 for item in results:
                     if isinstance(item, str) and item.strip():

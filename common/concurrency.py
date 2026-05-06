@@ -7,8 +7,9 @@
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any, Awaitable, Callable, List, Optional, TypeVar
+from typing import Any, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,8 @@ class ConcurrencyController:
             return await coro
 
     async def gather_with_limit(
-        self, tasks: List[Awaitable[T]], return_exceptions: bool = True
-    ) -> List[T]:
+        self, tasks: list[Awaitable[T]], return_exceptions: bool = True
+    ) -> list[T]:
         """
         批量任务带并发限制执行
 
@@ -114,11 +115,11 @@ class ConcurrencyController:
 
     async def batch_process(
         self,
-        items: List[Any],
+        items: list[Any],
         processor: Callable[[Any], Awaitable[T]],
         batch_size: Optional[int] = None,
         on_batch_complete: Optional[Callable[[int, int], None]] = None,
-    ) -> List[T]:
+    ) -> list[T]:
         """
         分批处理列表项
 
@@ -132,7 +133,7 @@ class ConcurrencyController:
             处理结果列表
         """
         batch_size = batch_size or self.max_concurrency
-        results: List[T] = []
+        results: list[T] = []
         total = len(items)
 
         logger.info(f"Batch processing {total} items, batch_size={batch_size}")
@@ -156,8 +157,8 @@ class ConcurrencyController:
         return results
 
     async def map_with_limit(
-        self, func: Callable[[Any], Awaitable[T]], items: List[Any]
-    ) -> List[T]:
+        self, func: Callable[[Any], Awaitable[T]], items: list[Any]
+    ) -> list[T]:
         """
         并发 map 操作
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 _DEFAULT_RELOAD_SUBDIRS: tuple[str, ...] = (
     # Backend code
     "agent",

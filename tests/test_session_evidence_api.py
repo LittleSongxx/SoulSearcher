@@ -24,6 +24,8 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
         "claims": [],
         "quality_summary": {"summary_count": 1},
         "research_brief": {"original_query": "q", "clarified_goal": "q"},
+        "source_routing": {"mode": "hybrid", "providers": ["web", "rag"]},
+        "source_collections": [{"id": "team_docs", "name": "team_docs"}],
         "quality_gates": [{"epoch": 1, "stage": "final", "gates": []}],
         "evidence_items": [
             {
@@ -121,7 +123,9 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
             return state
 
     monkeypatch.setattr(main, "checkpointer", object())
-    monkeypatch.setattr("common.session_manager.get_session_manager", lambda checkpointer: FakeManager())
+    monkeypatch.setattr(
+        "common.session_manager.get_session_manager", lambda checkpointer: FakeManager()
+    )
 
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -131,6 +135,10 @@ async def test_session_evidence_includes_fetched_pages_and_passages(monkeypatch)
     data = resp.json() or {}
     assert data.get("quality_summary", {}).get("summary_count") == 1
     assert data.get("research_brief", {}).get("original_query") == "q"
+    assert data.get("source_routing", {}).get("mode") == "hybrid"
+    assert data.get("source_collections", [{}])[0].get("id") == "team_docs"
+    assert data.get("evidence_store", {}).get("thread_id") == "thread-evidence"
+    assert data.get("access_policy", {}).get("visibility") == "private"
     assert data.get("quality_gates", [{}])[0].get("stage") == "final"
     assert data.get("evidence_items", [{}])[0].get("id") == "ev1"
     assert data.get("citation_annotations", [{}])[0].get("id") == "cite1"
@@ -171,8 +179,12 @@ async def test_session_evidence_enriches_claims_from_passages(monkeypatch):
         },
     }
 
-    checkpoint = SimpleNamespace(checkpoint={"channel_values": state}, metadata={}, parent_config=None)
-    monkeypatch.setattr(main, "checkpointer", SimpleNamespace(get_tuple=lambda config: checkpoint))
+    checkpoint = SimpleNamespace(
+        checkpoint={"channel_values": state}, metadata={}, parent_config=None
+    )
+    monkeypatch.setattr(
+        main, "checkpointer", SimpleNamespace(get_tuple=lambda config: checkpoint)
+    )
 
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

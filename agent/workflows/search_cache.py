@@ -7,7 +7,8 @@ are simple and fast.
 """
 
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, Tuple
+from collections.abc import Iterable
+from typing import Any
 
 
 class SearchCache:
@@ -46,10 +47,10 @@ class QueryDeduplicator:
     def __init__(self, similarity_threshold: float = 0.85):
         self.similarity_threshold = similarity_threshold
 
-    def deduplicate(self, queries: Iterable[str]) -> Tuple[List[str], List[str]]:
+    def deduplicate(self, queries: Iterable[str]) -> tuple[list[str], list[str]]:
         seen = set()
-        uniques: List[str] = []
-        dupes: List[str] = []
+        uniques: list[str] = []
+        dupes: list[str] = []
 
         for q in queries:
             if not q:
@@ -71,4 +72,4 @@ def get_search_cache() -> SearchCache:
     return _cache
 
 
-__all__ = ["SearchCache", "QueryDeduplicator", "get_search_cache"]
+__all__ = ["QueryDeduplicator", "SearchCache", "get_search_cache"]

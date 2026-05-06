@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 _ALLOWED_TARGET_TYPES = {"section", "claim", "source", "gap"}
 
@@ -17,12 +16,12 @@ class ContinueResearchPlan:
     target_index: Optional[int] = None
     target_text: str = ""
     instruction: str = ""
-    generated_queries: List[str] = field(default_factory=list)
+    generated_queries: list[str] = field(default_factory=list)
     resume_input: str = ""
-    update_state: Dict[str, Any] = field(default_factory=dict)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    update_state: dict[str, Any] = field(default_factory=dict)
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
@@ -45,7 +44,7 @@ def _one_based_index(value: Optional[int]) -> Optional[int]:
     return index if index > 0 else None
 
 
-def _find_by_id_or_index(items: List[Dict[str, Any]], target_id: str = "", target_index: Optional[int] = None) -> Dict[str, Any]:
+def _find_by_id_or_index(items: list[dict[str, Any]], target_id: str = "", target_index: Optional[int] = None) -> dict[str, Any]:
     target_id = _text(target_id)
     if target_id:
         for item in items or []:
@@ -61,8 +60,8 @@ def _find_by_id_or_index(items: List[Dict[str, Any]], target_id: str = "", targe
     return {}
 
 
-def _collect_quality_gaps(artifacts: Dict[str, Any]) -> List[str]:
-    gaps: List[str] = []
+def _collect_quality_gaps(artifacts: dict[str, Any]) -> list[str]:
+    gaps: list[str] = []
     seen = set()
     for record in artifacts.get("quality_gates", []) or []:
         if not isinstance(record, dict):
@@ -80,13 +79,13 @@ def _collect_quality_gaps(artifacts: Dict[str, Any]) -> List[str]:
 
 
 def resolve_continue_target(
-    artifacts: Dict[str, Any],
+    artifacts: dict[str, Any],
     *,
     target_type: str,
     target_id: str = "",
     target_index: Optional[int] = None,
     target_text: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     artifacts = artifacts if isinstance(artifacts, dict) else {}
     normalized_type = _text(target_type).lower().replace("-", "_")
     if normalized_type not in _ALLOWED_TARGET_TYPES:
@@ -114,7 +113,7 @@ def resolve_continue_target(
     return {"target_type": normalized_type, "target_id": target_id or text, "target_index": target_index, "target_text": text, "target": {"section": text}}
 
 
-def _queries_for_target(target_type: str, target_text: str, instruction: str = "") -> List[str]:
+def _queries_for_target(target_type: str, target_text: str, instruction: str = "") -> list[str]:
     base = _text(target_text)
     detail = _text(instruction)
     suffix = f" {detail}" if detail else ""
@@ -141,7 +140,7 @@ def _queries_for_target(target_type: str, target_text: str, instruction: str = "
 
 def build_continue_research_plan(
     *,
-    artifacts: Dict[str, Any],
+    artifacts: dict[str, Any],
     target_type: str,
     target_id: str = "",
     target_index: Optional[int] = None,
@@ -183,7 +182,7 @@ def build_continue_research_plan(
         "instruction": _text(instruction),
         "generated_queries": queries,
         "strategy": strategy,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     update_state = {
         "input": resume_input,

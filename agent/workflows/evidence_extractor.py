@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from agent.workflows.source_registry import SourceRegistry
 
@@ -12,7 +12,7 @@ def _pick_first_string(*values: Any) -> str:
     return ""
 
 
-def extract_message_sources(scraped_content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def extract_message_sources(scraped_content: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Extract a stable, canonicalized list of sources from `scraped_content`.
 
@@ -29,8 +29,8 @@ def extract_message_sources(scraped_content: List[Dict[str, Any]]) -> List[Dict[
       - publishedDate?: str
     """
     registry = SourceRegistry()
-    sources: List[Dict[str, Any]] = []
-    index_by_canonical: Dict[str, int] = {}
+    sources: list[dict[str, Any]] = []
+    index_by_canonical: dict[str, int] = {}
 
     def register_source(
         *,

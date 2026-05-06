@@ -22,12 +22,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Awaitable, Callable, Dict, Optional, Union
+from collections.abc import Awaitable, Callable
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 # Type for frame callback - can be sync or async
-FrameCallback = Callable[[str, Dict[str, Any]], Union[None, Awaitable[None]]]
+FrameCallback = Callable[[str, dict[str, Any]], Union[None, Awaitable[None]]]
 
 
 class CDPScreencast:
@@ -142,7 +143,7 @@ class CDPScreencast:
             self._running = False
             return False
 
-    async def _handle_frame(self, params: Dict[str, Any]) -> None:
+    async def _handle_frame(self, params: dict[str, Any]) -> None:
         """Handle incoming screencast frame from CDP."""
         if not self._running:
             return
@@ -257,7 +258,7 @@ class ScreencastManager:
     """
 
     def __init__(self):
-        self._screencasts: Dict[str, CDPScreencast] = {}
+        self._screencasts: dict[str, CDPScreencast] = {}
         self._lock = asyncio.Lock()
 
     async def start_screencast(

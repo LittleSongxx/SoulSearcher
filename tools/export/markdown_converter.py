@@ -4,19 +4,19 @@ Markdown to PDF/DOCX/HTML Converter.
 Converts markdown research reports to various export formats with styling.
 """
 
-import base64
 import io
 import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 # Check for optional dependencies
 try:
     import markdown
+
     MARKDOWN_AVAILABLE = True
 except ImportError:
     markdown = None
@@ -25,6 +25,7 @@ except ImportError:
 try:
     from weasyprint import CSS
     from weasyprint import HTML as WeasyprintHTML
+
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WeasyprintHTML = None
@@ -34,14 +35,15 @@ except ImportError:
 try:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Inches, Pt
+
     DOCX_AVAILABLE = True
 except ImportError:
     Document = None
     DOCX_AVAILABLE = False
 
 try:
-    from jinja2 import BaseLoader, Environment, FileSystemLoader
+    from jinja2 import Environment, FileSystemLoader
+
     JINJA2_AVAILABLE = True
 except ImportError:
     Environment = None
@@ -398,7 +400,11 @@ class MarkdownConverter:
                     html_parts.append(f"<h3>{p[4:]}</h3>")
                 elif p.startswith("- "):
                     items = p.split("\n")
-                    li_items = "".join(f"<li>{item[2:]}</li>" for item in items if item.startswith("- "))
+                    li_items = "".join(
+                        f"<li>{item[2:]}</li>"
+                        for item in items
+                        if item.startswith("- ")
+                    )
                     html_parts.append(f"<ul>{li_items}</ul>")
                 else:
                     html_parts.append(f"<p>{p}</p>")
@@ -425,7 +431,7 @@ class MarkdownConverter:
         title: str = "Research Report",
         thread_id: Optional[str] = None,
         sources: Optional[list] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> str:
         """
         Convert markdown to complete HTML document.
@@ -474,7 +480,11 @@ class MarkdownConverter:
             sources_html = "".join(f'<li><a href="{s}">{s}</a></li>' for s in sources)
             html = html.replace("{% for source in sources %}", "")
             html = html.replace("{% endfor %}", "")
-            html = re.sub(r'\{\{ source \}\}', "", html)
+            html = re.sub(
+                r'<li><a href="\{\{ source \}\}">\{\{ source \}\}</a></li>',
+                sources_html,
+                html,
+            )
 
         return html
 
@@ -640,7 +650,7 @@ class MarkdownConverter:
             # Regular paragraphs
             else:
                 # Handle inline formatting
-                text = self._process_inline_formatting(doc, line)
+                self._process_inline_formatting(doc, line)
                 current_list = None
 
     def _process_inline_formatting(self, doc, text: str) -> None:

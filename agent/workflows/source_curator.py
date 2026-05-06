@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from agent.workflows.research_brief import ResearchBrief
 from agent.workflows.source_url_utils import canonicalize_source_url
-
 
 _AUTHORITY_HINTS = (
     ".gov",
@@ -93,15 +92,15 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
         else:
             return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _freshness_score(value: Any) -> float:
     dt = _parse_datetime(value)
     if dt is None:
         return 0.0
-    age_days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0)
+    age_days = max(0.0, (datetime.now(UTC) - dt).total_seconds() / 86400.0)
     if age_days <= 30:
         return 0.16
     if age_days <= 180:
@@ -111,7 +110,7 @@ def _freshness_score(value: Any) -> float:
     return 0.0
 
 
-def _source_text(source: Dict[str, Any]) -> str:
+def _source_text(source: dict[str, Any]) -> str:
     fields = [
         source.get("title"),
         source.get("name"),
@@ -124,13 +123,13 @@ def _source_text(source: Dict[str, Any]) -> str:
     return " ".join(_text(item) for item in fields if _text(item))
 
 
-def score_source(source: Dict[str, Any], *, brief: Optional[ResearchBrief] = None) -> Tuple[float, List[str]]:
+def score_source(source: dict[str, Any], *, brief: Optional[ResearchBrief] = None) -> tuple[float, list[str]]:
     url = canonicalize_source_url(source.get("url") or source.get("rawUrl")) or _text(source.get("url") or source.get("rawUrl"))
     domain = _text(source.get("domain")) or _domain(url)
     title = _text(source.get("title") or source.get("name"))
     source_text = _source_text(source)
     score = 0.35
-    reasons: List[str] = []
+    reasons: list[str] = []
 
     if any(hint in domain for hint in _AUTHORITY_HINTS):
         score += 0.25
@@ -167,12 +166,12 @@ def score_source(source: Dict[str, Any], *, brief: Optional[ResearchBrief] = Non
 
 
 def curate_sources(
-    sources: List[Dict[str, Any]],
+    sources: list[dict[str, Any]],
     *,
     brief: Optional[ResearchBrief] = None,
     limit: Optional[int] = None,
-) -> List[Dict[str, Any]]:
-    enriched: List[Tuple[float, int, Dict[str, Any]]] = []
+) -> list[dict[str, Any]]:
+    enriched: list[tuple[float, int, dict[str, Any]]] = []
     seen = set()
     for idx, source in enumerate(sources or []):
         if not isinstance(source, dict):

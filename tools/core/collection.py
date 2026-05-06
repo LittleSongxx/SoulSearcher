@@ -7,14 +7,15 @@ blacklist filtering. This mirrors OpenManus's ToolCollection but is adapted to
 Weaver's tool registry and LangGraph agents.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Optional
 
 
 @dataclass
 class ToolCollection:
-    tools: List[Any] = field(default_factory=list)
-    tool_map: Dict[str, Any] = field(default_factory=dict)
+    tools: list[Any] = field(default_factory=list)
+    tool_map: dict[str, Any] = field(default_factory=dict)
 
     def __iter__(self):
         return iter(self.tools)
@@ -38,7 +39,7 @@ class ToolCollection:
     def get(self, name: str) -> Optional[Any]:
         return self.tool_map.get(name)
 
-    def to_list(self) -> List[Any]:
+    def to_list(self) -> list[Any]:
         return list(self.tools)
 
     def filter(

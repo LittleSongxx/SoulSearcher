@@ -1,4 +1,3 @@
-import pytest
 
 
 def test_settings_allows_missing_openai_api_key(monkeypatch):

@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from langchain.tools import tool
 
@@ -17,7 +17,7 @@ _E2B_PLACEHOLDER_KEYS = {
 
 
 @tool
-def execute_python_code(code: str) -> Dict[str, Any]:
+def execute_python_code(code: str) -> dict[str, Any]:
     """
     Execute Python code in a sandboxed E2B environment.
 
@@ -53,7 +53,7 @@ def execute_python_code(code: str) -> Dict[str, Any]:
 
     try:
         from e2b_code_interpreter import Sandbox  # type: ignore
-    except Exception as e:
+    except Exception:
         return {
             "success": False,
             "stdout": "",
@@ -101,7 +101,7 @@ def execute_python_code(code: str) -> Dict[str, Any]:
         }
 
 
-def create_visualization(data: Dict[str, Any], chart_type: str = "bar") -> Dict[str, Any]:
+def create_visualization(data: dict[str, Any], chart_type: str = "bar") -> dict[str, Any]:
     """
     Helper function to create data visualizations.
 

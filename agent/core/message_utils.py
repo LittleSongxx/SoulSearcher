@@ -1,9 +1,7 @@
 import logging
 import textwrap
-from typing import List
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from agent.core.llm_factory import create_summary_model
 from common.config import settings
@@ -14,7 +12,7 @@ logger = logging.getLogger(__name__)
 _chat_model_summary = create_summary_model
 
 
-def _messages_to_text(messages: List[BaseMessage]) -> str:
+def _messages_to_text(messages: list[BaseMessage]) -> str:
     lines = []
     for m in messages:
         role = m.type if hasattr(m, "type") else m.__class__.__name__
@@ -27,7 +25,7 @@ def _messages_to_text(messages: List[BaseMessage]) -> str:
     return "\n".join(lines)
 
 
-def summarize_messages(messages: List[BaseMessage]) -> SystemMessage:
+def summarize_messages(messages: list[BaseMessage]) -> SystemMessage:
     """Summarize middle conversation history into a compact system message."""
     if not messages:
         return SystemMessage(content="Conversation summary: (empty)")

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 
 @dataclass
@@ -14,9 +14,9 @@ class RunMetrics:
     ended_at: Optional[datetime] = None
     duration_ms: float = 0.0
     event_count: int = 0
-    nodes_started: Dict[str, int] = field(default_factory=dict)
-    nodes_completed: Dict[str, int] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
+    nodes_started: dict[str, int] = field(default_factory=dict)
+    nodes_completed: dict[str, int] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
     cancelled: bool = False
 
     def mark_event(self, event_type: str, node_name: str | None = None) -> None:
@@ -35,7 +35,7 @@ class RunMetrics:
         self.cancelled = cancelled
         self.duration_ms = (self.ended_at - self.started_at).total_seconds() * 1000
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "run_id": self.run_id,
             "model": self.model,
@@ -55,7 +55,7 @@ class RunMetricsRegistry:
     """In-memory registry for run metrics (per thread/run id)."""
 
     def __init__(self):
-        self._runs: Dict[str, RunMetrics] = {}
+        self._runs: dict[str, RunMetrics] = {}
 
     def start(self, run_id: str, model: str, route: str = "") -> RunMetrics:
         metrics = RunMetrics(run_id=run_id, model=model, route=route)
@@ -65,7 +65,7 @@ class RunMetricsRegistry:
     def get(self, run_id: str) -> Optional[RunMetrics]:
         return self._runs.get(run_id)
 
-    def all(self) -> List[Dict[str, object]]:
+    def all(self) -> list[dict[str, object]]:
         return [m.to_dict() for m in self._runs.values()]
 
     def finish(self, run_id: str, cancelled: bool = False) -> Optional[RunMetrics]:

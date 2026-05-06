@@ -19,11 +19,9 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import time
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -48,7 +46,16 @@ TransitionType = Literal[
 
 # Color scheme presets
 ColorScheme = Literal[
-    "default", "blue", "green", "red", "purple", "orange", "dark", "light", "corporate", "creative"
+    "default",
+    "blue",
+    "green",
+    "red",
+    "purple",
+    "orange",
+    "dark",
+    "light",
+    "corporate",
+    "creative",
 ]
 
 # Color scheme definitions (RGB hex values)
@@ -154,7 +161,7 @@ class _PresentationV2BaseTool(BaseTool):
             return session._handles.sandbox
         return None
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event."""
         if not self.emit_events:
             return
@@ -165,7 +172,7 @@ class _PresentationV2BaseTool(BaseTool):
             except Exception as e:
                 logger.warning(f"[presentation_v2] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -182,7 +189,7 @@ class _PresentationV2BaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -203,7 +210,9 @@ class _PresentationV2BaseTool(BaseTool):
         try:
             result = sandbox.commands.run("pip show python-pptx", timeout=30)
             if result.exit_code != 0:
-                install_result = sandbox.commands.run("pip install python-pptx Pillow", timeout=120)
+                install_result = sandbox.commands.run(
+                    "pip install python-pptx Pillow", timeout=120
+                )
                 return install_result.exit_code == 0
             return True
         except Exception as e:
@@ -220,7 +229,10 @@ class SetTransitionInput(BaseModel):
         default="fade", description="Transition type: fade, push, wipe, split, etc."
     )
     duration_seconds: float = Field(
-        default=1.0, ge=0.1, le=5.0, description="Transition duration in seconds (0.1-5.0)"
+        default=1.0,
+        ge=0.1,
+        le=5.0,
+        description="Transition duration in seconds (0.1-5.0)",
     )
 
 
@@ -241,7 +253,7 @@ class SetTransitionTool(_PresentationV2BaseTool):
         slide_number: int,
         transition_type: TransitionType = "fade",
         duration_seconds: float = 1.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "set_transition",
             {
@@ -309,7 +321,9 @@ print("SUCCESS")
             return result
 
         except Exception as e:
-            self._emit_tool_result("set_transition", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "set_transition", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
@@ -317,7 +331,9 @@ class ApplyThemeInput(BaseModel):
     """Input for apply_theme."""
 
     file_path: str = Field(description="Path to the presentation file")
-    color_scheme: ColorScheme = Field(default="default", description="Color scheme to apply")
+    color_scheme: ColorScheme = Field(
+        default="default", description="Color scheme to apply"
+    )
     font_title: str = Field(default="Arial", description="Font for titles")
     font_body: str = Field(default="Arial", description="Font for body text")
 
@@ -338,7 +354,7 @@ class ApplyThemeTool(_PresentationV2BaseTool):
         color_scheme: ColorScheme = "default",
         font_title: str = "Arial",
         font_body: str = "Arial",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "apply_theme",
             {
@@ -358,7 +374,7 @@ class ApplyThemeTool(_PresentationV2BaseTool):
             full_path = f"{self.workspace_path}/{file_path.lstrip('/')}"
             colors = COLOR_SCHEMES.get(color_scheme, COLOR_SCHEMES["default"])
 
-            python_code = f'''
+            python_code = f"""
 from pptx import Presentation
 from pptx.util import Pt
 from pptx.dml.color import RgbColor
@@ -391,7 +407,7 @@ for slide in prs.slides:
 
 prs.save("{full_path}")
 print("SUCCESS")
-'''
+"""
             result = sandbox.commands.run(f"python3 -c '{python_code}'", timeout=30)
 
             if "SUCCESS" not in result.stdout:
@@ -418,7 +434,9 @@ class SetBackgroundInput(BaseModel):
 
     file_path: str = Field(description="Path to the presentation file")
     slide_number: int = Field(description="Slide number (1-based), or 0 for all slides")
-    color: Optional[str] = Field(default=None, description="Background color (hex, e.g., 'FFFFFF')")
+    color: Optional[str] = Field(
+        default=None, description="Background color (hex, e.g., 'FFFFFF')"
+    )
     image_path: Optional[str] = Field(
         default=None, description="Path to background image in sandbox"
     )
@@ -440,7 +458,7 @@ class SetBackgroundTool(_PresentationV2BaseTool):
         slide_number: int,
         color: Optional[str] = None,
         image_path: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "set_background",
             {
@@ -451,7 +469,10 @@ class SetBackgroundTool(_PresentationV2BaseTool):
 
         try:
             if not color and not image_path:
-                return {"success": False, "error": "Either color or image_path must be provided"}
+                return {
+                    "success": False,
+                    "error": "Either color or image_path must be provided",
+                }
 
             sandbox = self._get_sandbox()
             if not sandbox:
@@ -463,7 +484,7 @@ class SetBackgroundTool(_PresentationV2BaseTool):
             full_path = f"{self.workspace_path}/{file_path.lstrip('/')}"
 
             if color:
-                python_code = f'''
+                python_code = f"""
 from pptx import Presentation
 from pptx.dml.color import RgbColor
 from pptx.enum.dml import MSO_THEME_COLOR
@@ -482,10 +503,9 @@ for sld_num in slide_numbers:
 
 prs.save("{full_path}")
 print("SUCCESS")
-'''
+"""
             else:
-                full_image = f"{self.workspace_path}/{image_path.lstrip('/')}"
-                python_code = f'''
+                python_code = f"""
 from pptx import Presentation
 from pptx.util import Inches
 
@@ -504,7 +524,7 @@ for sld_num in slide_numbers:
 
 prs.save("{full_path}")
 print("SUCCESS")
-'''
+"""
             result = sandbox.commands.run(f"python3 -c '{python_code}'", timeout=30)
 
             if "SUCCESS" not in result.stdout:
@@ -523,7 +543,9 @@ print("SUCCESS")
             return result
 
         except Exception as e:
-            self._emit_tool_result("set_background", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "set_background", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
@@ -533,7 +555,8 @@ class DuplicateSlideInput(BaseModel):
     file_path: str = Field(description="Path to the presentation file")
     slide_number: int = Field(description="Slide number to duplicate (1-based)")
     insert_position: Optional[int] = Field(
-        default=None, description="Position to insert the duplicate (default: after original)"
+        default=None,
+        description="Position to insert the duplicate (default: after original)",
     )
 
 
@@ -541,7 +564,9 @@ class DuplicateSlideTool(_PresentationV2BaseTool):
     """Duplicate a slide in the presentation."""
 
     name: str = "duplicate_slide"
-    description: str = "Duplicate a slide and optionally insert it at a specific position."
+    description: str = (
+        "Duplicate a slide and optionally insert it at a specific position."
+    )
     args_schema: type[BaseModel] = DuplicateSlideInput
 
     def _run(
@@ -549,7 +574,7 @@ class DuplicateSlideTool(_PresentationV2BaseTool):
         file_path: str,
         slide_number: int,
         insert_position: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "duplicate_slide",
             {
@@ -567,9 +592,8 @@ class DuplicateSlideTool(_PresentationV2BaseTool):
                 return {"success": False, "error": "Failed to install python-pptx"}
 
             full_path = f"{self.workspace_path}/{file_path.lstrip('/')}"
-            pos = insert_position if insert_position else slide_number + 1
 
-            python_code = f'''
+            python_code = f"""
 from pptx import Presentation
 import copy
 
@@ -602,7 +626,7 @@ for shape in source_slide.shapes:
 
 prs.save("{full_path}")
 print(f"SUCCESS: Duplicated slide {slide_number}, total slides: {{len(prs.slides)}}")
-'''
+"""
             result = sandbox.commands.run(f"python3 -c '{python_code}'", timeout=30)
 
             if "SUCCESS" not in result.stdout:
@@ -619,7 +643,9 @@ print(f"SUCCESS: Duplicated slide {slide_number}, total slides: {{len(prs.slides
             return result
 
         except Exception as e:
-            self._emit_tool_result("duplicate_slide", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "duplicate_slide", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
@@ -627,7 +653,7 @@ class ReorderSlidesInput(BaseModel):
     """Input for reorder_slides."""
 
     file_path: str = Field(description="Path to the presentation file")
-    new_order: List[int] = Field(
+    new_order: list[int] = Field(
         description="New order of slides as list of slide numbers (1-based)"
     )
 
@@ -646,8 +672,8 @@ class ReorderSlidesTool(_PresentationV2BaseTool):
     def _run(
         self,
         file_path: str,
-        new_order: List[int],
-    ) -> Dict[str, Any]:
+        new_order: list[int],
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "reorder_slides",
             {
@@ -667,7 +693,7 @@ class ReorderSlidesTool(_PresentationV2BaseTool):
             full_path = f"{self.workspace_path}/{file_path.lstrip('/')}"
             order_str = str(new_order)
 
-            python_code = f'''
+            python_code = f"""
 from pptx import Presentation
 
 prs = Presentation("{full_path}")
@@ -697,7 +723,7 @@ for slide_id in new_slide_ids:
 
 prs.save("{full_path}")
 print("SUCCESS")
-'''
+"""
             result = sandbox.commands.run(f"python3 -c '{python_code}'", timeout=30)
 
             if "SUCCESS" not in result.stdout:
@@ -714,7 +740,9 @@ print("SUCCESS")
             return result
 
         except Exception as e:
-            self._emit_tool_result("reorder_slides", {"error": str(e)}, start_time, False)
+            self._emit_tool_result(
+                "reorder_slides", {"error": str(e)}, start_time, False
+            )
             return {"success": False, "error": str(e)}
 
 
@@ -759,7 +787,7 @@ class AddTextBoxTool(_PresentationV2BaseTool):
         font_color: str = "000000",
         bold: bool = False,
         italic: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "add_text_box",
             {
@@ -779,7 +807,7 @@ class AddTextBoxTool(_PresentationV2BaseTool):
             full_path = f"{self.workspace_path}/{file_path.lstrip('/')}"
             text_escaped = text.replace('"', '\\"').replace("'", "\\'")
 
-            python_code = f'''
+            python_code = f"""
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RgbColor
@@ -813,7 +841,7 @@ for run in p.runs:
 
 prs.save("{full_path}")
 print("SUCCESS")
-'''
+"""
             result = sandbox.commands.run(f"python3 -c '{python_code}'", timeout=30)
 
             if "SUCCESS" not in result.stdout:
@@ -837,7 +865,7 @@ print("SUCCESS")
 def build_presentation_v2_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build presentation v2 tools for a thread.
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class _ThreadOwner:
 
 
 _LOCK = threading.Lock()
-_THREAD_OWNERS: Dict[str, _ThreadOwner] = {}
+_THREAD_OWNERS: dict[str, _ThreadOwner] = {}
 
 _DEFAULT_TTL_S = 60 * 60 * 24  # 24h
 _PRUNE_SIZE = 5000

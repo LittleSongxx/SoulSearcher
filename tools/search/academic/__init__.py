@@ -13,6 +13,6 @@ from tools.search.academic.semantic_scholar_provider import SemanticScholarProvi
 
 __all__ = [
     "ArxivProvider",
-    "SemanticScholarProvider",
     "PubMedProvider",
+    "SemanticScholarProvider",
 ]

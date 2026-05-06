@@ -8,7 +8,7 @@ import logging
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from common.config import settings
 
@@ -17,7 +17,7 @@ class JSONFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging."""
 
     def format(self, record: logging.LogRecord) -> str:
-        log_data: Dict[str, Any] = {
+        log_data: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created).isoformat(),
             "level": record.levelname,
             "logger": record.name,
@@ -108,7 +108,7 @@ def setup_logging():
     logger = logging.getLogger(__name__)
     logger.info("=" * 80)
     logger.info(f"Logging initialized - Level: {log_level_str}")
-    logger.info(f"Console logging: Enabled")
+    logger.info("Console logging: Enabled")
     logger.info(f"File logging: {'Enabled' if settings.enable_file_logging else 'Disabled'}")
     if settings.enable_file_logging:
         logger.info(f"Log file: {settings.log_file}")

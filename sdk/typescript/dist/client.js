@@ -1,4 +1,4 @@
-import { readDataStreamEvents, readSseEvents } from './sse.js';
+import { readSseEvents } from './sse.js';
 export class WeaverApiError extends Error {
     status;
     path;
@@ -70,60 +70,19 @@ export class WeaverClient {
         }
         return response;
     }
-    async *chatSse(payload, opts = {}) {
-        const response = await this.fetchImpl(this.url('/api/chat/sse'), {
-            method: 'POST',
-            headers: mergeHeaders({ ...this.headers }, {
-                Accept: 'text/event-stream',
-                'Content-Type': 'application/json',
-            }),
-            body: JSON.stringify({ ...payload, stream: payload.stream ?? true }),
-            signal: opts.signal,
-        });
-        if (!response.ok) {
-            const bodyText = await response.text().catch(() => '');
-            throw new WeaverApiError({ status: response.status, path: '/api/chat/sse', bodyText });
-        }
-        this.lastThreadId =
-            response.headers.get('X-Thread-ID') || response.headers.get('x-thread-id') || null;
-        for await (const event of readSseEvents(response)) {
-            const data = event.data;
-            if (data && typeof data === 'object' && 'type' in data && 'data' in data) {
-                yield data;
-                continue;
-            }
-            if (event.event) {
-                yield { type: event.event, data };
-            }
-        }
-    }
-    async cancelChat(threadId, request = undefined) {
+    async cancelResearch(threadId, request = undefined) {
         const safeId = encodeURIComponent(String(threadId));
         if (request) {
-            return this.requestJson(`/api/chat/cancel/${safeId}`, {
+            return this.requestJson(`/api/research/cancel/${safeId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request),
             });
         }
-        return this.requestJson(`/api/chat/cancel/${safeId}`, { method: 'POST' });
+        return this.requestJson(`/api/research/cancel/${safeId}`, { method: 'POST' });
     }
-    async cancelAllChats() {
-        return this.requestJson('/api/chat/cancel-all', { method: 'POST' });
-    }
-    async *researchStream(query, opts = {}) {
-        const params = new URLSearchParams({ query: String(query || '') });
-        const path = `/api/research?${params.toString()}`;
-        const response = await this.requestRaw(path, {
-            method: 'POST',
-            headers: { Accept: 'text/event-stream' },
-            signal: opts.signal,
-        });
-        this.lastThreadId =
-            response.headers.get('X-Thread-ID') || response.headers.get('x-thread-id') || null;
-        for await (const ev of readDataStreamEvents(response)) {
-            yield ev;
-        }
+    async cancelAllResearch() {
+        return this.requestJson('/api/research/cancel-all', { method: 'POST' });
     }
     async *researchSse(payload, opts = {}) {
         const response = await this.fetchImpl(this.url('/api/research/sse'), {

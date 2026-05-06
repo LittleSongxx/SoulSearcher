@@ -1,7 +1,6 @@
 """Tests for KV-cache friendly prefix stability in capped_add_messages."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 

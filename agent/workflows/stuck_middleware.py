@@ -2,12 +2,11 @@
 Stuck detection middleware: detects repeated assistant messages and injects a nudge.
 """
 
-from typing import List
 
 from langchain_core.messages import AIMessage, BaseMessage
 
 
-def detect_stuck(messages: List[BaseMessage], threshold: int = 2) -> bool:
+def detect_stuck(messages: list[BaseMessage], threshold: int = 2) -> bool:
     if len(messages) < threshold + 1:
         return False
     last = messages[-1]
@@ -22,7 +21,7 @@ def detect_stuck(messages: List[BaseMessage], threshold: int = 2) -> bool:
     return dup >= threshold
 
 
-def inject_stuck_hint(messages: List[BaseMessage]) -> List[BaseMessage]:
+def inject_stuck_hint(messages: list[BaseMessage]) -> list[BaseMessage]:
     hint = AIMessage(
         content="Detected repeated answers. Please try a different approach or use other tools."
     )

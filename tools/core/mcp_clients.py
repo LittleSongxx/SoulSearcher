@@ -9,9 +9,8 @@ Evented MCP multi-server client (SSE + stdio).
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain.tools import BaseTool
 
@@ -52,7 +51,7 @@ class MCPClientTool(BaseTool):
                 self.session.call_tool(self.original_name, kwargs)
             )
             content_items = getattr(result, "content", None) or []
-            parts: List[str] = []
+            parts: list[str] = []
             for item in content_items:
                 text = getattr(item, "text", None)
                 if isinstance(text, str) and text:
@@ -82,9 +81,9 @@ class MCPClients:
     """Manage multiple MCP server connections and expose their tools."""
 
     def __init__(self, thread_id: str = "default"):
-        self.sessions: Dict[str, Any] = {}
-        self.exit_stacks: Dict[str, asyncio.AbstractEventLoop] = {}
-        self.tools: List[BaseTool] = []
+        self.sessions: dict[str, Any] = {}
+        self.exit_stacks: dict[str, asyncio.AbstractEventLoop] = {}
+        self.tools: list[BaseTool] = []
         self.thread_id = thread_id
 
     async def connect_sse(self, server_url: str, server_id: str = "") -> None:
@@ -102,7 +101,7 @@ class MCPClients:
 
         await self._initialize(server_id)
 
-    async def connect_stdio(self, command: str, args: List[str], server_id: str = "") -> None:
+    async def connect_stdio(self, command: str, args: list[str], server_id: str = "") -> None:
         if stdio_client is None or ClientSession is None or StdioServerParameters is None:
             raise RuntimeError("Missing dependency: mcp. Install with `pip install mcp`.")
         server_id = server_id or command

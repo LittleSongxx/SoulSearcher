@@ -35,7 +35,9 @@ async def test_internal_api_key_allows_access_when_provided(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_thread_cancel_forbidden_for_other_user_when_isolation_enabled(monkeypatch):
+async def test_thread_cancel_forbidden_for_other_user_when_isolation_enabled(
+    monkeypatch,
+):
     monkeypatch.setitem(main.settings.__dict__, "internal_api_key", "test-key")
     monkeypatch.setitem(main.settings.__dict__, "auth_user_header", "X-Weaver-User")
     monkeypatch.setattr(main.settings, "openai_api_key", "")
@@ -43,12 +45,12 @@ async def test_thread_cancel_forbidden_for_other_user_when_isolation_enabled(mon
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         create_resp = await ac.post(
-            "/api/chat/sse",
+            "/api/research/sse",
             headers={
                 "Authorization": "Bearer test-key",
                 "X-Weaver-User": "alice",
             },
-            json={"messages": [{"role": "user", "content": "hi"}], "stream": True},
+            json={"query": "hi"},
         )
 
         assert create_resp.status_code == 200
@@ -56,7 +58,7 @@ async def test_thread_cancel_forbidden_for_other_user_when_isolation_enabled(mon
         assert thread_id
 
         forbidden = await ac.post(
-            f"/api/chat/cancel/{thread_id}",
+            f"/api/research/cancel/{thread_id}",
             headers={
                 "Authorization": "Bearer test-key",
                 "X-Weaver-User": "bob",

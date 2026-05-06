@@ -20,19 +20,7 @@ class _DummyRequest:
 async def _blocked_stream(*_args, **_kwargs):
     # Simulate an upstream generator that would otherwise keep running forever.
     await asyncio.Event().wait()
-    yield "0:{\"type\":\"text\",\"data\":{\"content\":\"hi\"}}\\n"
-
-
-@pytest.mark.asyncio
-async def test_chat_sse_aborts_when_request_is_disconnected(monkeypatch):
-    monkeypatch.setitem(main.settings.__dict__, "openai_api_key", "test-key")
-    monkeypatch.setattr(main, "stream_agent_events", _blocked_stream)
-
-    payload = main.ChatRequest(messages=[main.Message(role="user", content="hi")])
-    resp = await main.chat_sse(_DummyRequest(), payload)
-
-    with pytest.raises(StopAsyncIteration):
-        await asyncio.wait_for(anext(resp.body_iterator), timeout=1.0)
+    yield '0:{"type":"text","data":{"content":"hi"}}\\n'
 
 
 @pytest.mark.asyncio

@@ -13,7 +13,7 @@ for retry via an alternative subtopic decomposition.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 from common.config import settings
@@ -28,7 +28,7 @@ def _clip_score(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
-def _normalized_unique_domains(sources: List[str]) -> float:
+def _normalized_unique_domains(sources: list[str]) -> float:
     domains = set()
     for source in sources or []:
         host = urlparse(str(source or "").strip()).netloc.lower()
@@ -37,7 +37,7 @@ def _normalized_unique_domains(sources: List[str]) -> float:
     return min(len(domains) / 4.0, 1.0)
 
 
-def evaluate_branch(node: "ResearchTreeNode") -> Dict[str, Any]:
+def evaluate_branch(node: "ResearchTreeNode") -> dict[str, Any]:
     findings = node.findings if isinstance(node.findings, list) else []
     findings_count = len(findings)
     summary_len = len(node.summary) if node.summary else 0
@@ -52,7 +52,7 @@ def evaluate_branch(node: "ResearchTreeNode") -> Dict[str, Any]:
 
     evidence_rich = 0
     numeric_evidence = 0
-    result_scores: List[float] = []
+    result_scores: list[float] = []
     for finding in findings:
         result = finding.get("result", {}) if isinstance(finding, dict) else {}
         if not isinstance(result, dict):
@@ -112,7 +112,7 @@ def evaluate_branch(node: "ResearchTreeNode") -> Dict[str, Any]:
     )
     score = _clip_score(score * max(0.55, 1.0 - (duplicate_penalty * 0.35)))
 
-    focus_areas: List[str] = []
+    focus_areas: list[str] = []
     if findings_count < 3:
         focus_areas.append("补充更多一手或高置信度检索结果")
     if source_score < 0.5:
@@ -178,10 +178,10 @@ def score_branch(node: "ResearchTreeNode") -> float:
 
 def build_backtrack_queries(
     node: "ResearchTreeNode",
-    evaluation: Optional[Dict[str, Any]] = None,
+    evaluation: Optional[dict[str, Any]] = None,
     *,
     limit: int = 3,
-) -> List[str]:
+) -> list[str]:
     evaluation = evaluation or evaluate_branch(node)
     signals = evaluation.get("signals", {}) if isinstance(evaluation, dict) else {}
     existing_queries = {
@@ -190,7 +190,7 @@ def build_backtrack_queries(
         if isinstance(q, str) and q.strip()
     }
 
-    candidates: List[str] = []
+    candidates: list[str] = []
     topic = str(node.topic or "").strip()
     if not topic:
         return []
@@ -218,7 +218,7 @@ def build_backtrack_queries(
         if isinstance(focus, str) and focus.strip():
             candidates.append(f"{topic} {focus.strip()}")
 
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set(existing_queries)
     for candidate in candidates:
         normalized = " ".join(str(candidate or "").split()).strip()

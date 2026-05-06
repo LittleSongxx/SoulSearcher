@@ -19,11 +19,10 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -70,7 +69,7 @@ class _ImageEditBaseTool(BaseTool):
             return session._handles.sandbox
         return None
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event."""
         if not self.emit_events:
             return
@@ -81,7 +80,7 @@ class _ImageEditBaseTool(BaseTool):
             except Exception as e:
                 logger.warning(f"[image_edit] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -98,7 +97,7 @@ class _ImageEditBaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -154,7 +153,7 @@ class ApplyFilterTool(_ImageEditBaseTool):
         output_path: str,
         filter_type: FilterType,
         intensity: float = 1.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "apply_filter",
             {
@@ -263,7 +262,7 @@ class ApplyEffectTool(_ImageEditBaseTool):
         image_path: str,
         output_path: str,
         effect_type: EffectType,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "apply_effect",
             {
@@ -401,7 +400,7 @@ class AdjustImageTool(_ImageEditBaseTool):
         contrast: float = 1.0,
         saturation: float = 1.0,
         sharpness: float = 1.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "adjust_image",
             {
@@ -514,7 +513,7 @@ class RotateFlipTool(_ImageEditBaseTool):
         rotate_degrees: int = 0,
         flip_horizontal: bool = False,
         flip_vertical: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "rotate_flip",
             {
@@ -628,7 +627,7 @@ class AddWatermarkTool(_ImageEditBaseTool):
         opacity: float = 0.5,
         font_size: int = 36,
         color: str = "FFFFFF",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "add_watermark",
             {
@@ -766,7 +765,7 @@ class OverlayImagesInput(BaseModel):
     x: int = Field(default=0, description="X position of overlay")
     y: int = Field(default=0, description="Y position of overlay")
     opacity: float = Field(default=1.0, ge=0.0, le=1.0, description="Overlay opacity")
-    resize_overlay: Optional[List[int]] = Field(
+    resize_overlay: Optional[list[int]] = Field(
         default=None, description="Resize overlay to [width, height]"
     )
 
@@ -789,8 +788,8 @@ class OverlayImagesTool(_ImageEditBaseTool):
         x: int = 0,
         y: int = 0,
         opacity: float = 1.0,
-        resize_overlay: Optional[List[int]] = None,
-    ) -> Dict[str, Any]:
+        resize_overlay: Optional[list[int]] = None,
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "overlay_images",
             {
@@ -908,7 +907,7 @@ class CreateThumbnailTool(_ImageEditBaseTool):
         output_path: str,
         max_size: int = 128,
         maintain_aspect: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "create_thumbnail",
             {
@@ -982,7 +981,7 @@ except Exception as e:
 def build_image_edit_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build image edit tools for a thread.
 

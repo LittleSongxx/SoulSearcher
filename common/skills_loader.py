@@ -17,16 +17,16 @@ Example file (skills/code-assistant.md):
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import os
 import re
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import yaml
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
 _STATE_LOCK = threading.Lock()
-_REGISTRY_CACHE: Optional["SkillRegistrySnapshot"] = None
+_REGISTRY_CACHE: Optional[SkillRegistrySnapshot] = None
 
 ALLOWED_SKILL_MODES = {"direct", "agent", "deep"}
 ALLOWED_SKILL_CATEGORIES = {"research", "code", "writing", "data", "creative", "tool"}
@@ -71,7 +71,7 @@ _SKILL_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -82,7 +82,7 @@ class SkillValidationIssue:
     skill_id: str = ""
     source: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "severity": self.severity,
             "message": self.message,
@@ -98,9 +98,9 @@ class SkillIOField:
     description: str = ""
     type: str = "string"
     required: bool = False
-    examples: List[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "description": self.description,
@@ -117,7 +117,7 @@ class SkillDependency:
     required: bool = True
     description: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "type": self.type,
@@ -135,7 +135,7 @@ class SkillPermissions:
     sandbox: bool = False
     external_apis: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "network": self.network,
             "filesystem": self.filesystem,
@@ -148,8 +148,8 @@ class SkillPermissions:
 
 @dataclass
 class SkillRegistrySnapshot:
-    skills: List["SkillProfile"] = field(default_factory=list)
-    issues: List[SkillValidationIssue] = field(default_factory=list)
+    skills: list[SkillProfile] = field(default_factory=list)
+    issues: list[SkillValidationIssue] = field(default_factory=list)
     loaded_at: str = field(default_factory=_utc_now_iso)
     skills_dir: str = ""
     total_files: int = 0
@@ -163,7 +163,7 @@ class SkillRegistrySnapshot:
     def disabled_count(self) -> int:
         return len([skill for skill in self.skills if skill.is_valid and skill.status != "enabled"])
 
-    def to_dict(self, *, include_skills: bool = False) -> Dict[str, Any]:
+    def to_dict(self, *, include_skills: bool = False) -> dict[str, Any]:
         payload = {
             "loaded_at": self.loaded_at,
             "skills_dir": self.skills_dir,
@@ -198,25 +198,25 @@ class SkillProfile:
     icon: str = "⚡"
     category: str = "tool"  # research | code | writing | data | creative | tool
     mode: str = "agent"  # direct | agent | deep
-    tools: List[str] = field(default_factory=list)
-    example_queries: List[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
+    example_queries: list[str] = field(default_factory=list)
     is_preset: bool = True
     version: str = "1.0.0"
     status: str = "enabled"
     tool_policy: str = "strict"
-    tags: List[str] = field(default_factory=list)
-    runtime: Dict[str, Any] = field(default_factory=dict)
-    input_contract: List[SkillIOField] = field(default_factory=list)
-    output_contract: List[SkillIOField] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    runtime: dict[str, Any] = field(default_factory=dict)
+    input_contract: list[SkillIOField] = field(default_factory=list)
+    output_contract: list[SkillIOField] = field(default_factory=list)
     permissions: SkillPermissions = field(default_factory=SkillPermissions)
-    dependencies: List[SkillDependency] = field(default_factory=list)
-    validation_issues: List[SkillValidationIssue] = field(default_factory=list)
+    dependencies: list[SkillDependency] = field(default_factory=list)
+    validation_issues: list[SkillValidationIssue] = field(default_factory=list)
     system_prompt: str = ""
     updated_at: str = ""
     loaded_at: str = field(default_factory=_utc_now_iso)
     # Source file path (for debugging)
     _source: str = ""
-    _raw_meta: Dict[str, Any] = field(default_factory=dict)
+    _raw_meta: dict[str, Any] = field(default_factory=dict)
 
     # ---- helpers used by the backend ----
 
@@ -228,16 +228,16 @@ class SkillProfile:
     def is_enabled(self) -> bool:
         return self.status == "enabled"
 
-    def to_enabled_tools(self) -> Dict[str, bool]:
+    def to_enabled_tools(self) -> dict[str, bool]:
         """Convert the tools list to an ``enabled_tools`` dict compatible with AgentProfile."""
-        enabled: Dict[str, bool] = {}
+        enabled: dict[str, bool] = {}
         if self.tool_policy == "strict":
             enabled = {tool: False for tool in KNOWN_TOOL_KEYS}
         for tool in self.tools:
             enabled[tool] = True
         return enabled
 
-    def to_agent_profile_dict(self) -> Dict[str, Any]:
+    def to_agent_profile_dict(self) -> dict[str, Any]:
         """Return a dict that can be used as ``configurable.agent_profile``."""
         return {
             "id": self.id,
@@ -262,7 +262,7 @@ class SkillProfile:
             },
         }
 
-    def to_summary_dict(self, *, include_diagnostics: bool = False) -> Dict[str, Any]:
+    def to_summary_dict(self, *, include_diagnostics: bool = False) -> dict[str, Any]:
         """Metadata-only dict for the listing API (no full prompt)."""
         payload = {
             "id": self.id,
@@ -297,7 +297,7 @@ class SkillProfile:
             payload.pop("source", None)
         return payload
 
-    def to_full_dict(self) -> Dict[str, Any]:
+    def to_full_dict(self) -> dict[str, Any]:
         """Full dict including system_prompt."""
         d = self.to_summary_dict(include_diagnostics=True)
         d["system_prompt"] = self.system_prompt
@@ -308,7 +308,7 @@ class SkillProfile:
 # Parsing
 # ---------------------------------------------------------------------------
 
-def _normalize_string_list(value: Any) -> List[str]:
+def _normalize_string_list(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, list):
@@ -320,7 +320,7 @@ def _normalize_string_list(value: Any) -> List[str]:
     return [text] if text else []
 
 
-def _infer_permissions(tools: List[str]) -> SkillPermissions:
+def _infer_permissions(tools: list[str]) -> SkillPermissions:
     browser_tools = {"browser", "browser_use", "sandbox_browser", "sandbox_web_search", "computer_use"}
     network_tools = browser_tools | {"web_search", "crawl", "mcp"}
     sandbox_tools = {
@@ -358,13 +358,13 @@ def _parse_contract_fields(
     value: Any,
     *,
     field_name: str,
-    issues: List[SkillValidationIssue],
+    issues: list[SkillValidationIssue],
     skill_id: str,
     source: str,
-) -> List[SkillIOField]:
+) -> list[SkillIOField]:
     if value in (None, ""):
         return []
-    items: List[Any]
+    items: list[Any]
     if isinstance(value, dict):
         items = [{"name": key, **(item if isinstance(item, dict) else {"description": item})} for key, item in value.items()]
     elif isinstance(value, list):
@@ -381,7 +381,7 @@ def _parse_contract_fields(
         )
         return []
 
-    fields: List[SkillIOField] = []
+    fields: list[SkillIOField] = []
     for index, item in enumerate(items):
         if isinstance(item, str):
             item = {"name": item, "description": ""}
@@ -430,11 +430,11 @@ def _parse_contract_fields(
     return fields
 
 
-def _parse_dependencies(value: Any) -> List[SkillDependency]:
+def _parse_dependencies(value: Any) -> list[SkillDependency]:
     if value in (None, ""):
         return []
     items = value if isinstance(value, list) else [value]
-    dependencies: List[SkillDependency] = []
+    dependencies: list[SkillDependency] = []
     for item in items:
         if isinstance(item, str):
             dependencies.append(SkillDependency(name=item.strip()))
@@ -455,7 +455,7 @@ def _parse_dependencies(value: Any) -> List[SkillDependency]:
     return dependencies
 
 
-def _parse_permissions(value: Any, tools: List[str]) -> SkillPermissions:
+def _parse_permissions(value: Any, tools: list[str]) -> SkillPermissions:
     inferred = _infer_permissions(tools)
     if not isinstance(value, dict):
         return inferred
@@ -469,7 +469,7 @@ def _parse_permissions(value: Any, tools: List[str]) -> SkillPermissions:
     )
 
 
-def _validate_skill(skill: SkillProfile) -> List[SkillValidationIssue]:
+def _validate_skill(skill: SkillProfile) -> list[SkillValidationIssue]:
     issues = list(skill.validation_issues)
 
     if not skill.id:
@@ -540,7 +540,7 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
     tmp.replace(path)
 
 
-def _load_skill_state(paths: Optional[SkillsStatePaths] = None) -> Dict[str, Any]:
+def _load_skill_state(paths: Optional[SkillsStatePaths] = None) -> dict[str, Any]:
     paths = paths or _state_paths()
     with _STATE_LOCK:
         if not paths.file.exists():
@@ -557,7 +557,7 @@ def _load_skill_state(paths: Optional[SkillsStatePaths] = None) -> Dict[str, Any
         return raw
 
 
-def _save_skill_state(payload: Dict[str, Any], paths: Optional[SkillsStatePaths] = None) -> None:
+def _save_skill_state(payload: dict[str, Any], paths: Optional[SkillsStatePaths] = None) -> None:
     paths = paths or _state_paths()
     payload = dict(payload)
     payload["updated_at"] = _utc_now_iso()
@@ -565,7 +565,7 @@ def _save_skill_state(payload: Dict[str, Any], paths: Optional[SkillsStatePaths]
         _atomic_write_json(paths.file, payload)
 
 
-def _apply_status_override(skill_id: str, status: str, state: Dict[str, Any]) -> str:
+def _apply_status_override(skill_id: str, status: str, state: dict[str, Any]) -> str:
     overrides = state.get("status_overrides") or {}
     if isinstance(overrides, dict):
         override = str(overrides.get(skill_id) or "").strip().lower()
@@ -574,7 +574,7 @@ def _apply_status_override(skill_id: str, status: str, state: Dict[str, Any]) ->
     return status
 
 
-def _parse_skill_file(path: Path, *, state: Optional[Dict[str, Any]] = None) -> Optional[SkillProfile]:
+def _parse_skill_file(path: Path, *, state: Optional[dict[str, Any]] = None) -> Optional[SkillProfile]:
     """Parse a single .md skill file into a SkillProfile."""
     try:
         raw = path.read_text(encoding="utf-8")
@@ -607,7 +607,7 @@ def _parse_skill_file(path: Path, *, state: Optional[Dict[str, Any]] = None) -> 
 
     skill_id = meta.get("id") or path.stem
     tools = _normalize_string_list(meta.get("tools"))
-    issues: List[SkillValidationIssue] = []
+    issues: list[SkillValidationIssue] = []
     skill = SkillProfile(
         id=str(skill_id).strip(),
         name=str(meta.get("name") or skill_id).strip(),
@@ -643,7 +643,7 @@ def _parse_skill_file(path: Path, *, state: Optional[Dict[str, Any]] = None) -> 
         dependencies=_parse_dependencies(meta.get("dependencies")),
         validation_issues=[],
         system_prompt=body,
-        updated_at=datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
+        updated_at=datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat(),
         _source=str(path),
         _raw_meta=meta,
     )
@@ -671,8 +671,8 @@ def _build_registry(skills_dir: Optional[Path] = None) -> SkillRegistrySnapshot:
         return snapshot
 
     state = _load_skill_state()
-    parsed_skills: List[SkillProfile] = []
-    issues: List[SkillValidationIssue] = []
+    parsed_skills: list[SkillProfile] = []
+    issues: list[SkillValidationIssue] = []
     files = sorted(directory.glob("*.md"))
     snapshot.total_files = len(files)
 
@@ -692,7 +692,7 @@ def _build_registry(skills_dir: Optional[Path] = None) -> SkillRegistrySnapshot:
         parsed_skills.append(skill)
         issues.extend(skill.validation_issues)
 
-    counts: Dict[str, int] = {}
+    counts: dict[str, int] = {}
     for skill in parsed_skills:
         counts[skill.id] = counts.get(skill.id, 0) + 1
 
@@ -748,7 +748,7 @@ def load_all_skills(
     use_cache: bool = True,
     include_disabled: bool = False,
     include_invalid: bool = False,
-) -> List[SkillProfile]:
+) -> list[SkillProfile]:
     """
     Load and return all skill profiles from the skills/ directory.
 
@@ -787,7 +787,7 @@ def reload_skills(
     *,
     include_disabled: bool = False,
     include_invalid: bool = False,
-) -> List[SkillProfile]:
+) -> list[SkillProfile]:
     """Force-reload skills from disk (clears cache)."""
     global _REGISTRY_CACHE
     with _LOCK:

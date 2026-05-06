@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def _ensure_dir():
     _data_dir().mkdir(parents=True, exist_ok=True)
 
 
-def _load_json(filename: str) -> Dict[str, Any]:
+def _load_json(filename: str) -> dict[str, Any]:
     path = _data_dir() / filename
     if path.exists():
         try:
@@ -45,7 +45,7 @@ def _load_json(filename: str) -> Dict[str, Any]:
     return {}
 
 
-def _save_json(filename: str, data: Dict[str, Any]) -> None:
+def _save_json(filename: str, data: dict[str, Any]) -> None:
     _ensure_dir()
     path = _data_dir() / filename
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -57,7 +57,7 @@ def create_share_link(
     thread_id: str,
     permissions: str = "view",
     expires_hours: Optional[int] = 72,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a share link for a session."""
     share_id = str(uuid.uuid4())[:12]
     now = datetime.now().isoformat()
@@ -82,7 +82,7 @@ def create_share_link(
     return link
 
 
-def get_share_link(share_id: str) -> Optional[Dict[str, Any]]:
+def get_share_link(share_id: str) -> Optional[dict[str, Any]]:
     """Get share link details."""
     shares = _load_json("shares.json")
     link = shares.get(share_id)
@@ -113,7 +113,7 @@ def delete_share_link(share_id: str) -> bool:
     return False
 
 
-def list_share_links(thread_id: str) -> List[Dict[str, Any]]:
+def list_share_links(thread_id: str) -> list[dict[str, Any]]:
     """List all share links for a thread."""
     shares = _load_json("shares.json")
     return [s for s in shares.values() if s.get("thread_id") == thread_id]
@@ -126,7 +126,7 @@ def add_comment(
     content: str,
     author: str = "anonymous",
     message_id: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Add a comment to a session."""
     comment_id = str(uuid.uuid4())[:12]
     now = datetime.now().isoformat()
@@ -154,7 +154,7 @@ def add_comment(
 def get_comments(
     thread_id: str,
     message_id: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get comments for a session, optionally filtered by message."""
     comments = _load_json("comments.json")
     thread_comments = comments.get(thread_id, [])
@@ -180,9 +180,9 @@ def delete_comment(thread_id: str, comment_id: str) -> bool:
 
 def save_version(
     thread_id: str,
-    state_snapshot: Dict[str, Any],
+    state_snapshot: dict[str, Any],
     label: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Save a version snapshot of a session."""
     versions = _load_json("versions.json")
     thread_versions = versions.get(thread_id, [])
@@ -216,13 +216,13 @@ def save_version(
     return version
 
 
-def list_versions(thread_id: str) -> List[Dict[str, Any]]:
+def list_versions(thread_id: str) -> list[dict[str, Any]]:
     """List all versions for a session."""
     versions = _load_json("versions.json")
     return versions.get(thread_id, [])
 
 
-def get_version_snapshot(version_id: str) -> Optional[Dict[str, Any]]:
+def get_version_snapshot(version_id: str) -> Optional[dict[str, Any]]:
     """Get the full state snapshot for a version."""
     snapshot_path = _data_dir() / f"snapshot_{version_id}.json"
     if snapshot_path.exists():

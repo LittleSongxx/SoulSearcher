@@ -4,17 +4,16 @@ Prompt 迭代优化器核心模块
 实现 Prompt 的自动优化循环：预测 -> 评估 -> 分析 -> 优化
 """
 
-import asyncio
 import json
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
 
-from agent.core.llm_factory import create_chat_model_params
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
+from agent.core.llm_factory import create_chat_model_params
 from common.config import settings
 
 from .analyzer import ErrorAnalyzer
@@ -136,8 +135,8 @@ class PromptOptimizer:
         self.current_prompt = config.init_prompt
         self.best_prompt = config.init_prompt
         self.best_accuracy = 0.0
-        self.accuracy_history: List[float] = []
-        self.optimization_log: List[Dict] = []
+        self.accuracy_history: list[float] = []
+        self.optimization_log: list[dict] = []
 
         # 创建输出目录
         self.output_dir = config.output_dir / config.task_name
@@ -145,9 +144,9 @@ class PromptOptimizer:
 
     async def optimize(
         self,
-        test_data: List[Dict],
+        test_data: list[dict],
         progress_callback: Optional[Callable[[int, int, float], None]] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         执行优化循环
 
@@ -165,12 +164,12 @@ class PromptOptimizer:
                 "optimization_log": List[Dict]
             }
         """
-        logger.info(f"=" * 60)
+        logger.info("=" * 60)
         logger.info(f"Starting Prompt Optimization: {self.config.task_name}")
         logger.info(f"Test data: {len(test_data)} samples")
         logger.info(f"Epochs: {self.config.epochs}")
         logger.info(f"Target model: {self.config.target_model}")
-        logger.info(f"=" * 60)
+        logger.info("=" * 60)
 
         no_improvement_count = 0
 
@@ -290,7 +289,7 @@ class PromptOptimizer:
         self._save_final_result(result)
 
         logger.info(f"\n{'=' * 60}")
-        logger.info(f"Optimization Complete!")
+        logger.info("Optimization Complete!")
         logger.info(f"Best accuracy: {self.best_accuracy:.2%}")
         logger.info(f"Accuracy history: {[f'{a:.1%}' for a in self.accuracy_history]}")
         logger.info(f"Results saved to: {self.output_dir}")
@@ -298,19 +297,19 @@ class PromptOptimizer:
 
         return result
 
-    async def _predict_batch(self, data: List[Dict]) -> List[Dict]:
+    async def _predict_batch(self, data: list[dict]) -> list[dict]:
         """批量预测"""
         from common.concurrency import get_concurrency_controller
 
         controller = get_concurrency_controller()
         results = []
 
-        async def predict_one(item: Dict) -> Dict:
+        async def predict_one(item: dict) -> dict:
             try:
                 # 格式化 Prompt
                 try:
                     full_prompt = self.current_prompt.format(**item)
-                except KeyError as e:
+                except KeyError:
                     # 处理缺少的变量
                     full_prompt = self.current_prompt
                     for key, value in item.items():
@@ -335,7 +334,7 @@ class PromptOptimizer:
         # 过滤异常
         return [r for r in results if not isinstance(r, Exception)]
 
-    async def _generate_optimized_prompt(self, analysis: Dict) -> str:
+    async def _generate_optimized_prompt(self, analysis: dict) -> str:
         """生成优化后的 Prompt"""
         prompt = ChatPromptTemplate.from_template(self.OPTIMIZE_PROMPT)
 
@@ -388,7 +387,7 @@ class PromptOptimizer:
         path.write_text(json.dumps(checkpoint, ensure_ascii=False, indent=2))
         logger.debug(f"Checkpoint saved: {path}")
 
-    def _save_final_result(self, result: Dict):
+    def _save_final_result(self, result: dict):
         """保存最终结果"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -421,10 +420,10 @@ class PromptOptimizer:
 async def run_optimization(
     task_name: str,
     init_prompt: str,
-    test_data: List[Dict],
+    test_data: list[dict],
     eval_function: Callable,
     **config_kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     便捷函数：运行一次 Prompt 优化
 

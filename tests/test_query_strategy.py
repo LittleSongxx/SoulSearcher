@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from agent.workflows.query_strategy import (
     analyze_query_coverage,
@@ -33,7 +33,7 @@ def test_is_time_sensitive_topic_supports_english_and_chinese():
 
 
 def test_summarize_freshness_computes_buckets_and_ratios():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     search_runs = [
         {
@@ -60,7 +60,7 @@ def test_summarize_freshness_computes_buckets_and_ratios():
 
 
 def test_summarize_freshness_reads_provider_date_aliases_and_snippets():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     month_date = now - timedelta(days=2)
     month_date_text = f"{month_date.strftime('%B')} {month_date.day}, {month_date.year}"
 

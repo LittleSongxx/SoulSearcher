@@ -17,11 +17,11 @@ async def test_public_config_endpoint_exposes_safe_defaults():
     assert payload["defaults"]["primary_model"] == main.settings.primary_model
     assert payload["defaults"]["reasoning_model"] == main.settings.reasoning_model
 
-    assert payload["streaming"]["chat"]["protocol"] in {"sse", "legacy"}
-    assert payload["streaming"]["research"]["protocol"] in {"sse", "legacy"}
+    assert set(payload["streaming"].keys()) == {"research"}
+    assert payload["streaming"]["research"]["protocol"] == "sse"
+    assert payload["streaming"]["research"]["endpoint"] == "/api/research/sse"
 
     # Should not leak secrets.
     as_text = resp.text
     assert "OPENAI_API_KEY" not in as_text
     assert "E2B_API_KEY" not in as_text
-

@@ -34,10 +34,9 @@ import logging
 import os
 import re
 import threading
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +113,8 @@ class ScreenshotService:
         action: str = "screenshot",
         thread_id: Optional[str] = None,
         page_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Save a screenshot to disk.
 
@@ -182,8 +181,8 @@ class ScreenshotService:
         action: str = "screenshot",
         thread_id: Optional[str] = None,
         page_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Save a base64-encoded screenshot to disk.
 
@@ -230,8 +229,8 @@ class ScreenshotService:
         action: str = "screenshot",
         thread_id: Optional[str] = None,
         page_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Synchronous version of save_screenshot for non-async contexts.
 
@@ -346,7 +345,7 @@ class ScreenshotService:
         self,
         thread_id: Optional[str] = None,
         limit: int = 100,
-    ) -> list[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         List available screenshots.
 

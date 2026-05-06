@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, List, Optional
+from typing import Any, Optional
 
 from eval.deep_research_benchmark.schemas import BenchmarkTask
 
@@ -11,7 +12,7 @@ class DatasetValidationError(ValueError):
     pass
 
 
-def _clean_string_list(value: Any, *, field_name: str, line_number: int) -> List[str]:
+def _clean_string_list(value: Any, *, field_name: str, line_number: int) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list):
@@ -69,12 +70,12 @@ def parse_task(raw: dict[str, Any], *, line_number: int) -> BenchmarkTask:
     )
 
 
-def load_tasks(path: str | Path, max_cases: Optional[int] = None) -> List[BenchmarkTask]:
+def load_tasks(path: str | Path, max_cases: Optional[int] = None) -> list[BenchmarkTask]:
     input_path = Path(path)
     if not input_path.exists():
         raise FileNotFoundError(f"Benchmark dataset not found: {input_path}")
 
-    tasks: List[BenchmarkTask] = []
+    tasks: list[BenchmarkTask] = []
     with input_path.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             text = line.strip()

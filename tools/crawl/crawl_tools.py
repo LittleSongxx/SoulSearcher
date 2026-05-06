@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -27,7 +27,7 @@ class CrawlUrlTool(BaseTool):
     description: str = "Fetch a webpage over HTTP and return extracted plain text."
     args_schema: type[BaseModel] = CrawlUrlInput
 
-    def _run(self, url: str, timeout: int = 10, max_chars: int = 4000) -> Dict[str, Any]:
+    def _run(self, url: str, timeout: int = 10, max_chars: int = 4000) -> dict[str, Any]:
         res = _crawl_url(url, timeout=int(timeout))
         return {
             "url": res.get("url", url),
@@ -36,7 +36,7 @@ class CrawlUrlTool(BaseTool):
 
 
 class CrawlUrlsInput(BaseModel):
-    urls: List[str] = Field(description="List of URLs to crawl")
+    urls: list[str] = Field(description="List of URLs to crawl")
     timeout: int = Field(default=10, ge=1, le=60)
     max_chars_per_url: int = Field(default=2000, ge=200, le=20000)
 
@@ -47,11 +47,11 @@ class CrawlUrlsTool(BaseTool):
     args_schema: type[BaseModel] = CrawlUrlsInput
 
     def _run(
-        self, urls: List[str], timeout: int = 10, max_chars_per_url: int = 2000
-    ) -> List[Dict[str, Any]]:
+        self, urls: list[str], timeout: int = 10, max_chars_per_url: int = 2000
+    ) -> list[dict[str, Any]]:
         urls = [u for u in (urls or []) if isinstance(u, str) and u.strip()]
         results = _crawl_urls(urls, timeout=int(timeout))
-        trimmed: List[Dict[str, Any]] = []
+        trimmed: list[dict[str, Any]] = []
         for r in results:
             trimmed.append(
                 {
@@ -62,5 +62,5 @@ class CrawlUrlsTool(BaseTool):
         return trimmed
 
 
-def build_crawl_tools() -> List[BaseTool]:
+def build_crawl_tools() -> list[BaseTool]:
     return [CrawlUrlTool(), CrawlUrlsTool()]

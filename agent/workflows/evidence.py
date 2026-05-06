@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Optional
 
 from agent.workflows.source_url_utils import canonicalize_source_url
 
@@ -35,9 +36,9 @@ class EvidenceItem:
     quality_score: Optional[float] = None
     freshness_score: Optional[float] = None
     citation_id: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         return {key: value for key, value in data.items() if value not in (None, "", [], {})}
 
@@ -62,10 +63,10 @@ def _text(value: Any) -> str:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def from_search_result(result: Dict[str, Any], *, query: str = "", citation_id: str = "") -> EvidenceItem:
+def from_search_result(result: dict[str, Any], *, query: str = "", citation_id: str = "") -> EvidenceItem:
     url = canonicalize_source_url(result.get("url")) or _text(result.get("url"))
     title = _text(result.get("title"))
     snippet = _text(result.get("summary") or result.get("snippet") or result.get("content") or result.get("raw_excerpt"))
@@ -97,7 +98,7 @@ def from_search_result(result: Dict[str, Any], *, query: str = "", citation_id: 
     )
 
 
-def from_source(source: Dict[str, Any], *, citation_id: str = "") -> EvidenceItem:
+def from_source(source: dict[str, Any], *, citation_id: str = "") -> EvidenceItem:
     url = canonicalize_source_url(source.get("url")) or _text(source.get("url"))
     title = _text(source.get("title") or source.get("name"))
     snippet = _text(source.get("snippet") or source.get("summary") or source.get("content"))
@@ -115,7 +116,7 @@ def from_source(source: Dict[str, Any], *, citation_id: str = "") -> EvidenceIte
     )
 
 
-def from_fetched_page(page: Dict[str, Any]) -> EvidenceItem:
+def from_fetched_page(page: dict[str, Any]) -> EvidenceItem:
     url = canonicalize_source_url(page.get("url")) or _text(page.get("url"))
     title = _text(page.get("title"))
     snippet = _text(page.get("markdown") or page.get("text"))[:1000]
@@ -132,7 +133,7 @@ def from_fetched_page(page: Dict[str, Any]) -> EvidenceItem:
     )
 
 
-def from_passage(passage: Dict[str, Any]) -> EvidenceItem:
+def from_passage(passage: dict[str, Any]) -> EvidenceItem:
     url = canonicalize_source_url(passage.get("url")) or _text(passage.get("url"))
     title = _text(passage.get("page_title") or passage.get("title"))
     snippet = _text(passage.get("text") or passage.get("quote"))
@@ -150,7 +151,7 @@ def from_passage(passage: Dict[str, Any]) -> EvidenceItem:
     )
 
 
-def from_rag_result(result: Dict[str, Any], *, query: str = "") -> EvidenceItem:
+def from_rag_result(result: dict[str, Any], *, query: str = "") -> EvidenceItem:
     document_id = _text(result.get("document_id") or result.get("id") or result.get("chunk_id"))
     filename = _text(result.get("filename") or result.get("source"))
     snippet = _text(result.get("content") or result.get("text") or result.get("snippet"))
@@ -168,7 +169,7 @@ def from_rag_result(result: Dict[str, Any], *, query: str = "") -> EvidenceItem:
     )
 
 
-def from_tree_finding(finding: Dict[str, Any], *, branch_id: str = "", branch_topic: str = "") -> Optional[EvidenceItem]:
+def from_tree_finding(finding: dict[str, Any], *, branch_id: str = "", branch_topic: str = "") -> Optional[EvidenceItem]:
     result = finding.get("result") if isinstance(finding.get("result"), dict) else finding
     if not isinstance(result, dict):
         return None
@@ -178,8 +179,8 @@ def from_tree_finding(finding: Dict[str, Any], *, branch_id: str = "", branch_to
     return item
 
 
-def dedupe_evidence(items: Iterable[EvidenceItem]) -> List[EvidenceItem]:
-    output: List[EvidenceItem] = []
+def dedupe_evidence(items: Iterable[EvidenceItem]) -> list[EvidenceItem]:
+    output: list[EvidenceItem] = []
     seen = set()
     for item in items:
         key = item.id
@@ -196,13 +197,13 @@ def dedupe_evidence(items: Iterable[EvidenceItem]) -> List[EvidenceItem]:
 
 def build_evidence_items(
     *,
-    search_runs: Optional[List[Dict[str, Any]]] = None,
-    sources: Optional[List[Dict[str, Any]]] = None,
-    fetched_pages: Optional[List[Dict[str, Any]]] = None,
-    passages: Optional[List[Dict[str, Any]]] = None,
-    rag_results: Optional[List[Dict[str, Any]]] = None,
-) -> List[Dict[str, Any]]:
-    items: List[EvidenceItem] = []
+    search_runs: Optional[list[dict[str, Any]]] = None,
+    sources: Optional[list[dict[str, Any]]] = None,
+    fetched_pages: Optional[list[dict[str, Any]]] = None,
+    passages: Optional[list[dict[str, Any]]] = None,
+    rag_results: Optional[list[dict[str, Any]]] = None,
+) -> list[dict[str, Any]]:
+    items: list[EvidenceItem] = []
     for run in search_runs or []:
         if not isinstance(run, dict):
             continue
@@ -228,8 +229,8 @@ def build_evidence_items(
     return [item.to_dict() for item in dedupe_evidence(items)]
 
 
-def evidence_to_passages(evidence_items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    passages: List[Dict[str, Any]] = []
+def evidence_to_passages(evidence_items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    passages: list[dict[str, Any]] = []
     for item in evidence_items or []:
         if not isinstance(item, dict):
             continue

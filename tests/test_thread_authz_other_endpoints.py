@@ -49,33 +49,3 @@ async def test_export_forbidden_for_other_user_when_internal_auth_enabled(monkey
             },
         )
         assert forbidden.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_events_forbidden_for_other_user_when_internal_auth_enabled(monkeypatch):
-    monkeypatch.setitem(main.settings.__dict__, "internal_api_key", "test-key")
-    monkeypatch.setitem(main.settings.__dict__, "auth_user_header", "X-Weaver-User")
-
-    fake_checkpointer = _FakeCheckpointer(
-        by_thread_id={
-            "thread_alice": {"user_id": "alice"},
-        }
-    )
-    monkeypatch.setattr(main, "checkpointer", fake_checkpointer)
-
-    async def _fake_event_stream_generator(thread_id: str, *, timeout: float, last_event_id=None):
-        yield "event: test\ndata: {}\n\n"
-
-    monkeypatch.setattr(main, "event_stream_generator", _fake_event_stream_generator)
-
-    transport = ASGITransport(app=main.app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        forbidden = await ac.get(
-            "/api/events/thread_alice",
-            headers={
-                "Authorization": "Bearer test-key",
-                "X-Weaver-User": "bob",
-            },
-        )
-        assert forbidden.status_code == 403
-

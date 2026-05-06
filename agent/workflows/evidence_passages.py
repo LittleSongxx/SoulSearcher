@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Tuple
-
 
 _MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*$")
 
 
-def _paragraph_spans(text: str) -> List[Tuple[int, int]]:
-    spans: List[Tuple[int, int]] = []
+def _paragraph_spans(text: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
     if not text:
         return spans
 
@@ -24,7 +22,7 @@ def _paragraph_spans(text: str) -> List[Tuple[int, int]]:
     return spans
 
 
-def split_into_passages(text: str, *, max_chars: int = 1200) -> List[Dict[str, object]]:
+def split_into_passages(text: str, *, max_chars: int = 1200) -> list[dict[str, object]]:
     """
     Split a long text into passages with stable character offsets.
 
@@ -43,7 +41,7 @@ def split_into_passages(text: str, *, max_chars: int = 1200) -> List[Dict[str, o
     if budget <= 0:
         return []
 
-    passages: List[Dict[str, object]] = []
+    passages: list[dict[str, object]] = []
     spans = _paragraph_spans(text)
     if not spans:
         spans = [(0, len(text))]
@@ -51,9 +49,9 @@ def split_into_passages(text: str, *, max_chars: int = 1200) -> List[Dict[str, o
     chunk_start: int | None = None
     chunk_end: int | None = None
     chunk_heading: str | None = None
-    chunk_heading_path: List[str] | None = None
+    chunk_heading_path: list[str] | None = None
     current_heading: str | None = None
-    heading_stack: List[tuple[int, str]] = []
+    heading_stack: list[tuple[int, str]] = []
 
     def flush() -> None:
         nonlocal chunk_start, chunk_end, chunk_heading, chunk_heading_path
@@ -61,7 +59,7 @@ def split_into_passages(text: str, *, max_chars: int = 1200) -> List[Dict[str, o
             return
         snippet = text[chunk_start:chunk_end]
         if snippet.strip():
-            item: Dict[str, object] = {"text": snippet, "start_char": chunk_start, "end_char": chunk_end}
+            item: dict[str, object] = {"text": snippet, "start_char": chunk_start, "end_char": chunk_end}
             if chunk_heading:
                 item["heading"] = chunk_heading
             if chunk_heading_path:
@@ -98,7 +96,7 @@ def split_into_passages(text: str, *, max_chars: int = 1200) -> List[Dict[str, o
                 sub_end = min(sub_start + budget, end)
                 snippet = text[sub_start:sub_end]
                 if snippet.strip():
-                    item: Dict[str, object] = {
+                    item: dict[str, object] = {
                         "text": snippet,
                         "start_char": sub_start,
                         "end_char": sub_end,

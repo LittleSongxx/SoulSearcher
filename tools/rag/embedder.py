@@ -5,7 +5,7 @@ Generates embeddings using OpenAI API or compatible endpoints.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class Embedder:
 
         self.client = OpenAI(**client_kwargs)
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         """
         Generate embeddings for a list of texts.
 
@@ -96,7 +96,7 @@ class Embedder:
 
         return all_embeddings
 
-    def embed_single(self, text: str) -> List[float]:
+    def embed_single(self, text: str) -> list[float]:
         """
         Generate embedding for a single text.
 
@@ -109,7 +109,7 @@ class Embedder:
         embeddings = self.embed([text])
         return embeddings[0] if embeddings else []
 
-    def embed_query(self, query: str) -> List[float]:
+    def embed_query(self, query: str) -> list[float]:
         """
         Embed a search query.
 
@@ -124,7 +124,7 @@ class Embedder:
         """
         return self.embed_single(query)
 
-    def embed_documents(self, documents: List[str]) -> List[List[float]]:
+    def embed_documents(self, documents: list[str]) -> list[list[float]]:
         """
         Embed a list of documents.
 

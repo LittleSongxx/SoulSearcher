@@ -60,7 +60,7 @@ async def iter_sse_events(
             chunk = await asyncio.wait_for(iterator.__anext__(), timeout=chunk_timeout_s)
         except StopAsyncIteration:
             break
-        except asyncio.TimeoutError:
+        except TimeoutError:
             yield SSEEvent(event="stream_timeout", data={"timeout_s": chunk_timeout_s})
             break
 

@@ -2,8 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-import pytest
-
 pytest_plugins = ["pytest_asyncio"]
 
 # Force in-memory checkpointer during tests to avoid DB dependency

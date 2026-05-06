@@ -16,7 +16,7 @@ import logging
 import re
 import time
 import uuid
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -121,7 +121,7 @@ class SandboxScaffoldWebProjectTool(_SandboxShellBaseTool):
         overwrite: bool = False,
         install_deps: bool = True,
         extra_flags: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "scaffold_web_project",
             {
@@ -239,7 +239,7 @@ class SandboxDeployWebProjectTool(_SandboxShellBaseTool):
         start_command: Optional[str] = None,
         port: int = 3000,
         expose: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "deploy_web_project",
             {
@@ -343,7 +343,7 @@ class SandboxDeployWebProjectTool(_SandboxShellBaseTool):
 def build_sandbox_web_dev_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """Build sandbox web development tools (scaffold + deploy)."""
     return [
         SandboxScaffoldWebProjectTool(thread_id=thread_id, emit_events=emit_events),

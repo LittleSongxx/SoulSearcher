@@ -23,11 +23,12 @@ import importlib
 import inspect
 import json
 import logging
-from fnmatch import fnmatch
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Type
+from typing import Any, Optional
 
 from langchain.tools import BaseTool
 
@@ -36,7 +37,7 @@ try:  # LangChain 1.x canonical location
 except Exception:  # pragma: no cover
     CoreBaseTool = None  # type: ignore[assignment]
 
-from tools.core.base import ToolResult, WeaverTool, tool_schema
+from tools.core.base import WeaverTool
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class ToolMetadata:
     tool_type: str  # "weaver" | "langchain" | "function"
 
     # Schema
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     return_type: Optional[str] = None
 
     # Source
@@ -70,7 +71,7 @@ class ToolMetadata:
     # Registration
     registered_at: str = field(default_factory=lambda: datetime.now().isoformat())
     version: str = "1.0.0"
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
     # Usage statistics
     call_count: int = 0
@@ -101,7 +102,7 @@ class ToolMetadata:
             alpha = 0.2  # Weight for new value
             self.average_duration_ms = alpha * duration_ms + (1 - alpha) * self.average_duration_ms
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -147,12 +148,12 @@ class ToolRegistry:
     def __init__(self):
         """Initialize empty registry."""
         # Main registry: name -> (callable, metadata)
-        self._tools: Dict[str, tuple[Callable, ToolMetadata]] = {}
+        self._tools: dict[str, tuple[Callable, ToolMetadata]] = {}
 
         # Indexes for fast lookup
-        self._by_tag: Dict[str, Set[str]] = {}  # tag -> set of tool names
-        self._by_module: Dict[str, Set[str]] = {}  # module -> set of tool names
-        self._by_type: Dict[str, Set[str]] = {}  # type -> set of tool names
+        self._by_tag: dict[str, set[str]] = {}  # tag -> set of tool names
+        self._by_module: dict[str, set[str]] = {}  # module -> set of tool names
+        self._by_type: dict[str, set[str]] = {}  # type -> set of tool names
 
         logger.info("ToolRegistry initialized")
 
@@ -163,8 +164,8 @@ class ToolRegistry:
         name: str,
         tool: Callable,
         description: str = "",
-        parameters: Optional[Dict[str, Any]] = None,
-        tags: Optional[List[str]] = None,
+        parameters: Optional[dict[str, Any]] = None,
+        tags: Optional[list[str]] = None,
         version: str = "1.0.0",
         override: bool = False,
     ) -> ToolMetadata:
@@ -236,8 +237,8 @@ class ToolRegistry:
         self,
         tool_instance: Any,  # WeaverTool
         method_name: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-    ) -> List[ToolMetadata]:
+        tags: Optional[list[str]] = None,
+    ) -> list[ToolMetadata]:
         """
         Register all methods from a WeaverTool instance.
 
@@ -311,8 +312,8 @@ class ToolRegistry:
     # ==================== Discovery ====================
 
     def discover_from_module(
-        self, module_name: str, tags: Optional[List[str]] = None, prefix: str = ""
-    ) -> List[ToolMetadata]:
+        self, module_name: str, tags: Optional[list[str]] = None, prefix: str = ""
+    ) -> list[ToolMetadata]:
         """
         Discover and register tools from a module.
 
@@ -348,9 +349,7 @@ class ToolRegistry:
         # Scan for module-level LangChain tools (BaseTool instances)
         for _, obj in inspect.getmembers(module):
             is_langchain_tool = False
-            if BaseTool and isinstance(obj, BaseTool):
-                is_langchain_tool = True
-            elif CoreBaseTool is not None and isinstance(obj, CoreBaseTool):
+            if BaseTool and isinstance(obj, BaseTool) or CoreBaseTool is not None and isinstance(obj, CoreBaseTool):
                 is_langchain_tool = True
 
             if not is_langchain_tool:
@@ -363,7 +362,7 @@ class ToolRegistry:
 
             tool_desc = getattr(obj, "description", "") or ""
 
-            parameters: Dict[str, Any] = {}
+            parameters: dict[str, Any] = {}
             try:
                 args_schema = getattr(obj, "args_schema", None)
                 if args_schema is not None:
@@ -379,7 +378,7 @@ class ToolRegistry:
             try:
                 metadata = self.register(
                     name=tool_name,
-                    tool=getattr(obj, "invoke"),
+                    tool=obj.invoke,
                     description=str(tool_desc),
                     parameters=parameters,
                     tags=(tags or []) + ["langchain_tool", "auto_discovered"],
@@ -417,10 +416,10 @@ class ToolRegistry:
         directory: str,
         pattern: str = "*.py",
         recursive: bool = True,
-        tags: Optional[List[str]] = None,
-        exclude_dirs: Optional[Set[str]] = None,
-        exclude_globs: Optional[List[str]] = None,
-    ) -> List[ToolMetadata]:
+        tags: Optional[list[str]] = None,
+        exclude_dirs: Optional[set[str]] = None,
+        exclude_globs: Optional[list[str]] = None,
+    ) -> list[ToolMetadata]:
         """
         Discover tools from all Python files in a directory.
 
@@ -509,7 +508,7 @@ class ToolRegistry:
             return entry[1]
         return None
 
-    def get_all(self) -> Dict[str, Callable]:
+    def get_all(self) -> dict[str, Callable]:
         """
         Get all registered tools.
 
@@ -519,17 +518,17 @@ class ToolRegistry:
 
         return {name: tool for name, (tool, _) in self._tools.items()}
 
-    def get_by_tag(self, tag: str) -> Dict[str, Callable]:
+    def get_by_tag(self, tag: str) -> dict[str, Callable]:
         """Get tools with a specific tag."""
         names = self._by_tag.get(tag, set())
         return {name: self.get(name) for name in names}
 
-    def get_by_type(self, tool_type: str) -> Dict[str, Callable]:
+    def get_by_type(self, tool_type: str) -> dict[str, Callable]:
         """Get tools of a specific type."""
         names = self._by_type.get(tool_type, set())
         return {name: self.get(name) for name in names}
 
-    def list_names(self, enabled_only: bool = False) -> List[str]:
+    def list_names(self, enabled_only: bool = False) -> list[str]:
         """
         List all tool names.
 
@@ -545,7 +544,7 @@ class ToolRegistry:
 
         return [name for name, (_, metadata) in self._tools.items() if metadata.enabled]
 
-    def list_metadata(self, enabled_only: bool = False) -> List[ToolMetadata]:
+    def list_metadata(self, enabled_only: bool = False) -> list[ToolMetadata]:
         """Get metadata for all tools."""
         return [
             metadata for _, metadata in self._tools.values() if not enabled_only or metadata.enabled
@@ -553,7 +552,7 @@ class ToolRegistry:
 
     # ==================== Statistics ====================
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get registry statistics.
 
@@ -605,22 +604,16 @@ class ToolRegistry:
 
     def _detect_tool_type(self, tool: Callable) -> str:
         """Detect tool type from callable."""
-        if WeaverTool and isinstance(tool, WeaverTool):
+        if WeaverTool and isinstance(tool, WeaverTool) or hasattr(tool, "__self__") and WeaverTool and isinstance(tool.__self__, WeaverTool):
             return "weaver"
-        elif hasattr(tool, "__self__") and WeaverTool and isinstance(tool.__self__, WeaverTool):
-            return "weaver"
-        elif hasattr(tool, "__self__") and BaseTool and isinstance(tool.__self__, BaseTool):
-            return "langchain"
-        elif hasattr(tool, "__self__") and CoreBaseTool is not None and isinstance(tool.__self__, CoreBaseTool):
-            return "langchain"
-        elif BaseTool and isinstance(tool, BaseTool):
+        elif hasattr(tool, "__self__") and BaseTool and isinstance(tool.__self__, BaseTool) or hasattr(tool, "__self__") and CoreBaseTool is not None and isinstance(tool.__self__, CoreBaseTool) or BaseTool and isinstance(tool, BaseTool):
             return "langchain"
         elif hasattr(tool, "_tool_schema"):
             return "function"
         else:
             return "function"
 
-    def _extract_parameters(self, tool: Callable) -> Dict[str, Any]:
+    def _extract_parameters(self, tool: Callable) -> dict[str, Any]:
         """Extract parameter schema from callable signature."""
         try:
             sig = inspect.signature(tool)
@@ -725,10 +718,10 @@ def reset_global_registry():
 # ==================== Backward Compatibility ====================
 
 # For backward compatibility with existing code
-_REGISTERED_TOOLS: List = []
+_REGISTERED_TOOLS: list = []
 
 
-def set_registered_tools(tools: List) -> None:
+def set_registered_tools(tools: list) -> None:
     """
     Set registered tools (backward compatible).
 
@@ -754,7 +747,7 @@ def set_registered_tools(tools: List) -> None:
             logger.warning(f"Failed to register tool in new registry: {e}")
 
 
-def get_registered_tools() -> List:
+def get_registered_tools() -> list:
     """
     Get registered tools (backward compatible).
 

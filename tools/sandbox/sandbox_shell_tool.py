@@ -17,11 +17,10 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -51,7 +50,7 @@ class _SandboxShellBaseTool(BaseTool):
     workspace_path: str = "/workspace"
 
     # Track running processes per thread
-    _processes: Dict[str, Dict[str, Any]] = {}
+    _processes: dict[str, dict[str, Any]] = {}
 
     def _get_sandbox(self):
         """Get the E2B sandbox instance."""
@@ -60,7 +59,7 @@ class _SandboxShellBaseTool(BaseTool):
             return session._handles.sandbox
         return None
 
-    def _emit_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _emit_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Emit an event."""
         if not self.emit_events:
             return
@@ -71,7 +70,7 @@ class _SandboxShellBaseTool(BaseTool):
             except Exception as e:
                 logger.warning(f"[sandbox_shell] Failed to emit event: {e}")
 
-    def _emit_tool_start(self, action: str, args: Dict[str, Any]) -> float:
+    def _emit_tool_start(self, action: str, args: dict[str, Any]) -> float:
         """Emit tool start event."""
         start_time = time.time()
         self._emit_event(
@@ -88,7 +87,7 @@ class _SandboxShellBaseTool(BaseTool):
     def _emit_tool_result(
         self,
         action: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         start_time: float,
         success: bool = True,
     ) -> None:
@@ -104,7 +103,7 @@ class _SandboxShellBaseTool(BaseTool):
             },
         )
 
-    def _get_processes(self) -> Dict[str, Any]:
+    def _get_processes(self) -> dict[str, Any]:
         """Get processes for this thread."""
         if self.thread_id not in _SandboxShellBaseTool._processes:
             _SandboxShellBaseTool._processes[self.thread_id] = {}
@@ -139,7 +138,7 @@ class SandboxExecuteCommandTool(_SandboxShellBaseTool):
         folder: Optional[str] = None,
         timeout: int = 60,
         background: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "execute_command",
             {
@@ -206,7 +205,7 @@ class SandboxExecuteCommandTool(_SandboxShellBaseTool):
                 # Wait with timeout
                 try:
                     proc.wait(timeout=timeout)
-                except Exception as e:
+                except Exception:
                     # Timeout or error
                     try:
                         proc.kill()
@@ -259,7 +258,7 @@ class SandboxCheckOutputTool(_SandboxShellBaseTool):
         self,
         process_id: str,
         tail_lines: int = 50,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start("check_output", {"process_id": process_id})
 
         try:
@@ -324,7 +323,7 @@ class SandboxKillProcessTool(_SandboxShellBaseTool):
     description: str = "Kill a background process by its process_id."
     args_schema: type[BaseModel] = KillProcessInput
 
-    def _run(self, process_id: str) -> Dict[str, Any]:
+    def _run(self, process_id: str) -> dict[str, Any]:
         start_time = self._emit_tool_start("kill_process", {"process_id": process_id})
 
         try:
@@ -370,7 +369,7 @@ class SandboxListProcessesTool(_SandboxShellBaseTool):
     name: str = "sandbox_list_processes"
     description: str = "List all tracked background processes for this session."
 
-    def _run(self) -> Dict[str, Any]:
+    def _run(self) -> dict[str, Any]:
         start_time = self._emit_tool_start("list_processes", {})
 
         try:
@@ -428,7 +427,7 @@ class SandboxInstallPackageTool(_SandboxShellBaseTool):
         packages: str,
         package_manager: str = "auto",
         folder: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = self._emit_tool_start(
             "install_package",
             {
@@ -512,7 +511,7 @@ class SandboxExposePortTool(_SandboxShellBaseTool):
     )
     args_schema: type[BaseModel] = ExposePortInput
 
-    def _run(self, port: int) -> Dict[str, Any]:
+    def _run(self, port: int) -> dict[str, Any]:
         start_time = self._emit_tool_start("expose_port", {"port": port})
 
         try:
@@ -551,7 +550,7 @@ class SandboxExposePortTool(_SandboxShellBaseTool):
 def build_sandbox_shell_tools(
     thread_id: str,
     emit_events: bool = True,
-) -> List[BaseTool]:
+) -> list[BaseTool]:
     """
     Build sandbox shell tools for a thread.
 

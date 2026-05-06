@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -82,23 +82,23 @@ class ResearchTreeNode:
     topic: str = ""
     depth: int = 0
     parent_id: Optional[str] = None
-    children_ids: List[str] = field(default_factory=list)
+    children_ids: list[str] = field(default_factory=list)
     status: NodeStatus = NodeStatus.PENDING
-    findings: List[Dict[str, Any]] = field(default_factory=list)
-    sources: List[str] = field(default_factory=list)
+    findings: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[str] = field(default_factory=list)
     summary: str = ""
-    queries: List[str] = field(default_factory=list)
+    queries: list[str] = field(default_factory=list)
     relevance_score: float = 1.0
     score: float = 0.0
     retry_count: int = 0
-    quality_signals: Dict[str, Any] = field(default_factory=dict)
-    focus_areas: List[str] = field(default_factory=list)
-    backtrack_queries: List[str] = field(default_factory=list)
-    retry_history: List[Dict[str, Any]] = field(default_factory=list)
+    quality_signals: dict[str, Any] = field(default_factory=dict)
+    focus_areas: list[str] = field(default_factory=list)
+    backtrack_queries: list[str] = field(default_factory=list)
+    retry_history: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     completed_at: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert node to dictionary for serialization."""
         return {
             "id": self.id,
@@ -147,7 +147,7 @@ class ResearchTree:
     """
 
     root_id: Optional[str] = None
-    nodes: Dict[str, ResearchTreeNode] = field(default_factory=dict)
+    nodes: dict[str, ResearchTreeNode] = field(default_factory=dict)
     max_depth: int = 2
     max_branches: int = 4
     total_sources: int = 0
@@ -210,33 +210,33 @@ class ResearchTree:
         """Get the root node."""
         return self.nodes.get(self.root_id) if self.root_id else None
 
-    def get_children(self, node_id: str) -> List[ResearchTreeNode]:
+    def get_children(self, node_id: str) -> list[ResearchTreeNode]:
         """Get all children of a node."""
         node = self.nodes.get(node_id)
         if not node:
             return []
         return [self.nodes[cid] for cid in node.children_ids if cid in self.nodes]
 
-    def get_pending_nodes(self) -> List[ResearchTreeNode]:
+    def get_pending_nodes(self) -> list[ResearchTreeNode]:
         """Get all nodes with pending status."""
         return [n for n in self.nodes.values() if n.status == NodeStatus.PENDING]
 
-    def get_completed_nodes(self) -> List[ResearchTreeNode]:
+    def get_completed_nodes(self) -> list[ResearchTreeNode]:
         """Get all completed nodes."""
         return [n for n in self.nodes.values() if n.status == NodeStatus.COMPLETED]
 
-    def get_nodes_at_depth(self, depth: int) -> List[ResearchTreeNode]:
+    def get_nodes_at_depth(self, depth: int) -> list[ResearchTreeNode]:
         """Get all nodes at a specific depth."""
         return [n for n in self.nodes.values() if n.depth == depth]
 
-    def get_all_sources(self) -> List[str]:
+    def get_all_sources(self) -> list[str]:
         """Get all unique sources from all nodes."""
         sources = set()
         for node in self.nodes.values():
             sources.update(node.sources)
         return list(sources)
 
-    def get_all_findings(self) -> List[Dict[str, Any]]:
+    def get_all_findings(self) -> list[dict[str, Any]]:
         """Get all findings from all nodes."""
         findings = []
         for node in self.get_completed_nodes():
@@ -266,7 +266,7 @@ class ResearchTree:
 
         return "\n".join(lines)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert tree to dictionary for serialization."""
         return {
             "root_id": self.root_id,
@@ -318,7 +318,7 @@ DECOMPOSE_TOPIC_PROMPT = """
 """
 
 
-def _parse_json_output(text: str) -> Dict[str, Any]:
+def _parse_json_output(text: str) -> dict[str, Any]:
     """Parse JSON output from LLM response."""
     if not text:
         return {}
@@ -358,7 +358,7 @@ class TreeExplorer:
         researcher_llm: ChatOpenAI,
         writer_llm: ChatOpenAI,
         search_func,  # Function to perform search (e.g., tavily_search.invoke)
-        config: Dict[str, Any] = None,
+        config: dict[str, Any] = None,
         max_depth: int = 2,
         max_branches: int = 4,
         queries_per_branch: int = 3,
@@ -386,11 +386,11 @@ class TreeExplorer:
         self.queries_per_branch = queries_per_branch
 
         self.tree: Optional[ResearchTree] = None
-        self.all_searched_urls: List[str] = []
+        self.all_searched_urls: list[str] = []
         self.start_time: float = 0
-        self.backtrack_events: List[Dict[str, Any]] = []
+        self.backtrack_events: list[dict[str, Any]] = []
 
-    def _check_cancel(self, state: Dict[str, Any]) -> None:
+    def _check_cancel(self, state: dict[str, Any]) -> None:
         """Check for cancellation."""
         if state.get("is_cancelled"):
             raise asyncio.CancelledError("Task was cancelled (flag)")
@@ -398,7 +398,7 @@ class TreeExplorer:
         if token_id:
             _check_cancel_token(token_id)
 
-    async def _gather_with_task_cleanup(self, tasks: List[asyncio.Task]) -> None:
+    async def _gather_with_task_cleanup(self, tasks: list[asyncio.Task]) -> None:
         if not tasks:
             return
         try:
@@ -411,7 +411,7 @@ class TreeExplorer:
             raise
 
     def _seed_node_queries(self, node: ResearchTreeNode) -> None:
-        seeded: List[str] = []
+        seeded: list[str] = []
         seen = set()
         for query in node.queries or []:
             if not isinstance(query, str):
@@ -432,7 +432,7 @@ class TreeExplorer:
         self,
         node: ResearchTreeNode,
         query: str,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
     ) -> None:
         for r in results or []:
             if not isinstance(r, dict):
@@ -453,8 +453,8 @@ class TreeExplorer:
     def _prepare_backtrack_retry(
         self,
         node: ResearchTreeNode,
-        evaluation: Dict[str, Any],
-    ) -> List[str]:
+        evaluation: dict[str, Any],
+    ) -> list[str]:
         from agent.workflows.tree_evaluator import build_backtrack_queries
 
         retry_queries = build_backtrack_queries(
@@ -486,7 +486,7 @@ class TreeExplorer:
         topic: str,
         existing_knowledge: str = "",
         num_subtopics: int = 4,
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """
         Decompose a topic into sub-topics.
 
@@ -526,7 +526,7 @@ class TreeExplorer:
     def explore_branch(
         self,
         node: ResearchTreeNode,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         per_query_results: int = 5,
     ) -> None:
         """
@@ -743,7 +743,7 @@ class TreeExplorer:
         response = self.researcher_llm.invoke(msg, config=self.config)
         return getattr(response, "content", "") or ""
 
-    def merge_branches(self, nodes: List[ResearchTreeNode]) -> str:
+    def merge_branches(self, nodes: list[ResearchTreeNode]) -> str:
         """
         Merge findings from multiple branches into a coherent summary.
 
@@ -796,7 +796,7 @@ class TreeExplorer:
     def run(
         self,
         topic: str,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         decompose_root: bool = True,
     ) -> ResearchTree:
         """
@@ -859,7 +859,7 @@ class TreeExplorer:
         return self.tree
 
     def _explore_children(
-        self, parent: ResearchTreeNode, state: Dict[str, Any]
+        self, parent: ResearchTreeNode, state: dict[str, Any]
     ) -> None:
         """Recursively explore children of a node (synchronous version)."""
         if parent.depth >= self.max_depth:
@@ -881,7 +881,7 @@ class TreeExplorer:
     async def explore_branch_async(
         self,
         node: ResearchTreeNode,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         per_query_results: int = 5,
     ) -> None:
         """
@@ -927,7 +927,7 @@ class TreeExplorer:
                     # don't block research on rendering a status page.
                     try:
                         await asyncio.wait_for(status_task, timeout=0.5)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         pass
                 except Exception:
                     pass
@@ -1064,7 +1064,7 @@ class TreeExplorer:
     async def _explore_children_async(
         self,
         parent: ResearchTreeNode,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         semaphore: Optional[asyncio.Semaphore] = None,
     ) -> None:
         """
@@ -1142,7 +1142,7 @@ class TreeExplorer:
     async def run_async(
         self,
         topic: str,
-        state: Dict[str, Any],
+        state: dict[str, Any],
         decompose_root: bool = True,
     ) -> ResearchTree:
         """
@@ -1233,7 +1233,7 @@ class TreeExplorer:
 
         return self.tree
 
-    def _parse_list_output(self, text: str) -> List[str]:
+    def _parse_list_output(self, text: str) -> list[str]:
         """Parse python-list-like output into a string list."""
         import ast
 
@@ -1271,15 +1271,15 @@ class TreeExplorer:
 
         return self.merge_branches(completed)
 
-    def get_all_sources(self) -> List[str]:
+    def get_all_sources(self) -> list[str]:
         """Get all unique sources found during exploration."""
         return self.all_searched_urls.copy()
 
-    def get_backtrack_events(self) -> List[Dict[str, Any]]:
+    def get_backtrack_events(self) -> list[dict[str, Any]]:
         """Get all recorded backtrack events."""
         return list(self.backtrack_events)
 
-    def get_all_findings(self) -> List[Dict[str, Any]]:
+    def get_all_findings(self) -> list[dict[str, Any]]:
         """Get all findings from all nodes."""
         if not self.tree:
             return []

@@ -10,7 +10,7 @@ import os
 import re
 import time
 from importlib import metadata
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import dashscope
 from dashscope.audio.tts_v2 import AudioFormat, SpeechSynthesizer
@@ -48,7 +48,7 @@ def _is_auth_error_message(message: str) -> bool:
     )
 
 
-def _extract_error_json(message: str) -> Optional[Dict[str, Any]]:
+def _extract_error_json(message: str) -> Optional[dict[str, Any]]:
     """
     Best-effort extraction of JSON error payloads from DashScope websocket errors.
 
@@ -110,8 +110,9 @@ def _validate_dashscope_api_key(api_key: str) -> Optional[str]:
     if not key:
         return "No API key configured"
     try:
-        from dashscope import Models  # type: ignore
         from http import HTTPStatus
+
+        from dashscope import Models  # type: ignore
 
         resp = Models.list(page=1, page_size=1, api_key=key)
         status = int(resp.get("status_code") or 0)
@@ -149,7 +150,7 @@ class TTSService:
         model: str = DEFAULT_MODEL,
         max_retries: int = 3,
         retry_delay: float = 1.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run TTS and return a base64-encoded MP3 payload."""
         if not text or not text.strip():
             raise ValueError("Text cannot be empty.")
@@ -234,7 +235,7 @@ class TTSService:
             "error": None,
         }
 
-    def get_available_voices(self) -> Dict[str, str]:
+    def get_available_voices(self) -> dict[str, str]:
         return AVAILABLE_VOICES.copy()
 
     @staticmethod

@@ -6,8 +6,8 @@ from .reporter import ResearchReporter
 from .researcher import ResearchAgent
 
 __all__ = [
+    "ResearchAgent",
     "ResearchCoordinator",
     "ResearchPlanner",
-    "ResearchAgent",
     "ResearchReporter",
 ]

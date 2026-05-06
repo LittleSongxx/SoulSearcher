@@ -20,8 +20,9 @@ conversation flow.
 import asyncio
 import json
 import logging
+from collections.abc import AsyncGenerator, Callable
 from datetime import datetime
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+from typing import Any, Optional
 
 from agent.core.processor_config import AgentProcessorConfig
 from agent.parsers.xml_parser import XMLToolCall, XMLToolParser
@@ -48,7 +49,7 @@ class ResponseHandler:
 
     def __init__(
         self,
-        tool_registry: Optional[Dict[str, Callable]] = None,
+        tool_registry: Optional[dict[str, Callable]] = None,
         config: Optional[AgentProcessorConfig] = None,
     ):
         """
@@ -71,14 +72,16 @@ class ResponseHandler:
                 stop_on_tool_failure=not config.continue_on_tool_failure,
             )
             injector = ToolResultInjector(strategy=config.result_injection_strategy)
-            self.continuation_handler = ContinuationHandler(decider=decider, injector=injector)
+            self.continuation_handler = ContinuationHandler(
+                decider=decider, injector=injector
+            )
             logger.info("Auto-continuation enabled")
 
         logger.info(f"ResponseHandler initialized with config: {self.config.summary()}")
 
     async def process_streaming_response(
         self, response_stream: AsyncGenerator, session_id: str = "default"
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Process streaming LLM response with tool call detection and execution.
 
@@ -90,9 +93,7 @@ class ResponseHandler:
             Event dictionaries with type and data
         """
         accumulated_content = ""
-        detected_xml_calls: List[XMLToolCall] = []
-        thinking_sent = False
-
+        detected_xml_calls: list[XMLToolCall] = []
         try:
             async for chunk in response_stream:
                 # Extract content from chunk
@@ -110,7 +111,10 @@ class ResponseHandler:
                     }
 
                     # Check for XML tool calls if enabled
-                    if self.config.xml_tool_calling and "<function_calls>" in accumulated_content:
+                    if (
+                        self.config.xml_tool_calling
+                        and "<function_calls>" in accumulated_content
+                    ):
                         # Try to parse XML calls
                         new_calls = self.xml_parser.parse_streaming_content(
                             accumulated_content, detected_xml_calls
@@ -151,13 +155,19 @@ class ResponseHandler:
 
             # Response complete - execute tools if any were detected
             if detected_xml_calls and self.config.execute_tools:
-                logger.info(f"[{session_id}] Executing {len(detected_xml_calls)} XML tool calls")
+                logger.info(
+                    f"[{session_id}] Executing {len(detected_xml_calls)} XML tool calls"
+                )
 
                 # Execute based on strategy
                 if self.config.tool_execution_strategy == "parallel":
-                    results = await self._execute_tools_parallel(detected_xml_calls, session_id)
+                    results = await self._execute_tools_parallel(
+                        detected_xml_calls, session_id
+                    )
                 else:
-                    results = await self._execute_tools_sequential(detected_xml_calls, session_id)
+                    results = await self._execute_tools_sequential(
+                        detected_xml_calls, session_id
+                    )
 
                 # Yield tool results
                 for call, result in zip(detected_xml_calls, results):
@@ -181,7 +191,9 @@ class ResponseHandler:
             }
 
         except Exception as e:
-            logger.error(f"[{session_id}] Error processing response: {e}", exc_info=True)
+            logger.error(
+                f"[{session_id}] Error processing response: {e}", exc_info=True
+            )
             yield {
                 "type": "error",
                 "error": str(e),
@@ -190,8 +202,8 @@ class ResponseHandler:
             }
 
     async def _execute_tools_sequential(
-        self, tool_calls: List[XMLToolCall], session_id: str
-    ) -> List[ToolResult]:
+        self, tool_calls: list[XMLToolCall], session_id: str
+    ) -> list[ToolResult]:
         """
         Execute tool calls sequentially (one after another).
 
@@ -214,7 +226,9 @@ class ResponseHandler:
 
             # Check if we should continue on failure
             if not result.success and not self.config.continue_on_tool_failure:
-                logger.warning(f"[{session_id}] Tool execution failed, halting further executions")
+                logger.warning(
+                    f"[{session_id}] Tool execution failed, halting further executions"
+                )
                 # Fill remaining with error results
                 for remaining_call in tool_calls[i:]:
                     results.append(
@@ -229,8 +243,8 @@ class ResponseHandler:
         return results
 
     async def _execute_tools_parallel(
-        self, tool_calls: List[XMLToolCall], session_id: str
-    ) -> List[ToolResult]:
+        self, tool_calls: list[XMLToolCall], session_id: str
+    ) -> list[ToolResult]:
         """
         Execute tool calls in parallel (concurrently).
 
@@ -255,7 +269,7 @@ class ResponseHandler:
                 processed_results.append(
                     ToolResult(
                         success=False,
-                        output=f"Tool execution error: {str(result)}",
+                        output=f"Tool execution error: {result!s}",
                         error=str(result),
                     )
                 )
@@ -264,7 +278,9 @@ class ResponseHandler:
 
         return processed_results
 
-    async def _execute_single_tool(self, tool_call: XMLToolCall, session_id: str) -> ToolResult:
+    async def _execute_single_tool(
+        self, tool_call: XMLToolCall, session_id: str
+    ) -> ToolResult:
         """
         Execute a single tool call.
 
@@ -293,12 +309,20 @@ class ResponseHandler:
 
         # Execute with retry logic if configured
         if self.config.retry_on_tool_error:
-            return await self._execute_with_retry(tool_func, parameters, function_name, session_id)
+            return await self._execute_with_retry(
+                tool_func, parameters, function_name, session_id
+            )
         else:
-            return await self._execute_tool_once(tool_func, parameters, function_name, session_id)
+            return await self._execute_tool_once(
+                tool_func, parameters, function_name, session_id
+            )
 
     async def _execute_with_retry(
-        self, tool_func: Callable, parameters: Dict[str, Any], function_name: str, session_id: str
+        self,
+        tool_func: Callable,
+        parameters: dict[str, Any],
+        function_name: str,
+        session_id: str,
     ) -> ToolResult:
         """
         Execute tool with retry logic.
@@ -358,7 +382,11 @@ class ResponseHandler:
         )
 
     async def _execute_tool_once(
-        self, tool_func: Callable, parameters: Dict[str, Any], function_name: str, session_id: str
+        self,
+        tool_func: Callable,
+        parameters: dict[str, Any],
+        function_name: str,
+        session_id: str,
     ) -> ToolResult:
         """
         Execute tool function once.
@@ -386,15 +414,20 @@ class ResponseHandler:
             if not isinstance(result, ToolResult):
                 result = validate_tool_result(result)
 
-            logger.info(f"[{session_id}] Tool {function_name} executed: success={result.success}")
+            logger.info(
+                f"[{session_id}] Tool {function_name} executed: success={result.success}"
+            )
 
             return result
 
         except Exception as e:
-            logger.error(f"[{session_id}] Tool {function_name} execution error: {e}", exc_info=True)
+            logger.error(
+                f"[{session_id}] Tool {function_name} execution error: {e}",
+                exc_info=True,
+            )
             return ToolResult(
                 success=False,
-                output=f"Tool execution error: {str(e)}",
+                output=f"Tool execution error: {e!s}",
                 error=str(e),
                 metadata={"error_type": type(e).__name__},
             )
@@ -434,7 +467,7 @@ class ResponseHandler:
 
         return ""
 
-    def _extract_native_tool_calls(self, chunk: Any) -> List[Dict[str, Any]]:
+    def _extract_native_tool_calls(self, chunk: Any) -> list[dict[str, Any]]:
         """
         Extract native (OpenAI-format) tool calls from chunk.
 
@@ -461,8 +494,11 @@ class ResponseHandler:
         return tool_calls
 
     async def process_with_auto_continue(
-        self, messages: List[Dict[str, Any]], llm_callable: Callable, session_id: str = "default"
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        self,
+        messages: list[dict[str, Any]],
+        llm_callable: Callable,
+        session_id: str = "default",
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Process LLM responses with automatic continuation support.
 
@@ -555,7 +591,9 @@ class ResponseHandler:
             if state:
                 state.add_finish_reason(finish_reason)
 
-            logger.info(f"[{session_id}] Iteration {iteration}: finish_reason={finish_reason}")
+            logger.info(
+                f"[{session_id}] Iteration {iteration}: finish_reason={finish_reason}"
+            )
 
             # Parse XML tool calls if enabled
             xml_calls = []
@@ -575,11 +613,13 @@ class ResponseHandler:
 
             # Check if we should continue
             if state and self.continuation_handler:
-                should_continue, stop_reason = self.continuation_handler.decider.should_continue(
-                    state=state,
-                    finish_reason=finish_reason,
-                    has_tool_calls=len(all_tool_calls) > 0,
-                    tool_results=None,
+                should_continue, stop_reason = (
+                    self.continuation_handler.decider.should_continue(
+                        state=state,
+                        finish_reason=finish_reason,
+                        has_tool_calls=len(all_tool_calls) > 0,
+                        tool_results=None,
+                    )
                 )
 
                 if not should_continue:
@@ -599,9 +639,13 @@ class ResponseHandler:
 
                 # Execute based on strategy
                 if self.config.tool_execution_strategy == "parallel":
-                    tool_results = await self._execute_tools_parallel(all_tool_calls, session_id)
+                    tool_results = await self._execute_tools_parallel(
+                        all_tool_calls, session_id
+                    )
                 else:
-                    tool_results = await self._execute_tools_sequential(all_tool_calls, session_id)
+                    tool_results = await self._execute_tools_sequential(
+                        all_tool_calls, session_id
+                    )
 
                 # Record in state
                 if state:
@@ -624,7 +668,9 @@ class ResponseHandler:
                 # Inject results back into conversation
                 if self.continuation_handler:
                     messages = self.continuation_handler.injector.inject_results(
-                        messages=messages, tool_calls=all_tool_calls, tool_results=tool_results
+                        messages=messages,
+                        tool_calls=all_tool_calls,
+                        tool_results=tool_results,
                     )
 
                 yield {
@@ -671,7 +717,7 @@ class ResponseHandler:
 
         # Dict format
         if isinstance(response, dict):
-            if "choices" in response and response["choices"]:
+            if response.get("choices"):
                 message = response["choices"][0].get("message", {})
                 return message.get("content", "")
             if "content" in response:
@@ -691,7 +737,7 @@ class ResponseHandler:
 
         # Dict format
         if isinstance(response, dict):
-            if "choices" in response and response["choices"]:
+            if response.get("choices"):
                 return response["choices"][0].get("finish_reason")
 
         # Anthropic format
@@ -700,7 +746,7 @@ class ResponseHandler:
 
         return None
 
-    def _extract_native_tool_calls_from_response(self, response: Any) -> List[Any]:
+    def _extract_native_tool_calls_from_response(self, response: Any) -> list[Any]:
         """Extract native tool calls from full response (not just delta)."""
         tool_calls = []
 
@@ -712,7 +758,7 @@ class ResponseHandler:
 
         # Dict format
         if isinstance(response, dict):
-            if "choices" in response and response["choices"]:
+            if response.get("choices"):
                 message = response["choices"][0].get("message", {})
                 if "tool_calls" in message:
                     tool_calls.extend(message["tool_calls"])
@@ -742,12 +788,16 @@ if __name__ == "__main__":
         """Mock calculator tool."""
         try:
             import ast as _ast
+
             result = _ast.literal_eval(expression)
             return ToolResult(
-                success=True, output=json.dumps({"expression": expression, "result": result})
+                success=True,
+                output=json.dumps({"expression": expression, "result": result}),
             )
         except Exception as e:
-            return ToolResult(success=False, output=f"Calculation error: {e}", error=str(e))
+            return ToolResult(
+                success=False, output=f"Calculation error: {e}", error=str(e)
+            )
 
     tool_registry = {"search_web": mock_search, "calculate": mock_calculate}
 
@@ -779,7 +829,9 @@ if __name__ == "__main__":
     async def test():
         print("\nTest: Process streaming response with XML tool call\n")
 
-        async for event in handler.process_streaming_response(mock_stream(), "test-session"):
+        async for event in handler.process_streaming_response(
+            mock_stream(), "test-session"
+        ):
             event_type = event.get("type")
 
             if event_type == "text_delta":

@@ -1,13 +1,19 @@
-from agent.workflows.research_brief import build_research_brief
+from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
 from agent.workflows.model_context_policy import (
     build_deepsearch_context_policy,
     is_token_limit_error,
     resolve_model_context_window,
 )
-from agent.workflows.deepsearch_model_profile import build_deepsearch_model_profile
-from agent.workflows.research_pipeline import build_supervisor_workers_pipeline_artifact
+from agent.workflows.report_plan import (
+    build_sectioned_report_artifact,
+    build_sectioned_report_plan,
+)
+from agent.workflows.research_brief import build_research_brief
+from agent.workflows.research_pipeline import (
+    build_sub_research_findings,
+    build_supervisor_workers_pipeline_artifact,
+)
 from agent.workflows.research_task_runtime import ResearchTaskRuntime
-from agent.workflows.report_plan import build_sectioned_report_artifact, build_sectioned_report_plan
 from agent.workflows.sectioned_report import (
     apply_sectioned_report_review,
     compile_sectioned_report,
@@ -128,7 +134,9 @@ def test_worker_run_and_intermediate_steps_are_serializable():
     ).to_dict()
     steps = build_intermediate_steps(
         worker_runs=[worker_run],
-        supervisor_decisions=[{"round_index": 1, "action": "synthesize", "reason": "enough"}],
+        supervisor_decisions=[
+            {"round_index": 1, "action": "synthesize", "reason": "enough"}
+        ],
     )
 
     assert worker_run["round_index"] == 1
@@ -165,7 +173,11 @@ def test_research_task_runtime_tracks_subtask_lifecycle():
     assert completed["evidence_count"] == 1
     assert artifact["subtask_count"] == 1
     assert artifact["status_counts"] == {"completed": 1}
-    assert [event["type"] for event in artifact["events"]] == ["registered", "started", "completed"]
+    assert [event["type"] for event in artifact["events"]] == [
+        "registered",
+        "started",
+        "completed",
+    ]
 
 
 def test_build_supervisor_workers_pipeline_artifact_has_stage_boundaries():
@@ -183,6 +195,9 @@ def test_build_supervisor_workers_pipeline_artifact_has_stage_boundaries():
                 "round_index": 1,
                 "focus": "architecture",
                 "summary": "compressed finding",
+                "evidence_urls": ["https://example.com/a"],
+                "result_count": 2,
+                "evidence_count": 1,
             }
         ],
         supervisor_decisions=[{"round_index": 1, "action": "synthesize"}],
@@ -190,7 +205,10 @@ def test_build_supervisor_workers_pipeline_artifact_has_stage_boundaries():
         summary_notes=["architecture: compressed finding"],
         evidence_items=[{"id": "ev1"}],
         claim_ledger=[{"claim": "c"}],
-        quality_summary={"citation_coverage_score": 1.0, "claim_verifier_unsupported": 0},
+        quality_summary={
+            "citation_coverage_score": 1.0,
+            "claim_verifier_unsupported": 0,
+        },
         final_report="final",
     )
 
@@ -206,8 +224,38 @@ def test_build_supervisor_workers_pipeline_artifact_has_stage_boundaries():
         "verifier",
     ]
     assert stages["researcher"]["status"] == "completed"
-    assert stages["compression"]["outputs"]["compressed_research"][0]["summary"] == "compressed finding"
+    assert (
+        stages["compression"]["outputs"]["compressed_research"][0]["summary"]
+        == "compressed finding"
+    )
+    assert (
+        stages["compression"]["outputs"]["sub_research_findings"][0]["confidence"]
+        == 1.0
+    )
     assert stages["writer"]["outputs"]["report_length"] == len("final")
+    assert artifact["sub_research_findings"][0]["citations"] == [
+        "https://example.com/a"
+    ]
+
+
+def test_build_sub_research_findings_serializes_worker_evidence():
+    findings = build_sub_research_findings(
+        [
+            {
+                "worker_id": "w1",
+                "context_id": "ctx1",
+                "round_index": 2,
+                "focus": "risks",
+                "summary": "risk summary",
+                "sources": [{"url": "https://example.com/risk"}],
+                "queries": ["risk followup"],
+            }
+        ]
+    )
+
+    assert len(findings) == 1
+    assert findings[0].to_dict()["subquestion"] == "risks"
+    assert findings[0].to_dict()["citations"] == ["https://example.com/risk"]
 
 
 def test_model_context_policy_resolves_stage_budgets_and_token_limit_errors():

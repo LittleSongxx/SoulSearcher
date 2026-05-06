@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Iterable
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import LLMToolSelectorMiddleware
 from langchain.agents.middleware.tool_selection import (

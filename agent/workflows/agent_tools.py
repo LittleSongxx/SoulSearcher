@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
@@ -64,7 +64,7 @@ def _e2b_api_key_configured() -> bool:
     return True
 
 
-def _configurable(config: RunnableConfig) -> Dict[str, Any]:
+def _configurable(config: RunnableConfig) -> dict[str, Any]:
     if isinstance(config, dict):
         cfg = config.get("configurable") or {}
         if isinstance(cfg, dict):
@@ -72,7 +72,7 @@ def _configurable(config: RunnableConfig) -> Dict[str, Any]:
     return {}
 
 
-def _enabled(profile: Dict[str, Any], key: str, default: bool = False) -> bool:
+def _enabled(profile: dict[str, Any], key: str, default: bool = False) -> bool:
     enabled_tools = profile.get("enabled_tools") or {}
     if isinstance(enabled_tools, dict) and key in enabled_tools:
         return bool(enabled_tools.get(key))
@@ -86,7 +86,7 @@ def _normalize_pruning_route(value: Any) -> str:
     return ""
 
 
-def _resolve_pruning_route(profile: Dict[str, Any], cfg: Dict[str, Any]) -> str:
+def _resolve_pruning_route(profile: dict[str, Any], cfg: dict[str, Any]) -> str:
     candidates = [
         profile.get("route"),
         cfg.get("route"),
@@ -108,7 +108,7 @@ def _resolve_pruning_route(profile: Dict[str, Any], cfg: Dict[str, Any]) -> str:
     return ""
 
 
-def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
+def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
     """
     Build the toolset for "agent" mode based on `configurable.agent_profile.enabled_tools`.
 
@@ -133,7 +133,7 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
 
     thread_id = str(cfg.get("thread_id") or "default")
 
-    tools: List[BaseTool] = []
+    tools: list[BaseTool] = []
     e2b_ready = _e2b_api_key_configured()
 
     web_search_enabled = _enabled(profile, "web_search", default=True)
@@ -281,12 +281,12 @@ def build_agent_tools(config: RunnableConfig) -> List[BaseTool]:
     for t in tools:
         if hasattr(t, "thread_id"):
             try:
-                setattr(t, "thread_id", thread_id)
+                t.thread_id = thread_id
             except Exception:
                 pass
 
     # De-dup by tool name to avoid collisions
-    deduped: Dict[str, BaseTool] = {}
+    deduped: dict[str, BaseTool] = {}
     for t in tools:
         name = getattr(t, "name", None)
         if isinstance(name, str) and name:
@@ -354,7 +354,7 @@ _AGENT_CORE_TOOLS = {
 _MAX_PRUNED_TOOLS = 10
 
 
-def _prune_tools_by_route(tools: List[BaseTool], route: str) -> List[BaseTool]:
+def _prune_tools_by_route(tools: list[BaseTool], route: str) -> list[BaseTool]:
     """
     Prune tool list to route-relevant subset.
 

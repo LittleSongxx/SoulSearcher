@@ -4,7 +4,7 @@ import html
 import ipaddress
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -76,7 +76,7 @@ def _extract_title_from_html(text: str) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _looks_like_javascript_interstitial(text: str) -> bool:

@@ -15,9 +15,9 @@ Key design choices:
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 from common.config import settings
@@ -60,9 +60,9 @@ def _message_fingerprint(message: BaseMessage) -> tuple:
 
 
 def merge_reflexion_context(
-    existing_messages: Optional[List[BaseMessage]],
-    new_messages: Optional[List[BaseMessage]],
-) -> List[BaseMessage]:
+    existing_messages: Optional[list[BaseMessage]],
+    new_messages: Optional[list[BaseMessage]],
+) -> list[BaseMessage]:
     merged = list(existing_messages or [])
     incoming = list(new_messages or [])
     if not incoming:
@@ -82,7 +82,7 @@ def merge_reflexion_context(
     return merged + incoming[overlap:]
 
 
-def summarize_reflexion_messages(last_messages: List[BaseMessage]) -> str:
+def summarize_reflexion_messages(last_messages: list[BaseMessage]) -> str:
     summary_parts = []
     for msg in list(last_messages or [])[-8:]:
         role = type(msg).__name__
@@ -98,7 +98,7 @@ def generate_reflexion_feedback(
     user_goal: str,
     progress_summary: str,
     llm: Any,
-    config: Optional[Dict] = None,
+    config: Optional[dict] = None,
 ) -> Optional[str]:
     if not settings.agent_reflexion_enabled:
         return None
@@ -132,7 +132,7 @@ def generate_reflexion_feedback(
         return None
 
 
-def extract_reflexion_focus(feedback: str, limit: int = 3) -> List[str]:
+def extract_reflexion_focus(feedback: str, limit: int = 3) -> list[str]:
     text = str(feedback or "").strip()
     if not text:
         return []
@@ -156,7 +156,7 @@ def extract_reflexion_focus(feedback: str, limit: int = 3) -> List[str]:
     if not lines:
         lines = [text]
 
-    focus: List[str] = []
+    focus: list[str] = []
     seen = set()
     for line in lines:
         parts = [
@@ -183,7 +183,7 @@ def build_reflexion_message(
     user_goal: str,
     last_messages: list,
     llm: Any,
-    config: Optional[Dict] = None,
+    config: Optional[dict] = None,
 ) -> Optional[SystemMessage]:
     """
     Generate a reflexion message based on the last round of tool calls.

@@ -6,8 +6,9 @@ from typing import Any, Optional
 
 
 def get_judge_llm(model: str = "", *, temperature: float = 0.0) -> Any:
-    from common.config import settings
     from langchain_openai import ChatOpenAI
+
+    from common.config import settings
 
     resolved_model = str(model or getattr(settings, "evaluator_model", "") or "").strip()
     if not resolved_model:

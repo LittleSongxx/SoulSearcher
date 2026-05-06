@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Iterable, List
+from typing import Any
 
 
 @dataclass
@@ -11,25 +12,25 @@ class ReportSectionPlan:
     title: str
     focus: str
     research_required: bool
-    related_worker_ids: List[str] = field(default_factory=list)
+    related_worker_ids: list[str] = field(default_factory=list)
     evidence_item_count: int = 0
     status: str = "planned"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {key: value for key, value in asdict(self).items() if value not in (None, "", [], {})}
 
 
 def build_sectioned_report_plan(
     *,
-    research_brief: Dict[str, Any],
-    worker_runs: List[Dict[str, Any]],
-    evidence_items: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    research_brief: dict[str, Any],
+    worker_runs: list[dict[str, Any]],
+    evidence_items: list[dict[str, Any]],
+) -> dict[str, Any]:
     topic = str(research_brief.get("clarified_goal") or research_brief.get("original_query") or "Research report").strip()
     expected_fields = _unique_text(research_brief.get("expected_fields") or [])
     worker_by_focus = _workers_by_focus(worker_runs)
     evidence_count = len([item for item in evidence_items or [] if isinstance(item, dict)])
-    sections: List[ReportSectionPlan] = [
+    sections: list[ReportSectionPlan] = [
         ReportSectionPlan(
             section_id=_section_id("introduction", topic),
             title="Introduction",
@@ -105,9 +106,9 @@ def build_sectioned_report_plan(
 
 
 def build_sectioned_report_artifact(
-    report_plan: Dict[str, Any],
-    config: Dict[str, Any],
-) -> Dict[str, Any]:
+    report_plan: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     cfg = cfg if isinstance(cfg, dict) else {}
     enabled = _config_bool(
@@ -135,8 +136,8 @@ def _section_id(prefix: str, value: str) -> str:
     return f"section_{prefix}_{digest}"
 
 
-def _unique_text(values: Iterable[Any]) -> List[str]:
-    output: List[str] = []
+def _unique_text(values: Iterable[Any]) -> list[str]:
+    output: list[str] = []
     seen = set()
     for value in values or []:
         text = str(value or "").strip()
@@ -147,8 +148,8 @@ def _unique_text(values: Iterable[Any]) -> List[str]:
     return output
 
 
-def _workers_by_focus(worker_runs: List[Dict[str, Any]]) -> Dict[str, List[str]]:
-    mapping: Dict[str, List[str]] = {}
+def _workers_by_focus(worker_runs: list[dict[str, Any]]) -> dict[str, list[str]]:
+    mapping: dict[str, list[str]] = {}
     for run in worker_runs or []:
         if not isinstance(run, dict):
             continue
@@ -167,8 +168,8 @@ def _title_from_focus(focus: str) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _dedupe_sections(sections: List[ReportSectionPlan]) -> List[ReportSectionPlan]:
-    output: List[ReportSectionPlan] = []
+def _dedupe_sections(sections: list[ReportSectionPlan]) -> list[ReportSectionPlan]:
+    output: list[ReportSectionPlan] = []
     seen = set()
     for section in sections:
         key = (section.title.lower(), section.focus.lower())
