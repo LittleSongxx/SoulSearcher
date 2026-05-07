@@ -152,7 +152,7 @@ _chat_model = create_chat_model
 _parse_list_output = parse_list_output
 _format_results = format_search_results
 
-_DEEPSEARCH_MODES = {"auto", "tree", "linear", "reflection_loop", "supervisor_workers"}
+_DEEPSEARCH_MODES = {"tree", "supervisor_workers"}
 _SIMPLE_FACT_PATTERNS = (
     r"\bwhat\s+is\b",
     r"\bwho\s+is\b",
@@ -232,9 +232,11 @@ def _check_cancel(state: dict[str, Any]) -> None:
 def _normalize_deepsearch_mode(value: Any) -> str:
     """Normalize deepsearch mode to a supported DeepSearch execution mode."""
     mode = str(value or "").strip().lower().replace("-", "_")
-    if mode == "reflection":
-        mode = "reflection_loop"
+    if mode in {"reflection", "reflection_loop", "hybrid", "hybrid_private_web"}:
+        mode = "supervisor_workers"
     if mode in {"supervisor", "workers", "supervisor_worker"}:
+        mode = "supervisor_workers"
+    if mode in {"linear", "linear_light", "light"}:
         mode = "supervisor_workers"
     if mode in _DEEPSEARCH_MODES:
         return mode
@@ -6397,9 +6399,9 @@ def run_deepsearch_supervisor_workers(
             "deepsearch_artifacts": {
                 "mode": "supervisor_workers",
                 "research_task_runtime": task_runtime.to_artifact(),
-                "stage_runtime": stage_runtime.artifact()
-                if "stage_runtime" in locals()
-                else {},
+                "stage_runtime": (
+                    stage_runtime.artifact() if "stage_runtime" in locals() else {}
+                ),
                 "decision_log": decision_log,
             },
         }
@@ -6433,10 +6435,9 @@ def run_deepsearch_auto(
     state: dict[str, Any], config: dict[str, Any]
 ) -> dict[str, Any]:
     """
-    Auto-select between tree and linear deep search based on settings.
+    Select a supported DeepSearch strategy and execute it.
 
-    Uses tree-based exploration if enabled in settings, otherwise falls back
-    to the optimized linear approach.
+    Product-supported strategies are supervisor-workers and tree.
     """
     brief = build_research_brief(state, config)
     source_routing = build_source_routing_policy(
@@ -6463,48 +6464,5 @@ def run_deepsearch_auto(
         logger.info("[deepsearch] Using tree-based exploration mode (override)")
         return _with_event_marker(run_deepsearch_tree(state, config))
 
-    if strategy == "linear":
-        logger.info("[deepsearch] Using linear exploration mode (override)")
-        return _with_event_marker(run_deepsearch_optimized(state, config))
-
-    if strategy == "reflection_loop":
-        logger.info("[deepsearch] Using reflection loop exploration mode")
-        return _with_event_marker(run_deepsearch_reflection_loop(state, config))
-
-    if strategy == "supervisor_workers":
-        logger.info("[deepsearch] Using supervisor-workers exploration mode")
-        return _with_event_marker(run_deepsearch_supervisor_workers(state, config))
-
-    use_tree = getattr(settings, "tree_exploration_enabled", True)
-    topic = str(state.get("input") or state.get("topic") or "").strip()
-    if strategy == "linear_light" or (use_tree and _auto_mode_prefers_linear(topic)):
-        if strategy == "linear_light":
-            logger.info("[deepsearch] Auto strategy selected light linear exploration")
-        else:
-            logger.info(
-                "[deepsearch] Auto mode selected linear exploration for simple factual query"
-            )
-        simple_config = (
-            dict(config) if isinstance(config, dict) else {"configurable": {}}
-        )
-        existing_cfg = simple_config.get("configurable")
-        simple_cfg = dict(existing_cfg) if isinstance(existing_cfg, dict) else {}
-        simple_config["configurable"] = simple_cfg
-        for key, value in (decision.parameters or {}).items():
-            simple_cfg.setdefault(key, value)
-        simple_cfg.setdefault("deepsearch_max_epochs", 1)
-        simple_cfg.setdefault("deepsearch_query_num", 1)
-        simple_cfg.setdefault("deepsearch_results_per_query", 5)
-        simple_cfg.setdefault("deepsearch_visualize_browser", False)
-        return _with_event_marker(run_deepsearch_optimized(state, simple_config))
-
-    if strategy == "hybrid_private_web":
-        logger.info("[deepsearch] Using hybrid private/web linear exploration")
-        return _with_event_marker(run_deepsearch_optimized(state, config))
-
-    if use_tree:
-        logger.info("[deepsearch] Using tree-based exploration mode")
-        return _with_event_marker(run_deepsearch_tree(state, config))
-
-    logger.info("[deepsearch] Using linear exploration mode")
-    return _with_event_marker(run_deepsearch_optimized(state, config))
+    logger.info("[deepsearch] Using supervisor-workers exploration mode")
+    return _with_event_marker(run_deepsearch_supervisor_workers(state, config))

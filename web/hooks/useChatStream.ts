@@ -7,14 +7,33 @@ interface UseChatStreamProps {
   selectedModel: string
 }
 
-const RESEARCH_SEARCH_MODE = {
-  useWebSearch: true,
-  useAgent: true,
-  useDeepSearch: true,
+export type DeepResearchStrategy = 'supervisor_workers' | 'tree'
+
+export interface ChatExecutionMode {
+  useWebSearch?: boolean
+  useDeepResearch?: boolean
+  deepResearchStrategy?: DeepResearchStrategy
+  images?: ImageAttachment[]
 }
 
-const RESEARCH_DEEPSEARCH_CONFIG = {
-  deepsearch_strategy: 'supervisor_workers',
+const DEFAULT_DEEP_RESEARCH_STRATEGY: DeepResearchStrategy = 'supervisor_workers'
+
+function buildSearchMode(mode: ChatExecutionMode = {}) {
+  const useDeepSearch = Boolean(mode.useDeepResearch)
+  return {
+    useWebSearch: useDeepSearch || Boolean(mode.useWebSearch),
+    useDeepSearch,
+  }
+}
+
+function buildDeepsearchConfig(mode: ChatExecutionMode = {}) {
+  if (!mode.useDeepResearch) return undefined
+  const strategy = mode.deepResearchStrategy || DEFAULT_DEEP_RESEARCH_STRATEGY
+  return {
+    deepsearch_strategy: strategy,
+    deepsearch_mode: strategy,
+    source_policy: 'web',
+  }
 }
 
 export function useChatStream({ selectedModel }: UseChatStreamProps) {
@@ -26,6 +45,7 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
   const [threadId, setThreadId] = useState<string | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
+  const lastSearchModeRef = useRef(buildSearchMode())
 
   const handleStop = useCallback(async () => {
     // 优先通知后端取消当前线程
@@ -50,12 +70,15 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
     setTimeout(() => setCurrentStatus(''), 3000)
   }, [threadId])
 
-  const processChat = useCallback(async (messageHistory: Message[], images?: ImageAttachment[]) => {
+  const processChat = useCallback(async (messageHistory: Message[], mode: ChatExecutionMode = {}) => {
     setIsLoading(true)
     abortControllerRef.current = new AbortController()
     const streamProtocol = getResearchStreamProtocol()
     const latestUserMessage = [...messageHistory].reverse().find((m) => m.role === 'user')
     const query = String(latestUserMessage?.content || '').trim()
+    const searchMode = buildSearchMode(mode)
+    const deepsearchConfig = buildDeepsearchConfig(mode)
+    lastSearchModeRef.current = searchMode
 
     try {
       const response = await fetch(
@@ -69,9 +92,9 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
           body: JSON.stringify({
             query,
             model: selectedModel,
-            search_mode: RESEARCH_SEARCH_MODE,
-            deepsearch_config: RESEARCH_DEEPSEARCH_CONFIG,
-            images: (images || []).map(img => ({
+            search_mode: searchMode,
+            ...(deepsearchConfig ? { deepsearch_config: deepsearchConfig } : {}),
+            images: (mode.images || []).map(img => ({
               name: img.name,
               mime: img.mime,
               data: img.data
@@ -398,7 +421,7 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
             thread_id: threadId,
             payload: { tool_approved: true, tool_calls: toolCalls },
             model: selectedModel,
-            search_mode: RESEARCH_SEARCH_MODE
+            search_mode: lastSearchModeRef.current
           })
         }
       )

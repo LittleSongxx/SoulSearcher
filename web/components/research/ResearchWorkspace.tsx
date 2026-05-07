@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import { ArrowDown, FileSearch, Loader2, PanelLeft, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { ArtifactsPanel } from '@/components/chat/ArtifactsPanel'
 import { Header } from '@/components/chat/Header'
 import { ResearchInput } from './ResearchInput'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { useChatStream } from '@/hooks/useChatStream'
+import { useChatStream, type ChatExecutionMode, type DeepResearchStrategy } from '@/hooks/useChatStream'
 import { STORAGE_KEYS, DEFAULT_MODEL } from '@/lib/constants'
 import { getApiBaseUrl } from '@/lib/api'
 import { Message } from '@/types/chat'
@@ -23,10 +23,10 @@ interface ContinueResearchTarget {
 }
 
 const starterTasks = [
+  '解释一下大模型上下文窗口和 RAG 的区别。',
+  '联网搜索最近一周 AI Agent 领域的重要新闻，并简要总结来源。',
   '调研 2025 年 Deep Research Agent 的主流架构、评测基准与安全风险，并输出带引用的系统报告。',
   '比较 OpenAI、Anthropic、Google、Perplexity 的 Deep Research 产品能力、引用质量与适用场景。',
-  '分析一个开源项目的产品定位、架构、关键风险和 P0/P1/P2 改进路线图。',
-  '围绕某个行业趋势收集一手来源，验证关键判断，并给出结论可信度。',
 ]
 
 export function ResearchWorkspace() {
@@ -37,6 +37,9 @@ export function ResearchWorkspace() {
   const [isArtifactsOpen, setIsArtifactsOpen] = useState(true)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [input, setInput] = useState('')
+  const [useWebSearch, setUseWebSearch] = useState(false)
+  const [useDeepResearch, setUseDeepResearch] = useState(false)
+  const [deepResearchStrategy, setDeepResearchStrategy] = useState<DeepResearchStrategy>('supervisor_workers')
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const lastAtBottom = useRef<boolean | null>(null)
 
@@ -79,6 +82,22 @@ export function ResearchWorkspace() {
       saveToHistory(messages, currentSessionId)
     }
   }, [messages, currentSessionId, isLoading, saveToHistory])
+
+  const effectiveWebSearch = useDeepResearch || useWebSearch
+  const chatMode = useMemo<ChatExecutionMode>(() => ({
+    useWebSearch: effectiveWebSearch,
+    useDeepResearch,
+    deepResearchStrategy,
+  }), [effectiveWebSearch, useDeepResearch, deepResearchStrategy])
+
+  const handleWebSearchChange = (enabled: boolean) => {
+    if (!useDeepResearch) setUseWebSearch(enabled)
+  }
+
+  const handleDeepResearchChange = (enabled: boolean) => {
+    setUseDeepResearch(enabled)
+    if (enabled) setUseWebSearch(true)
+  }
 
   const resetWorkspace = () => {
     if (messages.length > 0) saveToHistory(messages, currentSessionId || undefined)
@@ -129,7 +148,7 @@ export function ResearchWorkspace() {
     } else if (currentSessionId) {
       saveToHistory(nextMessages, currentSessionId)
     }
-    await processChat(nextMessages)
+    await processChat(nextMessages, chatMode)
   }
 
   const handleEditMessage = async (id: string, newContent: string) => {
@@ -138,7 +157,7 @@ export function ResearchWorkspace() {
     const updatedMessage = { ...messages[index], content: newContent }
     const nextMessages = [...messages.slice(0, index), updatedMessage]
     setMessages(nextMessages)
-    if (updatedMessage.role === 'user') await processChat(nextMessages)
+    if (updatedMessage.role === 'user') await processChat(nextMessages, chatMode)
   }
 
   const handleContinueResearch = async (target: ContinueResearchTarget) => {
@@ -183,7 +202,7 @@ export function ResearchWorkspace() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">W</div>
               <div>
                 <div className="text-sm font-bold tracking-tight">Weaver</div>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Research Workspace</div>
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Chat + Deep Research</div>
               </div>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="h-7 w-7 text-muted-foreground">
@@ -193,17 +212,17 @@ export function ResearchWorkspace() {
 
           <Button className="h-10 justify-start gap-2" variant="outline" onClick={resetWorkspace}>
             <Plus className="h-4 w-4" />
-            New Research
+            New Chat
           </Button>
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">Research Sessions</div>
+            <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">Chat Sessions</div>
             {isHistoryLoading ? (
               <div className="space-y-2 px-1">
                 {[1, 2, 3].map(i => <div key={i} className="h-8 rounded-md bg-muted/40 animate-pulse" />)}
               </div>
             ) : history.length === 0 ? (
-              <div className="px-2 py-3 text-xs italic text-muted-foreground">No research sessions yet</div>
+              <div className="px-2 py-3 text-xs italic text-muted-foreground">No chat sessions yet</div>
             ) : (
               <div className="space-y-1">
                 {history.map(item => (
@@ -241,8 +260,8 @@ export function ResearchWorkspace() {
                   <FileSearch className="h-10 w-10 text-primary" />
                 </div>
                 <div className="space-y-3">
-                  <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Start a deep research workspace</h1>
-                  <p className="mx-auto max-w-2xl text-muted-foreground md:text-lg">Weaver now focuses on scoped research sessions: planning, web evidence, source grounding, quality checks, and citation-rich reports.</p>
+                  <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Start with chat, upgrade to research</h1>
+                  <p className="mx-auto max-w-2xl text-muted-foreground md:text-lg">默认是普通对话；需要最新信息时开启联网，需要系统性报告时开启深度研究。</p>
                 </div>
                 <div className="grid gap-3 text-left md:grid-cols-2">
                   {starterTasks.map(task => (
@@ -299,7 +318,19 @@ export function ResearchWorkspace() {
           </div>
         )}
 
-        <ResearchInput input={input} setInput={setInput} onSubmit={handleSubmit} isLoading={isLoading} onStop={handleStop} />
+        <ResearchInput
+          input={input}
+          setInput={setInput}
+          onSubmit={handleSubmit}
+          isLoading={isLoading}
+          onStop={handleStop}
+          useWebSearch={effectiveWebSearch}
+          useDeepResearch={useDeepResearch}
+          deepResearchStrategy={deepResearchStrategy}
+          onWebSearchChange={handleWebSearchChange}
+          onDeepResearchChange={handleDeepResearchChange}
+          onDeepResearchStrategyChange={setDeepResearchStrategy}
+        />
       </main>
 
       {(artifacts.length > 0 || threadId) && (

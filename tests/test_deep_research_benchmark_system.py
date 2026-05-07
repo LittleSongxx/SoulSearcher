@@ -15,7 +15,10 @@ from eval.deep_research_benchmark.dataset import load_tasks
 from eval.deep_research_benchmark.judges.rubric import extract_json_object
 from eval.deep_research_benchmark.metrics import percentile, summarize_results
 from eval.deep_research_benchmark.runner import build_research_payload, run_case
-from eval.deep_research_benchmark.schemas import DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG, RunConfig
+from eval.deep_research_benchmark.schemas import (
+    DEFAULT_SUPERVISOR_DEEPSEARCH_CONFIG,
+    RunConfig,
+)
 from eval.deep_research_benchmark.sse_client import parse_sse_frame
 
 
@@ -24,7 +27,9 @@ def _contains_cjk(text: str) -> bool:
 
 
 def test_seed_dataset_loads_tasks():
-    tasks = load_tasks(ROOT / "eval" / "deep_research_benchmark" / "datasets" / "seed_tasks.jsonl")
+    tasks = load_tasks(
+        ROOT / "eval" / "deep_research_benchmark" / "datasets" / "seed_tasks.jsonl"
+    )
 
     assert len(tasks) == 10
     assert tasks[0].id == "web_dr_001"
@@ -36,7 +41,9 @@ def test_seed_dataset_loads_tasks():
 
 
 def test_parse_sse_frame_unwraps_legacy_envelope():
-    event = parse_sse_frame('id: 1\nevent: text\ndata: {"type":"text","data":{"content":"hi"}}\n')
+    event = parse_sse_frame(
+        'id: 1\nevent: text\ndata: {"type":"text","data":{"content":"hi"}}\n'
+    )
 
     assert event is not None
     assert event.event == "text"
@@ -93,16 +100,38 @@ def test_percentile_and_summary_metrics():
             "passed": False,
             "details": {"dimensions": {"evidence_quality": 6, "depth": 5}},
         },
-        {"case_id": "a", "judge_type": "citation", "status": "scored", "score": 0.9, "details": {"effective_unique_sources": 10}},
-        {"case_id": "b", "judge_type": "citation", "status": "scored", "score": 0.8, "details": {"effective_unique_sources": 20}},
+        {
+            "case_id": "a",
+            "judge_type": "citation",
+            "status": "scored",
+            "score": 0.9,
+            "details": {"effective_unique_sources": 10},
+        },
+        {
+            "case_id": "b",
+            "judge_type": "citation",
+            "status": "scored",
+            "score": 0.8,
+            "details": {"effective_unique_sources": 20},
+        },
         {"case_id": "a", "judge_type": "claim", "status": "scored", "score": 0.05},
         {"case_id": "b", "judge_type": "claim", "status": "scored", "score": 0.15},
     ]
 
     assert percentile([1, 3], 0.5) == 2.0
     tasks = [
-        {"id": "a", "domain": "policy", "query": "English query", "metadata": {"language": "en"}},
-        {"id": "b", "domain": "policy", "query": "中文问题", "metadata": {"language": "zh"}},
+        {
+            "id": "a",
+            "domain": "policy",
+            "query": "English query",
+            "metadata": {"language": "en"},
+        },
+        {
+            "id": "b",
+            "domain": "policy",
+            "query": "中文问题",
+            "metadata": {"language": "zh"},
+        },
     ]
     summary = summarize_results(results, scores, tasks)
     assert summary.total_cases == 3
@@ -163,7 +192,11 @@ def test_cli_parser_defaults_to_supervisor_benchmark(tmp_path):
 
 def test_run_config_defaults_to_heavy_supervisor():
     config = RunConfig(
-        dataset_path=ROOT / "eval" / "deep_research_benchmark" / "datasets" / "seed_tasks.jsonl",
+        dataset_path=ROOT
+        / "eval"
+        / "deep_research_benchmark"
+        / "datasets"
+        / "seed_tasks.jsonl",
         output_dir=ROOT / "eval" / "deep_research_benchmark" / "results" / "test",
     )
 
@@ -196,7 +229,11 @@ def test_build_research_payload_forces_supervisor_strategy():
         max_cases=1,
     )[0]
     config = RunConfig(
-        dataset_path=ROOT / "eval" / "deep_research_benchmark" / "datasets" / "seed_tasks.jsonl",
+        dataset_path=ROOT
+        / "eval"
+        / "deep_research_benchmark"
+        / "datasets"
+        / "seed_tasks.jsonl",
         output_dir=ROOT / "eval" / "deep_research_benchmark" / "results" / "test",
         strategy="supervisor",
         deepsearch_config={"deepsearch_supervisor_rounds": 2},
@@ -220,7 +257,11 @@ def test_build_research_payload_rejects_non_supervisor_strategy():
         max_cases=1,
     )[0]
     config = RunConfig(
-        dataset_path=ROOT / "eval" / "deep_research_benchmark" / "datasets" / "seed_tasks.jsonl",
+        dataset_path=ROOT
+        / "eval"
+        / "deep_research_benchmark"
+        / "datasets"
+        / "seed_tasks.jsonl",
         output_dir=ROOT / "eval" / "deep_research_benchmark" / "results" / "test",
         strategy="tree",
     )
@@ -303,7 +344,7 @@ async def test_research_sse_passes_deepsearch_config(monkeypatch):
 
     async def fake_stream(*_args, **kwargs):
         captured.update(kwargs)
-        yield "0:{\"type\":\"done\",\"data\":{}}\n"
+        yield '0:{"type":"done","data":{}}\n'
 
     class DummyState:
         principal_id = ""
@@ -325,7 +366,10 @@ async def test_research_sse_passes_deepsearch_config(monkeypatch):
             "deepsearch_supervisor_rounds": 3,
             "unknown_key": "drop",
         },
-        research_brief={"original_query": "test supervisor benchmark", "expected_fields": ["evidence"]},
+        research_brief={
+            "original_query": "test supervisor benchmark",
+            "expected_fields": ["evidence"],
+        },
     )
     response = await main.research_sse(DummyRequest(), payload)
 
@@ -336,7 +380,7 @@ async def test_research_sse_passes_deepsearch_config(monkeypatch):
 
     assert captured["deepsearch_config"]["deepsearch_strategy"] == "supervisor_workers"
     assert captured["deepsearch_config"]["deepsearch_supervisor_rounds"] == 3
-    assert "unknown_key" in captured["deepsearch_config"]
+    assert "unknown_key" not in captured["deepsearch_config"]
     assert captured["research_brief"]["expected_fields"] == ["evidence"]
 
 
@@ -350,7 +394,11 @@ async def test_runner_records_failed_case_without_openai_key(tmp_path, monkeypat
         max_cases=1,
     )[0]
     config = RunConfig(
-        dataset_path=ROOT / "eval" / "deep_research_benchmark" / "datasets" / "seed_tasks.jsonl",
+        dataset_path=ROOT
+        / "eval"
+        / "deep_research_benchmark"
+        / "datasets"
+        / "seed_tasks.jsonl",
         output_dir=tmp_path / "run",
         base_url="asgi",
         timeout_s=20.0,

@@ -6,6 +6,8 @@ from typing import Any, Optional
 
 from agent.workflows.research_brief import ResearchBrief
 
+SUPPORTED_DEEPSEARCH_STRATEGIES = {"tree", "supervisor_workers"}
+
 
 @dataclass
 class StrategyDecision:
@@ -34,23 +36,32 @@ def _explicit_strategy(config: dict[str, Any]) -> str:
     value = cfg.get("deepsearch_strategy") or cfg.get("strategy")
     strategy = str(value or "").strip().lower().replace("-", "_")
     aliases = {
-        "reflection": "reflection_loop",
-        "reflect": "reflection_loop",
+        "reflection": "supervisor_workers",
+        "reflect": "supervisor_workers",
+        "reflection_loop": "supervisor_workers",
         "supervisor": "supervisor_workers",
         "workers": "supervisor_workers",
         "supervisor_worker": "supervisor_workers",
-        "linear_light": "linear_light",
-        "light": "linear_light",
-        "hybrid": "hybrid_private_web",
+        "linear": "supervisor_workers",
+        "linear_light": "supervisor_workers",
+        "light": "supervisor_workers",
+        "hybrid": "supervisor_workers",
+        "hybrid_private_web": "supervisor_workers",
     }
     return aliases.get(strategy, strategy)
 
 
 def _explicit_mode(config: dict[str, Any]) -> str:
-    mode = str(_cfg(config).get("deepsearch_mode") or "").strip().lower().replace("-", "_")
-    if mode == "reflection":
-        return "reflection_loop"
+    mode = (
+        str(_cfg(config).get("deepsearch_mode") or "").strip().lower().replace("-", "_")
+    )
+    if mode in {"reflection", "reflection_loop"}:
+        return "supervisor_workers"
     if mode in {"supervisor", "workers", "supervisor_worker"}:
+        return "supervisor_workers"
+    if mode in {"linear", "linear_light", "light"}:
+        return "supervisor_workers"
+    if mode in {"hybrid", "hybrid_private_web"}:
         return "supervisor_workers"
     return mode
 
@@ -63,52 +74,58 @@ def select_deepsearch_strategy(
     simple_query_detector: Optional[Callable[[str], bool]] = None,
 ) -> StrategyDecision:
     strategy = _explicit_strategy(config)
-    if strategy in {
-        "linear_light",
-        "linear",
-        "tree",
-        "reflection_loop",
-        "supervisor_workers",
-        "hybrid_private_web",
-    }:
-        return StrategyDecision(strategy=strategy, reason="runtime strategy override", confidence=1.0)
+    if strategy in SUPPORTED_DEEPSEARCH_STRATEGIES:
+        return StrategyDecision(
+            strategy=strategy, reason="runtime strategy override", confidence=1.0
+        )
 
     explicit_mode = _explicit_mode(config)
-    if explicit_mode in {"linear", "tree", "reflection_loop", "supervisor_workers"}:
-        return StrategyDecision(strategy=explicit_mode, reason="runtime mode override", confidence=1.0)
+    if explicit_mode in SUPPORTED_DEEPSEARCH_STRATEGIES:
+        return StrategyDecision(
+            strategy=explicit_mode, reason="runtime mode override", confidence=1.0
+        )
 
     configured_mode = (
-        str(getattr(settings, "deepsearch_mode", "supervisor_workers") or "supervisor_workers")
+        str(
+            getattr(settings, "deepsearch_mode", "supervisor_workers")
+            or "supervisor_workers"
+        )
         .strip()
         .lower()
         .replace("-", "_")
     )
-    if configured_mode in {"linear", "tree", "reflection_loop", "supervisor_workers"}:
-        return StrategyDecision(strategy=configured_mode, reason="settings mode override", confidence=1.0)
-
-    topic = brief.original_query or brief.clarified_goal
-    if simple_query_detector and simple_query_detector(topic):
+    if configured_mode in {
+        "reflection",
+        "reflection_loop",
+        "hybrid",
+        "hybrid_private_web",
+    }:
+        configured_mode = "supervisor_workers"
+    if configured_mode in {"linear", "linear_light", "light"}:
+        configured_mode = "supervisor_workers"
+    if configured_mode in SUPPORTED_DEEPSEARCH_STRATEGIES:
         return StrategyDecision(
-            strategy="linear_light",
-            reason="simple factual query detected",
-            parameters={
-                "deepsearch_max_epochs": 1,
-                "deepsearch_query_num": 1,
-                "deepsearch_results_per_query": 5,
-                "deepsearch_visualize_browser": False,
-            },
-            confidence=0.9,
+            strategy=configured_mode, reason="settings mode override", confidence=1.0
         )
+
+    _ = simple_query_detector
 
     cfg = _cfg(config)
     low_budget = False
     if "deepsearch_max_epochs" in cfg and "deepsearch_query_num" in cfg:
         try:
-            low_budget = int(cfg.get("deepsearch_max_epochs")) <= 2 and int(cfg.get("deepsearch_query_num")) <= 2
+            low_budget = (
+                int(cfg.get("deepsearch_max_epochs")) <= 2
+                and int(cfg.get("deepsearch_query_num")) <= 2
+            )
         except (TypeError, ValueError):
             low_budget = False
     if _truthy(cfg.get("use_reflection_loop")):
-        return StrategyDecision(strategy="reflection_loop", reason="low budget reflection loop selected", confidence=0.75)
+        return StrategyDecision(
+            strategy="supervisor_workers",
+            reason="reflection loop is not enabled for this product profile",
+            confidence=0.75,
+        )
     return StrategyDecision(
         strategy="supervisor_workers",
         reason="default supervisor-workers deep research strategy",

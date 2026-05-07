@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react'
 import { Paperclip, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { DeepResearchStrategy } from '@/hooks/useChatStream'
 
 interface ResearchInputProps {
   input: string
@@ -11,9 +12,27 @@ interface ResearchInputProps {
   onSubmit: () => void
   isLoading: boolean
   onStop: () => void
+  useWebSearch: boolean
+  useDeepResearch: boolean
+  deepResearchStrategy: DeepResearchStrategy
+  onWebSearchChange: (enabled: boolean) => void
+  onDeepResearchChange: (enabled: boolean) => void
+  onDeepResearchStrategyChange: (strategy: DeepResearchStrategy) => void
 }
 
-export function ResearchInput({ input, setInput, onSubmit, isLoading, onStop }: ResearchInputProps) {
+export function ResearchInput({
+  input,
+  setInput,
+  onSubmit,
+  isLoading,
+  onStop,
+  useWebSearch,
+  useDeepResearch,
+  deepResearchStrategy,
+  onWebSearchChange,
+  onDeepResearchChange,
+  onDeepResearchStrategyChange,
+}: ResearchInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -37,13 +56,34 @@ export function ResearchInput({ input, setInput, onSubmit, isLoading, onStop }: 
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-6">
-      <div className="mb-3 flex items-end justify-between gap-3 px-1">
+      <div className="mb-3 flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Research Workspace</div>
-          <div className="mt-1 text-xs text-muted-foreground">Describe the research question, scope, constraints, preferred sources, and expected report format.</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Weaver Chat</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            默认普通对话；按需开启联网搜索或深度研究。
+          </div>
         </div>
-        <div className="hidden rounded-full border bg-muted/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:block">
-          Deep Research
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={useWebSearch ? 'default' : 'outline'}
+            disabled={isLoading || useDeepResearch}
+            onClick={() => onWebSearchChange(!useWebSearch)}
+            className="h-8 rounded-full px-3 text-xs"
+          >
+            联网搜索
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={useDeepResearch ? 'default' : 'outline'}
+            disabled={isLoading}
+            onClick={() => onDeepResearchChange(!useDeepResearch)}
+            className="h-8 rounded-full px-3 text-xs"
+          >
+            深度研究
+          </Button>
         </div>
       </div>
 
@@ -58,7 +98,7 @@ export function ResearchInput({ input, setInput, onSubmit, isLoading, onStop }: 
           onKeyDown={handleKeyDown}
           disabled={isLoading}
           rows={1}
-          placeholder="Enter a deep research task..."
+          placeholder={useDeepResearch ? '输入深度研究任务...' : useWebSearch ? '输入需要联网搜索的问题...' : '输入消息...'}
           className="min-h-[72px] max-h-[240px] w-full resize-none bg-transparent py-5 pl-12 pr-16 text-base outline-none placeholder:text-muted-foreground/50"
         />
         <div className="absolute bottom-4 right-4">
@@ -80,9 +120,33 @@ export function ResearchInput({ input, setInput, onSubmit, isLoading, onStop }: 
         </div>
       </div>
       <div className="mt-2 flex justify-between px-3 text-[10px] text-muted-foreground/70">
-        <span>Research sessions use web search, evidence extraction, quality checks, and report generation.</span>
-        <span>Review citations before relying on conclusions.</span>
+        <span>{useDeepResearch ? '深度研究会自动启用联网、agent 工具和研究编排。' : useWebSearch ? '联网搜索会使用在线来源回答。' : '普通聊天不会联网或调用工具。'}</span>
+        <span>{useDeepResearch ? `策略：${deepResearchStrategy === 'tree' ? 'tree' : 'supervisor_workers'}` : '需要报告时开启深度研究。'}</span>
       </div>
+      {useDeepResearch && (
+        <div className="mt-2 flex justify-end gap-2 px-3">
+          <Button
+            type="button"
+            size="sm"
+            variant={deepResearchStrategy === 'supervisor_workers' ? 'default' : 'outline'}
+            disabled={isLoading}
+            onClick={() => onDeepResearchStrategyChange('supervisor_workers')}
+            className="h-7 rounded-full px-3 text-[10px]"
+          >
+            Supervisor Workers
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={deepResearchStrategy === 'tree' ? 'default' : 'outline'}
+            disabled={isLoading}
+            onClick={() => onDeepResearchStrategyChange('tree')}
+            className="h-7 rounded-full px-3 text-[10px]"
+          >
+            Tree
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

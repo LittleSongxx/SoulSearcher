@@ -698,37 +698,30 @@ def _coerce_search_mode_input(value: Any) -> SearchMode | None:
         lowered = value.strip().lower()
         if lowered in {"", "direct"}:
             return SearchMode()
-        if lowered in {"web", "search", "tavily"}:
-            return SearchMode(useWebSearch=True)
-        if lowered in {"mcp"}:
-            # Frontend UX label: "MCP" is implemented as tool-calling agent mode.
-            return SearchMode(useAgent=True)
-        if lowered in {"agent"}:
-            return SearchMode(useAgent=True)
-        if lowered in {"deep", "deep_agent", "deep-agent", "ultra"}:
-            return SearchMode(useAgent=True, useDeepSearch=True)
-        # Unknown string → treat as direct.
-        return SearchMode()
+        if lowered == "deep":
+            return SearchMode(useWebSearch=True, useAgent=True, useDeepSearch=True)
+        raise ValueError("search_mode must be direct/deep flags")
 
     if isinstance(value, dict):
         use_web = bool(value.get("useWebSearch", value.get("use_web", False)))
-        use_agent = bool(value.get("useAgent", value.get("use_agent", False)))
         use_deep = bool(value.get("useDeepSearch", value.get("use_deep", False)))
+        use_agent = bool(use_deep)
 
         # If booleans were not provided but a mode string exists, derive flags from it.
         if not (use_web or use_agent or use_deep) and isinstance(
             value.get("mode"), str
         ):
             mode_lower = value["mode"].strip().lower()
-            if mode_lower == "web":
-                use_web = True
-            elif mode_lower in {"agent", "deep"}:
+            if mode_lower == "deep":
                 use_agent = True
-                use_deep = mode_lower == "deep"
+                use_deep = True
+            elif mode_lower not in {"", "direct"}:
+                raise ValueError("search_mode.mode must be direct or deep")
 
-        # Deep requires agent.
-        if use_deep and not use_agent:
-            use_deep = False
+        # Deep enables web and agent.
+        if use_deep:
+            use_web = True
+            use_agent = True
 
         return SearchMode(
             useWebSearch=use_web, useAgent=use_agent, useDeepSearch=use_deep
@@ -1109,6 +1102,15 @@ _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
 }
 
 
+def _normalize_research_deepsearch_strategy(value: Any) -> str:
+    mode = str(value or "").strip().lower().replace("-", "_")
+    if mode in {"tree", "supervisor_workers"}:
+        return mode
+    if mode in {"supervisor", "workers", "supervisor_worker"}:
+        return "supervisor_workers"
+    return "supervisor_workers"
+
+
 def _safe_research_deepsearch_config(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
@@ -1133,6 +1135,11 @@ def _safe_research_deepsearch_config(value: Any) -> dict[str, Any]:
             item, dict
         ):
             cleaned[key_text] = item
+    for strategy_key in ("deepsearch_strategy", "strategy", "deepsearch_mode"):
+        if strategy_key in cleaned:
+            cleaned[strategy_key] = _normalize_research_deepsearch_strategy(
+                cleaned[strategy_key]
+            )
     return cleaned
 
 
@@ -1725,20 +1732,18 @@ def _normalize_search_mode(
 ) -> dict[str, Any]:
     if isinstance(search_mode, SearchMode):
         use_web = search_mode.useWebSearch
-        use_agent = search_mode.useAgent
         use_deep = search_mode.useDeepSearch
+        use_agent = bool(use_deep)
         use_deep_prompt = use_deep
     elif isinstance(search_mode, dict):
         # Support both camelCase (frontend payload) and snake_case (already-normalized)
         use_web = bool(
             search_mode.get("useWebSearch", search_mode.get("use_web", False))
         )
-        use_agent = bool(
-            search_mode.get("useAgent", search_mode.get("use_agent", False))
-        )
         use_deep = bool(
             search_mode.get("useDeepSearch", search_mode.get("use_deep", False))
         )
+        use_agent = bool(use_deep)
         use_deep_prompt = bool(
             search_mode.get(
                 "useDeepPrompt", search_mode.get("use_deep_prompt", use_deep)
@@ -1750,49 +1755,42 @@ def _normalize_search_mode(
             search_mode.get("mode"), str
         ):
             mode_lower = search_mode["mode"].strip().lower()
-            if mode_lower == "web":
-                use_web = True
-            elif mode_lower in {"agent", "deep"}:
+            if mode_lower == "deep":
                 use_agent = True
-                use_deep = mode_lower == "deep"
+                use_deep = True
                 use_deep_prompt = use_deep
+            elif mode_lower not in {"", "direct"}:
+                raise ValueError("search_mode.mode must be direct or deep")
     elif isinstance(search_mode, str):
         lowered = search_mode.lower().strip()
 
-        # UX labels
         if lowered in {"direct", ""}:
             use_web = False
             use_agent = False
             use_deep = False
             use_deep_prompt = False
+        elif lowered == "deep":
+            use_web = True
+            use_agent = True
+            use_deep = True
+            use_deep_prompt = True
         else:
-            use_web = lowered in {"web", "search", "tavily"}
-            use_agent = lowered in {
-                "agent",
-                "mcp",
-                "deep",
-                "deep_agent",
-                "deep-agent",
-                "ultra",
-            }
-            use_deep = lowered in {"deep", "deep_agent", "deep-agent", "ultra"}
-            use_deep_prompt = use_deep
+            use_web = False
+            use_agent = False
+            use_deep = False
+            use_deep_prompt = False
     else:
         use_web = False
         use_agent = False
         use_deep = False
         use_deep_prompt = False
 
-    if use_deep and not use_agent:
-        use_deep = False
-        use_deep_prompt = False
+    if use_deep:
+        use_web = True
+        use_agent = True
+        use_deep_prompt = True
 
-    if use_agent:
-        mode = "deep" if use_deep else "agent"
-    elif use_web:
-        mode = "web"
-    else:
-        mode = "direct"
+    mode = "deep" if use_deep else "direct"
 
     return {
         "use_web": use_web,
@@ -4041,7 +4039,9 @@ async def get_session_evidence(thread_id: str, request: Request):
                 research_pipeline if isinstance(research_pipeline, dict) else {}
             ),
             "stage_runtime": stage_runtime if isinstance(stage_runtime, dict) else {},
-            "source_quality": source_quality if isinstance(source_quality, dict) else {},
+            "source_quality": (
+                source_quality if isinstance(source_quality, dict) else {}
+            ),
             "browser_reader_plan": (
                 browser_reader_plan if isinstance(browser_reader_plan, dict) else {}
             ),
@@ -4813,34 +4813,39 @@ async def research_sse(request: Request, payload: ResearchRequest):
     safe_deepsearch_config = _safe_research_deepsearch_config(
         payload.deepsearch_config or {}
     )
-    preview_state: dict[str, Any] = {"input": query, "user_id": user_id}
-    if isinstance(payload.research_brief, dict) and payload.research_brief:
-        preview_state["research_brief"] = payload.research_brief
-    preview_config: dict[str, Any] = {
-        "configurable": {
-            "thread_id": thread_id,
-            "model": model,
-            "search_mode": mode_info,
-            "user_id": user_id,
-            "rag_collection_name": _rag_collection_for_request(request),
-            **safe_deepsearch_config,
+    should_prepare_research_brief = bool(mode_info.get("use_deep"))
+    preview_source_routing: dict[str, Any] = {}
+    normalized_research_brief: dict[str, Any] = {}
+    if should_prepare_research_brief:
+        preview_state: dict[str, Any] = {"input": query, "user_id": user_id}
+        if isinstance(payload.research_brief, dict) and payload.research_brief:
+            preview_state["research_brief"] = payload.research_brief
+        preview_config: dict[str, Any] = {
+            "configurable": {
+                "thread_id": thread_id,
+                "model": model,
+                "search_mode": mode_info,
+                "user_id": user_id,
+                "rag_collection_name": _rag_collection_for_request(request),
+                **safe_deepsearch_config,
+            }
         }
-    }
-    try:
-        preview_brief = build_research_brief(preview_state, preview_config)
-        preview_source_routing = build_source_routing_policy(
-            brief=preview_brief,
-            config=preview_config,
-            state=preview_state,
-        )
-        preview_brief.source_routing = preview_source_routing
-        normalized_research_brief = preview_brief.to_dict()
-    except Exception as e:
-        logger.debug(f"Failed to prepare preview research brief: {e}")
-        preview_source_routing = {}
-        normalized_research_brief = (
-            payload.research_brief if isinstance(payload.research_brief, dict) else {}
-        )
+        try:
+            preview_brief = build_research_brief(preview_state, preview_config)
+            preview_source_routing = build_source_routing_policy(
+                brief=preview_brief,
+                config=preview_config,
+                state=preview_state,
+            )
+            preview_brief.source_routing = preview_source_routing
+            normalized_research_brief = preview_brief.to_dict()
+        except Exception as e:
+            logger.debug(f"Failed to prepare preview research brief: {e}")
+            normalized_research_brief = (
+                payload.research_brief
+                if isinstance(payload.research_brief, dict)
+                else {}
+            )
 
     async def _sse_generator():
         gauge = None
@@ -4860,24 +4865,25 @@ async def research_sse(request: Request, payload: ResearchRequest):
                 pass
             yield format_sse_retry(2000)
             seq += 1
-            brief_payload = {
-                "thread_id": thread_id,
-                "research_brief": normalized_research_brief,
-                "source_routing": preview_source_routing,
-            }
-            yield format_sse_event(
-                event="brief_created",
-                data={
-                    "type": "brief_created",
-                    "data": brief_payload,
-                    "research_event": build_research_run_event(
-                        "brief_created",
-                        brief_payload,
-                        seq=seq,
-                    ),
-                },
-                event_id=seq,
-            )
+            if should_prepare_research_brief:
+                brief_payload = {
+                    "thread_id": thread_id,
+                    "research_brief": normalized_research_brief,
+                    "source_routing": preview_source_routing,
+                }
+                yield format_sse_event(
+                    event="brief_created",
+                    data={
+                        "type": "brief_created",
+                        "data": brief_payload,
+                        "research_event": build_research_run_event(
+                            "brief_created",
+                            brief_payload,
+                            seq=seq,
+                        ),
+                    },
+                    event_id=seq,
+                )
 
             # Deterministic failure mode when no API key is configured.
             # We keep this fast and side-effect free (no graph compilation/run).
@@ -4923,7 +4929,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
                     images=_normalize_images_payload(payload.images),
                     user_id=user_id,
                     request=request,
-                    deepsearch_config=payload.deepsearch_config,
+                    deepsearch_config=safe_deepsearch_config,
                     research_brief=normalized_research_brief,
                 ),
                 interval_s=15.0,

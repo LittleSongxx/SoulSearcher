@@ -4,7 +4,7 @@ from agent.workflows.research_brief import build_research_brief
 from agent.workflows.strategy_selector import select_deepsearch_strategy
 
 
-def test_strategy_selector_preserves_runtime_mode_override():
+def test_strategy_selector_maps_linear_runtime_mode_to_supervisor_workers():
     brief = build_research_brief({"input": "broad market analysis"}, {})
     decision = select_deepsearch_strategy(
         brief=brief,
@@ -12,7 +12,19 @@ def test_strategy_selector_preserves_runtime_mode_override():
         settings=SimpleNamespace(deepsearch_mode="tree", tree_exploration_enabled=True),
     )
 
-    assert decision.strategy == "linear"
+    assert decision.strategy == "supervisor_workers"
+    assert decision.reason == "runtime mode override"
+
+
+def test_strategy_selector_preserves_tree_runtime_mode_override():
+    brief = build_research_brief({"input": "broad market analysis"}, {})
+    decision = select_deepsearch_strategy(
+        brief=brief,
+        config={"configurable": {"deepsearch_mode": "tree"}},
+        settings=SimpleNamespace(deepsearch_mode="supervisor_workers"),
+    )
+
+    assert decision.strategy == "tree"
     assert decision.reason == "runtime mode override"
 
 
@@ -28,7 +40,7 @@ def test_strategy_selector_accepts_supervisor_workers_override():
     assert decision.reason == "runtime strategy override"
 
 
-def test_strategy_selector_selects_linear_light_for_simple_query():
+def test_strategy_selector_keeps_supervisor_for_simple_query():
     brief = build_research_brief({"input": "What is the capital of France?"}, {})
     decision = select_deepsearch_strategy(
         brief=brief,
@@ -37,11 +49,10 @@ def test_strategy_selector_selects_linear_light_for_simple_query():
         simple_query_detector=lambda text: True,
     )
 
-    assert decision.strategy == "linear_light"
-    assert decision.parameters["deepsearch_max_epochs"] == 1
+    assert decision.strategy == "supervisor_workers"
 
 
-def test_strategy_selector_selects_reflection_for_low_budget():
+def test_strategy_selector_maps_reflection_request_to_supervisor_workers():
     brief = build_research_brief({"input": "Summarize local notes"}, {})
     decision = select_deepsearch_strategy(
         brief=brief,
@@ -55,7 +66,7 @@ def test_strategy_selector_selects_reflection_for_low_budget():
         settings=SimpleNamespace(deepsearch_mode="auto", tree_exploration_enabled=True),
     )
 
-    assert decision.strategy == "reflection_loop"
+    assert decision.strategy == "supervisor_workers"
 
 
 def test_strategy_selector_uses_supervisor_workers_for_private_policy_by_default():
@@ -63,7 +74,9 @@ def test_strategy_selector_uses_supervisor_workers_for_private_policy_by_default
     decision = select_deepsearch_strategy(
         brief=brief,
         config={"configurable": {}},
-        settings=SimpleNamespace(deepsearch_mode="auto", tree_exploration_enabled=False),
+        settings=SimpleNamespace(
+            deepsearch_mode="auto", tree_exploration_enabled=False
+        ),
     )
 
     assert decision.strategy == "supervisor_workers"

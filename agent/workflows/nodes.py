@@ -1244,13 +1244,6 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]
             logger.debug(f"[deepsearch_node] failed to emit start event: {e}")
 
     try:
-        input_text = str(state.get("input", "") or "").strip()
-        if input_text and _auto_mode_prefers_linear(input_text):
-            logger.info(
-                "[deepsearch_node] Delegating simple factual deep query to direct answer node"
-            )
-            return direct_answer_node(state, config)
-
         token_id = state.get("cancel_token_id")
         if token_id:
             _check_cancellation(token_id)
@@ -1344,57 +1337,31 @@ def deepsearch_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]
 
 
 def route_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """
-    Route execution using SmartRouter (LLM-based intelligent routing).
-
-    Priority:
-    1. Config override (search_mode.mode) - for explicit user control
-    2. SmartRouter LLM decision - intelligent query classification
-    3. Low confidence fallback - route to clarify if confidence < threshold
-
-    Returns state updates with routing decision and metadata.
-    """
-    from agent.core.smart_router import smart_route
-
     configurable = _configurable(config)
     mode_info = configurable.get("search_mode", {}) or {}
-    override_mode = mode_info.get("mode")
     max_revisions = configurable.get("max_revisions", state.get("max_revisions", 0))
-    confidence_threshold = float(configurable.get("routing_confidence_threshold", 0.6))
 
-    # Use SmartRouter (handles override internally)
-    result = smart_route(
-        query=state.get("input", ""),
-        images=state.get("images"),
-        config=config,
-        override_mode=override_mode if override_mode else None,
-    )
+    route = "direct"
+    if isinstance(mode_info, dict):
+        mode = str(mode_info.get("mode") or "").strip().lower()
+        use_deep = bool(mode_info.get("use_deep") or mode_info.get("useDeepSearch"))
+        if mode == "deep" or use_deep:
+            route = "deep"
 
-    route = result.get("route", "direct")
-    confidence = result.get("routing_confidence", 1.0)
+    result = {
+        "route": route,
+        "routing_reasoning": f"Explicit frontend mode: {route}",
+        "routing_confidence": 1.0,
+    }
 
-    # Low confidence fallback: route to clarify
-    if not override_mode and confidence < confidence_threshold:
-        logger.info(
-            f"Low confidence ({confidence:.2f} < {confidence_threshold}), routing to clarify"
-        )
-        route = "clarify"
-        result["route"] = "clarify"
-        result["needs_clarification"] = True
-
-    logger.info(
-        f"[route_node] Routing decision: {route} (confidence: {confidence:.2f})"
-    )
+    logger.info(f"[route_node] Routing decision: {route} (explicit frontend mode)")
     logger.info(f"[route_node] search_mode from config: {mode_info}")
-    logger.info(f"[route_node] override_mode: {override_mode}")
     logger.info(f"[route_node] Returning result with route='{route}'")
 
-    # Merge max_revisions into result
     result["max_revisions"] = max_revisions
     result["resolved_route"] = route
 
-    # Domain classification (if enabled)
-    if getattr(settings, "domain_routing_enabled", False) and route in ("deep", "web"):
+    if getattr(settings, "domain_routing_enabled", False) and route == "deep":
         try:
             from agent.workflows.domain_router import DomainClassifier
 
@@ -1481,6 +1448,19 @@ def direct_answer_node(state: AgentState, config: RunnableConfig) -> dict[str, A
     """Direct answer without research."""
     logger.info("Executing direct answer node")
     t0 = time.time()
+    cfg = _configurable(config)
+    mode_info = cfg.get("search_mode", {}) or {}
+    use_web = bool(
+        isinstance(mode_info, dict)
+        and mode_info.get("use_web")
+        and not mode_info.get("use_deep")
+    )
+    if use_web:
+        fast_result = _answer_simple_agent_query(state, config)
+        if fast_result is not None:
+            logger.info(f"[timing] direct_web_answer {(time.time() - t0):.3f}s")
+            return fast_result
+
     llm = _chat_model(_model_for_task("writing", config), temperature=0.7)
 
     # Check if seeded messages contain a SystemMessage (e.g. from a skill prompt)
@@ -1494,10 +1474,16 @@ def direct_answer_node(state: AgentState, config: RunnableConfig) -> dict[str, A
             ),
         ]
     else:
+        system_content = (
+            "You are a helpful assistant. Answer succinctly and accurately."
+        )
+        if use_web:
+            system_content = (
+                "You are a helpful assistant. The user enabled web search, but no usable current web evidence was returned. "
+                "Answer succinctly from general knowledge and be transparent if the answer may require current sources."
+            )
         messages = [
-            SystemMessage(
-                content="You are a helpful assistant. Answer succinctly and accurately."
-            ),
+            SystemMessage(content=system_content),
             HumanMessage(
                 content=_build_user_content(state["input"], state.get("images"))
             ),

@@ -5,7 +5,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from common.proxy_env import normalize_socks_proxy_env
 
@@ -778,11 +778,19 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_deepsearch_mode(cls, value: str) -> str:
         mode = str(value or "").strip().lower().replace("-", "_")
-        if mode == "reflection":
-            mode = "reflection_loop"
+        if mode in {
+            "reflection",
+            "reflection_loop",
+            "hybrid",
+            "hybrid_private_web",
+            "auto",
+        }:
+            mode = "supervisor_workers"
         if mode in {"supervisor", "workers", "supervisor_worker"}:
             mode = "supervisor_workers"
-        if mode in {"auto", "tree", "linear", "reflection_loop", "supervisor_workers"}:
+        if mode in {"linear", "linear_light", "light"}:
+            mode = "supervisor_workers"
+        if mode in {"tree", "supervisor_workers"}:
             return mode
         return "supervisor_workers"
 
@@ -924,13 +932,16 @@ def load_yaml_config(yaml_path: str) -> dict[str, Any]:
     """
     root = _project_root()
     primary = Path(yaml_path) if Path(yaml_path).is_absolute() else root / yaml_path
-    example = primary.with_suffix(".yaml.example") if primary.suffix == ".yaml" else primary
+    example = (
+        primary.with_suffix(".yaml.example") if primary.suffix == ".yaml" else primary
+    )
     candidates = [primary, example]
     cfg_file = next((p for p in candidates if p.exists()), None)
     if not cfg_file:
         return {}
     try:
         import yaml
+
         data = yaml.safe_load(cfg_file.read_text(encoding="utf-8"))
     except Exception as exc:
         logger.warning(f"Failed to load YAML config from {cfg_file}: {exc}")
