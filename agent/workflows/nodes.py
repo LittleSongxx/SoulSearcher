@@ -17,7 +17,11 @@ from pydantic import BaseModel, Field
 from agent.core.context_offloader import load_all_offloaded, offload_content_list
 from agent.core.events import ToolEventType, get_emitter_sync
 from agent.core.llm_factory import create_chat_model
-from agent.core.middleware import enforce_tool_call_limit, retry_call
+from agent.core.middleware import (
+    enforce_tool_call_limit,
+    invoke_with_token_recovery,
+    retry_call,
+)
 from agent.core.state import AgentState, QueryState
 from agent.workflows.browser_context_helper import build_browser_context_hint
 from agent.workflows.stuck_middleware import detect_stuck, inject_stuck_hint
@@ -2686,7 +2690,9 @@ def writer_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
             response = agent.invoke({"messages": messages}, config=config)
         else:
             llm = _chat_model(model, temperature=0.7)
-            response = llm.invoke(messages)
+            response = invoke_with_token_recovery(
+                llm, messages, config=config, label="writer"
+            )
         logger.info(f"[timing] writer {(time.time() - t0):.3f}s")
 
         report = ""
@@ -2954,7 +2960,9 @@ Provide specific, actionable feedback and search queries to address gaps.""",
                     content=f"Question:\n{state['input']}\n\nReport:\n{report}"
                 ),
             ]
-            fallback_response = llm.invoke(fallback_msgs, config=config)
+            fallback_response = invoke_with_token_recovery(
+                llm, fallback_msgs, config=config, label="evaluator_fallback"
+            )
             raw_text = getattr(fallback_response, "content", "") or ""
             logger.info(f"[timing] evaluator (json fallback) {(time.time() - t0):.3f}s")
             try:
@@ -3222,11 +3230,13 @@ Keep the structure clear and improve factual accuracy and clarity.""",
 
     report = state.get("draft_report") or state.get("final_report", "")
     feedback = state.get("evaluation", "")
-    response = llm.invoke(
+    response = invoke_with_token_recovery(
+        llm,
         prompt.format_messages(
             question=state["input"], feedback=feedback, report=report
         ),
         config=config,
+        label="revise_report",
     )
     content = response.content if hasattr(response, "content") else str(response)
 
