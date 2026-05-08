@@ -16,9 +16,7 @@ from agent.workflows.nodes import (
     deepsearch_node,
     deepsearch_planner_node,
     direct_answer_node,
-    hitl_draft_review_node,
     hitl_plan_review_node,
-    hitl_sources_review_node,
     human_review_node,
     route_node,
 )
@@ -81,18 +79,21 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     workflow.add_node("router", route_node)
     workflow.add_node("direct_answer", direct_answer_node)
     workflow.add_node("human_review", human_review_node)
-    # Plan-and-Execute deep-research layer:
+    # Plan-and-Execute deep-research layer with two high-value HITL
+    # checkpoints:
     #   deepsearch_planner → hitl_plan_review → deepsearch_executor
-    #     → hitl_sources_review → hitl_draft_review → human_review
-    # All three `hitl_*_review` nodes are no-ops unless their respective
-    # checkpoint is listed in settings.hitl_checkpoints; when active they
-    # issue `interrupt()` so the user can edit plan / sources guidance / draft
-    # before downstream stages consume the state.
+    #     → human_review (= final)
+    # ``hitl_plan_review`` lets the user edit ``research_plan`` before any
+    # search runs (the executors consume it as seed queries); ``human_review``
+    # is the end-of-flow review gate. Both are no-ops unless their checkpoint
+    # name (``plan`` / ``final``) is listed in ``settings.hitl_checkpoints``.
+    # The intermediate ``sources`` / ``draft`` review nodes still exist in
+    # ``agent/workflows/nodes.py`` for unit tests, but were removed from the
+    # main graph because they overlapped with ``final`` (draft) or arrived
+    # too late to influence the writer (sources).
     workflow.add_node("deepsearch_planner", deepsearch_planner_node)
     workflow.add_node("hitl_plan_review", hitl_plan_review_node)
     workflow.add_node("deepsearch_executor", deepsearch_node)
-    workflow.add_node("hitl_sources_review", hitl_sources_review_node)
-    workflow.add_node("hitl_draft_review", hitl_draft_review_node)
 
     workflow.set_entry_point("router")
 
@@ -113,9 +114,7 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     workflow.add_edge("direct_answer", "human_review")
     workflow.add_edge("deepsearch_planner", "hitl_plan_review")
     workflow.add_edge("hitl_plan_review", "deepsearch_executor")
-    workflow.add_edge("deepsearch_executor", "hitl_sources_review")
-    workflow.add_edge("hitl_sources_review", "hitl_draft_review")
-    workflow.add_edge("hitl_draft_review", "human_review")
+    workflow.add_edge("deepsearch_executor", "human_review")
     workflow.add_edge("human_review", END)
 
     # HITL checkpoints are implemented via explicit review nodes that use

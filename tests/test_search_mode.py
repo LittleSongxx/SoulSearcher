@@ -59,19 +59,21 @@ def test_research_graph_only_exposes_direct_and_deep_routes():
 
     graph = create_research_graph().get_graph(xray=True)
     nodes = set(graph.nodes)
-    # Deep-research path is now Plan-and-Execute with three HITL checkpoints:
+    # Deep-research path is Plan-and-Execute with two high-value HITL gates:
     #   deepsearch_planner -> hitl_plan_review -> deepsearch_executor
-    #     -> hitl_sources_review -> hitl_draft_review -> human_review
+    #     -> human_review (= final)
     assert {
         "router",
         "direct_answer",
         "deepsearch_planner",
         "hitl_plan_review",
         "deepsearch_executor",
-        "hitl_sources_review",
-        "hitl_draft_review",
         "human_review",
     } <= nodes
+    # Intermediate review nodes were intentionally removed from the main
+    # graph (functions kept in agent/workflows/nodes.py for unit tests).
+    assert "hitl_sources_review" not in nodes
+    assert "hitl_draft_review" not in nodes
     # Legacy / removed paths must not be re-introduced
     assert "deepsearch" not in nodes
     assert "web_plan" not in nodes
