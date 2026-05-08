@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
@@ -690,14 +690,24 @@ def _final_report(
     config: dict[str, Any],
     *,
     sources: str = "",
+    skill_system_prompt: Optional[str] = None,
 ) -> str:
-    """Generate final report based on all summaries."""
+    """Generate final report based on all summaries.
+
+    When ``skill_system_prompt`` is provided, it is prepended as a
+    ``SystemMessage`` so the writer LLM is conditioned on the selected
+    research skill's role/methodology guidance. The skill text is passed
+    verbatim (not through ChatPromptTemplate) to avoid accidental brace
+    interpolation if a skill markdown body ever contains ``{...}``.
+    """
     prompt = ChatPromptTemplate.from_messages([("user", final_summary_prompt)])
     msg = prompt.format_messages(
         topic=topic,
         summary_search="\n\n".join(summary_notes) or "暂无",
         sources=sources or "暂无",
     )
+    if skill_system_prompt and skill_system_prompt.strip():
+        msg = [SystemMessage(content=skill_system_prompt)] + list(msg)
     response = llm.invoke(msg, config=config)
     return getattr(response, "content", "") or summary_text_prompt
 
@@ -1403,6 +1413,7 @@ def _revise_report_for_claim_failures(
     claims: list[dict[str, Any]],
     sources: str,
     config: dict[str, Any],
+    skill_system_prompt: Optional[str] = None,
 ) -> str:
     failing = [
         claim
@@ -1428,15 +1439,15 @@ def _revise_report_for_claim_failures(
             )
         ]
     )
-    response = llm.invoke(
-        prompt.format_messages(
-            topic=topic,
-            claims="\n".join(lines),
-            sources=sources or "暂无",
-            report=report,
-        ),
-        config=config,
+    msg = prompt.format_messages(
+        topic=topic,
+        claims="\n".join(lines),
+        sources=sources or "暂无",
+        report=report,
     )
+    if skill_system_prompt and skill_system_prompt.strip():
+        msg = [SystemMessage(content=skill_system_prompt)] + list(msg)
+    response = llm.invoke(msg, config=config)
     revised = getattr(response, "content", "") or ""
     return revised.strip() or report
 
@@ -1655,6 +1666,7 @@ def _write_section_content(
     report_sources: Optional[list[dict[str, Any]]] = None,
     sources: str,
     config: dict[str, Any],
+    skill_system_prompt: Optional[str] = None,
 ) -> str:
     title = str(section.get("title") or "Section").strip()
     focus = str(section.get("focus") or title).strip()
@@ -1697,18 +1709,18 @@ def _write_section_content(
         ]
     )
     try:
-        response = llm.invoke(
-            prompt.format_messages(
-                topic=topic,
-                title=title,
-                focus=focus,
-                summary_notes="\n\n".join(summary_notes[-8:]) or "暂无",
-                evidence=evidence_text or "暂无",
-                grounding_evidence=grounding_text or "暂无",
-                sources=sources or "暂无",
-            ),
-            config=config,
+        msg = prompt.format_messages(
+            topic=topic,
+            title=title,
+            focus=focus,
+            summary_notes="\n\n".join(summary_notes[-8:]) or "暂无",
+            evidence=evidence_text or "暂无",
+            grounding_evidence=grounding_text or "暂无",
+            sources=sources or "暂无",
         )
+        if skill_system_prompt and skill_system_prompt.strip():
+            msg = [SystemMessage(content=skill_system_prompt)] + list(msg)
+        response = llm.invoke(msg, config=config)
         content = getattr(response, "content", "") or ""
         if content.strip():
             return content.strip()
@@ -1736,6 +1748,7 @@ def _execute_sectioned_report_flow(
     report_sources: Optional[list[dict[str, Any]]] = None,
     per_query_results: int,
     emitter: Any,
+    skill_system_prompt: Optional[str] = None,
 ) -> tuple[dict[str, Any], str, list[dict[str, Any]], list[dict[str, Any]]]:
     sectioned_report = build_sectioned_report_artifact(report_plan, config)
     if not sectioned_report.get("enabled"):
@@ -1891,6 +1904,7 @@ def _execute_sectioned_report_flow(
             report_sources=report_sources,
             sources=sources_block,
             config=config,
+            skill_system_prompt=skill_system_prompt,
         )
         grade = grade_section_content(
             section, content, evidence, min_chars=min_chars, min_evidence=min_evidence
@@ -1960,6 +1974,7 @@ def _execute_sectioned_report_flow(
                 report_sources=report_sources,
                 sources=sources_block,
                 config=config,
+                skill_system_prompt=skill_system_prompt,
             )
             grade = grade_section_content(
                 section,
@@ -5143,15 +5158,23 @@ def run_deepsearch_supervisor_workers(
         config=config,
         max_skills=_configurable_int(config, "deepsearch_max_skills", 3),
     )
+    skill_system_prompt: str = ""
     if selected_skills:
         brief.skill_ids = [skill.skill_id for skill in selected_skills]
         state["research_brief"] = brief.to_dict()
+        skill_context_text = format_skill_context(selected_skills)
         state["skill_context"] = {
             "selected_skills": [
                 skill.to_dict(include_prompt=False) for skill in selected_skills
             ],
-            "context": format_skill_context(selected_skills),
+            "context": skill_context_text,
         }
+        skill_system_prompt = skill_context_text
+        logger.info(
+            "[deepsearch-supervisor] injecting skills into writer prompt: "
+            f"ids={[s.skill_id for s in selected_skills]} "
+            f"chars={len(skill_system_prompt)}"
+        )
     critic_llm = _chat_model(search_summary_model, temperature=0.2)
     writer_llm = _chat_model(writing_model, temperature=0.4)
 
@@ -6037,6 +6060,7 @@ def run_deepsearch_supervisor_workers(
             report_sources=report_sources,
             per_query_results=per_query_results,
             emitter=emitter,
+            skill_system_prompt=skill_system_prompt,
         )
         if section_search_runs:
             search_runs.extend(section_search_runs)
@@ -6097,6 +6121,7 @@ def run_deepsearch_supervisor_workers(
                     summary_notes_for_writer,
                     config,
                     sources=sources_block,
+                    skill_system_prompt=skill_system_prompt,
                 )
                 if summary_notes_for_writer
                 else "未找到足够资料生成报告。"
@@ -6162,6 +6187,7 @@ def run_deepsearch_supervisor_workers(
                     claims=claims,
                     sources=sources_block,
                     config=config,
+                    skill_system_prompt=skill_system_prompt,
                 )
                 final_revision_count += 1
                 try:
