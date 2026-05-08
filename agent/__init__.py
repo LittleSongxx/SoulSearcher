@@ -16,7 +16,6 @@ _PUBLIC_SYMBOLS = {
     "AgentState",
     "QueryState",
     "ResearchPlan",
-    "smart_route",
     # Events / streaming
     "event_stream_generator",
     "get_emitter",
@@ -50,7 +49,6 @@ __all__ = [
     "AgentState",
     "QueryState",
     "ResearchPlan",
-    "smart_route",
     "event_stream_generator",
     "get_emitter",
     "get_emitter_sync",

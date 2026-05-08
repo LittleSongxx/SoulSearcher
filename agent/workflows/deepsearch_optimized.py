@@ -4086,6 +4086,17 @@ def run_deepsearch_tree(
             extracted_sources = extract_message_sources(search_runs)
         except Exception:
             extracted_sources = []
+        if _configurable_bool(
+            config,
+            "deepsearch_source_curator_enabled",
+            bool(getattr(settings, "deepsearch_source_curator_enabled", False)),
+        ):
+            try:
+                extracted_sources = curate_sources(extracted_sources, brief=brief)
+            except Exception as curator_exc:
+                logger.warning(
+                    f"[deepsearch-tree] curate_sources failed: {curator_exc}"
+                )
         report_sources = extracted_sources[: max(1, report_sources_limit)]
         sources_block = _format_sources_for_writer(
             report_sources,
@@ -4182,11 +4193,177 @@ def run_deepsearch_tree(
                     },
                 )
 
+        # ---- Tree quality stack (parity with supervisor-workers) ----
+        fetched_pages, passages = _build_fetcher_evidence(all_sources[:10], config)
+        evidence_items = build_evidence_items(
+            search_runs=search_runs,
+            sources=extracted_sources,
+            fetched_pages=fetched_pages,
+            passages=passages,
+        )
+
+        try:
+            fact_cards = build_fact_cards(
+                evidence_items=evidence_items,
+                sources=report_sources,
+                max_cards=_configurable_int(
+                    config,
+                    "deepsearch_fact_card_cap",
+                    int(getattr(settings, "deepsearch_fact_card_cap", 80) or 80),
+                ),
+                min_quote_chars=_configurable_int(
+                    config,
+                    "deepsearch_fact_card_min_quote_chars",
+                    int(
+                        getattr(settings, "deepsearch_fact_card_min_quote_chars", 40)
+                        or 40
+                    ),
+                ),
+            )
+        except Exception as fact_card_exc:
+            logger.warning(
+                f"[deepsearch-tree] build_fact_cards failed: {fact_card_exc}"
+            )
+            fact_cards = []
+
+        try:
+            brief_coverage = build_brief_coverage_artifact(
+                research_brief=brief.to_dict(),
+                fact_cards=fact_cards,
+                evidence_items=evidence_items,
+            )
+        except Exception as bc_exc:
+            logger.warning(
+                f"[deepsearch-tree] build_brief_coverage_artifact failed: {bc_exc}"
+            )
+            brief_coverage = {"score": 0.0, "missing_fields": [], "matched_fields": []}
+
+        # Dual-channel claim verification (deterministic + heuristic semantic)
+        try:
+            _checks, claims, claim_stats = _verify_report_claims(
+                final_report,
+                search_runs,
+                passages=passages,
+                fetched_pages=fetched_pages,
+                config=config,
+            )
+        except Exception as cv_exc:
+            logger.warning(f"[deepsearch-tree] claim verification failed: {cv_exc}")
+            _checks = []
+            claims = []
+            claim_stats = {
+                "claim_verifier_total": 0,
+                "claim_verifier_verified": 0,
+                "claim_verifier_unsupported": 0,
+                "claim_verifier_contradicted": 0,
+            }
+
+        # Claim ledger (opt-in evidence registry)
+        claim_ledger: list[dict[str, Any]] = []
+        if _configurable_bool(
+            config,
+            "deepsearch_enable_claim_ledger",
+            bool(getattr(settings, "deepsearch_enable_claim_ledger", True)),
+        ):
+            try:
+                claim_ledger = build_claim_ledger(
+                    summary_notes=summary_notes,
+                    search_runs=search_runs,
+                    sources=report_sources,
+                    evidence_items=evidence_items,
+                    passages=passages,
+                    max_claims=_configurable_int(
+                        config,
+                        "deepsearch_claim_ledger_max_claims",
+                        int(
+                            getattr(settings, "deepsearch_claim_ledger_max_claims", 24)
+                            or 24
+                        ),
+                    ),
+                    min_overlap_tokens=_configurable_int(
+                        config,
+                        "deepsearch_claim_verifier_min_overlap_tokens",
+                        int(
+                            getattr(
+                                settings,
+                                "deepsearch_claim_verifier_min_overlap_tokens",
+                                2,
+                            )
+                            or 2
+                        ),
+                    ),
+                    max_evidence_per_claim=_configurable_int(
+                        config,
+                        "deepsearch_claim_verifier_max_evidence_per_claim",
+                        int(
+                            getattr(
+                                settings,
+                                "deepsearch_claim_verifier_max_evidence_per_claim",
+                                3,
+                            )
+                            or 3
+                        ),
+                    ),
+                )
+            except Exception as ledger_exc:
+                logger.warning(
+                    f"[deepsearch-tree] build_claim_ledger failed: {ledger_exc}"
+                )
+                claim_ledger = []
+
+        # Citation repair pipeline (local-context rescue + fact-card rescue)
+        missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+            final_report, max_missing=None
+        )
+        context_repaired = _repair_citations_from_local_context(
+            final_report, missing_citation_claims
+        )
+        context_citation_repair_applied = context_repaired != final_report
+        if context_citation_repair_applied:
+            final_report = context_repaired
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+                final_report, max_missing=None
+            )
+        fact_card_repaired, fact_card_repair = repair_citations_with_fact_cards(
+            final_report, missing_citation_claims, fact_cards
+        )
+        fact_card_repair_applied = fact_card_repaired != final_report
+        if fact_card_repair_applied:
+            final_report = fact_card_repaired
+            missing_citation_claims, citation_coverage = _estimate_citation_coverage(
+                final_report, max_missing=None
+            )
+        if context_citation_repair_applied or fact_card_repair_applied:
+            try:
+                _checks, claims, claim_stats = _verify_report_claims(
+                    final_report,
+                    search_runs,
+                    passages=passages,
+                    fetched_pages=fetched_pages,
+                    config=config,
+                )
+            except Exception:
+                pass
+
         quality_summary = {
             "epochs_completed": 1,
             "summary_count": len(summary_notes),
-            "source_count": len(all_sources),
+            "source_count": len(extracted_sources),
+            "selected_source_count": len(report_sources),
             "tree_node_count": len(tree.nodes),
+            "fetched_page_count": len(fetched_pages),
+            "passage_count": len(passages),
+            "evidence_item_count": len(evidence_items),
+            "fact_card_count": len(fact_cards),
+            "brief_coverage_score": brief_coverage.get("score"),
+            "brief_missing_fields": brief_coverage.get("missing_fields", []),
+            "claim_ledger_count": len(claim_ledger),
+            "citation_coverage": citation_coverage,
+            "citation_coverage_score": citation_coverage,
+            "missing_citation_claims": missing_citation_claims,
+            "citation_repair_applied": fact_card_repair_applied
+            or context_citation_repair_applied,
+            "fact_card_citation_repair": fact_card_repair,
             "budget_stop_reason": budget_stop_reason or "",
             "tokens_used": tokens_used,
             "elapsed_seconds": elapsed,
@@ -4195,80 +4372,8 @@ def run_deepsearch_tree(
             "feature_trace": feature_trace,
             **diagnostics,
         }
-        fetched_pages, passages = _build_fetcher_evidence(all_sources[:10], config)
+        quality_summary.update(claim_stats)
 
-        claims = []
-        try:
-            from agent.workflows.claim_verifier import ClaimVerifier
-
-            min_overlap = int(
-                getattr(settings, "deepsearch_claim_verifier_min_overlap_tokens", 2)
-                or 2
-            )
-            max_evidence = int(
-                getattr(settings, "deepsearch_claim_verifier_max_evidence_per_claim", 3)
-                or 3
-            )
-            use_passages = bool(
-                getattr(settings, "deepsearch_claim_verifier_use_passages", True)
-            )
-
-            verifier = ClaimVerifier(
-                min_overlap_tokens=min_overlap,
-                max_evidence_per_claim=max_evidence,
-            )
-            checks = verifier.verify_report(
-                final_report,
-                search_runs,
-                passages=(
-                    (list(passages or []) + list(fetched_pages or []))
-                    if use_passages
-                    else None
-                ),
-            )
-            claims = [
-                {
-                    "claim": c.claim,
-                    "status": c.status.value,
-                    "evidence_urls": c.evidence_urls,
-                    "evidence_passages": c.evidence_passages,
-                    "score": c.score,
-                    "notes": c.notes,
-                }
-                for c in checks
-            ]
-        except Exception:
-            claims = []
-
-        # ---- Patch quality_summary with citation_coverage & claim_verifier stats ----
-        try:
-            _missing_citation_claims, _citation_coverage = _estimate_citation_coverage(
-                final_report
-            )
-            quality_summary["citation_coverage"] = _citation_coverage
-            quality_summary["citation_coverage_score"] = _citation_coverage
-            quality_summary["missing_citation_claims"] = _missing_citation_claims
-        except Exception:
-            pass
-
-        _cv_total = len(claims)
-        _cv_verified = sum(
-            1 for c in claims if isinstance(c, dict) and c.get("status") == "verified"
-        )
-        _cv_unsupported = sum(
-            1
-            for c in claims
-            if isinstance(c, dict) and c.get("status") == "unsupported"
-        )
-        _cv_contradicted = sum(
-            1
-            for c in claims
-            if isinstance(c, dict) and c.get("status") == "contradicted"
-        )
-        quality_summary["claim_verifier_total"] = _cv_total
-        quality_summary["claim_verifier_verified"] = _cv_verified
-        quality_summary["claim_verifier_unsupported"] = _cv_unsupported
-        quality_summary["claim_verifier_contradicted"] = _cv_contradicted
         _record_quality_gates(
             diagnostics=diagnostics,
             quality_summary=quality_summary,
@@ -4276,12 +4381,6 @@ def run_deepsearch_tree(
             emitter=emitter,
             epoch=1,
             stage="final",
-        )
-        evidence_items = build_evidence_items(
-            search_runs=search_runs,
-            sources=extracted_sources,
-            fetched_pages=fetched_pages,
-            passages=passages,
         )
         citation_annotations = build_citation_annotations(
             report=final_report,
@@ -4319,7 +4418,15 @@ def run_deepsearch_tree(
             "fetched_pages": fetched_pages,
             "passages": passages,
             "sources": extracted_sources,
+            "selected_sources": report_sources,
             "claims": claims,
+            "fact_cards": fact_cards,
+            "brief_coverage": brief_coverage,
+            "claim_ledger": claim_ledger,
+            "fact_card_citation_repair": fact_card_repair,
+            "citation_repair_applied": fact_card_repair_applied
+            or context_citation_repair_applied,
+            "missing_citation_claims": missing_citation_claims,
         }
         _emit_event(
             emitter, "quality_update", {"epoch": 1, "stage": "final", **diagnostics}

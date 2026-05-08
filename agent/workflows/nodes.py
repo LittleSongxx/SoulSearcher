@@ -1218,8 +1218,82 @@ def tree_search_node(state: AgentState, config: RunnableConfig) -> dict[str, Any
         }
 
 
+def deepsearch_planner_node(
+    state: AgentState, config: RunnableConfig
+) -> dict[str, Any]:
+    """
+    Plan-and-Execute planner stage for the deep-research path.
+
+    This node is intentionally cheap: it builds the deterministic research
+    artifacts (`research_brief`, `source_routing`, `deepsearch_strategy_decision`)
+    and a small set of seed queries, then writes them back to state. No web
+    search or LLM-driven exploration happens here. The downstream
+    ``hitl_plan_review`` node can then ``interrupt()`` for user edits, after
+    which ``deepsearch_executor`` runs the chosen strategy.
+    """
+    logger.info("Executing deepsearch planner node")
+    try:
+        from agent.workflows.deepsearch_optimized import _auto_mode_prefers_linear
+        from agent.workflows.research_brief import build_research_brief
+        from agent.workflows.source_routing import build_source_routing_policy
+        from agent.workflows.strategy_selector import select_deepsearch_strategy
+    except Exception as exc:  # pragma: no cover - defensive, surfaces at import time
+        logger.error(f"[deepsearch_planner] failed to import planner deps: {exc}")
+        return {}
+
+    planner_config = _clone_config_with_route(
+        config, state.get("route", "deep") or "deep"
+    )
+
+    try:
+        brief = build_research_brief(state, planner_config)
+        source_routing = build_source_routing_policy(
+            brief=brief, config=planner_config, state=state
+        )
+        brief.source_routing = source_routing
+        decision = select_deepsearch_strategy(
+            brief=brief,
+            config=planner_config,
+            settings=settings,
+            simple_query_detector=_auto_mode_prefers_linear,
+        )
+    except Exception as exc:
+        logger.warning(
+            f"[deepsearch_planner] failed to build plan, falling back to executor: {exc}"
+        )
+        return {}
+
+    seed_queries: list[str] = []
+    existing_plan = state.get("research_plan") or []
+    if isinstance(existing_plan, list):
+        seed_queries = [
+            str(item).strip() for item in existing_plan if str(item or "").strip()
+        ]
+    if not seed_queries:
+        clarified = (brief.clarified_goal or brief.original_query or "").strip()
+        if clarified:
+            seed_queries = [clarified]
+        else:
+            topic = str(state.get("input") or "").strip()
+            if topic:
+                seed_queries = [topic]
+
+    return {
+        "research_brief": brief.to_dict(),
+        "source_routing": source_routing,
+        "deepsearch_strategy_decision": decision.to_dict(),
+        "research_plan": seed_queries,
+    }
+
+
 def deepsearch_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
-    """Deep search pipeline that iterates query → search → summarize."""
+    """Deep-search executor. Runs the strategy selected by the planner.
+
+    When invoked after :func:`deepsearch_planner_node`, reuses the cached
+    ``research_brief`` / ``source_routing`` / ``deepsearch_strategy_decision``
+    via :func:`run_deepsearch_auto` (which is idempotent on those keys). When
+    invoked directly (legacy / tests), it transparently plans + executes.
+    """
     logger.info("Executing deepsearch node")
     cfg = _configurable(config)
     deepsearch_config = _clone_config_with_route(

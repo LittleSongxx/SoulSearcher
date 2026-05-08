@@ -59,7 +59,18 @@ def test_research_graph_only_exposes_direct_and_deep_routes():
 
     graph = create_research_graph().get_graph(xray=True)
     nodes = set(graph.nodes)
-    assert {"router", "direct_answer", "deepsearch", "human_review"} <= nodes
+    # Deep-research path is now Plan-and-Execute split:
+    #   deepsearch_planner -> hitl_plan_review -> deepsearch_executor
+    assert {
+        "router",
+        "direct_answer",
+        "deepsearch_planner",
+        "hitl_plan_review",
+        "deepsearch_executor",
+        "human_review",
+    } <= nodes
+    # Legacy / removed paths must not be re-introduced
+    assert "deepsearch" not in nodes
     assert "web_plan" not in nodes
     assert "agent" not in nodes
     assert "clarify" not in nodes

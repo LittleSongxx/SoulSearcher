@@ -32,7 +32,6 @@ __all__ = [
     "maybe_strip_tool_messages",
     "remove_emitter",
     "retry_call",
-    "smart_route",
 ]
 
 _SYMBOL_TO_MODULE: dict[str, str] = {
@@ -54,8 +53,6 @@ _SYMBOL_TO_MODULE: dict[str, str] = {
     # Context
     "ContextManager": "agent.core.context_manager",
     "get_context_manager": "agent.core.context_manager",
-    # Routing
-    "smart_route": "agent.core.smart_router",
     # Middleware
     "enforce_tool_call_limit": "agent.core.middleware",
     "retry_call": "agent.core.middleware",

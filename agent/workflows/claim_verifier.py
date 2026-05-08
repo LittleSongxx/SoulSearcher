@@ -1,5 +1,15 @@
 """
-Claim verifier that matches report claims against collected evidence.
+Deterministic, rule-based claim verifier.
+
+This module implements the *first* of two channels used to check whether a
+claim extracted from the draft report is supported by the collected evidence.
+It is intentionally **rule-based** — it does not load any Natural Language
+Inference (NLI) model. Verification combines token-overlap, numeric and unit
+matching, alias detection, and negation / trend conflict detection to assign
+each claim a status of ``verified`` / ``contradicted`` / ``unsupported``.
+
+The complementary heuristic channel and the opt-in LLM-judge override live in
+``agent.workflows.semantic_claim_verifier``.
 """
 
 from __future__ import annotations
@@ -140,14 +150,18 @@ def _numeric_alias_tokens(text: str) -> set[str]:
     for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:%|percent|per\s+cent)", lower):
         tokens.add(f"pct_{_num_key(float(match.group(1)))}")
 
-    for match in re.finditer(r"(?:€|eur\s*)(\d+(?:\.\d+)?)\s*(million|billion|m|bn)?", lower):
+    for match in re.finditer(
+        r"(?:€|eur\s*)(\d+(?:\.\d+)?)\s*(million|billion|m|bn)?", lower
+    ):
         amount = float(match.group(1))
         unit = match.group(2) or ""
         if unit in {"billion", "bn"}:
             amount *= 1000
         tokens.add(f"euro_million_{_num_key(amount)}")
 
-    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(million|billion|m|bn)\s*(?:euros?|eur)", lower):
+    for match in re.finditer(
+        r"(\d+(?:\.\d+)?)\s*(million|billion|m|bn)\s*(?:euros?|eur)", lower
+    ):
         amount = float(match.group(1))
         unit = match.group(2)
         if unit in {"billion", "bn"}:
@@ -173,13 +187,25 @@ def _numeric_alias_tokens(text: str) -> set[str]:
             tokens.add(f"date_{year:04d}_{month:02d}_{int(day):02d}")
 
     month_pattern = "|".join(_MONTH_NUMBERS)
-    for match in re.finditer(rf"\b(\d{{1,2}})\s+({month_pattern})\s*,?\s*(\d{{4}})\b", lower):
-        day, month, year = int(match.group(1)), _MONTH_NUMBERS[match.group(2)], int(match.group(3))
+    for match in re.finditer(
+        rf"\b(\d{{1,2}})\s+({month_pattern})\s*,?\s*(\d{{4}})\b", lower
+    ):
+        day, month, year = (
+            int(match.group(1)),
+            _MONTH_NUMBERS[match.group(2)],
+            int(match.group(3)),
+        )
         tokens.add(f"date_{year:04d}_{month:02d}_{day:02d}")
         tokens.add(f"date_{year:04d}_{month:02d}")
 
-    for match in re.finditer(rf"\b({month_pattern})\s+(\d{{1,2}}),?\s*(\d{{4}})\b", lower):
-        month, day, year = _MONTH_NUMBERS[match.group(1)], int(match.group(2)), int(match.group(3))
+    for match in re.finditer(
+        rf"\b({month_pattern})\s+(\d{{1,2}}),?\s*(\d{{4}})\b", lower
+    ):
+        month, day, year = (
+            _MONTH_NUMBERS[match.group(1)],
+            int(match.group(2)),
+            int(match.group(3)),
+        )
         tokens.add(f"date_{year:04d}_{month:02d}_{day:02d}")
         tokens.add(f"date_{year:04d}_{month:02d}")
 
@@ -337,21 +363,31 @@ class ClaimVerifier:
         if not report:
             return []
 
-        body = re.split(r"^##\s*(?:参考来源|References)\b", report, maxsplit=1, flags=re.MULTILINE | re.IGNORECASE)[0]
+        body = re.split(
+            r"^##\s*(?:参考来源|References)\b",
+            report,
+            maxsplit=1,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )[0]
         candidates = re.split(r"(?<=[。！？.!?])\s+|\n+", body)
         claims: list[str] = []
         seen: set[str] = set()
 
         for sentence in candidates:
             raw_sentence = sentence.strip()
-            text = re.sub(r"\[(?:S?\d+(?:-\d+)?)(?:\s*[,，;；]\s*S?\d+(?:-\d+)?)*\]", "", sentence)
+            text = re.sub(
+                r"\[(?:S?\d+(?:-\d+)?)(?:\s*[,，;；]\s*S?\d+(?:-\d+)?)*\]", "", sentence
+            )
             text = re.sub(r"^[#>\-\*\s]+", "", text).strip()
             if self._is_structural_heading_candidate(raw_sentence, text):
                 continue
             if len(text) < 20:
                 continue
             lower = text.lower()
-            if any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _META_CLAIM_PATTERNS):
+            if any(
+                re.search(pattern, lower, flags=re.IGNORECASE)
+                for pattern in _META_CLAIM_PATTERNS
+            ):
                 continue
             has_signal = any(marker in lower for marker in _CLAIM_MARKERS) or bool(
                 re.search(r"\d{2,4}|\d+%|\d+\.\d+", text)
@@ -425,7 +461,11 @@ class ClaimVerifier:
 
         best_contradiction = contradicted[0][0] if contradicted else 0
         best_support = supported[0][0] if supported else 0
-        if contradicted and best_contradiction >= max(3, self.min_overlap_tokens) and best_contradiction > best_support:
+        if (
+            contradicted
+            and best_contradiction >= max(3, self.min_overlap_tokens)
+            and best_contradiction > best_support
+        ):
             urls = list(
                 dict.fromkeys(
                     [u for _o, u, _p in contradicted] + [u for _o, u, _p in supported]
@@ -516,7 +556,9 @@ class ClaimVerifier:
                     result.get("summary"),
                     result.get("snippet"),
                 ]
-                text = " ".join(str(part).strip() for part in parts if str(part or "").strip())
+                text = " ".join(
+                    str(part).strip() for part in parts if str(part or "").strip()
+                )
                 if text:
                     evidence.append({"url": canonical_url, "text": text})
         return evidence
@@ -527,7 +569,11 @@ class ClaimVerifier:
             " ",
             (text or "").lower(),
         )
-        tokens = {t for t in re.findall(r"[a-z0-9]+", value) if len(t) > 1 and t not in _STOPWORDS}
+        tokens = {
+            t
+            for t in re.findall(r"[a-z0-9]+", value)
+            if len(t) > 1 and t not in _STOPWORDS
+        }
         tokens.update(_numeric_alias_tokens(text or ""))
         tokens.update(_semantic_alias_tokens(text or ""))
         for seq in re.findall(r"[\u4e00-\u9fff]{2,}", value):
@@ -587,7 +633,10 @@ class ClaimVerifier:
         return best_fragment
 
     def _has_supportive_exception_to_negation(self, claim: str, evidence: str) -> bool:
-        if not re.search(r"\bnot\b[^.。！？!?]{0,120}\b(?:but|as|rather than|instead of)\b", evidence.lower()):
+        if not re.search(
+            r"\bnot\b[^.。！？!?]{0,120}\b(?:but|as|rather than|instead of)\b",
+            evidence.lower(),
+        ):
             return False
         shared = self._tokenize(claim) & self._tokenize(evidence)
         semantic_shared = {token for token in shared if "_" in token}
@@ -600,7 +649,9 @@ class ClaimVerifier:
         claim_neg = self._has_negation(claim)
         evidence_neg = self._has_negation(evidence)
         if claim_neg != evidence_neg:
-            if evidence_neg and self._has_supportive_exception_to_negation(claim, evidence):
+            if evidence_neg and self._has_supportive_exception_to_negation(
+                claim, evidence
+            ):
                 return False
             return True
 

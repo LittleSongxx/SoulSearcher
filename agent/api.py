@@ -17,7 +17,6 @@ from agent.core import (
     get_emitter,
     get_emitter_sync,
     remove_emitter,
-    smart_route,
 )
 from agent.core.message_utils import summarize_messages
 from agent.prompts import (
@@ -46,7 +45,6 @@ __all__ = [
     "AgentState",
     "QueryState",
     "ResearchPlan",
-    "smart_route",
     # Events / streaming
     "event_stream_generator",
     "get_emitter",

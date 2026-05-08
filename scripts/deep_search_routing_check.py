@@ -103,7 +103,8 @@ def run_deep_search_routing_check():
     print("\n" + "=" * 80)
     print("诊断说明")
     print("=" * 80)
-    print("""
+    print(
+        """
 请检查服务器日志中的以下关键信息：
 
 1. 请求接收日志（main.py）:
@@ -118,27 +119,25 @@ def run_deep_search_routing_check():
    [route_node] override_mode: deep
    [route_node] Returning result with route='deep'
 
-3. smart_route 日志（smart_router.py）:
-   [smart_route] using override mode: deep
-
-4. 图路由日志（graph.py）:
+3. 图路由日志（graph.py）:
    [route_decision] state['route'] = 'deep'
    [route_decision] → Routing to 'deepsearch' node  # ✅ 关键
 
-5. deepsearch 执行日志（nodes.py/deepsearch.py）:
+4. deepsearch 执行日志（nodes.py/deepsearch.py）:
    Executing deepsearch node
    [deepsearch] topic='...' epochs=3
    [deepsearch] 开始优化版深度搜索
    [deepsearch] ===== Epoch 1/3 =====
    ...
 
-如果没有看到第4步和第5步的日志，说明路由没有正确到达 deepsearch。
+如果没有看到第3步和第4步的日志，说明路由没有正确到达 deepsearch。
 
 常见问题排查：
 - 如果 mode 不是 'deep'，检查 _normalize_search_mode 函数
 - 如果 route_decision 没有执行，检查 state 的 route 字段
 - 如果路由到了其他节点，检查条件边配置
-""")
+"""
+    )
 
     print("\n" + "=" * 80)
     print("测试完成")

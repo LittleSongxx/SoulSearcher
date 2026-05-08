@@ -1,3 +1,25 @@
+"""
+Heuristic semantic channel for claim verification.
+
+This module is **not** a Natural Language Inference (NLI) model. It augments the
+deterministic `ClaimVerifier` (token overlap / numeric / negation / trend) with a
+second pass that:
+
+1. Re-checks each claim against evidence using slightly different heuristics
+   (higher overlap thresholds, additional structural filters), and
+2. Optionally accepts external overrides keyed by claim text via
+   ``semantic_claim_verifier_results`` in the runnable config — this is the
+   opt-in injection point for an LLM-judge channel produced upstream.
+
+Both channels are merged conservatively (correctness-first): a claim is only
+marked ``verified`` if both channels agree, while any contradiction from either
+side downgrades the final status.
+
+If you need true entailment-style verification, plug an LLM judge or a
+transformer NLI model upstream and pass its decisions in via the
+``semantic_claim_verifier_results`` override map.
+"""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -37,11 +59,15 @@ def enrich_claim_checks_with_semantics(
     enabled = _truthy(cfg.get("deepsearch_semantic_claim_verifier_enabled")) or _truthy(
         cfg.get("semantic_claim_verifier_enabled")
     )
-    mode = str(
-        cfg.get("deepsearch_semantic_claim_verifier_mode")
-        or cfg.get("semantic_claim_verifier_mode")
-        or "heuristic"
-    ).strip().lower()
+    mode = (
+        str(
+            cfg.get("deepsearch_semantic_claim_verifier_mode")
+            or cfg.get("semantic_claim_verifier_mode")
+            or "heuristic"
+        )
+        .strip()
+        .lower()
+    )
     overrides = cfg.get("semantic_claim_verifier_results") or cfg.get(
         "deepsearch_semantic_claim_verifier_results"
     )
@@ -61,8 +87,8 @@ def enrich_claim_checks_with_semantics(
                 semantic_notes = "semantic status supplied by verifier result override"
                 confidence = max(confidence, 0.8)
             elif mode == "heuristic":
-                semantic_status, semantic_notes, confidence = _heuristic_semantic_status(
-                    check, evidence_items or [], confidence
+                semantic_status, semantic_notes, confidence = (
+                    _heuristic_semantic_status(check, evidence_items or [], confidence)
                 )
             else:
                 semantic_notes = f"semantic verifier mode '{mode}' is not configured; deterministic status retained"
@@ -110,9 +136,17 @@ def _heuristic_semantic_status(
 ) -> tuple[str, str, float]:
     deterministic_status = _status_value(check.status)
     if deterministic_status == ClaimStatus.VERIFIED.value:
-        return deterministic_status, "deterministic verifier already found supporting evidence", max(base_confidence, 0.75)
+        return (
+            deterministic_status,
+            "deterministic verifier already found supporting evidence",
+            max(base_confidence, 0.75),
+        )
     if deterministic_status == ClaimStatus.CONTRADICTED.value:
-        return deterministic_status, "deterministic verifier found stronger conflicting evidence", max(base_confidence, 0.7)
+        return (
+            deterministic_status,
+            "deterministic verifier found stronger conflicting evidence",
+            max(base_confidence, 0.7),
+        )
 
     claim_tokens = _tokenize(check.claim)
     if not claim_tokens:
@@ -122,18 +156,34 @@ def _heuristic_semantic_status(
     for item in evidence_items or []:
         if not isinstance(item, dict):
             continue
-        text = " ".join(str(item.get(k) or "") for k in ("title", "summary", "snippet", "quote", "text", "content"))
+        text = " ".join(
+            str(item.get(k) or "")
+            for k in ("title", "summary", "snippet", "quote", "text", "content")
+        )
         tokens = _tokenize(text)
         overlap = len(claim_tokens & tokens)
         if overlap > best_overlap:
             best_overlap = overlap
-            best_url = str(item.get("url") or item.get("source_url") or item.get("document_id") or "")
+            best_url = str(
+                item.get("url")
+                or item.get("source_url")
+                or item.get("document_id")
+                or ""
+            )
     if best_overlap >= max(5, min(10, len(claim_tokens) // 2)):
         note = "heuristic semantic overlap found likely supporting evidence"
         if best_url:
             note += f" ({best_url})"
-        return ClaimStatus.VERIFIED.value, note, max(base_confidence, min(0.85, best_overlap / max(1, len(claim_tokens))))
-    return deterministic_status, "no semantic support above heuristic threshold", base_confidence
+        return (
+            ClaimStatus.VERIFIED.value,
+            note,
+            max(base_confidence, min(0.85, best_overlap / max(1, len(claim_tokens)))),
+        )
+    return (
+        deterministic_status,
+        "no semantic support above heuristic threshold",
+        base_confidence,
+    )
 
 
 def _merge_status(deterministic_status: str, semantic_status: str) -> str:
@@ -143,7 +193,10 @@ def _merge_status(deterministic_status: str, semantic_status: str) -> str:
         return deterministic_status
     if semantic_status == ClaimStatus.CONTRADICTED.value:
         return semantic_status
-    if semantic_status == ClaimStatus.VERIFIED.value and deterministic_status == ClaimStatus.UNSUPPORTED.value:
+    if (
+        semantic_status == ClaimStatus.VERIFIED.value
+        and deterministic_status == ClaimStatus.UNSUPPORTED.value
+    ):
         return semantic_status
     return deterministic_status
 
@@ -178,7 +231,11 @@ def _override_status(claim: str, overrides: dict[str, Any]) -> str:
 
 
 def _tokenize(text: str) -> set[str]:
-    return {token for token in str(text or "").lower().replace("-", " ").split() if len(token) >= 3}
+    return {
+        token
+        for token in str(text or "").lower().replace("-", " ").split()
+        if len(token) >= 3
+    }
 
 
 def _truthy(value: Any) -> bool:
