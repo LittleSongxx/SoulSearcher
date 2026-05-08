@@ -545,7 +545,9 @@ class TreeExplorer:
         try:
             # Bootstrap: run one search on the raw topic before invoking the planner.
             # This reduces time-to-first-search for tree mode when query generation is slow.
-            node.queries = [node.topic] if node.topic else []
+            # Respect any pre-seeded queries (e.g., user-edited research_plan from
+            # the Plan-and-Execute planner stage); fall back to [topic] otherwise.
+            self._seed_node_queries(node)
 
             def _search_one(query: str) -> None:
                 self._check_cancel(state)
@@ -798,6 +800,7 @@ class TreeExplorer:
         topic: str,
         state: dict[str, Any],
         decompose_root: bool = True,
+        seed_queries: Optional[list[str]] = None,
     ) -> ResearchTree:
         """
         Run the tree-based research process.
@@ -806,6 +809,10 @@ class TreeExplorer:
             topic: The main topic to research
             state: Agent state for cancellation checking
             decompose_root: Whether to decompose root into subtopics
+            seed_queries: Optional user-edited initial queries to drive the
+                root search (e.g., from the Plan-and-Execute planner /
+                hitl_plan_review stage). When provided, these take precedence
+                over the default ``[topic]`` bootstrap.
 
         Returns:
             The completed ResearchTree
@@ -819,8 +826,10 @@ class TreeExplorer:
             max_branches=self.max_branches,
         )
 
-        # Create root
+        # Create root and seed its queries (if the caller provided overrides)
         root = self.tree.create_root(topic)
+        if seed_queries:
+            root.queries = list(seed_queries)
 
         # Explore root first
         logger.info(f"[TreeExplorer] Starting tree exploration for: {topic}")
@@ -1144,6 +1153,7 @@ class TreeExplorer:
         topic: str,
         state: dict[str, Any],
         decompose_root: bool = True,
+        seed_queries: Optional[list[str]] = None,
     ) -> ResearchTree:
         """
         Async version of run() with parallel branch exploration.
@@ -1152,6 +1162,8 @@ class TreeExplorer:
             topic: The main topic to research
             state: Agent state for cancellation checking
             decompose_root: Whether to decompose root into subtopics
+            seed_queries: Optional user-edited initial queries to drive the
+                root search. See :meth:`run` for details.
 
         Returns:
             The completed ResearchTree
@@ -1165,8 +1177,10 @@ class TreeExplorer:
             max_branches=self.max_branches,
         )
 
-        # Create root
+        # Create root and seed its queries (if the caller provided overrides)
         root = self.tree.create_root(topic)
+        if seed_queries:
+            root.queries = list(seed_queries)
 
         # Explore root first (sync is fine for single node)
         logger.info(f"[TreeExplorer] Starting async tree exploration for: {topic}")

@@ -3892,6 +3892,36 @@ def run_deepsearch_tree(
             queries_per_branch=queries_per_branch,
         )
 
+        # Honor user-edited research_plan (Plan-and-Execute / hitl_plan_review).
+        # Seed the root branch with these queries; if absent, the explorer falls
+        # back to its default ``[topic]`` bootstrap.
+        seed_queries: list[str] = []
+        raw_plan = state.get("research_plan") if isinstance(state, dict) else None
+        if isinstance(raw_plan, list):
+            seen_seeds: set[str] = set()
+            for query in raw_plan:
+                if not isinstance(query, str):
+                    continue
+                normalized = " ".join(query.split()).strip()
+                if not normalized:
+                    continue
+                key = normalized.lower()
+                if key in seen_seeds:
+                    continue
+                seen_seeds.add(key)
+                seed_queries.append(normalized)
+        if seed_queries:
+            logger.info(
+                f"[deepsearch-tree] seeding root with {len(seed_queries)} user-edited queries"
+            )
+
+        # Build the kwargs once; only forward ``seed_queries`` when the user
+        # actually edited a plan, so legacy explorer signatures (and test
+        # fakes) continue to work unchanged.
+        explore_kwargs: dict[str, Any] = {"decompose_root": True}
+        if seed_queries:
+            explore_kwargs["seed_queries"] = seed_queries
+
         # Run tree exploration (use async if parallel_branches > 0)
         if parallel_branches > 0:
             # Use async parallel exploration
@@ -3904,13 +3934,13 @@ def run_deepsearch_tree(
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(
                             lambda: asyncio.run(
-                                explorer.run_async(topic, state, decompose_root=True)
+                                explorer.run_async(topic, state, **explore_kwargs)
                             )
                         )
                         tree = future.result()
                 else:
                     tree = loop.run_until_complete(
-                        explorer.run_async(topic, state, decompose_root=True)
+                        explorer.run_async(topic, state, **explore_kwargs)
                     )
                 logger.info("[deepsearch-tree] Used async parallel exploration")
             except TreeExplorationBudgetExceeded as e:
@@ -3922,7 +3952,7 @@ def run_deepsearch_tree(
                 # No event loop, create one
                 try:
                     tree = asyncio.run(
-                        explorer.run_async(topic, state, decompose_root=True)
+                        explorer.run_async(topic, state, **explore_kwargs)
                     )
                     logger.info("[deepsearch-tree] Used async parallel exploration")
                 except TreeExplorationBudgetExceeded as e:
@@ -3932,7 +3962,7 @@ def run_deepsearch_tree(
                     tree = getattr(explorer, "tree", None)
         else:
             try:
-                tree = explorer.run(topic, state, decompose_root=True)
+                tree = explorer.run(topic, state, **explore_kwargs)
             except TreeExplorationBudgetExceeded as e:
                 budget_stop_reason = (
                     budget_stop_reason or getattr(e, "reason", "") or str(e)
@@ -5216,6 +5246,35 @@ def run_deepsearch_supervisor_workers(
                 round=round_index,
                 missing_topic_count=len(missing_topics),
             )
+            # On round 1 only, honor the user-edited research_plan (Plan-and-
+            # Execute / hitl_plan_review) by allocating the first worker to a
+            # ``user_directed`` task. Later rounds fall back to gap-driven
+            # focus candidates so reflection feedback can drive exploration.
+            round_seed_queries: Optional[list[str]] = None
+            if round_index == 1:
+                raw_plan = (
+                    state.get("research_plan") if isinstance(state, dict) else None
+                )
+                if isinstance(raw_plan, list):
+                    cleaned: list[str] = []
+                    seen_seeds: set[str] = set()
+                    for query in raw_plan:
+                        if not isinstance(query, str):
+                            continue
+                        normalized = " ".join(query.split()).strip()
+                        if not normalized:
+                            continue
+                        key = normalized.lower()
+                        if key in seen_seeds:
+                            continue
+                        seen_seeds.add(key)
+                        cleaned.append(normalized)
+                    if cleaned:
+                        round_seed_queries = cleaned
+                        logger.info(
+                            f"[deepsearch-supervisor] round 1 seeded with "
+                            f"{len(cleaned)} user-edited queries"
+                        )
             tasks = build_worker_tasks(
                 brief=brief,
                 round_index=round_index,
@@ -5223,6 +5282,7 @@ def run_deepsearch_supervisor_workers(
                 queries_per_worker=queries_per_worker,
                 historical_queries=have_query,
                 missing_topics=missing_topics,
+                seed_queries=round_seed_queries,
             )
             tasks, rejected_tasks = budget_runtime.reserve_research_units(tasks)
             if rejected_tasks:

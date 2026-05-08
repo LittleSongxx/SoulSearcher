@@ -59,14 +59,17 @@ def test_research_graph_only_exposes_direct_and_deep_routes():
 
     graph = create_research_graph().get_graph(xray=True)
     nodes = set(graph.nodes)
-    # Deep-research path is now Plan-and-Execute split:
+    # Deep-research path is now Plan-and-Execute with three HITL checkpoints:
     #   deepsearch_planner -> hitl_plan_review -> deepsearch_executor
+    #     -> hitl_sources_review -> hitl_draft_review -> human_review
     assert {
         "router",
         "direct_answer",
         "deepsearch_planner",
         "hitl_plan_review",
         "deepsearch_executor",
+        "hitl_sources_review",
+        "hitl_draft_review",
         "human_review",
     } <= nodes
     # Legacy / removed paths must not be re-introduced

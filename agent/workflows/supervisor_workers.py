@@ -189,7 +189,16 @@ def build_worker_tasks(
     queries_per_worker: int,
     historical_queries: Optional[list[str]] = None,
     missing_topics: Optional[list[str]] = None,
+    seed_queries: Optional[list[str]] = None,
 ) -> list[WorkerTask]:
+    """Build worker tasks for a supervisor round.
+
+    When ``seed_queries`` is provided (typically the user-edited
+    ``research_plan`` from the Plan-and-Execute planner / hitl_plan_review
+    stage), the first worker on this round is allocated those queries as a
+    ``user_directed`` task; the remaining workers fall back to the default
+    role/expected-field driven foci.
+    """
     topic = brief.clarified_goal or brief.original_query
     focus_candidates = _unique(
         list(missing_topics or [])
@@ -204,7 +213,25 @@ def build_worker_tasks(
     used_queries = list(historical_queries or [])
     worker_count = max(1, int(max_workers or 1))
     query_count = max(1, int(queries_per_worker or 1))
-    for idx, focus in enumerate(focus_candidates[:worker_count], 1):
+
+    seed_clean = _unique(seed_queries or [])
+    if seed_clean:
+        seed_for_worker = seed_clean[:query_count]
+        used_queries.extend(seed_for_worker)
+        worker_id = _stable_id("worker", round_index, 0, "user_directed")
+        tasks.append(
+            WorkerTask(
+                worker_id=worker_id,
+                topic=topic,
+                focus="user_directed",
+                queries=seed_for_worker or [topic],
+                round_index=round_index,
+                context_id=f"ctx_{worker_id}",
+            )
+        )
+
+    remaining_workers = max(0, worker_count - len(tasks))
+    for idx, focus in enumerate(focus_candidates[:remaining_workers], 1):
         suffix = _focus_query_suffix(focus)
         base = f"{topic} {suffix}" if suffix and suffix not in topic else topic
         queries = backfill_diverse_queries(base, [base], used_queries, query_count)
@@ -620,7 +647,9 @@ def build_branch_diagnostics_artifact(
     for run in worker_runs or []:
         if not isinstance(run, dict):
             continue
-        focus = _text(run.get("focus") or run.get("topic") or run.get("worker_id") or "branch")
+        focus = _text(
+            run.get("focus") or run.get("topic") or run.get("worker_id") or "branch"
+        )
         focus_key = focus.lower()
         focus_counts[focus_key] = focus_counts.get(focus_key, 0) + 1
         worker_id = _text(run.get("worker_id") or focus_key)
@@ -632,7 +661,9 @@ def build_branch_diagnostics_artifact(
                 {
                     "worker_id": worker_id,
                     "kind": "worker_error",
-                    "details": errors[:3] if isinstance(errors, list) else [str(errors)],
+                    "details": (
+                        errors[:3] if isinstance(errors, list) else [str(errors)]
+                    ),
                 }
             )
     duplicate_focus_count = sum(max(0, count - 1) for count in focus_counts.values())
@@ -640,10 +671,14 @@ def build_branch_diagnostics_artifact(
     for item in evidence_items or []:
         if not isinstance(item, dict):
             continue
-        url = _text(item.get("url") or item.get("source_url") or item.get("document_id"))
+        url = _text(
+            item.get("url") or item.get("source_url") or item.get("document_id")
+        )
         if url:
             evidence_by_url[url] = evidence_by_url.get(url, 0) + 1
-    duplicate_evidence_urls = [url for url, count in evidence_by_url.items() if count > 1][:10]
+    duplicate_evidence_urls = [
+        url for url, count in evidence_by_url.items() if count > 1
+    ][:10]
     if duplicate_evidence_urls:
         conflict_hints.append(
             {
@@ -723,6 +758,11 @@ def build_intermediate_report(
         "total_evidence": total_evidence,
         "key_learnings": key_learnings,
         "source_count": len(source_urls),
-        "completion_estimate": min(1.0, round(total_results / max(1, 20) * 0.5 + total_evidence / max(1, 40) * 0.5, 3)),
+        "completion_estimate": min(
+            1.0,
+            round(
+                total_results / max(1, 20) * 0.5 + total_evidence / max(1, 40) * 0.5, 3
+            ),
+        ),
         "timestamp": datetime.now(UTC).isoformat(),
     }

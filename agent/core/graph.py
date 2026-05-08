@@ -16,7 +16,9 @@ from agent.workflows.nodes import (
     deepsearch_node,
     deepsearch_planner_node,
     direct_answer_node,
+    hitl_draft_review_node,
     hitl_plan_review_node,
+    hitl_sources_review_node,
     human_review_node,
     route_node,
 )
@@ -81,12 +83,16 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     workflow.add_node("human_review", human_review_node)
     # Plan-and-Execute deep-research layer:
     #   deepsearch_planner → hitl_plan_review → deepsearch_executor
-    # `hitl_plan_review_node` is a no-op unless settings.hitl_checkpoints includes
-    # "plan"; in that case it issues `interrupt()` so the user can edit the plan
-    # before the executor runs.
+    #     → hitl_sources_review → hitl_draft_review → human_review
+    # All three `hitl_*_review` nodes are no-ops unless their respective
+    # checkpoint is listed in settings.hitl_checkpoints; when active they
+    # issue `interrupt()` so the user can edit plan / sources guidance / draft
+    # before downstream stages consume the state.
     workflow.add_node("deepsearch_planner", deepsearch_planner_node)
     workflow.add_node("hitl_plan_review", hitl_plan_review_node)
     workflow.add_node("deepsearch_executor", deepsearch_node)
+    workflow.add_node("hitl_sources_review", hitl_sources_review_node)
+    workflow.add_node("hitl_draft_review", hitl_draft_review_node)
 
     workflow.set_entry_point("router")
 
@@ -107,7 +113,9 @@ def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
     workflow.add_edge("direct_answer", "human_review")
     workflow.add_edge("deepsearch_planner", "hitl_plan_review")
     workflow.add_edge("hitl_plan_review", "deepsearch_executor")
-    workflow.add_edge("deepsearch_executor", "human_review")
+    workflow.add_edge("deepsearch_executor", "hitl_sources_review")
+    workflow.add_edge("hitl_sources_review", "hitl_draft_review")
+    workflow.add_edge("hitl_draft_review", "human_review")
     workflow.add_edge("human_review", END)
 
     # HITL checkpoints are implemented via explicit review nodes that use
