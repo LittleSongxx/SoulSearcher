@@ -15,7 +15,7 @@
 [![Node.js 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-purple.svg)](https://github.com/langchain-ai/langgraph)
 
-[Demo](https://weaver-demo.vercel.app) · [Documentation](./) · [Report Bug](https://github.com/skygazer42/weaver/issues) · [Request Feature](https://github.com/skygazer42/weaver/issues)
+[Documentation](./) · [Report Bug](https://github.com/LittleSongxx/Weaver_pro/issues) · [Request Feature](https://github.com/LittleSongxx/Weaver_pro/issues)
 
 <img src="images/dashboard.png" alt="Weaver Dashboard" width="100%" style="border-radius: 8px; margin-top: 20px;" />
 
@@ -117,8 +117,8 @@
 ### 1⃣ Clone & Setup
 
 ```bash
-git clone https://github.com/skygazer42/weaver.git
-cd weaver
+git clone https://github.com/LittleSongxx/Weaver_pro.git
+cd Weaver_pro
 
 # Copy environment template
 cp .env.example .env
@@ -988,9 +988,9 @@ We welcome contributions! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for g
 
 **Development Setup:**
 ```bash
-# Clone your fork
-git clone https://github.com/skygazer42/weaver.git
-cd weaver
+# Clone the repo
+git clone https://github.com/LittleSongxx/Weaver_pro.git
+cd Weaver_pro
 
 # Install dependencies
 pnpm run install:all
@@ -1023,10 +1023,7 @@ This project is licensed under the MIT License - see the [LICENSE](../LICENSE) f
 
 ## Contact & Support
 
-- **Issues**: [GitHub Issues](https://github.com/skygazer42/weaver/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/skygazer42/weaver/discussions)
-- **Twitter**: [@WeaverAI](https://twitter.com/WeaverAI)
-- **Discord**: [Join our community](https://discord.gg/weaver)
+- **Issues**: [GitHub Issues](https://github.com/LittleSongxx/Weaver_pro/issues)
 
 ---
 

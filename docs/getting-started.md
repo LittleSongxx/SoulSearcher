@@ -25,8 +25,8 @@
 ## 1) 克隆仓库
 
 ```bash
-git clone https://github.com/skygazer42/weaver.git
-cd weaver
+git clone https://github.com/LittleSongxx/Weaver_pro.git
+cd Weaver_pro
 ```
 
 ---

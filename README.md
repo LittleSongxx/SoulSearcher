@@ -16,7 +16,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat)
 
-[在线演示](https://weaver-demo.vercel.app) · [文档](docs/README.md) · [问题反馈](https://github.com/skygazer42/weaver/issues) · [讨论区](https://github.com/skygazer42/weaver/discussions)
+[文档](docs/README.md) · [问题反馈](https://github.com/LittleSongxx/Weaver_pro/issues)
 
 <img src="docs/images/dashboard.png" alt="Weaver Dashboard" width="100%" style="border-radius: 8px; margin-top: 20px;" />
 
@@ -61,8 +61,8 @@ graph TB
 > 推荐直接使用根目录 `./start_weaver.sh`。更完整的说明见：`docs/getting-started.md`
 
 ```bash
-git clone https://github.com/skygazer42/weaver.git
-cd weaver
+git clone https://github.com/LittleSongxx/Weaver_pro.git
+cd Weaver_pro
 
 # start 脚本会在缺少时自动生成：
 # - .env
