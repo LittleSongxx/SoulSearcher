@@ -1,4 +1,4 @@
-# Weaver - AI Agent Platform
+# Weaver — AI Deep Research Platform
 
 <div align="right">
   <strong>Language / 语言:</strong>
@@ -8,14 +8,15 @@
 
 <div align="center">
 
-**Open-source AI Agent platform with Deep Research, Code Execution, Browser Automation, and Generative UI capabilities.**
+**Full-stack AI Deep Research platform built on LangGraph · Supervisor-Workers multi-round research · Multi-source aggregated search · Evidence traceability · HITL human-in-the-loop**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Node.js 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-purple.svg)](https://github.com/langchain-ai/langgraph)
+[![FastAPI 0.134+](https://img.shields.io/badge/FastAPI-0.134+-009688.svg)](https://fastapi.tiangolo.com/)
+[![LangGraph 1.0+](https://img.shields.io/badge/LangGraph-1.0+-7B68EE.svg)](https://github.com/langchain-ai/langgraph)
+[![Next.js 14+](https://img.shields.io/badge/Next.js-14+-000000.svg)](https://nextjs.org/)
 
-[Documentation](./) · [Report Bug](https://github.com/LittleSongxx/Weaver_pro/issues) · [Request Feature](https://github.com/LittleSongxx/Weaver_pro/issues)
+[Report Bug](https://github.com/LittleSongxx/Weaver_pro/issues) · [Request Feature](https://github.com/LittleSongxx/Weaver_pro/issues)
 
 <img src="images/dashboard.png" alt="Weaver Dashboard" width="100%" style="border-radius: 8px; margin-top: 20px;" />
 
@@ -23,1061 +24,540 @@
 
 ---
 
-## ✨ Highlights
-
--  **Smart Routing**- LLM-based intelligent query routing (Direct/Web/Agent/Deep Search)
--  **Deep Research**- Multi-epoch iterative research with parallel search and content analysis
--  **Code Execution**- Sandboxed Python interpreter with visualization support (E2B)
--  **Browser Automation**- Full Chromium control with screenshots (Playwright + E2B)
--  **Desktop Automation**- Mouse, keyboard, and screen control (PyAutoGUI)
--  **Document Generation**- Excel spreadsheets and PowerPoint presentations
--  **Trigger System**- Scheduled, Webhook, and Event-based automation
--  **Voice I/O**- Speech recognition (ASR) and text-to-speech (TTS)
--  **Cancellable Tasks**- Real-time task cancellation with token-based tracking
--  **Generative UI**- Real-time event streaming with artifacts
-
 ## Table of Contents
 
-- [Features](#features)
-- [Quick Start](#quick-start)
+- [Overview](#overview)
+- [Core Features](#core-features)
 - [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
-- [Tool Reference](#tool-reference)
+- [Tool Ecosystem](#tool-ecosystem)
 - [Development](#development)
 - [Deployment](#deployment)
-- [Documentation](#documentation)
-- [Roadmap](#roadmap)
+- [License](#license)
 
-## Features
+---
 
-### Core Capabilities
+## Overview
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Smart Router**| LLM-based query classification with confidence thresholds | ✅ |
-| **Deep Search**| Multi-step research with parallel search and content scraping | ✅ |
-| **Code Execution**| Python interpreter in E2B sandbox with matplotlib, pandas, numpy | ✅ |
-| **Browser Automation**| Playwright-based browser control with real-time screenshots | ✅ |
-| **Desktop Automation**| Mouse, keyboard, and screen control via PyAutoGUI | ✅ |
-| **Task Management**| Structured task tracking with progress visualization | ✅ |
-| **Trigger System**| Scheduled (Cron), Webhook, and Event-based triggers | ✅ |
-| **MCP Integration**| Model Context Protocol tool bridge for extensibility | ✅ |
-| **Voice I/O**| ASR (DashScope Paraformer) + TTS (DashScope Sambert) | ✅ |
-| **Cancellation**| Token-based task cancellation with graceful shutdown | ✅ |
-| **Memory**| Long-term memory with PostgreSQL/Redis store + Mem0 | ✅ |
+Weaver is a full-stack AI platform focused on **deep research**. Its core capability is automated complex information investigation: starting from a user query, it performs multi-round parallel search, evidence fetching, claim verification, and generates structured research reports with citations. It also integrates sandbox code execution, browser automation, RAG knowledge base, and MCP tool bridge capabilities.
 
-### Tool Categories
+---
+
+## Core Features
+
+### Deep Research Engine
+
+- **Plan-and-Execute**: Supervisor distributes sub-tasks → multiple Workers search in parallel → iterates until quality gates pass
+- **5 DeepSearch modes**: `supervisor_workers` (default) · `auto` · `tree` · `linear` · `reflection_loop`
+- **Evidence verification**: Claim Verifier per-statement verification · Evidence Passages paragraph-level grounding · Citation Gate coverage threshold · Fact Cards structured evidence
+- **Quality gates**: Citation coverage · Claim contradiction/unsupported limits · Knowledge gap analysis · Source quality scoring
+- **HITL checkpoints**: Research plan review (`hitl_plan_review`) + final report review (`human_review`), users can edit/approve/reject during the flow
+
+### Multi-Source Aggregated Search
+
+- **12+ search engines**: Tavily · Bocha · DuckDuckGo · Serper · SerpAPI · Bing · Google CSE · Exa · Firecrawl
+- **Academic sources**: arXiv · PubMed · Semantic Scholar
+- **Social feeds**: Twitter/X · Reddit · HackerNews
+- **Search strategies**: `fallback` · `parallel` · `round_robin` · `best_first`
+- **Reliability**: Per-provider retry + circuit breaker + freshness-aware ranking
+- **Caching**: LRU + TTL session-level search cache with fuzzy query deduplication
+
+### Multi-Model Support
+
+- **Providers**: OpenAI / DeepSeek / Anthropic / Azure / Ollama (ChatOpenAI-compatible)
+- **Task-based routing**: Different models for routing, planning, query generation, research, writing, evaluation
+- **Fallback chains**: Automatic fallback when primary model unavailable
+
+### Tool Ecosystem
+
+| Category | Tools |
+|----------|-------|
+| **Sandbox (E2B)** | Browser automation · File operations · Shell commands · Excel/PPT generation · Image editing · Web dev · Vision |
+| **Browser** | Playwright native automation · CDP screencast · Content extraction |
+| **Automation** | Computer use (mouse/keyboard) · Bash · Task list |
+| **Code** | Python execution (sandboxed) |
+| **RAG** | Document upload → ChromaDB vectorization → automatic retrieval during research |
+| **Export** | Markdown / HTML / PDF with Jinja2 templates |
+| **Voice** | DashScope ASR (speech recognition) + TTS (text-to-speech) |
+| **MCP** | Model Context Protocol bridge (filesystem / memory / git / postgres) |
+
+### Skills
+
+10 built-in skill profiles: `deep-researcher` · `data-analyst` · `competitive-analyst` · `code-assistant` · `writing-assistant` · `translator` · `finance-calculator` · `ppt-maker` · `web-scraper` · `mindmap-generator`
+
+### Session & Collaboration
+
+- PostgreSQL persistent sessions with LangGraph checkpointer
+- Session resume / continue-research / share / comments / version snapshots
+- SSE real-time streaming (research progress, search results, tool calls, quality metrics)
+- Report export (Markdown / HTML / PDF)
+
+---
+
+## Architecture
+
+### Research Graph (LangGraph StateGraph)
+
+```mermaid
+graph LR
+  Router -->|direct| DirectAnswer
+  Router -->|deep| DeepSearchPlanner
+  DeepSearchPlanner --> HITLPlanReview
+  HITLPlanReview --> DeepSearchExecutor
+  DirectAnswer --> HumanReview
+  DeepSearchExecutor --> HumanReview
+  HumanReview --> END
+```
+
+**Defined in** `agent/core/graph.py`. The graph has two main paths:
+- **Direct**: Router → Direct Answer → Human Review → END
+- **Deep Research**: Router → DeepSearch Planner → HITL Plan Review → DeepSearch Executor → Human Review → END
+
+### DeepSearch Engine (Supervisor-Workers)
+
+```mermaid
+graph TB
+  subgraph Supervisor["Supervisor Loop"]
+    S[Supervisor] -->|assign tasks| W1[Worker 1]
+    S --> W2[Worker 2]
+    S --> W3[Worker N]
+  end
+
+  subgraph WorkerPipeline["Per-Worker Pipeline"]
+    Search[Multi-Search Aggregator] --> Fetch[Research Fetcher]
+    Fetch --> Evidence[Evidence Extraction]
+    Evidence --> Compress[Compression]
+  end
+
+  W1 & W2 & W3 --> WorkerPipeline
+  WorkerPipeline --> Merge[Result Aggregation]
+  Merge --> QG[Quality Gates]
+  QG -->|pass| Writer[Report Writer]
+  QG -->|revise / gap| S
+  Writer --> CV[Claim Verifier]
+  CV -->|contradicted| Writer
+  CV -->|pass| Done[Final Report]
+```
+
+**Defined in** `agent/workflows/deepsearch_optimized.py` (250K+ lines) and `agent/workflows/supervisor_workers.py`.
+
+### Full System Architecture
+
+```mermaid
+graph TB
+  subgraph Frontend["Next.js 14 Frontend"]
+    UI[Chat / Research UI]
+    EP[Evidence Panel]
+    AP[Artifacts Panel]
+    MD[Metrics Dashboard]
+  end
+
+  subgraph Backend["FastAPI Backend · main.py"]
+    API["REST + SSE API"]
+    Graph["LangGraph StateGraph"]
+  end
+
+  subgraph Core["Agent Core"]
+    Router[Router Node]
+    Direct[Direct Answer]
+    Planner[DeepSearch Planner]
+    HITL[HITL Review Nodes]
+    Executor[DeepSearch Executor]
+  end
+
+  subgraph Tools["Tool Ecosystem"]
+    Search["12+ Search Engines<br>+ Academic + Feeds"]
+    Sandbox["E2B Sandbox<br>Code / Browser / Files"]
+    Browser["Playwright Browser"]
+    RAGTool["RAG Knowledge Base"]
+    MCPTool["MCP Tool Bridge"]
+    ExportTool["Export (MD/HTML/PDF)"]
+  end
+
+  subgraph Infra["Infrastructure"]
+    PG[(PostgreSQL + pgvector)]
+    Redis[(Redis)]
+    Prom[Prometheus]
+  end
+
+  UI -->|SSE| API
+  API --> Graph --> Core
+  Executor --> Tools
+  Graph --> Infra
+
+  style Frontend fill:#f8f9fa,stroke:#dee2e6
+  style Backend fill:#e3f2fd,stroke:#90caf9
+  style Core fill:#fff3e0,stroke:#ffcc80
+  style Tools fill:#e8f5e9,stroke:#a5d6a7
+  style Infra fill:#f3e5f5,stroke:#ce93d8
+```
+
+### Request Flow
 
 ```
- Sandbox Tools (E2B)
-├── Browser Automation
-│   ├── sb_browser_navigate        # Navigate to URL
-│   ├── sb_browser_click           # Click elements
-│   ├── sb_browser_type            # Type text
-│   ├── sb_browser_screenshot      # Capture screenshots
-│   └── sb_browser_get_html        # Extract page content
-├── File Operations
-│   ├── sandbox_create_file        # Create files
-│   ├── sandbox_read_file          # Read content
-│   ├── sandbox_str_replace        # Find/replace
-│   └── sandbox_download_file      # Download as Base64
-├── Shell & Packages
-│   ├── sandbox_execute_command    # Run shell commands
-│   ├── sandbox_install_package    # Install npm/pip/apt packages
-│   └── sandbox_expose_port        # Expose ports for web apps
-└── Document Generation
-    ├── sandbox_create_spreadsheet # Create Excel/CSV files
-    └── sandbox_create_presentation # Create PowerPoint slides
-
- Desktop Tools
-├── computer_move_mouse            # Move cursor
-├── computer_click                 # Mouse click
-├── computer_type                  # Keyboard input
-├── computer_screenshot            # Screen capture
-└── task_list                      # Task management
-
- Search & Crawl
-├── web_search                     # Tavily API search
-├── sandbox_web_search             # Visual web search with screenshots
-└── crawl                          # URL content extraction
-
- Code Execution
-└── execute_python_code            # Sandboxed Python interpreter
+Frontend (useChatStream.ts)
+  → POST /api/research/sse or /api/chat/sse
+    → main.py: stream_agent_events()
+      → research_graph.astream_events()
+        → Router Node → (Direct Answer | DeepSearch)
+          → Tool execution / Search / Fetch
+        → SSE event translation
+      ← SSE frames
+    ← StreamingResponse
+  ← Frontend incremental rendering
 ```
 
-## ⚡ Quick Start
+---
 
-### Prerequisites
+## Project Structure
 
-- **Python 3.11+**- [Download](https://www.python.org/downloads/)
-- **Node.js 20+**- [Download](https://nodejs.org/)
-- **Docker & Docker Compose**- [Install](https://docs.docker.com/get-docker/)
+```
+Weaver/
+├── main.py                         # FastAPI entry (5000+ lines, all API endpoints)
+├── agent/                          # LangGraph Agent core
+│   ├── core/                       # Graph, state, events, context, middleware
+│   │   ├── graph.py                # StateGraph: router → planner → HITL → executor → review
+│   │   ├── state.py                # AgentState (routing/research/quality/tree/metrics fields)
+│   │   ├── events.py               # SSE event emission
+│   │   ├── context_manager.py      # Token counting & truncation
+│   │   ├── multi_model.py          # Multi-model routing (by task type)
+│   │   ├── middleware.py           # Observation masking, token recovery, tool limits
+│   │   └── reflexion.py            # Self-reflection feedback
+│   └── workflows/                  # Workflow implementations (60+ modules)
+│       ├── nodes.py                # All graph nodes (router/direct/deepsearch/HITL)
+│       ├── deepsearch_optimized.py # Main DeepSearch engine (250K+)
+│       ├── supervisor_workers.py   # Supervisor-Workers orchestration
+│       ├── research_tree.py        # Tree-based exploration
+│       ├── claim_verifier.py       # Claim verification
+│       ├── quality_gates.py        # Quality gates
+│       ├── knowledge_gap.py        # Knowledge gap analysis
+│       ├── research_brief.py       # Research brief generation
+│       ├── domain_router.py        # Domain routing (scientific/legal/financial)
+│       ├── fact_cards.py           # Structured fact cards
+│       ├── citation_artifacts.py   # Citation annotation
+│       └── agents/                 # Hierarchical agents (coordinator/planner/researcher/reporter)
+├── tools/                          # Tool implementations
+│   ├── search/                     # Multi-source aggregated search
+│   │   ├── multi_search.py         # Search orchestration (fallback/parallel/round_robin)
+│   │   ├── providers.py            # Bocha/Serper/SerpAPI/Bing/GoogleCSE/Exa/Firecrawl
+│   │   ├── academic/               # arXiv / PubMed / Semantic Scholar
+│   │   ├── feeds/                  # Twitter / Reddit / HackerNews
+│   │   └── reliability.py          # Retry + circuit breaker
+│   ├── sandbox/                    # E2B sandbox (14 modules: browser/files/shell/sheets/PPT/image/etc.)
+│   ├── browser/                    # Playwright browser + CDP screencast
+│   ├── automation/                 # Desktop automation (computer_use / bash / task_list)
+│   ├── code/                       # Python code execution
+│   ├── rag/                        # RAG (document loader / embedder / ChromaDB vector store)
+│   ├── export/                     # Report export (Markdown → HTML/PDF, Jinja2 templates)
+│   ├── io/                         # Voice I/O (DashScope ASR / TTS)
+│   ├── crawl/                      # URL crawling (Playwright + crawl4ai)
+│   └── core/                       # Tool registry, MCP bridge, memory client
+├── common/                         # Shared infrastructure
+│   ├── config.py                   # Pydantic Settings (350+ env vars)
+│   ├── session_manager.py          # Session management (PostgreSQL persistence)
+│   ├── cancellation.py             # Task cancellation (token-based)
+│   ├── collaboration.py            # Share / comments / version snapshots
+│   ├── tracing.py                  # Call chain tracing
+│   └── evidence_store.py           # Evidence snapshot construction
+├── triggers/                       # Triggers (Cron / Webhook / Event)
+├── prompts/templates/              # 22 prompt templates
+├── skills/                         # 10 skill profiles (.md)
+├── web/                            # Next.js 14 frontend
+│   ├── components/chat/            # Chat UI / Evidence Panel / Artifacts / Metrics
+│   ├── components/research/        # Research Workspace
+│   ├── hooks/useChatStream.ts      # SSE streaming
+│   └── lib/api-types.ts            # Auto-generated TS types from OpenAPI
+├── sdk/                            # Internal SDKs (TypeScript + Python)
+├── eval/                           # Evaluation system (Deep Research Benchmark)
+├── docker/                         # Docker Compose (PostgreSQL + Redis + Backend + Frontend)
+├── scripts/                        # Dev/test/benchmark scripts
+└── tests/                          # Test suite
+```
 
-### 1⃣ Clone & Setup
+---
+
+## Quick Start
+
+### Option 1: One-command start (recommended)
 
 ```bash
 git clone https://github.com/LittleSongxx/Weaver_pro.git
 cd Weaver_pro
 
-# Copy environment template
-cp .env.example .env
+# Auto-generates .env / web/.env.local / config/config.toml on first run
+./start_weaver.sh
 ```
 
-### 2⃣ Configure API Keys
-
-Edit `.env` with your API keys:
+Fill in at least these keys in `.env`:
 
 ```bash
-# Required
-OPENAI_API_KEY=sk-...                    # https://platform.openai.com/api-keys
-TAVILY_API_KEY=tvly-...                   # https://tavily.com
-E2B_API_KEY=e2b_...                       # https://e2b.dev
-
-# Optional (choose one or more)
-ANTHROPIC_API_KEY=sk-ant-...              # Claude models
-GOOGLE_API_KEY=...                        # Gemini models
-DASHSCOPE_API_KEY=sk-...                  # Qwen models + TTS/ASR
-
-# Optional Features
-ENABLE_MEMORY=false                       # Long-term memory
-MEM0_API_KEY=...                          # Mem0 memory service
-ENABLE_MCP=false                          # MCP tool servers
+OPENAI_API_KEY=sk-...                     # Required (or DeepSeek-compatible key)
+OPENAI_BASE_URL=https://api.deepseek.com  # For DeepSeek
+BOCHA_API_KEY=                             # Recommended (Chinese search)
+E2B_API_KEY=e2b_...                        # Optional (sandbox code execution)
 ```
 
-### 3⃣ Install Dependencies
+### Option 2: Manual development setup
 
 ```bash
-# Backend (creates .venv and installs core + dev dependencies)
-make setup
-
-# Optional: install heavy/optional tool dependencies
-make setup-full
+# Backend
+make setup          # Creates .venv, installs requirements.txt + requirements-dev.txt
+make setup-full     # Also installs requirements-optional.txt
 
 # Frontend
 pnpm -C web install --frozen-lockfile
 
-# Optional: install Playwright browsers (needed for browser automation)
-playwright install chromium
+# Start
+make dev            # Backend on port 8001
+pnpm -C web dev     # Frontend on port 3100
 ```
 
-### 4⃣ Start Services
-
-```bash
-# Terminal 1: Start backend (use .venv)
-.venv/bin/python main.py
-
-# Terminal 2: Start frontend (defaults to port 3100)
-pnpm -C web dev
-```
-
-**Access points:**
--  **Web UI**: http://localhost:3100
--  **Backend API**: http://localhost:8001
--  **API Docs**: http://localhost:8001/docs
-
-### Common Dev Commands
-
-```bash
-# Run tests
-make test
-
-# Lint
-make lint
-
-# (Optional) Enable pre-commit
-.venv/bin/pre-commit install
-
-# (Optional) Local secret scan
-.venv/bin/python scripts/secret_scan.py
-```
-
-## Architecture
-
-### Project Structure
-
-```
-weaver/
-├── agent/                          # LangGraph Agent Logic
-│   ├── graph.py                    # Workflow graph (nodes + edges)
-│   ├── nodes.py                    # Agent nodes (route, plan, search, write)
-│   ├── smart_router.py             # LLM-based query routing
-│   ├── deepsearch.py               # Multi-epoch deep research
-│   ├── agent_prompts.py            # System prompts
-│   ├── agent_tools.py              # Tool builder
-│   ├── context_manager.py          # Token counting & truncation
-│   ├── events.py                   # Event emission system
-│   └── state.py                    # State definitions
-│
-├── tools/                          # Tool Implementations
-│   ├── sandbox/                    # E2B sandbox tools
-│   │   ├── browser_tools.py        # Browser automation
-│   │   ├── browser_session.py      # Session management
-│   │   ├── web_search_tool.py      # Visual web search
-│   │   ├── files_tool.py           # File operations
-│   │   ├── shell_tool.py           # Shell commands
-│   │   ├── sheets_tool.py          # Excel generation
-│   │   ├── presentation_tool.py    # PowerPoint generation
-│   │   └── vision_tool.py          # Image processing (OCR, resize)
-│   ├── computer_use_tool.py        # Desktop automation
-│   ├── task_list_tool.py           # Task management
-│   ├── screenshot_service.py       # Screenshot storage
-│   ├── crawl_tools.py              # URL crawling
-│   ├── asr.py                      # Speech recognition
-│   ├── tts.py                      # Text-to-speech
-│   ├── mcp.py                      # MCP integration
-│   └── registry.py                 # Tool registry
-│
-├── triggers/                       # Trigger System
-│   ├── models.py                   # Trigger data models
-│   ├── manager.py                  # Trigger lifecycle management
-│   ├── scheduler.py                # Cron-based scheduler
-│   └── webhook.py                  # Webhook handlers
-│
-├── common/                         # Shared Utilities
-│   ├── config.py                   # Settings & environment
-│   ├── logger.py                   # Structured logging
-│   ├── metrics.py                  # Performance metrics
-│   ├── cancellation.py             # Task cancellation
-│   └── agents_store.py             # Agent profile storage
-│
-├── web/                            # Next.js Frontend
-│   ├── app/                        # App router pages
-│   ├── components/                 # React components
-│   │   ├── chat/                   # Chat interface
-│   │   ├── views/                  # Discover, Library
-│   │   └── settings/               # Settings dialog
-│   ├── hooks/                      # React hooks
-│   │   ├── useChatStream.ts        # SSE streaming
-│   │   └── useChatHistory.ts       # LocalStorage history
-│   └── lib/                        # Utilities
-│
-├── main.py                         # FastAPI entry point
-├── docker/                         # Docker configuration
-│   ├── docker-compose.yml          # Service orchestration
-│   └── Dockerfile                  # Container image
-└── .env.example                    # Environment template
-```
-
-### Tech Stack
-
-| Layer | Technology | Version |
-|-------|------------|---------|
-| **Frontend**| Next.js | 14.2+ |
-| | Tailwind CSS | 3.4+ |
-| | Shadcn UI | Latest |
-| | Vercel AI SDK | 3.x |
-| **Backend**| Python | 3.11+ |
-| | FastAPI | 0.110+ |
-| | LangGraph | 0.2+ |
-| | LangChain | 0.2+ |
-| **Database**| PostgreSQL | 15+ |
-| | pgvector | 0.5+ |
-| **Sandbox**| E2B | Latest |
-| **Search**| Tavily API | v1 |
-| **Desktop**| PyAutoGUI | 0.9+ |
-| | Pillow | 10.0+ |
-| **Browser**| Playwright | 1.40+ |
-| **Voice**| DashScope | Latest |
-
-### Agent Execution Flow
-
-```mermaid
-graph TD
-    A[User Query] --> B[Smart Router]
-    B --> C{Route Decision}
-    C -->|direct| D[Direct Answer]
-    C -->|web| E[Web Search Plan]
-    C -->|agent| F[Tool Agent]
-    C -->|deep| G[Deep Search]
-    C -->|clarify| H[Clarify Node]
-
-    E --> I[Parallel Search]
-    I --> J[Writer Node]
-    J --> K[Evaluator]
-    K -->|pass| L[Complete]
-    K -->|revise| M[Refine Plan]
-    M --> I
-
-    G --> N[Multi-Epoch Research]
-    N --> O[Query Generation]
-    O --> P[Parallel Search]
-    P --> Q[Summarization]
-    Q --> R{More Epochs?}
-    R -->|yes| O
-    R -->|no| L
-
-    F --> S[Tool Execution]
-    S --> L
-
-    D --> L
-    H --> T[User Response]
-```
-
-## ⚙ Configuration
-
-### Environment Variables
-
-#### Core Settings
-
-```bash
-# API Keys
-OPENAI_API_KEY=sk-...                     # OpenAI API key
-OPENAI_BASE_URL=https://api.openai.com/v1 # Optional: Custom endpoint
-TAVILY_API_KEY=tvly-...                   # Tavily search API
-E2B_API_KEY=e2b_...                       # E2B sandbox API
-
-# Models
-PRIMARY_MODEL=deepseek-v4-flash           # Main LLM model
-REASONING_MODEL=deepseek-v4-pro           # Planning/reasoning model
-
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/weaver
-
-# Memory
-MEMORY_STORE_BACKEND=postgres             # postgres|redis|memory
-MEMORY_STORE_URL=postgresql://...         # Store connection URL
-ENABLE_MEMORY=false                       # Enable Mem0 integration
-MEM0_API_KEY=...                          # Mem0 API key (optional)
-
-# Features
-ENABLE_MCP=false                          # MCP tool servers
-DEBUG=false                               # Debug mode
-TOOL_APPROVAL=false                       # Require approval for tools
-HUMAN_REVIEW=false                        # Require review before completion
-MAX_REVISIONS=2                           # Max report revision iterations
-```
-
-#### Advanced Settings
-
-```bash
-# Context Management
-CONTEXT_MAX_TOKENS=128000                 # Token limit per request
-CONTEXT_TRUNCATION_STRATEGY=smart         # smart|fifo|middle
-
-# Search
-TOOL_RETRY=true                           # Retry failed tool calls
-TOOL_RETRY_MAX_ATTEMPTS=3                 # Max retry attempts
-TOOL_RETRY_BACKOFF=exponential            # exponential|linear|constant
-
-# Performance
-OPENAI_TIMEOUT=120                        # API timeout (seconds)
-ENABLE_PROMETHEUS=false                   # Prometheus metrics
-CORS_ORIGINS=http://localhost:3000        # CORS allowed origins
-
-# Voice
-DASHSCOPE_API_KEY=sk-...                  # DashScope for TTS/ASR
-
-# Logging
-LOG_LEVEL=INFO                            # DEBUG|INFO|WARNING|ERROR
-ENABLE_FILE_LOGGING=true                  # Log to files
-LOG_FILE=logs/weaver.log                  # Log file path
-```
-
-### Agent Profiles
-
-Configure agent tools in `data/agents.json`:
-
-```json
-{
-  "id": "default",
-  "name": "Weaver Default Agent",
-  "description": "Default tool-using agent",
-  "system_prompt": "You are a helpful AI assistant...",
-  "model": "gpt-4o",
-  "enabled_tools": {
-    "web_search": true,
-    "browser": false,
-    "sandbox_browser": true,
-    "sandbox_web_search": true,
-    "sandbox_files": true,
-    "sandbox_shell": true,
-    "sandbox_sheets": true,
-    "sandbox_presentation": true,
-    "sandbox_vision": true,
-    "python": true,
-    "crawl": true,
-    "task_list": true,
-    "computer_use": false,
-    "mcp": true
-  },
-  "metadata": {
-    "protected": true
-  }
-}
-```
-
-**Built-in Agent Profiles:**
-- `default` - Basic tools (web search, browser, python, crawl)
-- `manus` - Full-featured (compatibility id; UI name is "Weaver Full Agent")
-
-### Context Management
-
-```python
-from agent.core.context_manager import ContextManager
-
-manager = ContextManager(
-    model_name="gpt-4o",
-    max_tokens=128000,
-    truncation_strategy="smart"  # smart|fifo|middle
-)
-
-# Automatically truncate messages
-truncated_messages = manager.truncate_messages(messages)
-```
-
-**Truncation Strategies:**
-- `smart` - Keep system + first/last messages, truncate middle (default)
-- `fifo` - First In First Out, remove oldest messages
-- `middle` - Keep start and end, remove middle messages
-
-### Trigger System
-
-Create automated agent workflows:
-
-```python
-from triggers import TriggerManager, ScheduledTrigger, WebhookTrigger
-
-manager = TriggerManager()
-
-# Scheduled trigger (Cron)
-trigger = ScheduledTrigger(
-    name="hourly_report",
-    agent_id="default",
-    task="Generate hourly status report",
-    schedule="0 * * * *",  # Every hour
-    timezone="Asia/Shanghai",
-    run_immediately=False
-)
-await manager.add_trigger(trigger)
-
-# Webhook trigger
-webhook = WebhookTrigger(
-    name="github_webhook",
-    agent_id="default",
-    task="Process GitHub webhook: {payload.action}",
-    http_methods=["POST"],
-    require_auth=True,
-    rate_limit=100  # requests per hour
-)
-await manager.add_trigger(webhook)
-```
-
-## API Reference
-
-### Chat Endpoint
-
-**POST**`/api/chat`
-
-Start a new chat session with streaming response.
-
-**Request:**
-```json
-{
-  "messages": [
-    {"role": "user", "content": "Search for latest AI news"}
-  ],
-  "stream": true,
-  "model": "gpt-4o",
-  "search_mode": "deep",  // direct|web|agent|deep
-  "agent_id": "default",
-  "user_id": "user_123",
-  "images": [
-    {
-      "name": "screenshot.png",
-      "mime": "image/png",
-      "data": "base64_encoded_data"
-    }
-  ]
-}
-```
-
-**Response (SSE):**
-```
-0:{"type":"status","data":{"text":"Initializing...","step":"init"}}
-0:{"type":"text","data":{"content":"Hello"}}
-0:{"type":"tool","data":{"name":"web_search","status":"running"}}
-0:{"type":"screenshot","data":{"url":"...","image":"data:image/png;base64,..."}}
-0:{"type":"artifact","data":{"id":"...","type":"chart","content":"..."}}
-0:{"type":"done","data":{"timestamp":"..."}}
-```
-
-**SSE Event Types:**
-
-| Event | Description | Data Fields |
-|-------|-------------|-------------|
-| `status` | Status update | `text`, `step` |
-| `text` | Text chunk | `content` |
-| `message` | Full message | `content` |
-| `tool` | Tool execution | `name`, `status`, `query` |
-| `tool_start` | Tool started | `tool_name`, `args` |
-| `tool_result` | Tool completed | `tool_name`, `result` |
-| `tool_error` | Tool failed | `tool_name`, `error` |
-| `screenshot` | Screenshot available | `url`, `image` |
-| `task_update` | Task status changed | `task_id`, `status`, `progress` |
-| `research_node_start` | Deep research node started | `node_id`, `topic`, `depth` |
-| `research_node_complete` | Deep research node completed | `node_id`, `summary`, `quality` |
-| `research_tree_update` | Research tree snapshot updated | `tree`, `quality` |
-| `quality_update` | Research quality diagnostics updated | `query_coverage_score`, `freshness_summary`, etc. |
-| `search` | Search run update | `query`, `provider`, `results`, `count` |
-| `artifact` | Artifact generated | `id`, `type`, `title`, `content` |
-| `completion` | Final report | `content` |
-| `interrupt` | Requires approval | `thread_id`, `prompts` |
-| `cancelled` | Task cancelled | `message` |
-| `error` | Error occurred | `message` |
-| `done` | Stream completed | `timestamp`, `metrics` |
-
-`/api/events/{thread_id}` now emits typed SSE events (`event: <event_name>`) and includes
-resume cursor IDs (`id: <seq>`). Payload JSON keeps the `{type, data, ...}` envelope for backward compatibility.
-Client recommendation:
-- Prefer `addEventListener('<type>')` for typed events.
-- Also handle default `message` events and dispatch by envelope `type` as a fallback.
-- Treat `done` as the terminal event (`complete` can be supported as a compatibility alias).
-
-### Cancel Endpoint
-
-**POST**`/api/chat/cancel/{thread_id}`
-
-Cancel a running chat task.
-
-**Request:**
-```json
-{
-  "reason": "User requested cancellation"
-}
-```
-
-**Response:**
-```json
-{
-  "status": "cancelled",
-  "thread_id": "thread_abc123",
-  "reason": "User requested cancellation",
-  "timestamp": "2025-01-01T00:00:00"
-}
-```
-
-### Resume Interrupt
-
-**POST**`/api/interrupt/resume`
-
-Resume after tool approval interrupt.
-
-**Request:**
-```json
-{
-  "thread_id": "thread_abc123",
-  "payload": {
-    "decisions": [
-      { "type": "approve" }
-    ]
-  },
-  "model": "gpt-4o",
-  "search_mode": "agent"
-}
-```
-
-`payload.decisions` follows LangChain's `HumanInTheLoopMiddleware` schema:
-- `approve` — allow the tool call(s) as-is
-- `edit` — modify a tool call before execution:
-  - `{ "type": "edit", "edited_action": { "name": "<tool>", "args": { ... } } }`
-- `reject` — reject tool call(s) and feed an error tool message back to the model:
-  - `{ "type": "reject", "message": "Optional reason" }`
-
-Compatibility: legacy clients may still send `{ "tool_approved": true/false, "tool_calls": [...] }` and the backend
-will translate it into `decisions` automatically.
-
-### Screenshot API
-
-**GET**`/api/screenshots/{filename}`
-
-Retrieve a screenshot by filename.
-
-**Response:**Image file (PNG/JPEG)
-
-**GET**`/api/screenshots?thread_id=thread_123&limit=50`
-
-List screenshots for a thread.
-
-**Response:**
-```json
-{
-  "screenshots": [
-    {
-      "filename": "screenshot_1234567890.png",
-      "thread_id": "thread_123",
-      "url": "/api/screenshots/screenshot_1234567890.png",
-      "created_at": "2025-01-01T00:00:00"
-    }
-  ],
-  "count": 1
-}
-```
-
-### Trigger API
-
-**GET**`/api/triggers`
-
-List all triggers.
-
-**Query Parameters:**
-- `trigger_type` - Filter by type (scheduled|webhook|event)
-- `status` - Filter by status (active|paused|error)
-- `user_id` - Filter by user
-
-**POST**`/api/triggers/scheduled`
-
-Create scheduled trigger.
-
-**Request:**
-```json
-{
-  "name": "daily_summary",
-  "description": "Generate daily summary report",
-  "schedule": "0 9 * * *",
-  "agent_id": "default",
-  "task": "Generate daily summary",
-  "timezone": "Asia/Shanghai",
-  "run_immediately": false
-}
-```
-
-**POST**`/api/triggers/webhook`
-
-Create webhook trigger.
-
-**Request:**
-```json
-{
-  "name": "github_webhook",
-  "agent_id": "default",
-  "task": "Process: {payload.action}",
-  "http_methods": ["POST"],
-  "require_auth": true,
-  "rate_limit": 100
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "trigger_id": "trigger_abc123",
-  "endpoint": "/api/webhook/trigger_abc123",
-  "auth_token": "secret_token_xyz"  // if require_auth=true
-}
-```
-
-### Voice API
-
-**POST**`/api/asr/recognize`
-
-Speech recognition (ASR).
-
-**Request:**
-```json
-{
-  "audio_data": "base64_encoded_audio",
-  "format": "wav",
-  "sample_rate": 16000,
-  "language_hints": ["zh", "en"]
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "text": "Transcribed text here",
-  "metrics": {
-    "duration_ms": 123
-  }
-}
-```
-
-**POST**`/api/tts/synthesize`
-
-Text-to-speech (TTS).
-
-**Request:**
-```json
-{
-  "text": "Hello, how can I help you?",
-  "voice": "longxiaochun"  // See /api/tts/voices for options
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "audio": "base64_encoded_mp3",
-  "format": "mp3",
-  "voice": "longxiaochun"
-}
-```
-
-## Tool Reference
-
-### Complete Tool List
-
-See [TOOL_REFERENCE.md](TOOL_REFERENCE.md) for detailed tool documentation.
-
-**Quick Reference:**
-
-- **Sandbox Browser**: `sb_browser_*` (11 tools)
-- **Sandbox Files**: `sandbox_*_file` (8 tools)
-- **Sandbox Shell**: `sandbox_*_command`, `sandbox_install_package` (5 tools)
-- **Sandbox Sheets**: `sandbox_*_spreadsheet` (7 tools)
-- **Sandbox Presentation**: `sandbox_*_presentation`, `sandbox_*_slide` (8 tools)
-- **Sandbox Vision**: `sandbox_*_image`, `sandbox_extract_text` (7 tools)
-- **Computer Use**: `computer_*` (9 tools)
-- **Task Management**: `create_tasks`, `view_tasks`, `update_task` (4 tools)
-- **Search & Crawl**: `web_search`, `crawl` (2 tools)
-- **Code**: `execute_python_code` (1 tool)
-
-**Total: 62 tools**
-
-## Development
-
-### Run Tests
-
-```bash
-# Smoke test (API endpoints)
-python test_api_endpoints.py
-
-# Deep search routing test
-python scripts/test_deep_search_routing.py
-
-# Unit tests
-pytest tests/ -v
-
-# Specific test
-pytest tests/test_smoke_api.py -q
-```
-
-### Code Style
-
-```bash
-# Format
-black . --line-length 120
-isort . --profile black
-
-# Lint
-ruff check .
-
-# Type check
-mypy agent/ tools/ common/
-```
-
-### Debug Mode
-
-Enable debug logging:
-
-```bash
-# .env
-DEBUG=true
-LOG_LEVEL=DEBUG
-ENABLE_FILE_LOGGING=true
-```
-
-View logs:
-```bash
-tail -f logs/weaver.log
-tail -f logs/threads/{thread_id}.log
-```
-
-### Local Development
-
-```bash
-# Recommended
-./scripts/setup.sh
-./scripts/dev.sh
-
-# Or run separately:
-# Database
-docker compose -f docker/docker-compose.yml up -d postgres
-
-# Backend (with auto-reload)
-source .venv/bin/activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8001
-
-# Frontend
-pnpm -C web dev
-```
-
-## Deployment
-
-### Docker
-
-**Build:**
-```bash
-docker build -t weaver-backend .
-```
-
-**Run:**
-```bash
-docker run -p 8001:8000 \
-  --env-file .env \
-  --name weaver \
-  weaver-backend
-```
-
-### Docker Compose (Backend + Postgres)
-
-```bash
-# Start all services
-docker compose -f docker/docker-compose.yml up -d
-
-# View logs
-docker compose -f docker/docker-compose.yml logs -f
-
-# Stop
-docker compose -f docker/docker-compose.yml down
-```
-
-**Services:**
-- `postgres` - PostgreSQL database (port 5432)
-- `backend` - FastAPI backend (port 8001)
-  - Note: the frontend is started separately with `pnpm -C web dev` (not via compose by default).
-
-### Vercel (Frontend)
-
-```bash
-cd web
-vercel deploy --prod
-```
-
-**Environment Variables (Vercel):**
-- `NEXT_PUBLIC_API_URL` - Backend API URL
-
-### Railway/Render (Backend)
-
-**Start Command:**
-```bash
-uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-**Environment:**
-- Set all required API keys
-- Add PostgreSQL database addon
-- Set `DATABASE_URL` automatically
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [MANUS_AGENT_EXTRACTION_PROGRESS.md](MANUS_AGENT_EXTRACTION_PROGRESS.md) | Feature extraction from Manus (92% complete) |
-| [AGENT_VISUAL_IMPLEMENTATION_PLAN.md](AGENT_VISUAL_IMPLEMENTATION_PLAN.md) | Visual agent implementation plan |
-| [MANUS_FEATURE_ANALYSIS.md](MANUS_FEATURE_ANALYSIS.md) | Manus feature comparison and analysis |
-| [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md) | Frontend SSE integration guide |
-| [DEEP_SEARCH_ROUTING_ANALYSIS.md](DEEP_SEARCH_ROUTING_ANALYSIS.md) | Deep search routing flow analysis |
-| [DEEP_SEARCH_TROUBLESHOOTING.md](DEEP_SEARCH_TROUBLESHOOTING.md) | Deep search diagnostic guide |
-| [DEBUG_ALIGNMENT_ISSUE.md](DEBUG_ALIGNMENT_ISSUE.md) | Message alignment debugging guide |
-| [TOOL_REFERENCE.md](TOOL_REFERENCE.md) | Complete tool documentation |
-
-## Roadmap
-
-### ✅ Completed (v0.9 - 92%)
-
-**Core Agent System**
-- [x] LangGraph workflow engine
-- [x] Smart query routing with LLM classification
-- [x] Context management (token counting, truncation)
-- [x] Event streaming (SSE)
-- [x] Task cancellation system
-- [x] Multi-agent profiles (GPTs-like)
-
-**Search & Research**
-- [x] Deep Search (multi-epoch iterative research)
-- [x] Smart Router (confidence-based routing)
-- [x] Parallel search with deduplication
-- [x] Result aggregation with ranking
-- [x] Web search (Tavily API)
-- [x] Visual web search (screenshots)
-- [x] URL crawling
-
-**Code Execution**
-- [x] Python interpreter (E2B sandbox)
-- [x] Matplotlib, pandas, numpy support
-- [x] Visualization artifacts
-
-**Browser Automation**
-- [x] Playwright integration
-- [x] E2B browser sandbox
-- [x] Real-time screenshots
-- [x] Session management
-- [x] Element interaction (click, type, scroll)
-
-**Desktop Automation**
-- [x] Mouse control (PyAutoGUI)
-- [x] Keyboard input
-- [x] Screen capture
-- [x] Hotkey support
-
-**Document Generation**
-- [x] Excel spreadsheets (openpyxl)
-- [x] PowerPoint presentations (python-pptx)
-- [x] CSV export
-- [x] Charts and formatting
-
-**Image Processing**
-- [x] OCR text extraction (Tesseract)
-- [x] Image resize/crop/convert
-- [x] QR code reading
-- [x] Image comparison
-
-**File & Shell**
-- [x] Sandbox file operations (CRUD)
-- [x] Shell command execution
-- [x] Package installation (npm/pip/apt)
-- [x] Port exposure for web apps
-
-**Trigger System**
-- [x] Scheduled triggers (Cron)
-- [x] Webhook triggers
-- [x] Event-based triggers
-- [x] Trigger management UI
-
-**Voice I/O**
-- [x] Speech recognition (ASR - DashScope Paraformer)
-- [x] Text-to-speech (TTS - DashScope Sambert)
-- [x] Multiple voice options
-
-**Memory & Storage**
-- [x] Short-term memory (checkpointer)
-- [x] Long-term memory (PostgreSQL/Redis store)
-- [x] Mem0 integration
-- [x] Chat history persistence
-
-**Other**
-- [x] MCP integration
-- [x] Task management
-- [x] Prometheus metrics (optional)
-- [x] Structured logging
-- [x] Docker deployment
-
-### In Progress (v1.0)
-
-**Frontend**
-- [ ] Message alignment fixes for Deep Research
-- [ ] Artifact gallery view
-- [ ] Advanced search filters
-- [ ] Theme customization
-
-**Backend**
-- [ ] Agent runs persistence (database)
-- [ ] Advanced image editing (filters, effects)
-- [ ] Web development scaffolding
-- [ ] Deploy to Vercel/Netlify from sandbox
-
-### Future Plans
-
-We are continuously improving Weaver. Feel free to contribute or suggest new features!
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
-
-**Quick Start:**
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-**Development Setup:**
-```bash
-# Clone the repo
-git clone https://github.com/LittleSongxx/Weaver_pro.git
-cd Weaver_pro
-
-# Install dependencies
-pnpm run install:all
-
-# Create .env
-cp .env.example .env
-
-# Start development
-pnpm run dev
-```
-
-**Code Standards:**
-- Follow PEP 8 for Python
-- Use Black for formatting
-- Add type hints
-- Write tests for new features
-- Update documentation
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
-
-## Acknowledgments
-
-- **Inspired by**: [Manus](https://manus.im) - The best AI agent platform
-- **Built with**: [LangGraph](https://github.com/langchain-ai/langgraph) - Agent orchestration
-- **Powered by**: [E2B](https://e2b.dev) - Code execution sandbox
-- **Search**: [Tavily](https://tavily.com) - AI-optimized search API
-- **UI Components**: [Shadcn UI](https://ui.shadcn.com) - Beautiful React components
-
-## Contact & Support
-
-- **Issues**: [GitHub Issues](https://github.com/LittleSongxx/Weaver_pro/issues)
+### Access Points
+
+| Service | URL |
+|---------|-----|
+| Web UI | `http://127.0.0.1:3100` |
+| Backend API | `http://127.0.0.1:8001` |
+| OpenAPI Docs | `http://127.0.0.1:8001/docs` |
+| Prometheus Metrics | `http://127.0.0.1:8001/metrics` |
 
 ---
 
-<div align="center">
+## Configuration
 
-**[⬆ Back to Top](#weaver---ai-agent-platform)**
+### Key Environment Variables
 
-Made by the Weaver Team
+Weaver uses 350+ environment variables configured via `.env`. See `.env.example` for the full list with comments.
 
-</div>
-
----
-
-## Deep Research VNext (2026-02)
-
-### What Changed
-
-- Multi-provider search orchestration (`fallback|parallel|round_robin|best_first`)
-- Freshness-aware ranking for time-sensitive queries
-- Domain-aware provider profiles
-- Provider reliability guardrails (retry + circuit breaker)
-- Evidence-based claim verification + citation gate
-- DeepSearch budget guards (time/token)
-- Session-level search cache with TTL
-- Deep research artifact persistence and resume support
-- Benchmark loader and golden regression runner
-
-### Key Configuration
+#### Models
 
 ```bash
-# Deep mode selection
-DEEPSEARCH_MODE=supervisor_workers      # supervisor_workers|auto|tree|linear|reflection_loop
-TREE_EXPLORATION_ENABLED=true           # tree remains available only by explicit mode/strategy
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.deepseek.com
+PRIMARY_MODEL=deepseek-v4-flash           # Main chat/writing model
+REASONING_MODEL=deepseek-v4-pro           # Planning/reasoning model (fallback: PRIMARY_MODEL)
+ANTHROPIC_API_KEY=sk-ant-...              # Optional
+USE_AZURE=false
+```
 
-# Budget guards
-DEEPSEARCH_MAX_SECONDS=0                 # 0 = disabled
-DEEPSEARCH_MAX_TOKENS=0                  # 0 = disabled
+#### Search Engines
 
-# Search orchestration
-SEARCH_STRATEGY=fallback                 # fallback|parallel|round_robin|best_first
-SEARCH_ENABLE_FRESHNESS_RANKING=true
-SEARCH_FRESHNESS_HALF_LIFE_DAYS=30
-SEARCH_FRESHNESS_WEIGHT=0.35
+```bash
+SEARCH_ENGINES=tavily,bocha               # Priority order (comma-separated)
+TAVILY_API_KEY=tvly-...                   # Or TAVILY_API_KEYS for key pool rotation
+BOCHA_API_KEY=...
+SERPER_API_KEY=...                        # Optional
+BRAVE_API_KEY=...                         # Optional
+EXA_API_KEY=...                           # Optional
+# ... see .env.example for all providers
+```
 
-# Session cache
-SEARCH_CACHE_MAX_SIZE=200
-SEARCH_CACHE_TTL_SECONDS=1800
-SEARCH_CACHE_SIMILARITY_THRESHOLD=0.9
+#### DeepSearch
 
-# Citation gate
+```bash
+DEEPSEARCH_MODE=supervisor_workers        # supervisor_workers|auto|tree|linear|reflection_loop
+DEEPSEARCH_MAX_EPOCHS=3
+DEEPSEARCH_QUERY_NUM=5
+DEEPSEARCH_RESULTS_PER_QUERY=5
+DEEPSEARCH_REPORT_SOURCES_LIMIT=30
+DEEPSEARCH_ENABLE_RESEARCH_FETCHER=true
 CITATION_GATE_MIN_COVERAGE=0.6
 ```
 
-### Benchmark Smoke
+#### Search Orchestration
+
+```bash
+SEARCH_STRATEGY=fallback                  # fallback|parallel|round_robin|best_first
+SEARCH_ENABLE_FRESHNESS_RANKING=true
+SEARCH_CACHE_MAX_SIZE=200
+SEARCH_CACHE_TTL_SECONDS=1800
+SEARCH_RELIABILITY_CIRCUIT_BREAKER_FAILURES=3
+```
+
+#### Infrastructure
+
+```bash
+DATABASE_URL=postgresql://...             # Empty = in-memory checkpointer
+MEMORY_STORE_BACKEND=memory               # memory|postgres|redis
+PORT=8001
+CORS_ORIGINS=http://localhost:3000,http://localhost:3100
+```
+
+---
+
+## API Reference
+
+### Research SSE (Primary Endpoint)
+
+**POST** `/api/research/sse`
+
+```json
+{
+  "query": "Analyze the current state of AI Agent frameworks",
+  "search_mode": "deep",
+  "model": "deepseek-v4-flash",
+  "user_id": "user_123",
+  "images": [],
+  "deepsearch_config": {},
+  "research_brief": {}
+}
+```
+
+Returns `text/event-stream` with typed SSE events:
+
+| Event | Description |
+|-------|-------------|
+| `brief_created` | Research brief + source routing preview |
+| `status` | Status update (step, progress) |
+| `text` | Streaming text chunk |
+| `search` | Search execution (query, provider, results) |
+| `tool_start` / `tool_result` / `tool_error` | Tool lifecycle |
+| `quality_update` | Quality diagnostics (coverage, freshness, claims) |
+| `research_tree_update` | Research tree snapshot |
+| `artifact` | Generated artifact (chart, code, table) |
+| `completion` | Final report |
+| `interrupt` | HITL checkpoint (plan review / final review) |
+| `cancelled` | Task cancelled |
+| `error` | Error |
+| `done` | Stream complete |
+
+### Chat SSE
+
+**POST** `/api/chat/sse` — Same schema as research, for chat-mode interactions.
+
+### Session Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sessions` | List sessions |
+| GET | `/api/sessions/{thread_id}` | Get session info |
+| GET | `/api/sessions/{thread_id}/state` | Full state snapshot |
+| GET | `/api/sessions/{thread_id}/evidence` | Evidence artifacts (sources + claims + quality) |
+| POST | `/api/sessions/{thread_id}/continue-research` | Continue research on existing session |
+| POST | `/api/sessions/{thread_id}/resume` | Resume paused session |
+| DELETE | `/api/sessions/{thread_id}` | Delete session |
+
+### Collaboration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/sessions/{thread_id}/share` | Create share link |
+| GET | `/api/share/{share_id}` | Get shared session |
+| POST | `/api/sessions/{thread_id}/comments` | Add comment |
+| GET | `/api/sessions/{thread_id}/comments` | List comments |
+| POST | `/api/sessions/{thread_id}/versions` | Create version snapshot |
+| GET | `/api/sessions/{thread_id}/versions` | List versions |
+
+### HITL Interrupts
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/interrupt/{thread_id}/status` | Check interrupt status |
+| POST | `/api/interrupt/{thread_id}/resume` | Resume (approve/modify/reject/skip) |
+
+### Export
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/export/templates` | List export templates |
+| GET | `/api/export/{thread_id}?format=pdf` | Export report (markdown/html/pdf) |
+
+### Other Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/research/cancel/{thread_id}` | Cancel running task |
+| GET | `/api/tools/registry` | Tool registry stats |
+| GET | `/api/search/providers` | Search provider health |
+| GET | `/api/search/cache/stats` | Search cache stats |
+| GET | `/api/runs/{thread_id}` | Run metrics |
+| GET | `/api/traces/{thread_id}` | Execution traces |
+| POST | `/api/documents/upload` | Upload to RAG |
+| GET | `/api/config/public` | Public runtime config |
+| GET | `/api/memory/status` | Memory backend status |
+| GET | `/metrics` | Prometheus metrics |
+
+---
+
+## Tool Ecosystem
+
+### Search (16 modules)
+
+```
+tools/search/
+├── multi_search.py              # Orchestrator (fallback/parallel/round_robin/best_first)
+├── providers.py                 # Bocha · Serper · SerpAPI · Bing · Google CSE · Exa · Firecrawl
+├── search.py                    # Tavily search
+├── search_enhanced.py           # Enhanced search with snippets
+├── fallback_search.py           # DuckDuckGo fallback
+├── tavily_key_pool.py           # Multi-key rotation on quota exhaustion
+├── reliability.py               # Retry + circuit breaker
+├── academic/
+│   ├── arxiv_provider.py        # arXiv API
+│   ├── pubmed_provider.py       # PubMed/NCBI Entrez
+│   └── semantic_scholar_provider.py
+└── feeds/
+    ├── twitter_provider.py      # Twitter/X API v2
+    ├── reddit_provider.py       # Reddit API (PRAW)
+    └── hackernews_provider.py   # HackerNews
+```
+
+### Sandbox (14 modules via E2B)
+
+Browser session · Browser tools · Files · Shell · Excel/CSV · PowerPoint · Vision/OCR · Image editing · Web search · Web dev · Presentation v2
+
+### Browser (6 modules)
+
+Playwright native automation · Session management · Content extraction · CDP screencast · Browser-use events
+
+### Other Tools
+
+- **automation/**: Computer use · Bash · Task list · Ask human · String replace
+- **code/**: Python code executor
+- **rag/**: Document loader · Embedder · ChromaDB vector store · RAG tool
+- **export/**: Markdown converter · Jinja2 templates (HTML/PDF)
+- **io/**: ASR · TTS · Screenshot service
+- **crawl/**: Playwright crawler · crawl4ai integration
+- **core/**: Tool registry · MCP clients/policy · Memory client · LangChain adapter
+
+---
+
+## Development
+
+### Makefile Targets
+
+```bash
+make setup          # Create venv + install deps
+make setup-full     # + optional deps
+make dev            # Start backend
+make dev-reload     # Backend with hot reload
+make test           # pytest
+make lint           # ruff (changed files)
+make lint-all       # ruff (full repo)
+make format         # ruff formatter
+make secret-scan    # Scan for leaked keys
+make check          # lint + test + secret scan
+make openapi-types  # Regenerate TS types from OpenAPI
+make bench-smoke    # Benchmark smoke test
+make web-install    # pnpm install
+make web-lint       # Frontend lint
+make web-build      # Frontend build
+```
+
+### Testing
+
+```bash
+make test                                    # All tests
+python -m pytest tests/ -v                   # Verbose
+python scripts/smoke_test_api.py             # API smoke test
+python scripts/live_api_smoke.py --ws        # Live API + WebSocket
+python scripts/deep_search_routing_check.py  # DeepSearch routing
+```
+
+### Benchmark
 
 ```bash
 python scripts/benchmark_deep_research.py \
@@ -1088,20 +568,85 @@ python scripts/benchmark_deep_research.py \
 
 - Sample tasks: `eval/benchmarks/sample_tasks.jsonl`
 - Golden baseline: `eval/golden_queries.json`
-- Full benchmark notes: `docs/benchmarks/README.md`
+- Full benchmark docs: [docs/benchmarks/README.md](benchmarks/README.md)
+- Evaluation system: [eval/deep_research_benchmark/README.md](../eval/deep_research_benchmark/README.md)
 
-### Rollback / Troubleshooting
+---
 
-- Unstable deep research flow:
-  - set `DEEPSEARCH_MODE=linear`
-  - or explicitly set `DEEPSEARCH_MODE=tree` for the legacy tree runner
-- Stale results:
-  - enable freshness ranking
-  - reduce `SEARCH_FRESHNESS_HALF_LIFE_DAYS`
-- Noisy search reliability:
-  - pin `SEARCH_STRATEGY=fallback`
-- Citation gate blocks completion too often:
-  - review citation coverage in report output
-  - temporarily lower `CITATION_GATE_MIN_COVERAGE`
-- Cache too sticky during rollout:
-  - reduce `SEARCH_CACHE_TTL_SECONDS` (e.g., 120-300)
+## Deployment
+
+### Docker Compose (recommended)
+
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Services: PostgreSQL 16 (pgvector) · Redis 7 · FastAPI backend · Next.js frontend
+
+### Manual
+
+```bash
+# Backend
+uvicorn main:app --host 0.0.0.0 --port 8001
+
+# Frontend
+pnpm -C web build && pnpm -C web start
+```
+
+### Security Hardening
+
+```bash
+WEAVER_INTERNAL_API_KEY=...               # API key for all /api/* endpoints
+WEAVER_AUTH_USER_HEADER=X-Weaver-User     # User identity header (set by reverse proxy)
+RATE_LIMIT_ENABLED=true                   # HTTP rate limiting
+RATE_LIMIT_GENERAL_PER_MINUTE=60
+RATE_LIMIT_RESEARCH_PER_MINUTE=20
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | FastAPI 0.134 · Uvicorn · Python 3.11+ |
+| **Agent** | LangGraph 1.0+ · LangChain 1.0+ |
+| **LLM** | OpenAI / DeepSeek / Anthropic / Azure / Ollama |
+| **Database** | PostgreSQL 16 (pgvector) · Redis 7 |
+| **Search** | Tavily · Bocha · DuckDuckGo · Serper · Bing · Exa · Google CSE · Firecrawl |
+| **Academic** | arXiv · PubMed · Semantic Scholar |
+| **Sandbox** | E2B Code Interpreter |
+| **Browser** | Playwright 1.47+ |
+| **RAG** | ChromaDB · PyMuPDF · python-docx |
+| **Frontend** | Next.js 14 · React 18 · Tailwind CSS · Shadcn UI · Lucide Icons |
+| **Export** | WeasyPrint (PDF) · Jinja2 · Markdown |
+| **Observability** | Prometheus · Structured logging |
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+
+```bash
+git clone https://github.com/LittleSongxx/Weaver_pro.git
+cd Weaver_pro
+make setup
+make test
+```
+
+Code style: Ruff for linting/formatting · Type hints · Tests for new features.
+
+---
+
+## License
+
+MIT License — see [LICENSE](../LICENSE).
+
+---
+
+<div align="center">
+
+**[⬆ Back to Top](#weaver--ai-deep-research-platform)**
+
+</div>
