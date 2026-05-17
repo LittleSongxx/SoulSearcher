@@ -139,11 +139,24 @@ class ResearchCoordinator:
         )
         quality_gap_count = max(0, int(quality_gap_count or 0))
 
-        # Rule 2: Have sources, no report → synthesize
+        # Rule 2: Have sources, no report → synthesize only if enough sources
+        _min_sources_for_synthesize = max(
+            1, int(self.config.get("min_sources_for_synthesize", 3) or 3)
+        )
         if num_sources > 0 and not has_report:
+            if num_sources >= _min_sources_for_synthesize:
+                return CoordinatorDecision(
+                    action=CoordinatorAction.SYNTHESIZE,
+                    reasoning="已有搜索来源但尚未生成报告，进入综合阶段",
+                    priority_topics=[],
+                )
+            # Too few sources — gather more before synthesizing
             return CoordinatorDecision(
-                action=CoordinatorAction.SYNTHESIZE,
-                reasoning="已有搜索来源但尚未生成报告，进入综合阶段",
+                action=CoordinatorAction.RESEARCH,
+                reasoning=(
+                    f"已有 {num_sources} 个来源但不足 {_min_sources_for_synthesize} 个，"
+                    "继续收集更多来源以提高报告质量"
+                ),
                 priority_topics=[],
             )
 

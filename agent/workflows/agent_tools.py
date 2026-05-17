@@ -7,6 +7,11 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 
 from common.config import settings
+from agent.runtime.sandbox_policy import (
+    daytona_sandbox_enabled,
+    e2b_sandbox_enabled,
+    should_expose_host_bash,
+)
 from tools import execute_python_code, tavily_search
 from tools.automation.ask_human_tool import ask_human
 from tools.automation.bash_tool import safe_bash
@@ -174,9 +179,9 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
 
     # Browser: prefer sandbox browser if explicitly enabled.
     if _enabled(profile, "sandbox_browser", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_browser_tools(thread_id))
-        elif settings.sandbox_mode == "daytona":
+        elif daytona_sandbox_enabled():
             # For daytona mode, rely on daytona tools; skip local sandbox browser
             pass
     elif _enabled(profile, "browser", default=False):
@@ -188,52 +193,52 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
 
     # Sandbox web search: visual search using sandbox browser
     if sandbox_web_search_enabled and not web_search_enabled:
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_web_search_tools(thread_id))
 
     # Sandbox files: file operations in E2B sandbox
     if _enabled(profile, "sandbox_files", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_files_tools(thread_id))
 
     # Sandbox shell: command execution in E2B sandbox
     if _enabled(profile, "sandbox_shell", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_shell_tools(thread_id))
 
     # Sandbox sheets: Excel/spreadsheet generation in E2B sandbox
     if _enabled(profile, "sandbox_sheets", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_sheets_tools(thread_id))
 
     # Sandbox presentation: PowerPoint generation in E2B sandbox
     if _enabled(profile, "sandbox_presentation", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_presentation_tools(thread_id))
 
     # Sandbox vision: Image analysis and OCR in E2B sandbox
     if _enabled(profile, "sandbox_vision", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_vision_tools(thread_id))
 
     # Sandbox image edit: Advanced image editing in E2B sandbox
     if _enabled(profile, "sandbox_image_edit", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_image_edit_tools(thread_id))
 
     # Sandbox web development: scaffold & deploy web apps
     if _enabled(profile, "sandbox_web_dev", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_sandbox_web_dev_tools(thread_id))
 
     # Presentation outline: LLM-based PPT outline generation
     if _enabled(profile, "presentation_outline", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_presentation_outline_tools(thread_id))
 
     # Presentation v2: Enhanced PPT features (themes, transitions)
     if _enabled(profile, "presentation_v2", default=False):
-        if settings.sandbox_mode == "local" and e2b_ready:
+        if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_presentation_v2_tools(thread_id))
 
     if _enabled(profile, "python", default=False):
@@ -258,9 +263,12 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
     if _enabled(profile, "str_replace", default=True):
         tools.append(str_replace)
 
-    # Safe bash (can be combined with sandbox routing in future)
+    # Host bash is opt-in only; remote sandbox is the default shell surface.
     if _enabled(profile, "bash", default=False):
-        tools.append(safe_bash)
+        if should_expose_host_bash():
+            tools.append(safe_bash)
+        else:
+            logger.info("Host bash requested by profile but hidden by sandbox policy")
 
     # Planning tool
     if _enabled(profile, "planning", default=True):
@@ -271,7 +279,7 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
         tools.extend(filter_mcp_tools(get_registered_tools(), mcp_policy))
 
     # Daytona remote sandbox tools (only when mode=daytona)
-    if settings.sandbox_mode == "daytona" and _enabled(
+    if daytona_sandbox_enabled() and _enabled(
         profile, "sandbox_daytona", default=True
     ):
         from tools.sandbox import daytona_create, daytona_stop

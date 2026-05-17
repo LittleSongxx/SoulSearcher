@@ -152,6 +152,56 @@ _chat_model = create_chat_model
 _parse_list_output = parse_list_output
 _format_results = format_search_results
 
+# ---------------------------------------------------------------------------
+# Re-export helpers from deepsearch sub-package.  The canonical definitions
+# now live in agent.workflows.deepsearch.* ; the local copies below are kept
+# only so that existing in-file references continue to work without a
+# mass-rename.  New code should import from the sub-package directly.
+# ---------------------------------------------------------------------------
+from agent.workflows.deepsearch_helpers.config_utils import (  # noqa: E402
+    _auto_mode_prefers_linear,
+    _browser_visualization_enabled,
+    _check_cancel,
+    _configurable_bool,
+    _configurable_float,
+    _configurable_int,
+    _configurable_value,
+    _normalize_deepsearch_mode,
+    _normalize_multi_search_results,
+    _resolve_deepsearch_mode,
+    _resolve_provider_profile,
+    _resolve_search_strategy,
+)
+from agent.workflows.deepsearch_helpers.config_utils import (  # noqa: E402, F811
+    _BROAD_RESEARCH_CUES,
+    _DEEPSEARCH_MODES,
+    _SIMPLE_FACT_PATTERNS,
+)
+from agent.workflows.deepsearch_helpers.token_estimation import (  # noqa: E402
+    _budget_stop_reason,
+    _estimate_tokens_from_results,
+    _estimate_tokens_from_text,
+    _should_skip_expensive_postprocessing,
+)
+from agent.workflows.deepsearch_helpers.text_utils import (  # noqa: E402
+    _canonical_text_url,
+    _inline_text,
+    _is_low_value_evidence_text,
+    _is_short_claim_sentence,
+    _item_snippet,
+    _split_claim_sentences,
+)
+from agent.workflows.deepsearch_helpers.events import (  # noqa: E402
+    _build_feature_trace,
+    _compact_search_results,
+    _emit_event,
+    _event_results_limit,
+    _provider_breakdown,
+    _resolve_event_emitter,
+    _safe_filename,
+    _save_deepsearch_data,
+)
+
 _DEEPSEARCH_MODES = {"tree", "supervisor_workers"}
 _SIMPLE_FACT_PATTERNS = (
     r"\bwhat\s+is\b",
@@ -402,9 +452,34 @@ def _cache_query_key(
 
 
 def _estimate_tokens_from_text(text: str) -> int:
+    """Estimate token count for mixed CJK/Latin text.
+
+    CJK characters typically map to 1-2 tokens each; Latin/ASCII runs
+    average ~4 characters per token.  The simple ``len // 4`` heuristic
+    severely underestimates token counts for Chinese/Japanese/Korean text.
+    """
     if not text:
         return 0
-    return max(1, len(str(text)) // 4)
+    s = str(text)
+    cjk = 0
+    other = 0
+    for ch in s:
+        cp = ord(ch)
+        if (
+            0x4E00 <= cp <= 0x9FFF      # CJK Unified Ideographs
+            or 0x3400 <= cp <= 0x4DBF    # CJK Extension A
+            or 0xF900 <= cp <= 0xFAFF    # CJK Compatibility Ideographs
+            or 0x3000 <= cp <= 0x303F    # CJK Symbols and Punctuation
+            or 0xFF00 <= cp <= 0xFFEF    # Fullwidth Forms
+            or 0xAC00 <= cp <= 0xD7AF    # Hangul Syllables
+            or 0x3040 <= cp <= 0x309F    # Hiragana
+            or 0x30A0 <= cp <= 0x30FF    # Katakana
+        ):
+            cjk += 1
+        else:
+            other += 1
+    # CJK chars ≈ 1.5 tokens each; ASCII ≈ 0.25 tokens per char
+    return max(1, int(cjk * 1.5 + other * 0.25))
 
 
 def _estimate_tokens_from_results(results: list[dict[str, Any]]) -> int:
@@ -497,6 +572,36 @@ def _search_query(
     except Exception as e:
         logger.warning(f"[deepsearch] tavily fallback failed: {e}")
         return []
+
+
+async def _search_query_async(
+    query: str,
+    max_results: int,
+    config: dict[str, Any],
+    provider_profile: Optional[list[str]] = None,
+) -> list[dict[str, Any]]:
+    """Async wrapper for _search_query that offloads to a thread.
+
+    Use this from async contexts (e.g. async LangGraph nodes) to avoid
+    blocking the event loop during network-bound search calls.
+    """
+    return await asyncio.to_thread(
+        _search_query, query, max_results, config, provider_profile
+    )
+
+
+async def _parallel_worker_dispatch_async(
+    tasks: list,
+    collect_fn,
+    max_workers: int = 4,
+) -> list:
+    """Dispatch worker tasks in parallel via asyncio instead of ThreadPoolExecutor.
+
+    Each task is run in a separate thread (via ``asyncio.to_thread``) to avoid
+    blocking the event loop while preserving the existing synchronous worker logic.
+    """
+    coros = [asyncio.to_thread(collect_fn, task) for task in tasks]
+    return await asyncio.gather(*coros)
 
 
 def _selected_model(config: dict[str, Any], fallback: str) -> str:
@@ -3939,42 +4044,33 @@ def run_deepsearch_tree(
 
         # Run tree exploration (use async if parallel_branches > 0)
         if parallel_branches > 0:
-            # Use async parallel exploration
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If already in async context, use run_in_executor
-                    import concurrent.futures
+            # Use async parallel exploration.  We may be called from a sync
+            # LangGraph node while an event loop is running (uvicorn), or from
+            # a plain sync context (tests / CLI).  Handle both.
+            async def _run_async_explorer():
+                return await explorer.run_async(topic, state, **explore_kwargs)
 
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(
-                            lambda: asyncio.run(
-                                explorer.run_async(topic, state, **explore_kwargs)
-                            )
-                        )
-                        tree = future.result()
+            try:
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+
+                if loop is not None:
+                    # Inside a running event loop (e.g. uvicorn) — offload to a
+                    # new thread that creates its own loop, avoiding the
+                    # "cannot call asyncio.run() from a running loop" error.
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        tree = pool.submit(asyncio.run, _run_async_explorer()).result()
                 else:
-                    tree = loop.run_until_complete(
-                        explorer.run_async(topic, state, **explore_kwargs)
-                    )
+                    tree = asyncio.run(_run_async_explorer())
                 logger.info("[deepsearch-tree] Used async parallel exploration")
             except TreeExplorationBudgetExceeded as e:
                 budget_stop_reason = (
                     budget_stop_reason or getattr(e, "reason", "") or str(e)
                 )
                 tree = getattr(explorer, "tree", None)
-            except RuntimeError:
-                # No event loop, create one
-                try:
-                    tree = asyncio.run(
-                        explorer.run_async(topic, state, **explore_kwargs)
-                    )
-                    logger.info("[deepsearch-tree] Used async parallel exploration")
-                except TreeExplorationBudgetExceeded as e:
-                    budget_stop_reason = (
-                        budget_stop_reason or getattr(e, "reason", "") or str(e)
-                    )
-                    tree = getattr(explorer, "tree", None)
         else:
             try:
                 tree = explorer.run(topic, state, **explore_kwargs)
@@ -4541,10 +4637,25 @@ def run_deepsearch_tree(
     except Exception as e:
         logger.error(f"[deepsearch-tree] Failed: {e}", exc_info=True)
         elapsed = max(0.0, time.time() - start_ts)
-        should_fallback = searches_used == 0 and not search_runs and elapsed < 5.0
+        fallback_depth = int(state.get("_deepsearch_fallback_depth", 0) or 0)
+        should_fallback = (
+            searches_used == 0
+            and not search_runs
+            and elapsed < 5.0
+            and fallback_depth < 1
+        )
         if should_fallback:
             logger.info("[deepsearch-tree] Falling back to linear deepsearch...")
-            return run_deepsearch_optimized(state, config)
+            state["_deepsearch_fallback_depth"] = fallback_depth + 1
+            try:
+                return run_deepsearch_optimized(state, config)
+            except Exception as fallback_exc:
+                logger.error(
+                    "[deepsearch-tree] Fallback also failed: %s",
+                    fallback_exc,
+                    exc_info=True,
+                )
+                # Fall through to the partial-result error handling below
 
         error_message = str(e).strip() or e.__class__.__name__
         if not budget_stop_reason:
@@ -6611,7 +6722,43 @@ def run_deepsearch_supervisor_workers(
                 "strategy_fallback",
                 fallback_artifact,
             )
-        fallback_result = run_deepsearch_optimized(state, config)
+        # Guard: prevent cascading fallback if already inside a fallback
+        fallback_depth = int(state.get("_deepsearch_fallback_depth", 0) or 0)
+        if fallback_depth >= 1:
+            logger.warning(
+                "[deepsearch-supervisor] Already inside a fallback (depth=%d), "
+                "returning error instead of recursive fallback",
+                fallback_depth,
+            )
+            return {
+                "final_report": f"深度研究执行失败: {exc}",
+                "is_complete": True,
+                "errors": [str(exc), "fallback also failed or skipped"],
+                "deepsearch_artifacts": {
+                    "mode": "supervisor_workers",
+                    "fallback": fallback_artifact,
+                    "fallback_skipped_reason": "max_fallback_depth_reached",
+                },
+            }
+        state["_deepsearch_fallback_depth"] = fallback_depth + 1
+        try:
+            fallback_result = run_deepsearch_optimized(state, config)
+        except Exception as fallback_exc:
+            logger.error(
+                "[deepsearch-supervisor] Fallback also failed: %s",
+                fallback_exc,
+                exc_info=True,
+            )
+            return {
+                "final_report": f"深度研究执行失败: {exc}",
+                "is_complete": True,
+                "errors": [str(exc), f"fallback error: {fallback_exc}"],
+                "deepsearch_artifacts": {
+                    "mode": "supervisor_workers",
+                    "fallback": fallback_artifact,
+                    "fallback_error": str(fallback_exc),
+                },
+            }
         if isinstance(fallback_result, dict):
             artifacts = fallback_result.get("deepsearch_artifacts")
             if not isinstance(artifacts, dict):

@@ -14,6 +14,7 @@ from typing import Any
 __all__ = [
     "AgentProcessorConfig",
     "AgentState",
+    "AgentStateV2",
     "ContextManager",
     "Event",
     "EventEmitter",
@@ -24,6 +25,7 @@ __all__ = [
     "ToolEventType",
     "create_checkpointer",
     "create_research_graph",
+    "create_unified_research_graph",
     "enforce_tool_call_limit",
     "event_stream_generator",
     "get_context_manager",
@@ -37,8 +39,10 @@ __all__ = [
 _SYMBOL_TO_MODULE: dict[str, str] = {
     # Graph/state
     "create_research_graph": "agent.core.graph",
+    "create_unified_research_graph": "agent.core.graph_v2",
     "create_checkpointer": "agent.core.graph",
     "AgentState": "agent.core.state",
+    "AgentStateV2": "agent.core.state_v2",
     "QueryState": "agent.core.state",
     "ResearchPlan": "agent.core.state",
     # Events / streaming

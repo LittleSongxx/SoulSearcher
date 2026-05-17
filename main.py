@@ -372,9 +372,19 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Rate Limiting Middleware (in-memory token bucket)
 # ---------------------------------------------------------------------------
-_rate_limit_buckets: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+from common.rate_limiter import RateLimiter
+from common.stream_registry import StreamRegistry
+
+_rate_limiter = RateLimiter(
+    general_per_minute=int(getattr(settings, "rate_limit_general_per_minute", 60)),
+    research_per_minute=int(getattr(settings, "rate_limit_research_per_minute", 20)),
+    window_seconds=int(getattr(settings, "rate_limit_window_seconds", 60)),
+    max_buckets=int(getattr(settings, "rate_limit_max_buckets", 10_000) or 10_000),
+)
+_stream_registry = StreamRegistry()
 _RATE_LIMIT_EXEMPT = {"/", "/health", "/metrics", "/docs", "/openapi.json", "/redoc"}
-_rate_limit_cleanup_task: asyncio.Task | None = None
+# Legacy aliases kept for backwards compatibility within this file
+_rate_limit_buckets: "OrderedDict[str, dict[str, Any]]" = _rate_limiter._buckets
 
 
 def _get_client_ip(request: Request) -> str:
@@ -460,9 +470,17 @@ async def _cleanup_rate_limit_buckets():
 # Initialize agent graphs with short-term memory (checkpointer)
 if settings.database_url:
     checkpointer = create_checkpointer(settings.database_url)
+    _checkpointer_type = "postgres"
 else:
     # Fallback to in-memory checkpointer for short-term memory
     checkpointer = MemorySaver()
+    _checkpointer_type = "memory"
+    logger.warning(
+        "\n"
+        "  ⚠️  Using in-memory checkpointer (MemorySaver). "
+        "All session state will be LOST on process restart.\n"
+        "  → Set DATABASE_URL in .env to enable persistent checkpointing.\n"
+    )
 
 
 def _init_store():
@@ -503,11 +521,28 @@ def _init_store():
 # Long-term memory store (configurable via .env)
 store = _init_store()
 
-research_graph = create_research_graph(
-    checkpointer=checkpointer,
-    interrupt_before=settings.interrupt_nodes_list,
-    store=store,
+# V2 graph toggle — set WEAVER_V2=true in .env or env var to enable the
+# unified deep research graph (3-project integrated version).
+_use_v2_graph = (
+    os.getenv("WEAVER_V2", "").strip().lower()
+    in {"1", "true", "yes", "y", "on"}
 )
+
+if _use_v2_graph:
+    from agent.core.graph_v2 import create_unified_research_graph
+
+    research_graph = create_unified_research_graph(
+        checkpointer=checkpointer,
+        interrupt_before=settings.interrupt_nodes_list,
+        store=store,
+    )
+    logger.info("Using V2 unified research graph (WEAVER_V2=true)")
+else:
+    research_graph = create_research_graph(
+        checkpointer=checkpointer,
+        interrupt_before=settings.interrupt_nodes_list,
+        store=store,
+    )
 mcp_thread_id = (
     "default"  # thread id for MCP event emission; per-request tools will override
 )
@@ -555,14 +590,14 @@ async def startup_event():
         logger.warning(f"Proxy env normalization failed: {e}")
 
     # Ensure the rate-limit bucket cleanup task is running (lifespan-managed).
-    global _rate_limit_cleanup_task
-    if getattr(settings, "rate_limit_enabled_effective", False) and (
-        _rate_limit_cleanup_task is None or _rate_limit_cleanup_task.done()
-    ):
-        _rate_limit_cleanup_task = asyncio.create_task(
-            _cleanup_rate_limit_buckets(),
-            name="weaver-rate-limit-cleanup",
-        )
+    if getattr(settings, "rate_limit_enabled_effective", False):
+        await _rate_limiter.start_cleanup_loop(interval=300.0)
+
+    # Validate critical configuration and warn early about misconfigurations.
+    from common.config import validate_critical_config
+    config_warnings = validate_critical_config(settings)
+    for cw in config_warnings:
+        logger.warning(f"[config] {cw}")
 
     # Log configuration
     logger.info(f"Environment: {'DEBUG' if settings.debug else 'PRODUCTION'}")
@@ -627,6 +662,23 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Agents store init failed: {e}", exc_info=settings.debug)
 
+    # Start IM channel service (Feishu/Lark, etc.)
+    try:
+        if getattr(settings, "channels_enabled", False):
+            from channels.service import start_channel_service
+            await start_channel_service()
+            logger.info("Channel service started")
+    except Exception as e:
+        logger.warning(f"Channel service startup failed: {e}", exc_info=settings.debug)
+
+    # Prime skills cache
+    try:
+        from agent.skills.storage import get_skill_storage
+        get_skill_storage().load_skills(enabled_only=True)
+        logger.info("Skills cache primed")
+    except Exception as e:
+        logger.warning(f"Skills cache priming failed: {e}", exc_info=settings.debug)
+
     logger.info("=" * 80)
     logger.info("Weaver Research Agent Ready")
     logger.info("=" * 80)
@@ -638,16 +690,25 @@ async def shutdown_event():
     logger.info("Weaver Research Agent Shutting Down...")
     logger.info("=" * 80)
 
+    # Flush memory update queue
+    try:
+        from agent.runtime.memory.queue import get_memory_queue
+        get_memory_queue().flush()
+        logger.info("Memory queue flushed")
+    except Exception as e:
+        logger.debug(f"Memory queue flush skipped: {e}")
+
+    # Stop channel service
+    try:
+        from channels.service import stop_channel_service
+        await stop_channel_service()
+        logger.info("Channel service stopped")
+    except Exception as e:
+        logger.debug(f"Channel service stop skipped: {e}")
+
     # Stop lifespan-managed background tasks.
-    global _rate_limit_cleanup_task
-    cleanup_task = _rate_limit_cleanup_task
-    if cleanup_task and not cleanup_task.done():
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except asyncio.CancelledError:
-            pass
-    _rate_limit_cleanup_task = None
+    await _rate_limiter.stop_cleanup_loop()
+    _stream_registry.cancel_all()
 
     try:
         logger.info("Closing MCP tools...")
@@ -1168,8 +1229,9 @@ class CancelRequest(BaseModel):
     reason: Optional[str] = "User requested cancellation"
 
 
-# Store active streaming tasks (legacy; cancellation is primarily token-based)
-active_streams: dict[str, asyncio.Task] = {}
+# Active streaming tasks managed via StreamRegistry (see common/stream_registry.py)
+# Legacy alias kept for any code that references active_streams directly.
+active_streams = _stream_registry._tasks
 
 
 def _serialize_interrupts(interrupts: Any) -> list[Any]:
@@ -1327,6 +1389,8 @@ async def health():
     return {
         "status": "healthy",
         "database": "configured" if settings.database_url else "not configured",
+        "checkpointer_type": _checkpointer_type,
+        "persistence_mode": "persistent" if _checkpointer_type != "memory" else "ephemeral",
         "version": app.version,
         "uptime_seconds": time.monotonic() - APP_STARTED_AT,
         "timestamp": datetime.now().isoformat(),
@@ -1545,6 +1609,7 @@ def _should_emit_main_text_for_node(node_name: str) -> bool:
     allow_tokens = (
         "writer",
         "direct_answer",
+        "final_report",
         "agent",
         "reviser",
     )
@@ -1570,6 +1635,9 @@ def _should_emit_thinking_summary_for_node(node_name: str) -> bool:
         "web_plan",
         "refine_plan",
         "clarify",
+        "research_brief",
+        "supervisor",
+        "classify",
     )
     return any(token in name for token in allow)
 
@@ -1621,11 +1689,41 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
             if use_zh
             else "I'll check if any clarification is needed so we don't go off-track."
         )
+    if "research_brief" in name:
+        return (
+            "我在将你的问题转化为结构化的研究概要。"
+            if use_zh
+            else "I'm turning your question into a structured research brief."
+        )
+    if "classify_complexity" in name:
+        return (
+            "我在分析任务的复杂度以选择最优执行路径。"
+            if use_zh
+            else "I'm analyzing task complexity to select the best execution strategy."
+        )
+    if "supervisor" in name:
+        return (
+            "研究主管正在制定研究策略并协调子研究员。"
+            if use_zh
+            else "The research supervisor is planning strategy and coordinating sub-researchers."
+        )
     if "planner" in name or "web_plan" in name or "refine_plan" in name:
         return (
             "我会先拆解问题并生成一组检索关键词。"
             if use_zh
             else "I'll break the question down and generate targeted search queries."
+        )
+    if "researcher" in name and "research_supervisor" not in name:
+        return (
+            "子研究员正在搜索并收集相关来源的信息。"
+            if use_zh
+            else "A sub-researcher is searching and gathering information from sources."
+        )
+    if "compress" in name:
+        return (
+            "我会去重并压缩信息，保留最相关证据。"
+            if use_zh
+            else "I'll deduplicate and compress sources, keeping the most relevant evidence."
         )
     if "perform_parallel_search" in name or (
         ("search" in name) and "research" not in name
@@ -1647,7 +1745,7 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
             if use_zh
             else "I'll deduplicate and compress sources, keeping the most relevant evidence."
         )
-    if "writer" in name:
+    if "final_report" in name or "writer" in name:
         return (
             "我会把证据整理成结构化的最终回答。"
             if use_zh
@@ -1937,34 +2035,48 @@ async def stream_agent_events(
         )
 
         # Initialize state with cancellation support
-        initial_state: AgentState = {
-            "input": input_text,
-            "images": images,
-            "needs_clarification": False,
-            "tool_approved": False,
-            "pending_tool_calls": [],
-            "user_id": user_id,
-            "messages": [],
-            "research_plan": [],
-            "current_step": 0,
-            "scraped_content": [],
-            "code_results": [],
-            "final_report": "",
-            "draft_report": "",
-            "evaluation": "",
-            "verdict": "",
-            "route": "",
-            "revision_count": 0,
-            "max_revisions": settings.max_revisions,
-            "tool_call_count": 0,
-            "is_complete": False,
-            "errors": [],
-            # Cancellation control fields
-            "cancel_token_id": thread_id,
-            "is_cancelled": False,
-        }
-        if isinstance(research_brief, dict) and research_brief:
-            initial_state["research_brief"] = research_brief
+        if _use_v2_graph:
+            from agent.core.state_v2 import build_initial_state_v2
+
+            initial_state = build_initial_state_v2(
+                input_text=input_text,
+                user_id=user_id,
+                images=images,
+                research_brief=research_brief if isinstance(research_brief, dict) else None,
+                messages=[],
+            )
+            # Add cancellation support fields
+            initial_state["cancel_token_id"] = thread_id
+            initial_state["is_cancelled"] = False
+        else:
+            initial_state: AgentState = {
+                "input": input_text,
+                "images": images,
+                "needs_clarification": False,
+                "tool_approved": False,
+                "pending_tool_calls": [],
+                "user_id": user_id,
+                "messages": [],
+                "research_plan": [],
+                "current_step": 0,
+                "scraped_content": [],
+                "code_results": [],
+                "final_report": "",
+                "draft_report": "",
+                "evaluation": "",
+                "verdict": "",
+                "route": "",
+                "revision_count": 0,
+                "max_revisions": settings.max_revisions,
+                "tool_call_count": 0,
+                "is_complete": False,
+                "errors": [],
+                # Cancellation control fields
+                "cancel_token_id": thread_id,
+                "is_cancelled": False,
+            }
+            if isinstance(research_brief, dict) and research_brief:
+                initial_state["research_brief"] = research_brief
 
         # Load long-term memories (store) and Mem0 (optional) and inject deep prompt if needed
         messages: list[Any] = []
@@ -2022,19 +2134,21 @@ async def stream_agent_events(
         config["configurable"].update(
             _safe_research_deepsearch_config(deepsearch_config or {})
         )
-        try:
-            brief = build_research_brief(initial_state, config)
-            source_routing = build_source_routing_policy(
-                brief=brief,
-                config=config,
-                state=initial_state,
-            )
-            brief.source_routing = source_routing
-            initial_state["research_brief"] = brief.to_dict()
-            initial_state["source_routing"] = source_routing
-            config["configurable"]["source_routing"] = source_routing
-        except Exception as e:
-            logger.debug(f"Failed to build research brief/source routing: {e}")
+        # V2 graph handles research brief and source routing internally
+        if not _use_v2_graph:
+            try:
+                brief = build_research_brief(initial_state, config)
+                source_routing = build_source_routing_policy(
+                    brief=brief,
+                    config=config,
+                    state=initial_state,
+                )
+                brief.source_routing = source_routing
+                initial_state["research_brief"] = brief.to_dict()
+                initial_state["source_routing"] = source_routing
+                config["configurable"]["source_routing"] = source_routing
+            except Exception as e:
+                logger.debug(f"Failed to build research brief/source routing: {e}")
 
         async def _drain_pending_tool_events() -> None:
             while not event_queue.empty():
@@ -2178,6 +2292,18 @@ async def stream_agent_events(
                             "step": "clarifying",
                         },
                     )
+                elif "research_brief" in node_name:
+                    logger.debug(f"  Research brief node started | Thread: {thread_id}")
+                    yield await format_stream_event(
+                        "status",
+                        {"text": "Drafting research brief...", "step": "planning"},
+                    )
+                elif "classify_complexity" in node_name:
+                    logger.debug(f"  Complexity classifier started | Thread: {thread_id}")
+                    yield await format_stream_event(
+                        "status",
+                        {"text": "Analyzing task complexity...", "step": "planning"},
+                    )
                 elif "planner" in node_name:
                     logger.debug(f"  Planning node started | Thread: {thread_id}")
                     yield await format_stream_event(
@@ -2195,13 +2321,34 @@ async def stream_agent_events(
                         "status",
                         {"text": text, "step": "deep_research"},
                     )
+                elif "supervisor" in node_name:
+                    logger.debug(f"  Supervisor node started | Thread: {thread_id}")
+                    yield await format_stream_event(
+                        "status",
+                        {
+                            "text": "Orchestrating research strategy...",
+                            "step": "supervisor",
+                        },
+                    )
+                elif "researcher" in node_name and "research_supervisor" not in node_name:
+                    logger.debug(f"  Researcher node started | Thread: {thread_id}")
+                    yield await format_stream_event(
+                        "status",
+                        {"text": "Conducting research...", "step": "researching"},
+                    )
+                elif "compress_research" in node_name:
+                    logger.debug(f"  Compression node started | Thread: {thread_id}")
+                    yield await format_stream_event(
+                        "status",
+                        {"text": "Compressing research findings...", "step": "compressing"},
+                    )
                 elif "perform_parallel_search" in node_name or "search" in node_name:
                     logger.debug(f"  Search node started | Thread: {thread_id}")
                     yield await format_stream_event(
                         "status",
                         {"text": "Conducting research...", "step": "researching"},
                     )
-                elif "writer" in node_name:
+                elif "final_report" in node_name or "writer" in node_name:
                     logger.debug(f"  Writer node started | Thread: {thread_id}")
                     yield await format_stream_event(
                         "status",
@@ -2256,8 +2403,15 @@ async def stream_agent_events(
                             pass
 
                     # Check for completion and final report artifact
-                    if output.get("is_complete"):
-                        final_report = output.get("final_report", "")
+                    # V1: checks is_complete flag; V2: checks final_report on graph_end
+                    is_graph_complete = (
+                        output.get("is_complete") or
+                        event_type == "on_graph_end"
+                    )
+                    final_report = output.get("final_report", "")
+                    report_format = output.get("report_format", "markdown")
+
+                    if is_graph_complete and final_report:
                         if final_report:
                             try:
                                 candidates: list[dict[str, Any]] = []
@@ -2277,17 +2431,30 @@ async def stream_agent_events(
                                 pass
 
                             yield await format_stream_event(
-                                "completion", {"content": final_report}
+                                "completion",
+                                {
+                                    "content": final_report,
+                                    "format": report_format,
+                                },
                             )
 
-                            # Also emit as artifact
+                            # Emit as artifact with format-aware type
+                            artifact_type = (
+                                "html-report" if report_format == "html" else "report"
+                            )
+                            artifact_title = (
+                                "Research Report (HTML)"
+                                if report_format == "html"
+                                else "Research Report"
+                            )
                             yield await format_stream_event(
                                 "artifact",
                                 {
                                     "id": f"report_{datetime.now().timestamp()}",
-                                    "type": "report",
-                                    "title": "Research Report",
+                                    "type": artifact_type,
+                                    "title": artifact_title,
                                     "content": final_report,
+                                    "format": report_format,
                                 },
                             )
                             # Store memory for future sessions
@@ -2913,6 +3080,334 @@ async def memory_status():
     }
 
 
+# ── DeerFlow-aligned: Channels API ──
+
+class ChannelStatusResponse(BaseModel):
+    service_running: bool
+    channels: dict[str, Any] = {}
+
+
+class ChannelRestartResponse(BaseModel):
+    success: bool
+    message: str
+
+
+@app.get("/api/channels", response_model=ChannelStatusResponse)
+async def channels_status():
+    """Get the status of all IM channels."""
+    try:
+        from channels.service import get_channel_service
+        svc = get_channel_service()
+        if svc is None:
+            return ChannelStatusResponse(service_running=False, channels={})
+        status = svc.get_status()
+        return ChannelStatusResponse(**status)
+    except Exception:
+        return ChannelStatusResponse(service_running=False, channels={})
+
+
+@app.post("/api/channels/{name}/restart", response_model=ChannelRestartResponse)
+async def channels_restart(name: str):
+    """Restart a specific IM channel."""
+    try:
+        from channels.service import get_channel_service
+        svc = get_channel_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="Channel service not running")
+        success = await svc.restart_channel(name)
+        if success:
+            return ChannelRestartResponse(success=True, message=f"Channel {name} restarted")
+        raise HTTPException(status_code=404, detail=f"Channel {name} not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── DeerFlow-aligned: Skills API ──
+
+class SkillListResponse(BaseModel):
+    skills: list[dict[str, Any]]
+
+
+class SkillDetailResponse(BaseModel):
+    name: str
+    description: str
+    category: str
+    enabled: bool
+    allowed_tools: list[str] | None = None
+    license: str | None = None
+    path: str
+    container_path: str
+
+
+class SkillInstallResponse(BaseModel):
+    success: bool
+    skill_name: str
+    message: str
+
+
+class SkillHistoryResponse(BaseModel):
+    name: str
+    history: list[dict[str, Any]]
+
+
+@app.get("/api/skills", response_model=SkillListResponse)
+async def list_skills(enabled_only: bool = False):
+    """List all available skills (public and custom)."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        skills = storage.load_skills(enabled_only=enabled_only)
+        return {
+            "skills": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "category": s.category.value,
+                    "enabled": s.enabled,
+                    "allowed_tools": s.allowed_tools,
+                    "license": s.license,
+                    "path": s.skill_path,
+                }
+                for s in skills
+            ]
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/skills/{name}", response_model=SkillDetailResponse)
+async def get_skill(name: str):
+    """Get details for a specific skill, including container path info."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        skills = storage.load_skills()
+        for s in skills:
+            if s.name == name:
+                return {
+                    "name": s.name,
+                    "description": s.description,
+                    "category": s.category.value,
+                    "enabled": s.enabled,
+                    "allowed_tools": s.allowed_tools,
+                    "license": s.license,
+                    "path": s.skill_path,
+                    "container_path": s.get_container_file_path(storage.get_container_root()),
+                }
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.put("/api/skills/{name}")
+async def update_skill(name: str, enabled: bool = True):
+    """Enable or disable a skill by updating extensions_config.json."""
+    try:
+        from common.extensions_config import ExtensionsConfig, reload_extensions_config
+        config = ExtensionsConfig.from_file()
+        config.skills[name] = {"enabled": enabled}
+        # Write updated config back
+        import json
+        config_path = ExtensionsConfig.resolve_config_path()
+        if config_path:
+            config_path.write_text(json.dumps(config.model_dump(by_alias=True), indent=2, ensure_ascii=False), encoding="utf-8")
+        reload_extensions_config()
+        from agent.skills.prompt import clear_skills_prompt_cache
+        clear_skills_prompt_cache()
+        return {"name": name, "enabled": enabled}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/skills/install", response_model=SkillInstallResponse)
+async def install_skill(file: UploadFile = None):
+    """Install a skill from a .skill ZIP archive."""
+    if not file or not file.filename or not file.filename.endswith(".skill"):
+        raise HTTPException(status_code=400, detail="A .skill file is required")
+    try:
+        import tempfile
+        from pathlib import Path
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        with tempfile.NamedTemporaryFile(suffix=".skill", delete=False) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+        try:
+            result = await storage.ainstall_skill_from_archive(str(tmp_path))
+        finally:
+            tmp_path.unlink(missing_ok=True)
+        from agent.skills.prompt import clear_skills_prompt_cache
+        clear_skills_prompt_cache()
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/skills/custom")
+async def list_custom_skills():
+    """List only custom (user-authored) skills."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        skills = storage.load_skills(enabled_only=False)
+        custom = [s for s in skills if s.category.value == "custom"]
+        return {
+            "skills": [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "enabled": s.enabled,
+                    "allowed_tools": s.allowed_tools,
+                    "license": s.license,
+                    "path": s.skill_path,
+                }
+                for s in custom
+            ]
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/skills/custom/{name}")
+async def get_custom_skill(name: str):
+    """Get the full SKILL.md content for a custom skill."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        if not storage.custom_skill_exists(name):
+            raise HTTPException(status_code=404, detail=f"Custom skill '{name}' not found")
+        content = storage.read_custom_skill(name)
+        return {"name": name, "content": content}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.put("/api/skills/custom/{name}")
+async def edit_custom_skill(name: str, content: str):
+    """Edit a custom skill's SKILL.md content."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        storage.ensure_custom_skill_is_editable(name)
+        storage.validate_skill_markdown_content(name, content)
+        from agent.skills.security_scanner import scan_skill_content
+        result = await scan_skill_content(content, executable=False, location=f"{name}/SKILL.md")
+        if result.decision == "block":
+            raise HTTPException(status_code=400, detail=f"Security scan blocked: {result.reason}")
+        storage.write_custom_skill(name, "SKILL.md", content)
+        from agent.skills.prompt import clear_skills_prompt_cache
+        clear_skills_prompt_cache()
+        return {"name": name, "message": f"Custom skill '{name}' updated"}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/skills/custom/{name}")
+async def delete_custom_skill(name: str):
+    """Delete a custom skill."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        storage.delete_custom_skill(name)
+        from agent.skills.prompt import clear_skills_prompt_cache
+        clear_skills_prompt_cache()
+        return {"name": name, "message": f"Custom skill '{name}' deleted"}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/skills/custom/{name}/history", response_model=SkillHistoryResponse)
+async def get_skill_history(name: str):
+    """Get the edit history for a custom skill."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        history = storage.read_history(name)
+        return {"name": name, "history": history}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/skills/custom/{name}/rollback")
+async def rollback_skill(name: str, version: int = 0):
+    """Rollback a custom skill to a previous version in its history."""
+    try:
+        from agent.skills.storage import get_or_new_skill_storage
+        storage = get_or_new_skill_storage()
+        history = storage.read_history(name)
+        if not history:
+            raise HTTPException(status_code=404, detail=f"No history found for skill '{name}'")
+        if version < 0 or version >= len(history):
+            raise HTTPException(status_code=400, detail=f"Invalid version index {version}. Valid range: 0-{len(history)-1}")
+        entry = history[version]
+        prev = entry.get("prev_content")
+        if not prev:
+            raise HTTPException(status_code=400, detail="Selected version has no previous content to restore")
+        storage.write_custom_skill(name, "SKILL.md", prev)
+        from agent.skills.prompt import clear_skills_prompt_cache
+        clear_skills_prompt_cache()
+        return {"name": name, "message": f"Rolled back to version {version}", "version": version}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── DeerFlow-aligned: Memory API ──
+
+class MemoryDataResponse(BaseModel):
+    user: dict[str, Any] = {}
+    history: dict[str, Any] = {}
+    facts: list[dict[str, Any]] = []
+    fact_count: int = 0
+
+
+@app.get("/api/memory", response_model=MemoryDataResponse)
+async def get_memory():
+    """Get current memory data for the effective user."""
+    try:
+        from agent.runtime.memory.storage import get_memory_storage
+        from agent.runtime.user_context import get_effective_user_id
+        data = get_memory_storage().load(user_id=get_effective_user_id())
+        return {
+            "user": data.get("user", {}),
+            "history": data.get("history", {}),
+            "facts": data.get("facts", []),
+            "fact_count": len(data.get("facts", [])),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/memory/reload")
+async def reload_memory():
+    """Force reload memory from disk."""
+    try:
+        from agent.runtime.memory.storage import get_memory_storage, reset_memory_storage
+        reset_memory_storage()
+        data = get_memory_storage().load()
+        return {"fact_count": len(data.get("facts", [])), "status": "reloaded"}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.get("/api/config/public", response_model=PublicConfigResponse)
 async def public_config():
     """
@@ -3037,6 +3532,7 @@ async def public_config():
             "sandbox_mode": settings.sandbox_mode,
             "prometheus_enabled": bool(settings.enable_prometheus),
             "tracing_enabled": bool(settings.enable_tracing),
+            "persistence_mode": "persistent" if _checkpointer_type != "memory" else "ephemeral",
         },
         "streaming": {
             "research": {"protocol": "sse", "endpoint": "/api/research/sse"},

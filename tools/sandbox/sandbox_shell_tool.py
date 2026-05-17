@@ -18,12 +18,15 @@ Usage:
 from __future__ import annotations
 
 import logging
+import shlex
 import time
 import uuid
 from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from agent.runtime.sandbox_policy import assess_shell_command, audit
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +152,19 @@ class SandboxExecuteCommandTool(_SandboxShellBaseTool):
         )
 
         try:
+            allowed, reason = assess_shell_command(command)
+            audit(
+                self.name,
+                "execute_command",
+                self.thread_id,
+                allowed,
+                reason,
+                background=background,
+                folder=folder,
+            )
+            if not allowed:
+                return {"success": False, "error": reason}
+
             sandbox = self._get_sandbox()
             if not sandbox:
                 raise RuntimeError("Sandbox not initialized. Start sandbox browser first.")
@@ -156,8 +172,11 @@ class SandboxExecuteCommandTool(_SandboxShellBaseTool):
             # Build working directory
             cwd = self.workspace_path
             if folder:
-                folder = folder.strip("/")
+                folder = folder.strip().strip("/")
+                if ".." in folder.split("/"):
+                    return {"success": False, "error": "folder path cannot contain '..'"}
                 cwd = f"{self.workspace_path}/{folder}"
+            quoted_cwd = shlex.quote(cwd)
 
             if background:
                 # Non-blocking execution
@@ -168,9 +187,9 @@ class SandboxExecuteCommandTool(_SandboxShellBaseTool):
                 pid_file = f"/tmp/cmd_{process_id}.pid"
 
                 bg_command = (
-                    f"cd {cwd} && "
-                    f"nohup sh -c '{command}' > {output_file} 2>&1 & "
-                    f"echo $! > {pid_file}"
+                    f"cd {quoted_cwd} && "
+                    f"nohup sh -c {shlex.quote(command)} > {shlex.quote(output_file)} 2>&1 & "
+                    f"echo $! > {shlex.quote(pid_file)}"
                 )
 
                 proc = sandbox.process.start(bg_command)
@@ -198,7 +217,7 @@ class SandboxExecuteCommandTool(_SandboxShellBaseTool):
 
             else:
                 # Blocking execution
-                full_command = f"cd {cwd} && {command}"
+                full_command = f"cd {quoted_cwd} && {command}"
 
                 proc = sandbox.process.start(full_command)
 

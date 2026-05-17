@@ -1,0 +1,68 @@
+{
+  "mcpServers": {},
+  "skills": {
+    "academic-paper-review": {
+      "enabled": true
+    },
+    "bootstrap": {
+      "enabled": true
+    },
+    "chart-visualization": {
+      "enabled": true
+    },
+    "claude-to-deerflow": {
+      "enabled": true
+    },
+    "code-documentation": {
+      "enabled": true
+    },
+    "consulting-analysis": {
+      "enabled": true
+    },
+    "data-analysis": {
+      "enabled": true
+    },
+    "deep-research": {
+      "enabled": true
+    },
+    "find-skills": {
+      "enabled": true
+    },
+    "frontend-design": {
+      "enabled": true
+    },
+    "github-deep-research": {
+      "enabled": true
+    },
+    "image-generation": {
+      "enabled": true
+    },
+    "newsletter-generation": {
+      "enabled": true
+    },
+    "podcast-generation": {
+      "enabled": true
+    },
+    "ppt-generation": {
+      "enabled": true
+    },
+    "skill-creator": {
+      "enabled": true
+    },
+    "surprise-me": {
+      "enabled": true
+    },
+    "systematic-literature-review": {
+      "enabled": true
+    },
+    "vercel-deploy-claimable": {
+      "enabled": true
+    },
+    "video-generation": {
+      "enabled": true
+    },
+    "web-design-guidelines": {
+      "enabled": true
+    }
+  }
+}

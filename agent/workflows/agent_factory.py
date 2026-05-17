@@ -192,14 +192,22 @@ def build_writer_agent(model: str | None = None) -> tuple[object, list[BaseTool]
 
 
 def build_tool_agent(
-    *, model: str, tools: list[BaseTool], temperature: float = 0.7
+    *, model: str, tools: list[BaseTool], temperature: float = 0.7,
+    middlewares: list | None = None,
 ) -> object:
     """
     Create a generic tool-calling agent using the shared middleware stack.
+
+    Args:
+        model: Model name string.
+        tools: List of tools to bind to the agent.
+        temperature: LLM sampling temperature.
+        middlewares: Optional custom middleware list. If None, uses the default stack.
     """
     model_name = (model or settings.primary_model).strip()
+    mws = middlewares if middlewares is not None else _build_middlewares()
     return create_agent(
         _build_llm(model_name, temperature=temperature),
         tools,
-        middleware=_build_middlewares(),
+        middleware=mws,
     )

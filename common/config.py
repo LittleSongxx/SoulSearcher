@@ -208,6 +208,12 @@ class Settings(BaseSettings):
     tool_approval: bool = False  # require approval before executing tools
     max_revisions: int = 2
 
+    # DeerFlow-style Agent runtime
+    agent_runtime_enabled: bool = True
+    agent_runtime_default_subagent_enabled: bool = True
+    agent_runtime_max_concurrent_subagents: int = 3
+    host_bash_enabled: bool = False
+
     # Quality gates (evaluation)
     citation_gate_min_coverage: float = Field(default=0.6, ge=0.0, le=1.0)
     claim_verifier_gate_max_contradicted: int = Field(default=0, ge=0)
@@ -583,12 +589,72 @@ class Settings(BaseSettings):
     )
     daytona_vnc_password: str = ""  # Must be set via environment variable
 
-    # Sandbox mode: local (E2B), daytona (remote), none (disabled)
-    sandbox_mode: str = "local"
+    # Sandbox mode: e2b (remote E2B), daytona (remote Daytona), none (disabled).
+    # Legacy value "local" is still accepted as an alias for E2B.
+    sandbox_mode: str = "e2b"
     sandbox_template_browser: str = (
         ""  # e2b sandbox browser template ID (e.g., chrome-stable)
     )
     sandbox_allow_internet: bool = True  # allow internet access inside sandbox
+
+    # IM channel integration
+    channels_enabled: bool = False
+    channels_base_url: str = ""
+    channel_default_agent_name: str = ""
+    channel_default_model: str = ""
+    channel_default_subagent_enabled: bool = True
+    channel_default_deepsearch_mode: str = "supervisor_workers"
+    feishu_channel_enabled: bool = False
+    feishu_app_id: str = ""
+    feishu_app_secret: str = ""
+    feishu_domain: str = "https://open.feishu.cn"
+
+    # ── DeerFlow-aligned: Skills ──
+    skills_path: str = ""  # Override skills root path (defaults to skills/ under project root)
+    skills_public_dir: str = "skills/public"
+    skills_custom_dir: str = "skills/custom"
+    skills_state_path: str = "data/skills_state.json"
+    skills_container_path: str = "/mnt/skills"
+    skill_evolution_enabled: bool = False  # Allow agents to create/modify skills
+    skill_evolution_moderation_model_name: str = ""  # Model for security scan (empty = default)
+
+    # ── DeerFlow-aligned: Memory ──
+    memory_enabled: bool = True
+    memory_injection_enabled: bool = True
+    memory_storage_path: str = ""
+    memory_debounce_seconds: int = 30
+    memory_max_facts: int = 100
+    memory_fact_confidence_threshold: float = 0.7
+    memory_max_injection_tokens: int = 2000
+    memory_model_name: str = ""
+
+    # ── DeerFlow-aligned: Summarization ──
+    summarization_enabled: bool = True
+    summarization_max_input_tokens: int = 64000
+    summarization_trigger_fraction: float = 0.75
+    summarization_keep_last: int = 15
+
+    # ── DeerFlow-aligned: Loop Detection ──
+    loop_detection_enabled: bool = True
+    loop_detection_max_repeats: int = 3
+    loop_detection_window: int = 8
+
+    # ── DeerFlow-aligned: Guardrails ──
+    guardrails_enabled: bool = False
+    guardrails_denylist: str = ""  # comma-separated denied tool names
+
+    # ── DeerFlow-aligned: Tool Search (deferred MCP tools) ──
+    tool_search_enabled: bool = False
+
+    # ── DeerFlow-aligned: Title Generation ──
+    title_generation_enabled: bool = True
+    title_max_words: int = 8
+
+    # ── DeerFlow-aligned: Todo/Plan Mode ──
+    plan_mode_enabled: bool = True
+
+    # ── Sandbox security ──
+    sandbox_allow_host_bash: bool = False
 
     # Tool / middleware controls
     tool_retry: bool = True
@@ -1044,6 +1110,57 @@ def apply_app_config_overrides(settings: Settings) -> None:
         settings.sandbox_mode = "none"
 
     _apply_yaml_overrides(settings)
+
+
+def validate_critical_config(s: Settings) -> list[str]:
+    """Run startup-time sanity checks on critical config fields.
+
+    Returns a list of human-readable warning strings.  An empty list means all
+    checks passed.  Callers (e.g. ``main.startup_event``) should log these at
+    WARNING level so operators notice misconfigurations early.
+    """
+    warnings: list[str] = []
+
+    # --- LLM credentials ---
+    has_api_key = bool(s.openai_api_key) or bool(s.azure_api_key)
+    if not has_api_key:
+        warnings.append(
+            "No LLM API key configured (OPENAI_API_KEY / AZURE_API_KEY). "
+            "All LLM calls will fail."
+        )
+
+    if not s.primary_model.strip():
+        warnings.append(
+            "PRIMARY_MODEL is empty. "
+            "Set it to a valid model name (e.g. deepseek-chat)."
+        )
+
+    # --- Search ---
+    engines = [e.strip().lower() for e in s.search_engines_list if e.strip()]
+    needs_tavily = "tavily" in engines
+    needs_bocha = "bocha" in engines
+    if needs_tavily and not s.tavily_api_key:
+        warnings.append(
+            "SEARCH_ENGINES includes 'tavily' but TAVILY_API_KEY is empty."
+        )
+    if needs_bocha and not s.bocha_api_key:
+        warnings.append(
+            "SEARCH_ENGINES includes 'bocha' but BOCHA_API_KEY is empty."
+        )
+
+    # --- Numeric sanity ---
+    if s.deepsearch_max_epochs < 1:
+        warnings.append(
+            f"DEEPSEARCH_MAX_EPOCHS={s.deepsearch_max_epochs} is < 1; "
+            "at least 1 epoch is required for any research output."
+        )
+    if s.deepsearch_supervisor_rounds < 1:
+        warnings.append(
+            f"DEEPSEARCH_SUPERVISOR_ROUNDS={s.deepsearch_supervisor_rounds} is < 1; "
+            "supervisor mode requires at least 1 round."
+        )
+
+    return warnings
 
 
 try:

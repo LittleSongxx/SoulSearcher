@@ -12,8 +12,10 @@ from typing import Any
 _PUBLIC_SYMBOLS = {
     # Core graph/state
     "create_research_graph",
+    "create_unified_research_graph",
     "create_checkpointer",
     "AgentState",
+    "AgentStateV2",
     "QueryState",
     "ResearchPlan",
     # Events / streaming
@@ -45,8 +47,10 @@ _PUBLIC_SYMBOLS = {
 __all__ = [
     # Keep the stable surface small and explicit.
     "create_research_graph",
+    "create_unified_research_graph",
     "create_checkpointer",
     "AgentState",
+    "AgentStateV2",
     "QueryState",
     "ResearchPlan",
     "event_stream_generator",

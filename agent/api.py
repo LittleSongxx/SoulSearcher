@@ -7,12 +7,14 @@ specific submodules (agent.core.*, agent.workflows.*, agent.prompts.*, etc.).
 
 from agent.core import (
     AgentState,
+    AgentStateV2,
     QueryState,
     ResearchPlan,
     ToolEvent,
     ToolEventType,
     create_checkpointer,
     create_research_graph,
+    create_unified_research_graph,
     event_stream_generator,
     get_emitter,
     get_emitter_sync,
@@ -41,8 +43,10 @@ from agent.workflows import (
 __all__ = [
     # Core graph/state
     "create_research_graph",
+    "create_unified_research_graph",
     "create_checkpointer",
     "AgentState",
+    "AgentStateV2",
     "QueryState",
     "ResearchPlan",
     # Events / streaming
