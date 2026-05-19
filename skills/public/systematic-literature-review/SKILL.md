@@ -224,12 +224,134 @@ User: "Here's one paper (https://arxiv.org/abs/1706.03762). Can you review it?"
 
 This is a single-paper peer review, not a literature survey. Do not use this skill. Route to `academic-paper-review` instead.
 
+### Phase 2.5: Citation Graph Traversal (Optional but Recommended)
+
+**This phase builds a citation network from the seed papers using Semantic Scholar's API. It reveals how papers connect, which are most influential, and which related papers were missed by keyword search alone.**
+
+When to enable: always run this phase unless the user explicitly asks for a minimal review. The citation graph adds significant value at modest API cost (free, rate-limited).
+
+#### Step 2.5.1: Build Citation Graph
+
+Use the bundled citation graph script:
+
+```bash
+python /mnt/skills/public/systematic-literature-review/scripts/citation_graph.py \
+  <paper_id_1> <paper_id_2> ... <paper_id_N> \
+  --max-citations 100 \
+  --max-references 100 \
+  --min-co-occurrence 2 \
+  --output /tmp/citation_graph.json
+```
+
+Input: arXiv IDs from the Phase 2 search results. Pass all paper IDs as arguments.
+
+Optional: provide `--api-key <key>` for higher rate limits (Semantic Scholar free tier).
+
+The script outputs a JSON file containing:
+- **forward_citations**: papers that cite each seed paper (with influential flag)
+- **backward_references**: papers cited by each seed paper (reveals intellectual lineage)
+- **co_citation_clusters**: pairs of papers frequently cited together (reveals thematic groupings)
+- **network_stats**: overall graph metrics (paper count, connectivity)
+
+#### Step 2.5.2: Interpret Citation Graph
+
+From the graph output, extract these insights for the report:
+
+**Influence ranking**: Sort seed papers by `influentialCitationCount` (citations from highly-cited subsequent work). This identifies the most impactful papers beyond raw citation counts.
+
+**Intellectual lineage**: Build a backward citation map to see which older works seed papers all reference. These are the field's foundational papers — they should be cited in the review even if not in the original search results.
+
+**Missing papers**: Papers that are frequently cited by the seed set but were not in the original search results are candidates for inclusion. Particularly, papers with citation count > 10 from the seed set deserve manual review.
+
+**Co-citation communities**: Groups of papers frequently cited together indicate sub-communities or research sub-areas. Use these to validate or refine the themes identified in Phase 4 synthesis.
+
+#### Step 2.5.3: Incorporate into Report
+
+Add a section to the final report:
+
+```markdown
+## Citation Network Analysis
+
+- **Most Influential Papers** (by influential citations): [ranked list]
+- **Foundational Works** (most referenced by the seed set): [ranked list]
+- **Research Communities** (co-citation clusters): [list of named communities with representative papers]
+- **Papers Recommended for Inclusion**: [papers highly cited by the seed set but not in the review]
+```
+
+### PRISMA Compliance Mode
+
+When the user requests a "PRISMA-compliant" review or "systematic review following PRISMA guidelines", follow the PRISMA 2020 statement.
+
+#### PRISMA Flow Diagram
+
+Document the paper selection process as a flow diagram:
+
+```
+IDENTIFICATION
+  Papers identified from arXiv search:  N
+  Papers identified from citation graph:  M
+  Total records identified:              N+M
+  Duplicates removed:                    X
+  Records after deduplication:           Y
+
+SCREENING
+  Records screened (title+abstract):     Y
+  Records excluded (off-topic):          Z
+  Records sought for retrieval:          Y-Z
+
+ELIGIBILITY
+  Full texts assessed for eligibility:   Y-Z
+  Full texts excluded with reasons:      W
+    - Not peer-reviewed: w1
+    - Insufficient detail: w2
+    - Retracted: w3
+    - Other reason: w4
+
+INCLUDED
+  Papers included in final synthesis:    P
+```
+
+The flow diagram MUST use actual numbers from the search process. Do not fabricate numbers.
+
+#### PRISMA Checklist
+
+Include a PRISMA 2020 compliance summary:
+
+| PRISMA Item | Section in this Review | Status |
+|---|---|---|
+| Title identifies as systematic review | Report title | ✓ |
+| Structured abstract | Executive summary | ✓ |
+| Rationale and objectives | Introduction | ✓ |
+| Eligibility criteria | Methodology | ✓ |
+| Information sources | Methodology | ✓ |
+| Search strategy | Methodology | ✓ |
+| Selection process | Methodology | ✓ |
+| Data extraction process | Methodology | ✓ |
+| Risk of bias assessment | Per-paper annotations | ✓ |
+| Synthesis methods | Methodology | ✓ |
+| Study selection results | PRISMA Flow Diagram | ✓ |
+| Study characteristics | Per-paper table | ✓ |
+| Risk of bias results | Theme sections | ⚠ if not assessed |
+
+Generate the PRISMA flow diagram as a Mermaid diagram for the markdown report, and also as a plain text table for accessibility.
+
+## Integration with Other Academic Skills
+
+- **`research-trend-analysis`**: Use before SLR to identify the most active sub-topics and time windows to focus on.
+- **`paper-decomposition`**: Use on the final set of included papers to build structured knowledge graphs.
+- **`academic-paper-review`**: Use for deep-dive reviews of the 2-3 most critical papers in the synthesis.
+- **`research-proposal-generator`**: Use after SLR to turn identified gaps into research proposals.
+- **`vision-enrich`**: Use to extract and analyze figures/tables from key papers for richer synthesis.
+
 ## Notes
 
 - **Prerequisite: `subagent_enabled` must be `true`**. Phase 3 requires the `task` tool for parallel metadata extraction. This tool is only loaded when `subagent_enabled` is set to `true` in the runtime config (`config.configurable.subagent_enabled`). Without it, the `task` tool will not appear in the available tools and Phase 3 cannot execute as designed.
-- **arXiv only, by design**. This skill does not query Semantic Scholar, PubMed, or Google Scholar. arXiv covers the bulk of CS/ML/physics/math preprints, which is what DeerFlow users most often want to survey. Multi-source academic search belongs in a dedicated MCP server, not inside this skill.
+- **arXiv primary, Semantic Scholar supplementary**. Phase 2 uses arXiv for initial paper discovery. Phase 2.5 (citation graph) uses Semantic Scholar to enrich the paper set with citation context. For biomedical topics, also consider PubMed via Weaver's academic search providers.
 - **Hard upper bound of 50 papers**. This is tied to the Phase 3 concurrency strategy (max 3 subagents per round, ~5 papers each, at most ~3 rounds). Surveys larger than 50 papers degrade in synthesis quality and are better done by splitting into sub-topics.
 - **Phase 3 requires subagents to be enabled**. This skill's parallel extraction step hard-requires the `task` tool, which is only available when `subagent_enabled=true` at runtime. If subagents are unavailable, do not claim to execute the Phase 3 parallel plan; instead, tell the user that subagents must be enabled for the full workflow, or offer to narrow/split the request into a smaller manual review.
 - **Subagent results are strings, not objects**. Always strip the `Task Succeeded. Result: ` / `Task failed.` / `Task timed out.` prefixes before parsing the JSON payload.
 - **The `id` field is a bare arXiv id** (e.g. `1706.03762`), not a URL and not with a version suffix. `abs_url` / `pdf_url` hold the full URLs if you need them.
 - **Synthesis, not listing**. The final report must identify themes and compare findings across papers. A report that only lists papers one after another is a failure mode — if you cannot find themes, say so explicitly instead of faking them.
+- **PRISMA mode requires data integrity**. When generating the PRISMA flow diagram, use real counts from the actual search/filter process. Never estimate or round numbers.
+- **Citation graph adds papers**. The citation graph traversal typically identifies 5-20 additional papers. Review these manually before including them — not all highly-cited papers are relevant.
+- **The citation_graph.py script outputs JSON**. Parse it with `json.load()` before incorporating into the report. The `connected_paper_lookup` field contains metadata for cited/citing papers.

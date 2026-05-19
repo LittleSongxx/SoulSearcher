@@ -125,9 +125,115 @@ For each strength or weakness, provide:
 - **Where**: Section/figure/table reference
 - **Why it matters**: Impact on the paper's claims or utility
 
-### Phase 3: Review Synthesis
+### Phase 3: Evidence Verification
 
-#### Step 3.1: Assemble the Structured Review
+**This phase leverages Weaver's unique claim verification infrastructure to fact-check the paper's claims against independent sources.**
+
+#### Step 3.1: Extract Structured Claims
+
+Use the bundled extraction script to pull structured, verifiable claims from the paper:
+
+```bash
+python /mnt/skills/public/academic-paper-review/scripts/extract_claims.py \
+  <paper_text_file> \
+  --max-claims 80 \
+  --output /tmp/claims.json
+```
+
+The output is a JSON array where each claim has: `claim_id`, `claim_text`, `claim_type` (numerical/methodological/comparative/definitional/speculative), `verifiability`, and `location`.
+
+#### Step 3.2: Independent Evidence Search
+
+For each **numerical** claim (highest verifiability), search for independent confirmation:
+
+```
+For each numerical claim:
+  1. Identify the key metric and value
+  2. Search: "[metric] [paper topic] benchmark results" via web_search
+  3. Search: "[paper topic] [dataset name] leaderboard" via web_search
+  4. Fetch any independent benchmark reports, leaderboards, or meta-analyses
+  5. Record whether the claimed value is: confirmed / contradicted / cannot be independently verified
+```
+
+Prioritize claims with `verifiability: "high"`. At minimum, verify the paper's 3-5 most important numerical claims.
+
+#### Step 3.3: Cross-Reference with Existing Benchmarks
+
+For papers reporting on standard benchmarks:
+
+- Check Papers With Code leaderboards for the reported dataset/task
+- Compare reported numbers against the current SOTA
+- Flag if reported numbers significantly exceed known SOTA without explanation
+- Check if the paper's comparison baselines are the correct/current SOTA methods
+
+#### Step 3.4: Evidence Verification Summary
+
+Add this section to the review output:
+
+```markdown
+## Evidence Verification
+
+| Claim | Claimed Value | Independent Evidence | Status |
+|---|---|---|---|
+| Accuracy on X | 94.2% | Leaderboard shows 93.8-94.5% range | ✓ Consistent |
+| Outperforms Y by Z% | +3.5% | Independent benchmark: Y achieves 91.0% | ✓ Confirmed |
+| First to achieve W | N/A | Paper from 2023 achieved similar result | ⚠ Disputed |
+
+**Verification Summary**:
+- Verified claims: X / Y
+- Contradicted claims: A / Y
+- Cannot verify (no independent source): B / Y
+```
+
+### Phase 4: Reproducibility Assessment
+
+**Leverages Weaver's E2B sandbox for automated code execution and result comparison.**
+
+#### Step 4.1: Check for Code Availability
+
+Search for the paper's code:
+```
+1. Check paper for GitHub links or "Code available at" statements
+2. Search: "github.com [paper title]" via web_search
+3. Search Papers With Code for the paper
+4. Check the paper's website or supplementary materials
+```
+
+If code is found, proceed. If not, note this as a limitation in the review.
+
+#### Step 4.2: Run Reproducibility Audit
+
+If code is available, invoke the `reproducibility-audit` skill or perform a lightweight check:
+
+```bash
+# Clone in sandbox
+cd /home/user && git clone --depth 1 <repo_url> paper_check
+
+# Check if it has recognizable structure
+ls paper_check/
+find paper_check/ -name "requirements.txt" -o -name "pyproject.toml" -o -name "README.md" | head -5
+```
+
+Even a partial check provides valuable evidence:
+- **Code exists but won't run**: Yellow flag — documentation issue
+- **Code runs but produces different numbers**: Red flag — potential reproducibility issue
+- **No code**: Downgrade reproducibility score to 1/5
+
+#### Step 4.3: Reproducibility Rating
+
+| Score | Criteria |
+|---|---|
+| **5/5** | Code runs cleanly, reproduces key results within tolerance |
+| **4/5** | Code runs with minor fixes, reproduces most results |
+| **3/5** | Code available but requires significant effort to reproduce |
+| **2/5** | Code partially available or heavily bit-rotted |
+| **1/5** | No code or data available |
+
+Add the reproducibility rating to the methodology assessment table.
+
+### Phase 5: Review Synthesis
+
+#### Step 5.1: Assemble the Structured Review
 
 Produce the final review using the template below.
 
@@ -277,8 +383,129 @@ Before finalizing the review, verify:
 ## Output Format
 
 - Output the complete review in **Markdown** format
+- First ensure the output directory exists: `mkdir -p /mnt/user-data/outputs`
 - Save the review to `/mnt/user-data/outputs/review-{paper-topic}.md` when working in sandbox
 - Present the review to the user using the `present_files` tool
+
+## Advanced Modes
+
+### Mode A: Meta-Review (Comparative Cross-Paper Analysis)
+
+Activate this mode when the user provides 3-5 papers on the same topic and asks for comparison, ranking, or a meta-review.
+
+**Workflow:**
+
+1. Run the standard review (Phases 1-5) for each paper independently
+2. Extract a comparison matrix across all papers:
+
+```markdown
+## Comparative Analysis Matrix
+
+| Criterion | Paper A | Paper B | Paper C | Paper D |
+|---|---|---|---|---|
+| **Methodology** | X/5 | X/5 | X/5 | X/5 |
+| **Novelty** | X/5 | X/5 | X/5 | X/5 |
+| **Reproducibility** | X/5 | X/5 | X/5 | X/5 |
+| **Experimental Rigor** | X/5 | X/5 | X/5 | X/5 |
+| **Primary Dataset** | Name | Name | Name | Name |
+| **Primary Metric** | X% | X% | X% | X% |
+| **Key Innovation** | ... | ... | ... | ... |
+| **Major Limitation** | ... | ... | ... | ... |
+
+## Rankings
+
+### By Overall Quality
+1. Paper [X] — [justification]
+2. Paper [Y] — [justification]
+...
+
+### By Contribution Significance
+1. Paper [X] — [justification]
+...
+
+## Consensus Findings
+- [What do all papers agree on?]
+
+## Contested Findings
+- [Where do papers disagree? What explains the disagreement?]
+
+## Current SOTA Summary
+[Based on these papers, what is the current best practice in this area?]
+
+## Recommendations for Future Work
+[What gaps remain across all papers? What should the next paper do?]
+```
+
+3. Save as `meta-review-{topic-slug}.md`
+
+### Mode B: Reviewer Simulator
+
+Activate when the user asks to simulate a review for a specific venue ("review this as if for NeurIPS", "write an ICML-style review").
+
+**Supported Venues:**
+
+| Venue | Focus Areas | Review Form | Tone |
+|---|---|---|---|
+| **NeurIPS** | Novelty, empirical rigor, clarity | 4-question form (Summary, Strengths, Weaknesses, Overall) | Constructive but blunt |
+| **ICML** | Technical correctness, significance | Similar to NeurIPS, heavier weight on theory | Technical, precise |
+| **ACL / EMNLP** | Linguistic contribution, reproducibility | Structured with soundness/novelty/clarity ratings | Constructive |
+| **CHI** | Human-centered contribution, evaluation rigor | Contribution type classification + evaluation | Application-focused |
+| **CVPR / ICCV** | Visual results, benchmark performance | Results-first evaluation | Metric-focused |
+| **Nature / Science** | Broad impact, novelty, accessibility | Short-form, high-rejection-rate | Brief, impactful |
+| **IEEE / ACM Trans.** | Technical depth, completeness | Detailed, thorough | Technical, exhaustive |
+
+**Adaptation rules:**
+
+- For machine learning venues (NeurIPS, ICML, ICLR): emphasize novelty, theoretical justification, and fair comparison to SOTA
+- For NLP venues (ACL, EMNLP): emphasize linguistic insight, reproducibility, and ethical considerations
+- For systems venues: emphasize engineering contribution, scalability, and real-world deployment evidence
+- For high-impact journals (Nature, Science): emphasize broad significance, accessibility, and paradigm-shifting potential
+
+**Simulated Review Output:**
+
+```markdown
+# [Venue Name] Review: [Paper Title]
+
+## Reviewer Information
+- **Reviewer Expertise**: [High/Medium/Low] — [justification]
+- **Confidence in Review**: [High/Medium/Low]
+
+## Summary
+[As required by venue format]
+
+## Strengths
+[Weighted by venue priorities]
+
+## Weaknesses
+[Weighted by venue priorities]
+
+## Questions for Authors
+[Venue-appropriate questions]
+
+## Overall Recommendation
+- [ ] Strong Accept (top 5%)
+- [ ] Accept (top 20%)
+- [ ] Weak Accept (top 40%)
+- [ ] Borderline
+- [ ] Reject
+
+## Confidence
+[High/Medium/Low] — [explanation]
+
+## Reason for Recommendation
+[Venue-aligned justification]
+
+## Private Comments to Area Chair / Editor
+[If applicable — notes about ethics concerns, conflicts, or other sensitive issues]
+```
+
+## Integration with Other Academic Skills
+
+- **`reproducibility-audit`**: Use for Phase 4 (Reproducibility Assessment). The audit provides concrete execution evidence.
+- **`paper-decomposition`**: Use for structured claim extraction and dependency analysis.
+- **`systematic-literature-review`**: Use for Phase 2.1 (Literature Context Search) to find related work.
+- **`deep-research`**: Load for any paper that requires understanding the broader research context.
+- **`science-communication`**: After reviewing, use to create lay summaries, press releases, or social media posts.
 
 ## Notes
 
@@ -287,3 +514,6 @@ Before finalizing the review, verify:
 - Adapt the review depth to the user's needs: a brief assessment for quick triage versus a full review for submission preparation
 - When reviewing multiple papers comparatively, maintain consistent criteria across all reviews
 - Always disclose limitations of your review (e.g., "I could not verify the proofs in Appendix B in detail")
+- In Meta-Review mode, load all papers before starting the comparison
+- In Reviewer Simulator mode, state the venue's review criteria in your preamble
+- Evidence verification (Phase 3) uses Weaver's `claim_verifier` engine — numerical claims are automatically cross-checked

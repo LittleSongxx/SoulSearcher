@@ -1,6 +1,19 @@
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
+
+try:
+    from enum import StrEnum  # Python 3.11+
+except ImportError:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        """StrEnum backport for Python 3.10."""
+        __str__ = str.__str__
+        __format__ = str.__format__
+
+        @staticmethod
+        def _generate_next_value_(name, start, count, last_values):
+            return name.lower()
 
 SKILL_MD_FILE = "SKILL.md"
 

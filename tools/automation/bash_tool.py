@@ -5,30 +5,36 @@ from typing import Optional
 
 from langchain.tools import tool
 
+from agent.runtime.sandbox_policy import _DANGEROUS_COMMANDS, _PIPE_TO_SHELL_RE, assess_shell_command
+
 SAFE_DEFAULT_CWD = Path(".")
 DEFAULT_TIMEOUT = 20  # seconds
-DISALLOWED = {"rm", "shutdown", "reboot"}
 
 
 @tool
 def safe_bash(cmd: str, cwd: Optional[str] = None, timeout: int = DEFAULT_TIMEOUT) -> str:
     """
-    Run a shell command with basic safety guard (no destructive commands).
+    Run a shell command with security guard (shares sandbox_policy's command denylist).
 
     Args:
-        cmd: command string
+        cmd: command string (must pass sandbox policy assessment)
         cwd: optional working directory (default repo root)
         timeout: seconds before kill
     """
-    parts = shlex.split(cmd)
-    if any(part in DISALLOWED for part in parts):
-        return "Error: disallowed command"
+    allowed, reason = assess_shell_command(cmd)
+    if not allowed:
+        return f"Error: {reason}"
 
-    workdir = Path(cwd) if cwd else SAFE_DEFAULT_CWD
+    workdir = Path(cwd).resolve() if cwd else SAFE_DEFAULT_CWD.resolve()
+    try:
+        parts = shlex.split(cmd)
+    except ValueError as exc:
+        return f"Error: invalid shell syntax: {exc}"
+
     try:
         result = subprocess.run(
-            cmd,
-            shell=True,
+            parts,
+            shell=False,
             cwd=workdir,
             capture_output=True,
             text=True,
@@ -37,9 +43,13 @@ def safe_bash(cmd: str, cwd: Optional[str] = None, timeout: int = DEFAULT_TIMEOU
         out = result.stdout.strip()
         err = result.stderr.strip()
         if result.returncode != 0:
-            return f"[exit {result.returncode}] {out}\\n{err}"
+            return f"[exit {result.returncode}] {out}\n{err}"
         return out or "(no output)"
     except subprocess.TimeoutExpired:
         return "Error: command timed out"
+    except FileNotFoundError:
+        return f"Error: command not found: {parts[0] if parts else cmd}"
+    except PermissionError as e:
+        return f"Error: permission denied: {e}"
     except Exception as e:
         return f"Error: {e}"

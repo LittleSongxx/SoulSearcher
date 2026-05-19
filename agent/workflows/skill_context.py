@@ -24,14 +24,22 @@ class SelectedSkillContext:
 
 
 def _load_skill_body(skill: Skill) -> str:
-    """Read the SKILL.md body (content after YAML frontmatter)."""
+    """Read the SKILL.md body (content after YAML frontmatter).
+
+    Only strips a leading ``---`` block. Any subsequent ``---`` sequences
+    (e.g. in Mermaid diagrams or code fences) are left untouched.
+    """
     try:
         content = skill.skill_file.read_text(encoding="utf-8")
-        # Strip YAML frontmatter
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            return parts[2].strip()
-        return content.strip()
+        stripped = content.lstrip()
+        if not stripped.startswith("---"):
+            return content.strip()
+        # Find the closing --- for the YAML frontmatter
+        second = stripped.find("---", 3)
+        if second == -1:
+            return content.strip()
+        body = stripped[second + 3:]
+        return body.strip()
     except Exception:
         return ""
 

@@ -11,20 +11,10 @@ from common.config import settings
 
 logger = logging.getLogger(__name__)
 
+from agent.workflows.constants import DANGEROUS_COMMANDS as _DANGEROUS_COMMANDS, NETCAT_ALIASES as _NETCAT_ALIASES
+
 _E2B_MODES = {"e2b", "local", "remote", "e2b_remote"}
-_DANGEROUS_COMMANDS = {
-    "chmod",
-    "chown",
-    "dd",
-    "mkfs",
-    "mount",
-    "reboot",
-    "rm",
-    "shutdown",
-    "sudo",
-    "su",
-}
-_PIPE_TO_SHELL_RE = re.compile(r"(curl|wget)\b.*\|\s*(bash|sh|python)", re.I)
+_PIPE_TO_SHELL_RE = re.compile(r"(curl|wget)\b.*\|\s*(bash|sh|python|zsh)", re.I)
 
 
 @dataclass(slots=True)
@@ -91,6 +81,8 @@ def assess_shell_command(command: str) -> tuple[bool, str]:
         base = part.rsplit("/", 1)[-1]
         if base in _DANGEROUS_COMMANDS:
             return False, f"command '{base}' requires explicit elevated policy"
+        if base in _NETCAT_ALIASES:
+            return False, f"command '{base}' is blocked (network utility)"
     return True, "allowed"
 
 
