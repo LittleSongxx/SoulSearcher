@@ -246,40 +246,21 @@ async def _execute_search(
         except Exception as e:
             logger.warning(f"[DeepResearch] Fallback search failed: {e}")
 
-    # Try academic search providers (ArXiv, PubMed, Semantic Scholar)
-    academic_providers = _get_academic_providers()
-    for provider in academic_providers:
-        try:
-            provider_results = provider.search(query, max_results=3)
-            for r in provider_results:
-                results.append({
-                    "url": getattr(r, "url", ""),
-                    "title": getattr(r, "title", ""),
-                    "content": getattr(r, "snippet", "") or getattr(r, "content", ""),
-                })
-        except Exception as e:
-            logger.debug(f"[DeepResearch] Academic provider {provider.name} failed: {e}")
+    # Try academic search tools (shared with researcher)
+    try:
+        from tools.search.academic import arxiv_search, pubmed_search, semantic_scholar_search
+        for academic_tool in [arxiv_search, pubmed_search, semantic_scholar_search]:
+            try:
+                response = await academic_tool.ainvoke(
+                    {"query": query, "max_results": 3}, config
+                )
+                results.append({"url": "", "title": academic_tool.name, "content": str(response)})
+            except Exception:
+                logger.debug(f"[DeepResearch] Academic tool {academic_tool.name} failed")
+    except ImportError:
+        logger.debug("[DeepResearch] Academic search tools not available")
 
     return results
-
-
-def _get_academic_providers() -> list:
-    """Get available academic search providers from Weaver's ecosystem."""
-    providers = []
-    try:
-        from tools.search.academic import ArxivProvider, PubMedProvider, SemanticScholarProvider
-        arxiv = ArxivProvider()
-        if arxiv.is_available():
-            providers.append(arxiv)
-        pubmed = PubMedProvider()
-        if pubmed.is_available():
-            providers.append(pubmed)
-        semantic = SemanticScholarProvider()
-        if semantic.is_available():
-            providers.append(semantic)
-    except ImportError:
-        pass
-    return providers
 
 
 def _build_context_from_results(search_results: list[dict]) -> str:

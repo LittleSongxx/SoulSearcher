@@ -14,11 +14,12 @@ from agent.core import (
     ToolEventType,
     create_checkpointer,
     create_research_graph,
-    create_unified_research_graph,
+    create_research_graph_with_checkpointer,
     event_stream_generator,
     get_emitter,
     get_emitter_sync,
     remove_emitter,
+    build_initial_state,
 )
 from agent.core.message_utils import summarize_messages
 from agent.prompts import (
@@ -36,19 +37,18 @@ from agent.workflows import (
     build_writer_agent,
     get_deep_agent_prompt,
     initialize_enhanced_tools,
-    run_deepsearch,
-    run_deepsearch_optimized,
 )
 
 __all__ = [
     # Core graph/state
     "create_research_graph",
-    "create_unified_research_graph",
+    "create_research_graph_with_checkpointer",
     "create_checkpointer",
     "AgentState",
     "AgentStateV2",
     "QueryState",
     "ResearchPlan",
+    "build_initial_state",
     # Events / streaming
     "event_stream_generator",
     "get_emitter",
@@ -66,8 +66,6 @@ __all__ = [
     "set_prompt_manager",
     # Workflows & tools
     "get_deep_agent_prompt",
-    "run_deepsearch",
-    "run_deepsearch_optimized",
     "build_writer_agent",
     "build_tool_agent",
     "build_agent_tools",

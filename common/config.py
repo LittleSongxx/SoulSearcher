@@ -319,17 +319,6 @@ class Settings(BaseSettings):
         ""  # Model for URL selection/critique (defaults to reasoning_model)
     )
 
-    # Hierarchical Agent Config
-    use_hierarchical_agents: bool = (
-        False  # Enable coordinator→planner→researcher→reporter flow
-    )
-    use_hybrid_search: bool = (
-        True  # When hierarchical is enabled, use tree search instead of flat planner
-    )
-
-    # Domain Routing Config
-    domain_routing_enabled: bool = False  # Enable domain-specific routing and prompts
-
     # RAG (Retrieval-Augmented Generation) Config
     rag_enabled: bool = False  # Enable local document RAG
     rag_store_path: Optional[str] = None  # Path for persistent vector storage
@@ -337,18 +326,6 @@ class Settings(BaseSettings):
     rag_embedding_model: str = "text-embedding-3-small"  # OpenAI embedding model
     rag_chunk_size: int = 1000  # Document chunk size
     rag_chunk_overlap: int = 200  # Overlap between chunks
-
-    # Tree-based Research Config
-    tree_exploration_enabled: bool = True  # Enable tree-based deep research
-    tree_max_depth: int = 2  # Maximum tree depth (0 = root only)
-    tree_max_branches: int = 4  # Maximum children per node
-    tree_queries_per_branch: int = 3  # Number of queries per branch
-    tree_parallel_branches: int = (
-        3  # Max concurrent branch exploration (0 = sequential)
-    )
-    deepsearch_tree_max_searches: int = (
-        30  # 0 = disabled (hard cap on search calls in tree mode)
-    )
 
     # Report Visualization Config
     enable_report_charts: bool = True  # Generate charts from data in reports
@@ -365,14 +342,6 @@ class Settings(BaseSettings):
     custom_writer_prompt_path: str = ""  # 自定义 writer 提示词文件路径
     prompt_pack: str = "deepsearch"  # default prompt pack
     prompt_variant: str = "full"  # full | lite
-
-    # XML Tool Calling Config (Phase 2 - Manus 风格工具调用)
-    agent_xml_tool_calling: bool = False  # 启用 XML 工具调用 (Claude 友好)
-    agent_native_tool_calling: bool = True  # 启用原生工具调用 (OpenAI 格式)
-    agent_execute_tools: bool = True  # 自动执行工具
-    agent_auto_continue: bool = False  # 自动续写机制 (finish_reason=tool_calls 时继续)
-    agent_max_auto_continues: int = 25  # 最大自动续写次数
-    agent_tool_execution_strategy: str = "sequential"  # sequential | parallel
 
     # LangGraph Store (long-term memory)
     memory_store_backend: str = "memory"  # memory | postgres | redis
@@ -712,20 +681,8 @@ class Settings(BaseSettings):
     agent_reflexion_enabled: bool = True  # self-reflection after tool-calling rounds
     agent_reflexion_max_rounds: int = 2  # max reflection iterations
 
-    # LATS-style tree backtracking
-    tree_backtrack_enabled: bool = True  # allow backtracking on low-quality branches
-    tree_backtrack_score_threshold: float = (
-        0.4  # branches below this score trigger retry
-    )
-    tree_backtrack_max_retries: int = 1  # max retries per branch
-
     # Dynamic tool pruning
     dynamic_tool_pruning: bool = False  # prune tools by route to reduce token overhead
-
-    # Prompt Optimization (Prompt 优化)
-    prompt_optimizer_model: str = "gpt-4o"  # 用于优化 Prompt 的模型
-    prompt_optimization_epochs: int = 3  # 优化迭代轮次
-    prompt_optimization_sample_size: int = 50  # 每轮评估样本数
 
     @property
     def cors_origins_list(self) -> list[str]:

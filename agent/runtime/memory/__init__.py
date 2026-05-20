@@ -1,4 +1,6 @@
-"""Memory system — DeerFlow-aligned long-term memory with LLM extraction."""
+"""Memory system — long-term memory with LLM extraction and semantic retrieval."""
+
+from agent.runtime.memory.system import get_memory_system
 
 from agent.runtime.memory.updater import (
     MemoryUpdater,
@@ -32,4 +34,5 @@ __all__ = [
     "format_memory_for_injection",
     "MEMORY_UPDATE_PROMPT",
     "format_conversation_for_update",
+    "get_memory_system",
 ]

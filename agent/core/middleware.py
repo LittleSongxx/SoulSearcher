@@ -1,304 +1,236 @@
-import asyncio
+"""Unified Middleware Layer — 4 essential cross-cutting concerns.
+
+1. ToolErrorHandling  - Tool failures return error messages, never crash
+2. LoopDetection       - Prevent infinite LLM loops
+3. TokenUsage          - Track API costs + sub-agent usage attribution
+4. Memory              - Async per-user memory updates
+
+All other concerns are handled explicitly in graph nodes — not hidden in middleware.
+"""
+
+from __future__ import annotations
+
+import hashlib
 import logging
 import time
-from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional
 
-from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
-
-from agent.workflows.model_context_policy import is_token_limit_error
-from common.config import settings
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.messages import ToolMessage
 
 logger = logging.getLogger(__name__)
 
 
-def retry_call(fn: Callable, *, attempts: int, backoff: float, **kwargs) -> Any:
+# =============================================================================
+# 1. Tool Error Handling Middleware
+# =============================================================================
+
+class ToolErrorHandler:
+    """Wraps tool execution to catch errors and return graceful error messages.
+
+    Pattern from deer-flow: ToolErrorHandlingMiddleware.
+    Prevents a single tool failure from crashing the entire research pipeline.
     """
-    Simple synchronous retry helper with exponential backoff.
-    Note: Use async_retry_call for async contexts to avoid blocking.
-    """
-    last_exc = None
-    for i in range(attempts):
+
+    @staticmethod
+    async def execute_with_error_handling(tool_call, tools_by_name: dict, config) -> ToolMessage:
+        """Execute a tool call and return a ToolMessage even on error."""
+        tool_name = tool_call.get("name", "unknown")
+        tool_call_id = tool_call.get("id", "unknown")
+
         try:
-            return fn(**kwargs)
-        except Exception as e:
-            last_exc = e
-            wait = backoff * (2**i)
-            logger.warning(
-                f"Tool call failed (attempt {i + 1}/{attempts}): {e}; retrying in {wait:.1f}s"
+            tool = tools_by_name.get(tool_name)
+            if tool is None:
+                return ToolMessage(
+                    content=f"Error: Tool '{tool_name}' not found. Available: {list(tools_by_name.keys())}",
+                    name=tool_name,
+                    tool_call_id=tool_call_id,
+                )
+
+            result = await tool.ainvoke(tool_call.get("args", {}), config)
+            return ToolMessage(
+                content=str(result),
+                name=tool_name,
+                tool_call_id=tool_call_id,
             )
-            time.sleep(wait)
-    if last_exc:
-        raise last_exc
-    return None
+
+        except Exception as e:
+            logger.warning(f"[ToolError] {tool_name} failed: {e}")
+            return ToolMessage(
+                content=f"Tool '{tool_name}' encountered an error: {str(e)}. Please try a different approach.",
+                name=tool_name,
+                tool_call_id=tool_call_id,
+            )
 
 
-async def async_retry_call(
-    fn: Callable, *, attempts: int, backoff: float, **kwargs
-) -> Any:
+# =============================================================================
+# 2. Loop Detection Middleware
+# =============================================================================
+
+class LoopDetector:
+    """Detect infinite loops in LLM responses.
+
+    Uses a dual-layer strategy from deer-flow:
+    - Hash-based: Detect exact duplicate responses
+    - Frequency-based: Detect repetitive patterns
+
+    Critical for fast_llm which is more prone to getting stuck in loops.
     """
-    Async retry helper with exponential backoff.
-    Does not block the event loop during wait.
+
+    def __init__(self, max_repetitions: int = 3):
+        self.max_repetitions = max_repetitions
+        self.response_hashes: list[str] = []
+        self.response_prefixes: dict[str, int] = {}
+
+    def check(self, response_content: str) -> bool:
+        """Check if response indicates a loop. Returns True if loop detected."""
+        if not response_content:
+            return False
+
+        # Hash-based detection
+        content_hash = hashlib.md5(response_content.encode()).hexdigest()
+        self.response_hashes.append(content_hash)
+
+        if len(self.response_hashes) >= self.max_repetitions:
+            recent = self.response_hashes[-self.max_repetitions:]
+            if len(set(recent)) == 1:
+                logger.warning("[LoopDetect] Exact duplicate responses detected")
+                return True
+
+        # Frequency-based detection (check first 100 chars)
+        prefix = response_content[:100]
+        self.response_prefixes[prefix] = self.response_prefixes.get(prefix, 0) + 1
+
+        if self.response_prefixes[prefix] >= self.max_repetitions + 2:
+            logger.warning("[LoopDetect] Repetitive response pattern detected")
+            return True
+
+        return False
+
+    def get_hint(self) -> str:
+        """Get a hint to inject into the conversation to break the loop."""
+        return (
+            "\n[System Notice: You appear to be repeating yourself. "
+            "Please try a different approach or conclude your research if you're stuck.]"
+        )
+
+
+# =============================================================================
+# 3. Token Usage Middleware
+# =============================================================================
+
+class TokenUsageTracker:
+    """Track token usage across all LLM calls for cost attribution.
+
+    Pattern from deer-flow: TokenUsageMiddleware.
+    Tracks per-phase usage (input gateway, research, report) and
+    sub-agent usage for cost analysis.
     """
-    last_exc = None
-    for i in range(attempts):
+
+    def __init__(self):
+        self.usage_by_phase: dict[str, dict[str, int]] = {}
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.start_time = time.time()
+
+    def record(self, phase: str, input_tokens: int, output_tokens: int) -> None:
+        """Record token usage for a phase."""
+        if phase not in self.usage_by_phase:
+            self.usage_by_phase[phase] = {"input": 0, "output": 0}
+        self.usage_by_phase[phase]["input"] += input_tokens
+        self.usage_by_phase[phase]["output"] += output_tokens
+        self.total_input_tokens += input_tokens
+        self.total_output_tokens += output_tokens
+
+    def get_summary(self) -> dict[str, Any]:
+        """Get a summary of token usage."""
+        elapsed = time.time() - self.start_time
+        return {
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "total_tokens": self.total_input_tokens + self.total_output_tokens,
+            "elapsed_seconds": round(elapsed, 1),
+            "by_phase": dict(self.usage_by_phase),
+        }
+
+    @staticmethod
+    def estimate_cost(model_name: str, input_tokens: int, output_tokens: int) -> float:
+        """Estimate API cost based on model pricing (approximate)."""
+        pricing = {
+            "gpt-4.1-mini": (0.15, 0.60),      # per 1M input, per 1M output
+            "gpt-4.1": (2.00, 8.00),
+            "gpt-4o": (2.50, 10.00),
+            "gpt-4o-mini": (0.15, 0.60),
+            "o3-mini": (1.10, 4.40),
+            "o1": (15.00, 60.00),
+        }
+        input_price, output_price = pricing.get(model_name, (1.0, 4.0))
+        return (input_tokens / 1_000_000) * input_price + (output_tokens / 1_000_000) * output_price
+
+
+# =============================================================================
+# 4. Memory Middleware (Phase 4 integration point)
+# =============================================================================
+
+class MemoryMiddleware:
+    """Asynchronous per-user memory updates.
+
+    Pattern from deer-flow (MemoryMiddleware), simplified for the unified design.
+    Runs memory extraction as a background task so it doesn't block research.
+
+    Phase 4 integrates with structured + embedding dual-mode memory.
+    """
+
+    async def update_memory(
+        self,
+        user_id: str,
+        query: str,
+        findings: str,
+        facts: list[str],
+    ) -> None:
+        """Update user memory after research completes (fire-and-forget)."""
         try:
-            result = fn(**kwargs)
-            # If fn returns a coroutine, await it
-            if asyncio.iscoroutine(result):
-                return await result
-            return result
+            from agent.runtime.memory import get_memory_system
+            memory = get_memory_system()
+            await memory.record_research(
+                user_id=user_id,
+                query=query,
+                findings=findings[:5000],  # Store summarized findings
+                facts=facts,
+            )
+        except ImportError:
+            logger.debug("[Memory] Memory system not available (Phase 4)")
         except Exception as e:
-            last_exc = e
-            wait = backoff * (2**i)
-            logger.warning(
-                f"Tool call failed (attempt {i + 1}/{attempts}): {e}; retrying in {wait:.1f}s"
-            )
-            await asyncio.sleep(wait)
-    if last_exc:
-        raise last_exc
-    return None
+            logger.warning(f"[Memory] Background memory update failed: {e}")
 
 
-def enforce_tool_call_limit(state: dict[str, Any], limit: int) -> None:
-    """
-    Increment and enforce per-run tool call limit stored on state.
-    limit=0 means unlimited.
-    """
-    if limit <= 0:
-        return
-    count = int(state.get("tool_call_count", 0)) + 1
-    state["tool_call_count"] = count
-    if count > limit:
-        raise RuntimeError(f"Tool call limit exceeded ({count}/{limit})")
+# =============================================================================
+# Global Instances
+# =============================================================================
+
+_loop_detector: Optional[LoopDetector] = None
+_token_tracker: Optional[TokenUsageTracker] = None
+_memory_middleware: Optional[MemoryMiddleware] = None
 
 
-def maybe_strip_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """
-    Optionally remove ToolMessage from history to save tokens.
-    """
-    if not settings.strip_tool_messages:
-        return messages
-    return [m for m in messages if not isinstance(m, ToolMessage)]
+def get_loop_detector() -> LoopDetector:
+    global _loop_detector
+    if _loop_detector is None:
+        _loop_detector = LoopDetector()
+    return _loop_detector
 
 
-def mask_old_observations(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """
-    Hybrid observation masking: keep recent tool observations in full,
-    replace older ones with compact placeholders.
-
-    This preserves full reasoning/action history while cutting token cost
-    on stale observations by ~50%+.
-
-    Controlled by:
-    - settings.observation_masking (bool)
-    - settings.observation_masking_window (int): recent messages whose
-      ToolMessage observations are kept verbatim.
-    """
-    if not settings.observation_masking:
-        return messages
-
-    window = max(int(getattr(settings, "observation_masking_window", 5)), 0)
-
-    # Find indices of all ToolMessages
-    tool_indices = [i for i, m in enumerate(messages) if isinstance(m, ToolMessage)]
-    if not tool_indices:
-        return messages
-
-    # The last `window` ToolMessages stay intact; older ones get masked
-    keep_set = set(tool_indices[-window:]) if window else set()
-
-    result: list[BaseMessage] = []
-    for i, msg in enumerate(messages):
-        if isinstance(msg, ToolMessage) and i not in keep_set:
-            content = getattr(msg, "content", "") or ""
-            # Build compact one-line summary (first 120 chars)
-            snippet = content[:120].replace("\n", " ").strip()
-            if len(content) > 120:
-                snippet += "…"
-            masked = ToolMessage(
-                content=f"[Observation masked: {snippet}]",
-                tool_call_id=getattr(msg, "tool_call_id", ""),
-                name=getattr(msg, "name", None),
-            )
-            result.append(masked)
-        else:
-            result.append(msg)
-    return result
+def get_token_tracker() -> TokenUsageTracker:
+    global _token_tracker
+    if _token_tracker is None:
+        _token_tracker = TokenUsageTracker()
+    return _token_tracker
 
 
-def shrink_messages_for_retry(
-    messages: list[BaseMessage],
-    *,
-    keep_ratio: float,
-    keep_last_min: int = 2,
-) -> list[BaseMessage]:
-    """
-    Shrink a message list while preserving SystemMessages and the most recent turns.
-
-    All SystemMessages are kept verbatim (system prompts carry the task contract).
-    Among non-system messages, the trailing ``keep_ratio`` fraction is preserved,
-    with a floor of ``keep_last_min`` to ensure the last user/assistant turn is
-    visible to the LLM.
-
-    Args:
-        messages: Original message list.
-        keep_ratio: Fraction of non-system messages to keep from the tail
-            (e.g. 0.5 keeps the most recent half). Clamped to [0, 1].
-        keep_last_min: Minimum number of trailing non-system messages to keep,
-            even if ``keep_ratio`` would yield fewer. Useful when the message
-            list is small.
-
-    Returns:
-        New message list with SystemMessages preserved at their original positions
-        relative to the kept tail.
-    """
-    if not messages:
-        return list(messages or [])
-
-    ratio = max(0.0, min(1.0, float(keep_ratio)))
-    system_msgs = [m for m in messages if isinstance(m, SystemMessage)]
-    non_system = [m for m in messages if not isinstance(m, SystemMessage)]
-
-    if not non_system:
-        return list(system_msgs)
-
-    keep_count = max(int(len(non_system) * ratio), keep_last_min)
-    keep_count = min(keep_count, len(non_system))
-    kept_tail = non_system[-keep_count:] if keep_count > 0 else []
-
-    return system_msgs + kept_tail
+def get_memory_middleware() -> MemoryMiddleware:
+    global _memory_middleware
+    if _memory_middleware is None:
+        _memory_middleware = MemoryMiddleware()
+    return _memory_middleware
 
 
-_DEFAULT_SHRINK_RATIOS = (0.5, 0.25)
-
-
-def _resolve_shrink_ratios(max_retries: int) -> tuple[float, ...]:
-    """Pick a shrink schedule sized to ``max_retries``.
-
-    Always returns at least one ratio. For ``max_retries`` larger than the
-    default schedule, additional retries reuse the smallest ratio (most
-    aggressive truncation).
-    """
-    retries = max(1, int(max_retries))
-    if retries <= len(_DEFAULT_SHRINK_RATIOS):
-        return _DEFAULT_SHRINK_RATIOS[:retries]
-    extra = retries - len(_DEFAULT_SHRINK_RATIOS)
-    return _DEFAULT_SHRINK_RATIOS + (_DEFAULT_SHRINK_RATIOS[-1],) * extra
-
-
-def invoke_with_token_recovery(
-    llm: Any,
-    messages: list[BaseMessage],
-    *,
-    config: dict | None = None,
-    max_retries: int = 2,
-    label: str = "",
-) -> Any:
-    """
-    Invoke an LLM with messages, recovering from token-limit errors only.
-
-    Strategy:
-        1. Try the original ``messages`` once.
-        2. If the failure matches ``is_token_limit_error``, shrink the message
-           history (preserving SystemMessages and the trailing turns) and retry.
-        3. Other exceptions propagate immediately so callers can surface real
-           errors (auth, schema, network) without silent corruption.
-        4. After ``max_retries`` exhausted, re-raise the last token-limit error.
-
-    The function does not mutate ``messages``. ``config`` is forwarded to
-    ``llm.invoke`` when provided (LangChain ``RunnableConfig``).
-
-    Args:
-        llm: A LangChain runnable exposing ``.invoke(messages, config=...)``.
-        messages: Conversation history.
-        config: Optional ``RunnableConfig`` forwarded to the LLM.
-        max_retries: Maximum shrink+retry attempts after the first failure
-            (default 2). Total LLM calls = 1 + max_retries in the worst case.
-        label: Optional tag included in log messages for traceability.
-
-    Returns:
-        Whatever ``llm.invoke`` returns.
-
-    Raises:
-        Exception: Re-raises the last error if all retries fail or the error
-            is not token-limit related.
-    """
-    invoke_kwargs: dict[str, Any] = {}
-    if config is not None:
-        invoke_kwargs["config"] = config
-
-    try:
-        return llm.invoke(messages, **invoke_kwargs)
-    except Exception as exc:
-        if not is_token_limit_error(exc):
-            raise
-        last_exc: BaseException = exc
-        ratios = _resolve_shrink_ratios(max_retries)
-        for attempt, ratio in enumerate(ratios, start=1):
-            shrunk = shrink_messages_for_retry(messages, keep_ratio=ratio)
-            if len(shrunk) >= len(messages):
-                # Already at minimum size; further shrinking would be a no-op.
-                break
-            logger.warning(
-                "[token_recovery%s] attempt %d/%d: shrank %d -> %d messages (ratio=%.2f)",
-                f" {label}" if label else "",
-                attempt,
-                len(ratios),
-                len(messages),
-                len(shrunk),
-                ratio,
-            )
-            try:
-                return llm.invoke(shrunk, **invoke_kwargs)
-            except Exception as retry_exc:
-                if not is_token_limit_error(retry_exc):
-                    raise
-                last_exc = retry_exc
-        raise last_exc
-
-
-async def ainvoke_with_token_recovery(
-    llm: Any,
-    messages: list[BaseMessage],
-    *,
-    config: dict | None = None,
-    max_retries: int = 2,
-    label: str = "",
-) -> Any:
-    """Async variant of :func:`invoke_with_token_recovery`.
-
-    See :func:`invoke_with_token_recovery` for behaviour. Uses ``llm.ainvoke``
-    instead of ``llm.invoke``.
-    """
-    invoke_kwargs: dict[str, Any] = {}
-    if config is not None:
-        invoke_kwargs["config"] = config
-
-    try:
-        return await llm.ainvoke(messages, **invoke_kwargs)
-    except Exception as exc:
-        if not is_token_limit_error(exc):
-            raise
-        last_exc: BaseException = exc
-        ratios = _resolve_shrink_ratios(max_retries)
-        for attempt, ratio in enumerate(ratios, start=1):
-            shrunk = shrink_messages_for_retry(messages, keep_ratio=ratio)
-            if len(shrunk) >= len(messages):
-                break
-            logger.warning(
-                "[token_recovery%s] attempt %d/%d: shrank %d -> %d messages (ratio=%.2f)",
-                f" {label}" if label else "",
-                attempt,
-                len(ratios),
-                len(messages),
-                len(shrunk),
-                ratio,
-            )
-            try:
-                return await llm.ainvoke(shrunk, **invoke_kwargs)
-            except Exception as retry_exc:
-                if not is_token_limit_error(retry_exc):
-                    raise
-                last_exc = retry_exc
-        raise last_exc

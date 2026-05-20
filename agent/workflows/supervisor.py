@@ -35,8 +35,8 @@ from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
-from agent.core.prompts_v2 import LEAD_RESEARCHER_PROMPT
-from agent.core.state_v2 import (
+from agent.core.prompts import LEAD_RESEARCHER_PROMPT
+from agent.core.state import (
     ConductResearch,
     ResearchComplete,
     ResearchDeep,
@@ -55,7 +55,7 @@ def _get_researcher_subgraph():
     """Lazy-import researcher subgraph to avoid circular dependencies."""
     global _researcher_subgraph
     if _researcher_subgraph is None:
-        from agent.workflows.researcher_v2 import build_researcher_subgraph
+        from agent.workflows.researcher import build_researcher_subgraph
         _researcher_subgraph = build_researcher_subgraph()
     return _researcher_subgraph
 
@@ -137,51 +137,44 @@ async def supervisor(
                     f"[Supervisor] Injected {len(viewed_images)} image(s) "
                     f"into LLM context"
                 )
-                # Clear from config so images are not re-injected on subsequent calls
                 configurable["viewed_images"] = {}
                 config["configurable"] = configurable
         except ImportError:
-            pass
+            logger.debug("[Supervisor] Multimodal support not available")
 
     # Combine context prefix with conversation history from state
     supervisor_messages = context_messages + list(
         state.get("supervisor_messages", [])
     )
 
-    # === Loop Detection (middleware_v2) ===
-    try:
-        from agent.core.middleware_v2 import get_loop_detector
-        loop_detector = get_loop_detector()
-        recent_content = "\n".join([
-            str(m.content)[:200]
-            for m in supervisor_messages[-5:]
-            if hasattr(m, "content") and m.content
-        ])
-        if loop_detector.check(recent_content):
-            logger.warning("[Supervisor] Loop detected, forcing completion")
-            return Command(
-                goto="supervisor_tools",
-                update={
-                    "supervisor_messages": [supervisor_messages[-1]],
-                    "research_iterations": state.get("research_iterations", 0) + 1,
-                },
-            )
-    except ImportError:
-        pass
+    # === Loop Detection ===
+    from agent.core.middleware import get_loop_detector
+    loop_detector = get_loop_detector()
+    recent_content = "\n".join([
+        str(m.content)[:200]
+        for m in supervisor_messages[-5:]
+        if hasattr(m, "content") and m.content
+    ])
+    if loop_detector.check(recent_content):
+        logger.warning("[Supervisor] Loop detected, forcing completion")
+        return Command(
+            goto="supervisor_tools",
+            update={
+                "supervisor_messages": [supervisor_messages[-1]],
+                "research_iterations": state.get("research_iterations", 0) + 1,
+            },
+        )
 
     response = await research_model.ainvoke(supervisor_messages)
 
-    # === Token Usage Tracking (middleware_v2) ===
-    try:
-        from agent.core.middleware_v2 import get_token_tracker
-        tracker = get_token_tracker()
-        usage = getattr(response, "usage_metadata", None) or {}
-        input_tokens = usage.get("input_tokens", 0)
-        output_tokens = usage.get("output_tokens", 0)
-        if input_tokens or output_tokens:
-            tracker.record("supervisor", input_tokens, output_tokens)
-    except (ImportError, Exception):
-        pass
+    # === Token Usage Tracking ===
+    from agent.core.middleware import get_token_tracker
+    tracker = get_token_tracker()
+    usage = getattr(response, "usage_metadata", None) or {}
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    if input_tokens or output_tokens:
+        tracker.record("supervisor", input_tokens, output_tokens)
 
     return Command(
         goto="supervisor_tools",
@@ -245,14 +238,12 @@ async def supervisor_tools(
 
     # --- ThinkTool calls ---
     think_calls = [tc for tc in tool_calls if tc["name"] == "ThinkTool"]
-    auto_complete = False
     for tc in think_calls:
         reflection = tc["args"].get("reflection", "")
         gaps = tc["args"].get("gaps_identified", [])
         confidence = tc["args"].get("confidence_level", "medium")
         next_strategy = tc["args"].get("next_strategy", "search_more")
 
-        # Structured think_tool processing (unified design enhancement)
         think_summary = (
             f"Reflection recorded:\n"
             f"- Gaps identified: {', '.join(gaps) if gaps else 'none'}\n"
@@ -265,34 +256,6 @@ async def supervisor_tools(
             name="ThinkTool",
             tool_call_id=tc["id"],
         ))
-
-        # Auto-complete: confidence=high + strategy=complete
-        if confidence == "high" and next_strategy == "complete":
-            auto_complete = True
-            logger.info("[SupervisorTools] ThinkTool auto-complete: high confidence + complete strategy")
-
-    # === Auto-ResearchComplete: if think_tool signals completion and no
-    #     ConductResearch or ResearchDeep calls are pending, end the loop ===
-    research_calls = (
-        [tc for tc in tool_calls if tc["name"] == "ConductResearch"] +
-        [tc for tc in tool_calls if tc["name"] == "ResearchDeep"]
-    )
-    if auto_complete and not research_calls:
-        logger.info("[SupervisorTools] Auto-triggering ResearchComplete from think_tool")
-        auto_tc_id = think_calls[0]["id"] if think_calls else "auto_complete"
-        all_tool_messages.append(ToolMessage(
-            content="Research phase automatically completed. The supervisor has high confidence "
-                    "and the think_tool strategy indicates completion.",
-            name="ResearchComplete",
-            tool_call_id=auto_tc_id,
-        ))
-        return Command(
-            goto="__end__",
-            update={
-                "supervisor_messages": all_tool_messages,
-                "notes": _extract_notes_from_messages(supervisor_messages),
-            },
-        )
 
     # --- ResearchDeep calls (Phase 2: breadth × depth recursion) ---
     deep_calls = [tc for tc in tool_calls if tc["name"] == "ResearchDeep"]
@@ -307,7 +270,7 @@ async def supervisor_tools(
         )
 
         try:
-            from agent.workflows.deep_research_v2 import (
+            from agent.workflows.deep_research import (
                 execute_deep_research,
                 format_deep_research_result,
             )
@@ -353,11 +316,11 @@ async def supervisor_tools(
     # --- SourceCurate calls ---
     curate_calls = [tc for tc in tool_calls if tc["name"] == "SourceCurate"]
     if curate_calls:
-        curated = await _execute_source_curation(state, config, research_config)
-        update_payload["curated_sources"] = curated
+        collected_urls = _collect_source_urls(state)
+        update_payload["curated_sources"] = collected_urls
         for tc in curate_calls:
             all_tool_messages.append(ToolMessage(
-                content=f"Sources curated. Top {len(curated)} sources ranked by quality and relevance.",
+                content=f"Sources collected. {len(collected_urls)} unique URLs will be curated during report generation.",
                 name="SourceCurate",
                 tool_call_id=tc["id"],
             ))
@@ -473,42 +436,25 @@ def _extract_notes_from_messages(messages: list) -> list[str]:
     return notes
 
 
-async def _execute_source_curation(
-    state: SupervisorState,
-    config: RunnableConfig,
-    research_config: ResearchConfiguration,
-) -> list[dict]:
-    """Execute source curation using LLM-based ranking.
+def _collect_source_urls(state: SupervisorState) -> list[dict]:
+    """Collect source URLs from research notes for downstream curation.
 
-    Pattern from gpt-researcher's SourceCurator.
-    In Phase 3, this will be a dedicated tool with structured output.
-    For Phase 1, it's implemented inline.
+    Actual quality ranking happens during report generation (report.py::curate_sources).
+    This just extracts and deduplicates URLs from the supervisor's collected research.
     """
+    import re
+
     notes = _extract_notes_from_messages(state.get("supervisor_messages", []))
     if not notes:
         return []
 
-    # Extract source URLs from notes
-    import re
     url_pattern = re.compile(r'https?://[^\s)\]]+')
-    all_urls = []
-    for note in notes:
-        urls = url_pattern.findall(note)
-        all_urls.extend(urls)
-
-    if not all_urls:
-        return []
-
-    # Deduplicate
     seen = set()
     unique_urls = []
-    for url in all_urls:
-        if url not in seen:
-            seen.add(url)
-            unique_urls.append(url)
+    for note in notes:
+        for url in url_pattern.findall(note):
+            if url not in seen:
+                seen.add(url)
+                unique_urls.append({"url": url, "title": url.split("/")[-1] or url})
 
-    max_sources = min(research_config.max_curated_sources, len(unique_urls))
-    return [
-        {"url": url, "title": url.split("/")[-1] or url, "relevance_score": 0.8}
-        for url in unique_urls[:max_sources]
-    ]
+    return unique_urls

@@ -49,7 +49,6 @@ def build_lead_agent(
         vision_enabled=vision_enabled,
         memory_enabled=getattr(settings, "memory_enabled", True),
         summarization_enabled=getattr(settings, "summarization_enabled", True),
-        loop_detection_enabled=getattr(settings, "loop_detection_enabled", True),
     )
 
     # Filter tools by enabled skills

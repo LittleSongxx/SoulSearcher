@@ -1,235 +1,294 @@
+"""Unified state definitions for the Deep Research Agent.
+
+Integrates patterns from:
+- open_deep_research: override_reducer, SupervisorState/ResearcherState subgraph nesting
+- gpt-researcher: depth/breadth tracking, learnings accumulation
+- deer-flow: Structured output models for tool calls
+"""
+
 import operator
-from typing import Annotated, Any, Literal, Optional, TypedDict
+from typing import Annotated, Any, Literal, Optional
 
-from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
-
-from agent.core.message_utils import summarize_messages
-from common.config import settings
-
-from .middleware import mask_old_observations, maybe_strip_tool_messages
+from langchain_core.messages import BaseMessage, MessageLikeRepresentation
+from langgraph.graph import MessagesState
+from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
 
 
-def capped_add_messages(
-    existing: list[BaseMessage] | None, new: list[BaseMessage] | None
-) -> list[BaseMessage]:
+# =============================================================================
+# Reducers
+# =============================================================================
+
+def override_reducer(current_value, new_value):
+    """Reducer that allows complete override via {'type': 'override', 'value': ...}.
+
+    Used for state fields that need full replacement (not accumulation).
+    Pattern from open_deep_research.
     """
-    Aggregate messages and trim to keep context bounded.
+    if isinstance(new_value, dict) and new_value.get("type") == "override":
+        return new_value.get("value", new_value)
+    return operator.add(current_value, new_value)
 
-    Uses a hybrid strategy (observation masking + optional LLM summarization):
-    1. Merge new messages via LangGraph's add_messages.
-    2. Apply legacy strip_tool_messages if enabled (backward compat).
-    3. Apply observation masking: mask stale ToolMessage observations while
-       keeping reasoning/action history intact (KV-cache friendly).
-    4. If trim_messages is enabled, keep head (immutable prefix for KV-cache
-       stability) + tail, with optional summarization of the middle.
+
+# =============================================================================
+# Structured Output Models (Pydantic - used as LangChain tools)
+# =============================================================================
+
+class ClarifyWithUser(BaseModel):
+    """Structured clarification analysis."""
+    need_clarification: bool = Field(
+        description="Whether the user needs to be asked a clarifying question."
+    )
+    question: str = Field(
+        description="A question to ask the user to clarify the research scope."
+    )
+    verification: str = Field(
+        description="Verification that research will begin after user provides needed info."
+    )
+
+
+class ResearchQuestion(BaseModel):
+    """Structured research brief from user messages."""
+    research_brief: str = Field(
+        description="A detailed research question that will guide the entire research process."
+    )
+
+
+class ComplexityAssessment(BaseModel):
+    """Structured complexity classification for routing."""
+    complexity: Literal["simple", "standard", "deep"] = Field(
+        description="Complexity level of the research task."
+    )
+    estimated_depth: int = Field(
+        description="Recommended recursion depth (1=surface, 2=moderate, 3=thorough).",
+        ge=1, le=3
+    )
+    estimated_breadth: int = Field(
+        description="Recommended search breadth (number of parallel queries).",
+        ge=1, le=6
+    )
+    reasoning: str = Field(
+        description="Brief reasoning for the complexity classification."
+    )
+
+
+class ConductResearch(BaseModel):
+    """Delegate a research task to a specialized sub-researcher.
+
+    The supervisor uses this tool to spawn parallel research subgraphs.
+    Pattern from open_deep_research.
     """
-    merged = add_messages(existing, new)
-    merged = maybe_strip_tool_messages(merged)
-
-    # Hybrid observation masking — replaces stale observations with compact
-    # placeholders, preserving reasoning and action history.
-    merged = mask_old_observations(merged)
-
-    if not settings.trim_messages:
-        return merged
-
-    keep_first = max(int(getattr(settings, "trim_messages_keep_first", 1)), 0)
-    keep_last = max(int(getattr(settings, "trim_messages_keep_last", 8)), 0)
-    if keep_first + keep_last == 0 or len(merged) <= keep_first + keep_last:
-        return merged
-
-    # KV-cache friendly: head (prefix) is immutable — never modify these messages
-    head = merged[:keep_first] if keep_first else []
-    tail = merged[-keep_last:] if keep_last else []
-
-    # Optional summarization of middle history (hybrid: masking first, then summarize)
-    if settings.summary_messages and len(merged) > settings.summary_messages_trigger:
-        middle = merged[keep_first : len(merged) - keep_last]
-        summary_msg = summarize_messages(middle)
-        # Append summary after immutable prefix (not replacing head messages)
-        trimmed = head + [summary_msg] + tail
-    else:
-        trimmed = head + tail
-
-    return trimmed
+    research_topic: str = Field(
+        description="The topic to research. Must be a single, well-defined topic "
+                    "described in detail (at least a paragraph). Include specific "
+                    "instructions for the researcher."
+    )
 
 
-# Execution status type
-ExecutionStatus = Literal[
-    "pending", "running", "paused", "completed", "failed", "cancelled"
-]
+class ThinkTool(BaseModel):
+    """Enhanced strategic reflection tool.
 
+    Unlike open_deep_research's basic think_tool that just logs thoughts,
+    this enhanced version structures thinking into actionable data that
+    downstream nodes can consume for automated decision-making.
 
-class AgentState(TypedDict):
+    Pattern: open_deep_research think_tool + gpt-researcher's structured reflection.
     """
-    The state schema for the research agent.
-    This represents the agent's "short-term memory" during a research session.
+    reflection: str = Field(
+        description="Detailed reflection on current research progress and strategy."
+    )
+    gaps_identified: list[str] = Field(
+        description="Specific information gaps that still need to be filled."
+    )
+    confidence_level: Literal["low", "medium", "high"] = Field(
+        description="Current confidence level in research completeness."
+    )
+    next_strategy: Literal["search_more", "curate", "complete"] = Field(
+        description="Recommended next action: search for more info, curate existing "
+                    "sources, or complete the research phase."
+    )
 
-    Enhanced with fields from Manus for better tracking and control.
+
+class SourceCurate(BaseModel):
+    """Curate and rank collected sources by quality and relevance.
+
+    From gpt-researcher's SourceCurator pattern.
     """
+    max_sources: int = Field(
+        default=10,
+        description="Maximum number of top sources to retain after curation."
+    )
 
-    # ============ Input/Output ============
-    # User's original input/query
+
+class ResearchComplete(BaseModel):
+    """Signal that the research phase is complete.
+
+    Called by supervisor when satisfied with research coverage.
+    From open_deep_research.
+    """
+    summary: str = Field(
+        default="",
+        description="Optional summary of why research is considered complete."
+    )
+
+
+class ResearchDeep(BaseModel):
+    """Initiate deep recursive research using breadth x depth algorithm.
+
+    This triggers deterministic deep research when the supervisor
+    determines comprehensive coverage is needed.
+    """
+    research_topic: str = Field(
+        description="The research topic for deep recursive exploration."
+    )
+    breadth: int = Field(
+        default=4,
+        description="Number of search queries to generate per depth level."
+    )
+    depth: int = Field(
+        default=2,
+        description="How many levels deep to recursively research."
+    )
+
+
+# =============================================================================
+# State Definitions
+# =============================================================================
+
+class AgentInputState(MessagesState):
+    """Input state: only messages required from caller."""
+    pass
+
+
+class AgentState(MessagesState):
+    """Main agent state for the complete research workflow.
+
+    This is the top-level state that flows through the entire graph:
+    Input Gateway → Supervisor Subgraph → Final Report Generation.
+    """
+    # === User input ===
     input: str
-    # Optional base64-encoded images from the user
-    images: list[dict[str, Any]]
-    # Final report/answer
-    final_report: str
-    # Draft report for evaluator/optimizer loop
-    draft_report: str
+    skill_ids: list[str]
+    images: list[dict[str, Any]]  # Base64-encoded images from user input (multimodal)
 
-    # ============ User Context ============
-    # User identifier for memory/namespace
-    user_id: str
-    # Thread/conversation identifier
-    thread_id: str
-    # Agent profile ID (for GPTs-like behavior)
-    agent_id: str
-
-    # ============ Execution Control ============
-    # Message history for LLM context (auto-trimmed via capped_add_messages)
-    messages: Annotated[list[BaseMessage], capped_add_messages]
-    # Structured research plan (list of search queries/steps)
-    research_plan: list[str]
-    # Current step being executed
-    current_step: int
-    # Execution status
-    status: ExecutionStatus
-    # Completion flag
-    is_complete: bool
-    # Start timestamp (ISO format)
-    started_at: str
-    # End timestamp (ISO format)
-    ended_at: str
-
-    # ============ Routing ============
-    # Routing decision: direct, agent, web, deep, clarify
-    route: str
-    # Routing reasoning (from smart router)
-    routing_reasoning: str
-    # Routing confidence (0-1)
-    routing_confidence: float
-    # Suggested queries from router
-    suggested_queries: list[str]
-
-    # ============ Clarification ============
-    # Flag for clarify step
+    # === Input Gateway outputs ===
+    research_brief: Optional[str]
+    complexity: str  # "simple" | "standard" | "deep"
+    estimated_depth: int
+    estimated_breadth: int
     needs_clarification: bool
-    # Clarification question to ask user
-    clarification_question: str
 
-    # ============ Research Data ============
-    # All scraped content from searches
-    scraped_content: Annotated[list[dict[str, Any]], operator.add]
-    # Code execution results
-    code_results: Annotated[list[dict[str, Any]], operator.add]
-    # Summary notes from deep search
-    summary_notes: list[str]
-    # Sources collected
+    # === Supervisor state (accumulated across iterations) ===
+    supervisor_messages: Annotated[list[MessageLikeRepresentation], override_reducer]
+    raw_notes: Annotated[list[str], override_reducer]
+    notes: Annotated[list[str], override_reducer]
+    research_iterations: int
+
+    # === Report format ===
+    report_format: str  # "markdown" (default) or "html"
+
+    # === Collected sources ===
     sources: list[dict[str, str]]
+    curated_sources: list[dict[str, Any]]
 
-    # ============ Deep Search Artifacts ============
-    # Structured artifacts from deep search (quality metrics, claims, sources, etc.)
-    deepsearch_artifacts: dict[str, Any]
-    # Quality summary from deep search diagnostics
-    quality_summary: dict[str, Any]
-
-    # ============ Quality Control ============
-    # Evaluation feedback for optimizer
-    evaluation: str
-    # Evaluator verdict ("pass" / "revise" / "incomplete")
-    verdict: str
-    # Structured evaluation dimensions (coverage, accuracy, freshness, coherence)
-    eval_dimensions: dict[str, float]
-    # Missing topics identified by evaluator
-    missing_topics: list[str]
-    # Revision control
-    revision_count: int
-    max_revisions: int
-
-    # ============ Tool Control ============
-    # Tool approval gating
-    tool_approved: bool
-    # Pending tool calls awaiting approval
-    pending_tool_calls: list[dict[str, Any]]
-    # Tool call accounting
-    tool_call_count: int
-    # Maximum tool calls allowed
-    tool_call_limit: int
-    # Tools enabled for this session
-    enabled_tools: dict[str, bool]
-
-    # ============ Cancellation & Error ============
-    # Cancellation support
-    cancel_token_id: Optional[str]  # 取消令牌 ID
-    is_cancelled: bool  # 是否已取消
-    # Error tracking
-    errors: Annotated[list[str], operator.add]
-    # Last error message
-    last_error: str
-
-    # ============ Research Tree ============
-    # Tree-based research structure (serialized dict)
-    research_tree: dict[str, Any]
-    # Current branch being explored
-    current_branch_id: Optional[str]
-    # Whether tree exploration is enabled
-    tree_exploration_enabled: bool
-
-    # ============ Hierarchical Agent Control ============
-    # Coordinator's chosen action (plan, research, synthesize, reflect, complete)
-    coordinator_action: str
-    # Coordinator's reasoning for the decision
-    coordinator_reasoning: str
-    # Number of coordinator iterations (prevents infinite loops)
-    coordinator_iterations: int
-
-    # ============ Compressed Knowledge ============
-    # Structured compressed knowledge from research
-    compressed_knowledge: dict[str, Any]
-
-    # ============ Domain Routing ============
-    # Detected research domain (scientific, legal, financial, etc.)
-    domain: str
-    # Domain-specific configuration (search hints, sources, etc.)
-    domain_config: dict[str, Any]
-
-    # ============ Sub-Agent Context Isolation ============
-    # Tracking of sub-agent contexts for parallel branches
-    sub_agent_contexts: dict[str, dict[str, Any]]
-
-    # ============ Metrics ============
-    # Token usage tracking
-    total_input_tokens: int
-    total_output_tokens: int
+    # === Final output ===
+    final_report: str
 
 
-class ResearchPlan(TypedDict):
-    """Structured research plan output."""
+class SupervisorState(TypedDict):
+    """State for the research supervisor subgraph.
 
-    queries: list[str]
-    reasoning: str
-
-
-class SearchResult(TypedDict):
-    """Search result structure."""
-
-    query: str
-    results: list[dict[str, Any]]
-    timestamp: str
-
-
-class CodeExecution(TypedDict):
-    """Code execution result structure."""
-
-    code: str
-    output: str
-    error: str | None
-    image: str | None  # Base64 encoded image if generated
+    The supervisor manages research delegation: it decides which topics
+    to research, delegates to parallel researcher subgraphs via ConductResearch,
+    reflects via think_tool, and signals completion via ResearchComplete.
+    """
+    supervisor_messages: Annotated[list[MessageLikeRepresentation], override_reducer]
+    research_brief: str
+    complexity: str
+    estimated_depth: int
+    estimated_breadth: int
+    notes: Annotated[list[str], override_reducer]
+    raw_notes: Annotated[list[str], override_reducer]
+    research_iterations: int
+    deep_research_count: int
+    curated_sources: list[dict[str, Any]]
 
 
-class QueryState(TypedDict):
-    """State for a single parallel research query."""
+class ResearcherState(TypedDict):
+    """State for individual researcher subgraphs.
 
-    query: str
+    Each researcher is spawned by the supervisor with a specific research_topic.
+    It uses search tools to gather information, reflects via think_tool,
+    and produces compressed research output.
+    """
+    researcher_messages: Annotated[list[MessageLikeRepresentation], operator.add]
+    tool_call_iterations: int
+    research_topic: str
+    compressed_research: str
+    raw_notes: Annotated[list[str], override_reducer]
+
+
+class ResearcherOutputState(BaseModel):
+    """Output state from individual researchers (returned to supervisor)."""
+    compressed_research: str
+    raw_notes: Annotated[list[str], override_reducer]
+
+
+# =============================================================================
+# State Bridge: Old → New State Adapter
+# =============================================================================
+
+def build_initial_state(
+    input_text: str = "",
+    user_id: str = "",
+    images: list[dict[str, Any]] | None = None,
+    research_brief: dict[str, Any] | None = None,
+    messages: list | None = None,
+    **kwargs,
+) -> dict:
+    """Build an initial AgentState from main.py fields.
+
+    Bridges legacy fields into the standard AgentState.
+
+    Args:
+        input_text: User's query text.
+        user_id: User identifier.
+        images: Optional images (stored in metadata, not core state).
+        research_brief: Pre-existing research brief dict (from store).
+        messages: Initial messages (system prompts, memory context, etc.).
+        **kwargs: Additional legacy fields (ignored).
+
+    Returns:
+        dict ready to be used as initial_state for the v2 graph.
+    """
+    initial_state: dict[str, Any] = {
+        "input": input_text,
+        "images": images or [],
+        "skill_ids": kwargs.get("skill_ids", []),
+        "research_brief": None,
+        "complexity": "standard",
+        "estimated_depth": 1,
+        "estimated_breadth": 2,
+        "needs_clarification": False,
+        "supervisor_messages": [],
+        "raw_notes": [],
+        "notes": [],
+        "research_iterations": 0,
+        "sources": [],
+        "curated_sources": [],
+        "final_report": "",
+        "report_format": kwargs.get("report_format", "markdown"),
+        "messages": messages or [],
+    }
+
+    # Handle research_brief from store memory (pre-existing brief)
+    if isinstance(research_brief, dict) and research_brief:
+        brief_text = research_brief.get("research_brief", "")
+        if brief_text:
+            initial_state["research_brief"] = brief_text
+
+    # Inject user_id into configurable metadata (not state directly)
+    if user_id:
+        initial_state["_user_id"] = user_id
+
+    return initial_state

@@ -2,8 +2,7 @@
 Public API surface for `agent.workflows`.
 
 This module is intentionally **lazy** to prevent circular import chains
-between workflows and tools (e.g. research fetchers that also need URL
-canonicalization helpers living in workflows).
+between workflows and tools.
 """
 
 from __future__ import annotations
@@ -25,26 +24,19 @@ __all__ = [
     "check_cancellation",
     "get_deep_agent_prompt",
     "get_search_cache",
-    "handle_cancellation",
     "initialize_enhanced_tools",
-    "run_deepsearch",
-    "run_deepsearch_optimized",
 ]
 
 _SYMBOL_TO_MODULE: dict[str, str] = {
     # Graph node helpers
-    "initialize_enhanced_tools": "agent.workflows.nodes",
-    "check_cancellation": "agent.workflows.nodes",
-    "handle_cancellation": "agent.workflows.nodes",
+    "initialize_enhanced_tools": "agent.workflows.agent_tools",
+    "check_cancellation": "common.cancellation",
     # Deep research helpers
-    "get_deep_agent_prompt": "agent.workflows.deep_agent",
+    "get_deep_agent_prompt": "agent.workflows.agent_tools",
     # Agent factories/tools
     "build_tool_agent": "agent.workflows.agent_factory",
     "build_writer_agent": "agent.workflows.agent_factory",
     "build_agent_tools": "agent.workflows.agent_tools",
-    # Core workflows
-    "run_deepsearch": "agent.workflows.deepsearch",
-    "run_deepsearch_optimized": "agent.workflows.deepsearch_optimized",
     # Response/aggregation
     "ResponseHandler": "agent.workflows.response_handler",
     "ResultAggregator": "agent.workflows.result_aggregator",
@@ -59,7 +51,7 @@ _SYMBOL_TO_MODULE: dict[str, str] = {
 }
 
 
-def __getattr__(name: str) -> Any:  # pragma: no cover
+def __getattr__(name: str) -> Any:
     module_path = _SYMBOL_TO_MODULE.get(name)
     if not module_path:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -67,5 +59,5 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
     return getattr(module, name)
 
 
-def __dir__() -> list[str]:  # pragma: no cover
+def __dir__() -> list[str]:
     return sorted(set(list(globals().keys()) + list(_SYMBOL_TO_MODULE.keys())))

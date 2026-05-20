@@ -1,9 +1,7 @@
 """
 Public API surface for `agent.core`.
 
-This module is intentionally **lazy** to avoid circular import chains. Importing
-submodules like `agent.core.search_cache` should not pull in the whole graph /
-workflow stack.
+This module is intentionally **lazy** to avoid circular import chains.
 """
 
 from __future__ import annotations
@@ -12,39 +10,31 @@ import importlib
 from typing import Any
 
 __all__ = [
-    "AgentProcessorConfig",
     "AgentState",
-    "AgentStateV2",
-    "ContextManager",
+    "AgentInputState",
     "Event",
     "EventEmitter",
-    "QueryState",
-    "ResearchPlan",
     "SearchCache",
     "ToolEvent",
     "ToolEventType",
     "create_checkpointer",
     "create_research_graph",
-    "create_unified_research_graph",
-    "enforce_tool_call_limit",
     "event_stream_generator",
-    "get_context_manager",
     "get_emitter",
     "get_emitter_sync",
-    "maybe_strip_tool_messages",
     "remove_emitter",
-    "retry_call",
+    "build_initial_state",
+    "create_research_graph_with_checkpointer",
 ]
 
 _SYMBOL_TO_MODULE: dict[str, str] = {
     # Graph/state
     "create_research_graph": "agent.core.graph",
-    "create_unified_research_graph": "agent.core.graph_v2",
+    "create_research_graph_with_checkpointer": "agent.core.graph",
     "create_checkpointer": "agent.core.graph",
     "AgentState": "agent.core.state",
-    "AgentStateV2": "agent.core.state_v2",
-    "QueryState": "agent.core.state",
-    "ResearchPlan": "agent.core.state",
+    "AgentInputState": "agent.core.state",
+    "build_initial_state": "agent.core.state",
     # Events / streaming
     "Event": "agent.core.events",
     "EventEmitter": "agent.core.events",
@@ -54,13 +44,6 @@ _SYMBOL_TO_MODULE: dict[str, str] = {
     "get_emitter": "agent.core.events",
     "get_emitter_sync": "agent.core.events",
     "remove_emitter": "agent.core.events",
-    # Context
-    "ContextManager": "agent.core.context_manager",
-    "get_context_manager": "agent.core.context_manager",
-    # Middleware
-    "enforce_tool_call_limit": "agent.core.middleware",
-    "retry_call": "agent.core.middleware",
-    "maybe_strip_tool_messages": "agent.core.middleware",
     # Config
     "AgentProcessorConfig": "agent.core.processor_config",
     # Cache
@@ -68,7 +51,7 @@ _SYMBOL_TO_MODULE: dict[str, str] = {
 }
 
 
-def __getattr__(name: str) -> Any:  # pragma: no cover
+def __getattr__(name: str) -> Any:
     module_path = _SYMBOL_TO_MODULE.get(name)
     if not module_path:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -76,5 +59,5 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
     return getattr(module, name)
 
 
-def __dir__() -> list[str]:  # pragma: no cover
+def __dir__() -> list[str]:
     return sorted(set(list(globals().keys()) + list(_SYMBOL_TO_MODULE.keys())))

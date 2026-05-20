@@ -22,13 +22,13 @@ from langchain_core.runnables import RunnableConfig
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
-from agent.core.prompts_v2 import (
+from agent.core.prompts import (
     FINAL_REPORT_PROMPT,
     HTML_REPORT_CSS_TEMPLATE,
     HTML_REPORT_PROMPT,
     SOURCE_CURATION_PROMPT,
 )
-from agent.core.state_v2 import AgentState
+from agent.core.state import AgentState
 
 logger = logging.getLogger(__name__)
 
@@ -98,23 +98,6 @@ REPORT_STRUCTURE_TEMPLATES = {
 - ## Appendices: Data tables, methodology details (if needed)
 - ### Sources: Comprehensive reference list""",
 }
-
-REPORT_COMPOSER_PROMPT = """Classify this research brief into one report type. Respond with ONLY the type name.
-
-<Research Brief>
-{research_brief}
-</Research Brief>
-
-Report types:
-- academic: Literature reviews, scholarly topics, scientific research
-- market_research: Market analysis, industry trends, competitive intelligence
-- comparison: Comparing options, products, approaches, or viewpoints
-- how_to: Step-by-step guides, practical instructions, tutorials
-- summary: Topic overviews, briefings, general knowledge synthesis
-- deep_analysis: Complex multi-faceted topics requiring thorough exploration
-
-Type:"""
-
 
 def compose_report_structure(research_brief: str) -> str:
     """Select the best report structure template based on research brief content.
@@ -417,17 +400,14 @@ async def final_report_generation(
                 f"length={len(response.content)} chars)"
             )
 
-            # === Token Usage Tracking (middleware_v2) ===
-            try:
-                from agent.core.middleware_v2 import get_token_tracker
-                tracker = get_token_tracker()
-                usage = getattr(response, "usage_metadata", None) or {}
-                input_tokens = usage.get("input_tokens", 0)
-                output_tokens = usage.get("output_tokens", 0)
-                if input_tokens or output_tokens:
-                    tracker.record("report", input_tokens, output_tokens)
-            except (ImportError, Exception):
-                pass
+            # === Token Usage Tracking ===
+            from agent.core.middleware import get_token_tracker
+            tracker = get_token_tracker()
+            usage = getattr(response, "usage_metadata", None) or {}
+            input_tokens = usage.get("input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
+            if input_tokens or output_tokens:
+                tracker.record("report", input_tokens, output_tokens)
 
             final_content = response.content
 
@@ -473,18 +453,17 @@ async def final_report_generation(
                 except Exception as e:
                     logger.warning(f"[Report] Quality check skipped: {e}")
 
-            # === Memory Update (middleware_v2 + memory_v2) ===
+            # === Memory Update ===
+            from agent.core.middleware import get_memory_middleware
+            memory_mw = get_memory_middleware()
+            user_id = config.get("configurable", {}).get("user_id", "default")
+            memory_content = final_content
+            if report_format == "html":
+                import re
+                memory_content = re.sub(
+                    r"<[^>]+>", "", final_content[:10000]
+                )
             try:
-                from agent.core.middleware_v2 import get_memory_middleware
-                memory_mw = get_memory_middleware()
-                user_id = config.get("configurable", {}).get("user_id", "default")
-                # Strip HTML tags for memory storage
-                memory_content = final_content
-                if report_format == "html":
-                    import re
-                    memory_content = re.sub(
-                        r"<[^>]+>", "", final_content[:10000]
-                    )
                 await memory_mw.update_memory(
                     user_id=user_id,
                     query=research_brief[:500] if research_brief else "",
@@ -492,8 +471,6 @@ async def final_report_generation(
                     facts=[n[:200] for n in notes[:10] if n],
                 )
                 logger.info("[Report] Memory updated for user '%s'", user_id)
-            except ImportError:
-                logger.debug("[Report] Memory system not available")
             except Exception as e:
                 logger.warning(f"[Report] Memory update failed: {e}")
 

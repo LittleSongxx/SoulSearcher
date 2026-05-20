@@ -24,12 +24,12 @@ from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
-from agent.core.prompts_v2 import (
+from agent.core.prompts import (
     CLARIFY_WITH_USER_PROMPT,
     COMPLEXITY_CLASSIFIER_PROMPT,
     RESEARCH_BRIEF_PROMPT,
 )
-from agent.core.state_v2 import (
+from agent.core.state import (
     AgentState,
     ClarifyWithUser,
     ComplexityAssessment,
@@ -94,7 +94,7 @@ async def clarify_with_user(
                     f"into LLM context"
                 )
         except ImportError:
-            pass
+            logger.debug("[Clarify] Multimodal support not available")
 
     response = await clarification_model.ainvoke([HumanMessage(content=content)])
 
@@ -268,7 +268,7 @@ async def direct_answer(state: AgentState, config: RunnableConfig) -> dict:
         "tags": ["langsmith:nostream"],
     }
 
-    from agent.core.prompts_v2 import DIRECT_ANSWER_PROMPT
+    from agent.core.prompts import DIRECT_ANSWER_PROMPT
 
     prompt = DIRECT_ANSWER_PROMPT.format(
         input=user_input,
@@ -360,9 +360,9 @@ def _build_skill_context(state: AgentState) -> str:
                 except Exception:
                     parts.append(f"- Skill: {skill_name}")
     except ImportError:
-        pass
+        logger.debug("[SkillContext] Skill parser not available, using skill_ids only")
     except Exception:
-        pass
+        logger.warning("[SkillContext] Failed to parse skills, using skill_ids only", exc_info=True)
 
     # === Fallback: list skill_ids if no files loaded ===
     if skills_loaded == 0:

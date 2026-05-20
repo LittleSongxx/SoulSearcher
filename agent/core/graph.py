@@ -1,36 +1,195 @@
-import asyncio
+"""Unified Deep Research Graph — the "Strongest Version" integrating all three projects.
+
+Architecture (from unified design):
+┌─────────────────────────────────────────────────────────────────┐
+│ INPUT GATEWAY                                                   │
+│  clarify_with_user → write_research_brief → classify_complexity │
+│       ↓                        ↓                    ↓           │
+│    [END if need]          [always next]     simple→direct_answer│
+│                                              standard/deep→sup  │
+├─────────────────────────────────────────────────────────────────┤
+│ RESEARCH EXECUTION                                              │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ SUPERVISOR SUBGRAPH                                        │  │
+│  │  supervisor ⇄ supervisor_tools                            │  │
+│  │    tools: ConductResearch, ThinkTool, SourceCurate,        │  │
+│  │           ResearchComplete, [ResearchDeep - Phase 2]       │  │
+│  │    ConductResearch spawns Researcher Subgraphs in parallel │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                              ↓                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ RESEARCHER SUBGRAPH (N parallel instances)                 │  │
+│  │  researcher ⇄ researcher_tools → compress_research        │  │
+│  │    tools: search, think_tool, ResearchComplete, MCP        │  │
+│  │    compression: raw→embedding→LLM (mixed gradient)         │  │
+│  └───────────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│ REPORT GENERATION                                               │
+│  [source_curation] → final_report_generation → END              │
+└─────────────────────────────────────────────────────────────────┘
+
+Key design principles:
+1. Explicit data flow via typed State (not implicit middleware)
+2. Subgraph nesting for clear boundaries (open_deep_research pattern)
+3. Adaptive routing by complexity (unified design innovation)
+4. Three-tier model routing (fast/smart/strategic)
+
+Graph nodes:
+    clarify_with_user ──→ write_research_brief ──→ classify_complexity
+                                │                          │
+                    [always next]              simple → direct_answer → END
+                                               standard/deep → research_supervisor
+                                                                    │
+                                                    supervisor_subgraph (nested)
+                                                                    │
+                                                       final_report_generation
+                                                                    │
+                                                                   END
+"""
+
+from __future__ import annotations
+
 import logging
-from pathlib import Path
+from typing import Optional
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, START, StateGraph
 
-try:
-    import psycopg
-except ModuleNotFoundError:
-    psycopg = None
-
-if psycopg is not None:
-    from langgraph.checkpoint.postgres import PostgresSaver
-
-from agent.workflows.nodes import (
-    deepsearch_node,
-    deepsearch_planner_node,
-    direct_answer_node,
-    hitl_plan_review_node,
-    human_review_node,
-    route_node,
-)
-
-from .state import AgentState
+from agent.core.configuration import ResearchConfiguration
+from agent.core.state import AgentInputState, AgentState
 
 logger = logging.getLogger(__name__)
 
 
-if psycopg is not None:
+# =============================================================================
+# Graph Construction
+# =============================================================================
+
+def create_research_graph(
+    checkpointer=None,
+    interrupt_before: Optional[list[str]] = None,
+    store=None,
+):
+    """Create the unified deep research graph.
+
+    This is the main entry point for the Weaver Deep Research Agent.
+    It compiles the full graph with subgraph nesting for clean boundaries.
+
+    Args:
+        checkpointer: Optional LangGraph checkpointer for state persistence.
+        interrupt_before: Optional list of node names to interrupt before (HITL).
+        store: Optional LangGraph store.
+
+    Returns:
+        Compiled LangGraph StateGraph.
+    """
+    # Lazy imports to avoid circular dependencies
+    from agent.workflows.input_gateway import (
+        clarify_with_user,
+        classify_complexity,
+        direct_answer,
+        write_research_brief,
+    )
+    from agent.workflows.report import final_report_generation
+    from agent.workflows.supervisor import build_supervisor_subgraph
+
+    workflow = StateGraph(
+        AgentState,
+        input=AgentInputState,
+        config_schema=ResearchConfiguration,
+    )
+
+    # === Build and add nodes ===
+
+    # Input Gateway nodes
+    workflow.add_node("clarify_with_user", clarify_with_user)
+    workflow.add_node("write_research_brief", write_research_brief)
+    workflow.add_node("classify_complexity", classify_complexity)
+
+    # Fast path
+    workflow.add_node("direct_answer", direct_answer)
+
+    # Research Supervisor (compiled subgraph - open_deep_research pattern)
+    workflow.add_node("research_supervisor", build_supervisor_subgraph())
+
+    # Final Report Generation
+    workflow.add_node("final_report_generation", final_report_generation)
+
+    # === Define edges ===
+
+    # Entry → Clarify
+    workflow.add_edge(START, "clarify_with_user")
+    # clarify_with_user has conditional edges: write_research_brief or __end__
+
+    # Research brief → Complexity classification
+    # (write_research_brief always goes to classify_complexity via Command)
+
+    # classify_complexity has conditional edges: direct_answer or research_supervisor
+
+    # Research supervisor → Final report
+    workflow.add_edge("research_supervisor", "final_report_generation")
+
+    # Direct answer → End
+    workflow.add_edge("direct_answer", END)
+
+    # Final report → End
+    workflow.add_edge("final_report_generation", END)
+
+    # === Compile ===
+    graph = workflow.compile(
+        checkpointer=checkpointer,
+        store=store,
+        interrupt_before=interrupt_before,
+    )
+
+    logger.info("[Graph] Unified research graph compiled successfully")
+    return graph
+
+
+# =============================================================================
+# Convenience: Graph with Checkpointer
+# =============================================================================
+
+def create_research_graph_with_checkpointer(
+    database_url: str,
+    interrupt_before: Optional[list[str]] = None,
+):
+    """Create the unified graph with PostgreSQL checkpointer.
+
+    Args:
+        database_url: PostgreSQL connection URL.
+        interrupt_before: Optional HITL interrupt points.
+
+    Returns:
+        Compiled graph with persistence.
+    """
+    checkpointer = create_checkpointer(database_url)
+    return create_research_graph(
+        checkpointer=checkpointer,
+        interrupt_before=interrupt_before,
+    )
+
+
+def create_checkpointer(database_url: str):
+    """Create a PostgreSQL checkpointer for state persistence.
+
+    Allows long-running agents to pause/resume and handle failures.
+    Returns an AsyncCompatPostgresSaver setup against the given URL.
+    """
+    import asyncio
+
+    try:
+        import psycopg
+    except ModuleNotFoundError:
+        raise RuntimeError("psycopg is required for PostgreSQL checkpointing")
+
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    try:
+        conn = psycopg.connect(database_url, autocommit=True)
+    except Exception as e:
+        raise RuntimeError(f"Failed to connect to Postgres: {e}") from e
 
     class AsyncCompatPostgresSaver(PostgresSaver):
-        """Add async checkpoint methods to the sync Postgres saver used by this app."""
-
         async def aget_tuple(self, config):
             return await asyncio.to_thread(self.get_tuple, config)
 
@@ -45,138 +204,21 @@ if psycopg is not None:
 
         async def aput(self, config, checkpoint, metadata, new_versions):
             return await asyncio.to_thread(
-                self.put,
-                config,
-                checkpoint,
-                metadata,
-                new_versions,
+                self.put, config, checkpoint, metadata, new_versions
             )
 
         async def aput_writes(self, config, writes, task_id, task_path=""):
             return await asyncio.to_thread(
-                self.put_writes,
-                config,
-                writes,
-                task_id,
-                task_path,
+                self.put_writes, config, writes, task_id, task_path
             )
 
         async def adelete_thread(self, thread_id: str):
             return await asyncio.to_thread(self.delete_thread, thread_id)
 
-else:
-
-    class AsyncCompatPostgresSaver:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("psycopg is required for PostgreSQL checkpointing")
-
-
-def create_research_graph(checkpointer=None, interrupt_before=None, store=None):
-    from common.config import settings
-
-    workflow = StateGraph(AgentState)
-
-    workflow.add_node("router", route_node)
-    workflow.add_node("direct_answer", direct_answer_node)
-    workflow.add_node("human_review", human_review_node)
-    # Plan-and-Execute deep-research layer with two high-value HITL
-    # checkpoints:
-    #   deepsearch_planner → hitl_plan_review → deepsearch_executor
-    #     → human_review (= final)
-    # ``hitl_plan_review`` lets the user edit ``research_plan`` before any
-    # search runs (the executors consume it as seed queries); ``human_review``
-    # is the end-of-flow review gate. Both are no-ops unless their checkpoint
-    # name (``plan`` / ``final``) is listed in ``settings.hitl_checkpoints``.
-    # The intermediate ``sources`` / ``draft`` review nodes still exist in
-    # ``agent/workflows/nodes.py`` for unit tests, but were removed from the
-    # main graph because they overlapped with ``final`` (draft) or arrived
-    # too late to influence the writer (sources).
-    workflow.add_node("deepsearch_planner", deepsearch_planner_node)
-    workflow.add_node("hitl_plan_review", hitl_plan_review_node)
-    workflow.add_node("deepsearch_executor", deepsearch_node)
-
-    workflow.set_entry_point("router")
-
-    def route_decision(state: AgentState) -> str:
-        route = state.get("route", "direct")
-        logger.info(f"[route_decision] state['route'] = '{route}'")
-
-        if route == "deep":
-            logger.info("[route_decision] → Routing to 'deepsearch_planner' node")
-            return "deepsearch_planner"
-
-        logger.info("[route_decision] → Routing to 'direct_answer' node")
-        return "direct_answer"
-
-    workflow.add_conditional_edges(
-        "router", route_decision, ["direct_answer", "deepsearch_planner"]
-    )
-    workflow.add_edge("direct_answer", "human_review")
-    workflow.add_edge("deepsearch_planner", "hitl_plan_review")
-    workflow.add_edge("hitl_plan_review", "deepsearch_executor")
-    workflow.add_edge("deepsearch_executor", "human_review")
-    workflow.add_edge("human_review", END)
-
-    # HITL checkpoints are implemented via explicit review nodes that use
-    # `langgraph.types.interrupt()` (see agent/workflows/nodes.py).
-    hitl_checkpoints = getattr(settings, "hitl_checkpoints", "") or ""
-    if hitl_checkpoints.strip():
-        logger.info(f"HITL checkpoints enabled: {hitl_checkpoints}")
-
-    # Compile the graph
-    graph = workflow.compile(
-        checkpointer=checkpointer,
-        store=store,
-        interrupt_before=interrupt_before,
-    )
-
-    logger.info("Research graph compiled successfully")
-
-    return graph
-
-
-def export_graph_mermaid(
-    output_path: str = "graph_mermaid.md", xray: bool = True
-) -> Path:
-    """
-    Export the compiled graph to a mermaid markdown file for visualization.
-    """
-    graph = create_research_graph(checkpointer=None, interrupt_before=None)
-    mermaid = graph.get_graph(xray=xray).draw_mermaid()
-    path = Path(output_path)
-    path.write_text(f"```mermaid\n{mermaid}\n```", encoding="utf-8")
-    logger.info(f"Graph mermaid exported to {path}")
-    return path
-
-
-def create_checkpointer(database_url: str):
-    """
-    Create a PostgreSQL checkpointer for state persistence.
-
-    This allows long-running agents to pause/resume and handle failures.
-    """
-    if not database_url:
-        raise ValueError(
-            "database_url is required to initialize the Postgres checkpointer."
-        )
-    if psycopg is None:
-        raise RuntimeError(
-            "psycopg is required to initialize the Postgres checkpointer."
-        )
-
-    # Create connection (psycopg3)
-    try:
-        conn = psycopg.connect(database_url, autocommit=True)
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to connect to Postgres for checkpointer: {e}"
-        ) from e
-
-    # Create checkpointer
     checkpointer = AsyncCompatPostgresSaver(conn)
-
-    # Setup tables
     checkpointer.setup()
 
-    logger.info("PostgreSQL checkpointer initialized")
+    logger.info("[Graph] PostgreSQL checkpointer initialized")
     return checkpointer
+
+

@@ -31,12 +31,12 @@ from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
-from agent.core.prompts_v2 import (
+from agent.core.prompts import (
     COMPRESSION_SIMPLE_HUMAN_MESSAGE,
     COMPRESSION_SYSTEM_PROMPT,
     RESEARCHER_SYSTEM_PROMPT,
 )
-from agent.core.state_v2 import (
+from agent.core.state import (
     ResearcherOutputState,
     ResearcherState,
     ResearchComplete,
@@ -150,37 +150,31 @@ async def researcher(
         except ImportError:
             pass
 
-    # === Loop Detection (middleware_v2) ===
-    try:
-        from agent.core.middleware_v2 import get_loop_detector
-        loop_detector = get_loop_detector()
-        recent_content = "\n".join([
-            str(m.content)[:200]
-            for m in researcher_messages[-5:]
-            if hasattr(m, "content") and m.content
-        ])
-        if loop_detector.check(recent_content):
-            logger.warning("[Researcher] Loop detected, forcing compression")
-            return Command(
-                goto="compress_research",
-                update={"researcher_messages": researcher_messages},
-            )
-    except ImportError:
-        pass
+    # === Loop Detection ===
+    from agent.core.middleware import get_loop_detector
+    loop_detector = get_loop_detector()
+    recent_content = "\n".join([
+        str(m.content)[:200]
+        for m in researcher_messages[-5:]
+        if hasattr(m, "content") and m.content
+    ])
+    if loop_detector.check(recent_content):
+        logger.warning("[Researcher] Loop detected, forcing compression")
+        return Command(
+            goto="compress_research",
+            update={"researcher_messages": researcher_messages},
+        )
 
     response = await research_model.ainvoke(messages)
 
-    # === Token Usage Tracking (middleware_v2) ===
-    try:
-        from agent.core.middleware_v2 import get_token_tracker
-        tracker = get_token_tracker()
-        usage = getattr(response, "usage_metadata", None) or {}
-        input_tokens = usage.get("input_tokens", 0)
-        output_tokens = usage.get("output_tokens", 0)
-        if input_tokens or output_tokens:
-            tracker.record("research", input_tokens, output_tokens)
-    except (ImportError, Exception):
-        pass
+    # === Token Usage Tracking ===
+    from agent.core.middleware import get_token_tracker
+    tracker = get_token_tracker()
+    usage = getattr(response, "usage_metadata", None) or {}
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    if input_tokens or output_tokens:
+        tracker.record("research", input_tokens, output_tokens)
 
     return Command(
         goto="researcher_tools",
@@ -495,56 +489,11 @@ async def _get_researcher_tools(
 
     # === Academic Retrievers (ArXiv, PubMed, Semantic Scholar) ===
     try:
-        from tools.search.academic import (
-            ArxivProvider,
-            PubMedProvider,
-            SemanticScholarProvider,
-        )
-        from langchain_core.tools import tool
-        from common.config import settings
-
-        @tool
-        def arxiv_search(query: str, max_results: int = 5) -> str:
-            """Search ArXiv for academic preprints. Use for physics, CS, math, and related fields."""
-            provider = ArxivProvider()
-            results = provider.search(query, max_results=max_results)
-            if not results:
-                return "No ArXiv results found."
-            return "\n\n".join(
-                f"{i+1}. {r.title or 'Unknown'}\n   URL: {r.link or 'N/A'}\n   Authors: {', '.join(r.authors[:5]) if r.authors else 'N/A'}\n   Summary: {r.summary[:300] if r.summary else 'N/A'}"
-                for i, r in enumerate(results[:max_results])
-            )
-
-        @tool
-        def pubmed_search(query: str, max_results: int = 5) -> str:
-            """Search PubMed for biomedical literature. Use for medical, biology, and life science topics."""
-            provider = PubMedProvider()
-            results = provider.search(query, max_results=max_results)
-            if not results:
-                return "No PubMed results found."
-            return "\n\n".join(
-                f"{i+1}. {r.title or 'Unknown'}\n   URL: {r.link or 'N/A'}\n   Authors: {', '.join(r.authors[:5]) if r.authors else 'N/A'}\n   Summary: {r.summary[:300] if r.summary else 'N/A'}"
-                for i, r in enumerate(results[:max_results])
-            )
-
-        @tool
-        def semantic_scholar_search(query: str, max_results: int = 5) -> str:
-            """Search Semantic Scholar for academic papers with citation data. Use for comprehensive academic literature searches."""
-            provider = SemanticScholarProvider()
-            results = provider.search(query, max_results=max_results)
-            if not results:
-                return "No Semantic Scholar results found."
-            return "\n\n".join(
-                f"{i+1}. {r.title or 'Unknown'}\n   URL: {r.link or 'N/A'}\n   Authors: {', '.join(r.authors[:5]) if r.authors else 'N/A'}\n   Citations: {r.citation_count if hasattr(r, 'citation_count') else 'N/A'}\n   Summary: {r.summary[:300] if r.summary else 'N/A'}"
-                for i, r in enumerate(results[:max_results])
-            )
-
+        from tools.search.academic import arxiv_search, pubmed_search, semantic_scholar_search
         tools.extend([arxiv_search, pubmed_search, semantic_scholar_search])
-        logger.debug("[Researcher] Loaded academic search providers (ArXiv, PubMed, Semantic Scholar)")
-    except ImportError as e:
-        logger.debug(f"[Researcher] Academic providers not available: {e}")
-    except Exception as e:
-        logger.warning(f"[Researcher] Failed to load academic providers: {e}")
+        logger.debug("[Researcher] Loaded academic search tools (ArXiv, PubMed, Semantic Scholar)")
+    except ImportError:
+        logger.debug("[Researcher] Academic search tools not available")
 
     # === Sandbox Tools (code execution, shell, files) ===
     try:
@@ -607,14 +556,14 @@ def _aggregate_research_content(messages: list) -> str:
 async def _execute_tool_safely(tool, args: dict, config: RunnableConfig) -> str:
     """Execute a tool with error handling via middleware (deer-flow pattern).
 
-    Uses ToolErrorHandler from middleware_v2 to guarantee error messages
+    Uses ToolErrorHandler from middleware to guarantee error messages
     are returned instead of exceptions propagating to the graph.
     """
     if tool is None:
         return f"Error: Tool not found for args {list(args.keys())}"
 
     try:
-        from agent.core.middleware_v2 import ToolErrorHandler
+        from agent.core.middleware import ToolErrorHandler
 
         tool_call = {"name": getattr(tool, "name", "unknown"), "id": "researcher", "args": args}
         tools_by_name = {getattr(tool, "name", ""): tool}

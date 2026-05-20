@@ -66,7 +66,6 @@ except ModuleNotFoundError:
 from pydantic import BaseModel, Field, field_validator
 
 from agent import (
-    AgentState,
     ToolEvent,
     create_checkpointer,
     create_research_graph,
@@ -102,8 +101,9 @@ from common.sse import (
     iter_with_sse_keepalive,
 )
 from common.thread_ownership import get_thread_owner, set_thread_owner
+from agent.runtime.memory import get_memory_system
 from tools.browser.browser_session import browser_sessions
-from tools.core.memory_client import add_memory_entry, fetch_memories, store_interaction
+
 from tools.core.registry import set_registered_tools
 from tools.mcp import close_mcp_tools, init_mcp_tools
 from tools.sandbox import sandbox_browser_sessions
@@ -521,28 +521,11 @@ def _init_store():
 # Long-term memory store (configurable via .env)
 store = _init_store()
 
-# V2 graph toggle — set WEAVER_V2=true in .env or env var to enable the
-# unified deep research graph (3-project integrated version).
-_use_v2_graph = (
-    os.getenv("WEAVER_V2", "").strip().lower()
-    in {"1", "true", "yes", "y", "on"}
+research_graph = create_research_graph(
+    checkpointer=checkpointer,
+    interrupt_before=settings.interrupt_nodes_list,
+    store=store,
 )
-
-if _use_v2_graph:
-    from agent.core.graph_v2 import create_unified_research_graph
-
-    research_graph = create_unified_research_graph(
-        checkpointer=checkpointer,
-        interrupt_before=settings.interrupt_nodes_list,
-        store=store,
-    )
-    logger.info("Using V2 unified research graph (WEAVER_V2=true)")
-else:
-    research_graph = create_research_graph(
-        checkpointer=checkpointer,
-        interrupt_before=settings.interrupt_nodes_list,
-        store=store,
-    )
 mcp_thread_id = (
     "default"  # thread id for MCP event emission; per-request tools will override
 )
@@ -1011,7 +994,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "deepsearch_max_reflection_rounds",
     "deepsearch_max_skills",
     "deepsearch_reflection_loops",
-    "deepsearch_tree_max_searches",
     "deepsearch_supervisor_rounds",
     "deepsearch_supervisor_max_workers",
     "deepsearch_supervisor_queries_per_worker",
@@ -2035,50 +2017,17 @@ async def stream_agent_events(
         )
 
         # Initialize state with cancellation support
-        if _use_v2_graph:
-            from agent.core.state_v2 import build_initial_state_v2
+        initial_state = build_initial_state(
+            input_text=input_text,
+            user_id=user_id,
+            images=images,
+            research_brief=research_brief if isinstance(research_brief, dict) else None,
+            messages=[],
+        )
+        initial_state["cancel_token_id"] = thread_id
+        initial_state["is_cancelled"] = False
 
-            initial_state = build_initial_state_v2(
-                input_text=input_text,
-                user_id=user_id,
-                images=images,
-                research_brief=research_brief if isinstance(research_brief, dict) else None,
-                messages=[],
-            )
-            # Add cancellation support fields
-            initial_state["cancel_token_id"] = thread_id
-            initial_state["is_cancelled"] = False
-        else:
-            initial_state: AgentState = {
-                "input": input_text,
-                "images": images,
-                "needs_clarification": False,
-                "tool_approved": False,
-                "pending_tool_calls": [],
-                "user_id": user_id,
-                "messages": [],
-                "research_plan": [],
-                "current_step": 0,
-                "scraped_content": [],
-                "code_results": [],
-                "final_report": "",
-                "draft_report": "",
-                "evaluation": "",
-                "verdict": "",
-                "route": "",
-                "revision_count": 0,
-                "max_revisions": settings.max_revisions,
-                "tool_call_count": 0,
-                "is_complete": False,
-                "errors": [],
-                # Cancellation control fields
-                "cancel_token_id": thread_id,
-                "is_cancelled": False,
-            }
-            if isinstance(research_brief, dict) and research_brief:
-                initial_state["research_brief"] = research_brief
-
-        # Load long-term memories (store) and Mem0 (optional) and inject deep prompt if needed
+        # Load long-term memories (store) and inject deep prompt if needed
         messages: list[Any] = []
         if (
             mode_info.get("mode") == "agent"
@@ -2094,11 +2043,10 @@ async def stream_agent_events(
             store_text = "\n".join(f"- {m}" for m in store_memories)
             messages.append(SystemMessage(content=f"Stored memories:\n{store_text}"))
 
-        mem_entries = fetch_memories(query=input_text, user_id=user_id)
-        if mem_entries:
-            memory_text = "\n".join(f"- {m}" for m in mem_entries)
+        mem_context = get_memory_system().get_relevant_context(user_id or "default", input_text)
+        if mem_context:
             messages.append(
-                SystemMessage(content=f"Relevant past knowledge:\n{memory_text}")
+                SystemMessage(content=f"Relevant past knowledge:\n{mem_context}")
             )
 
         if messages:
@@ -2134,21 +2082,6 @@ async def stream_agent_events(
         config["configurable"].update(
             _safe_research_deepsearch_config(deepsearch_config or {})
         )
-        # V2 graph handles research brief and source routing internally
-        if not _use_v2_graph:
-            try:
-                brief = build_research_brief(initial_state, config)
-                source_routing = build_source_routing_policy(
-                    brief=brief,
-                    config=config,
-                    state=initial_state,
-                )
-                brief.source_routing = source_routing
-                initial_state["research_brief"] = brief.to_dict()
-                initial_state["source_routing"] = source_routing
-                config["configurable"]["source_routing"] = source_routing
-            except Exception as e:
-                logger.debug(f"Failed to build research brief/source routing: {e}")
 
         async def _drain_pending_tool_events() -> None:
             while not event_queue.empty():
@@ -2458,12 +2391,15 @@ async def stream_agent_events(
                                 },
                             )
                             # Store memory for future sessions
-                            # Store memory (long-term)
-                            add_memory_entry(final_report)
-                            # Store interaction (question + answer)
-                            store_interaction(input_text, final_report)
-                            # Store to graph store
                             _store_add(input_text, final_report, user_id=user_id)
+                            asyncio.create_task(
+                                get_memory_system().record_research(
+                                    user_id=user_id or "default",
+                                    query=input_text,
+                                    findings=final_report,
+                                    facts=[],
+                                )
+                            )
 
             elif event_type == "on_tool_start":
                 tool_name = name or str(data_dict.get("name", "") or "") or "unknown"
@@ -2782,7 +2718,7 @@ async def refresh_tool_registry(reset: bool = False):
     - This is intended for dev/debug (e.g., after editing tool modules).
     - `reset=true` clears the global registry before discovery.
     """
-    from agent.workflows.nodes import initialize_enhanced_tools
+    from agent.workflows.agent_tools import initialize_enhanced_tools
     from tools.core.registry import get_global_registry, reset_global_registry
 
     if reset:

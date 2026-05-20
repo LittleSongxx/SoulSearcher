@@ -33,7 +33,6 @@ from tools.planning.planning_tool import plan_steps
 from tools.sandbox import (
     build_image_edit_tools,
     build_presentation_outline_tools,
-    build_presentation_v2_tools,
     build_sandbox_browser_tools,
     build_sandbox_files_tools,
     build_sandbox_presentation_tools,
@@ -236,11 +235,6 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
         if e2b_sandbox_enabled() and e2b_ready:
             tools.extend(build_presentation_outline_tools(thread_id))
 
-    # Presentation v2: Enhanced PPT features (themes, transitions)
-    if _enabled(profile, "presentation_v2", default=False):
-        if e2b_sandbox_enabled() and e2b_ready:
-            tools.extend(build_presentation_v2_tools(thread_id))
-
     if _enabled(profile, "python", default=False):
         tools.append(execute_python_code)
         tools.append(chart_visualize)
@@ -397,3 +391,86 @@ def _prune_tools_by_route(tools: list[BaseTool], route: str) -> list[BaseTool]:
 
     logger.info(f"[tool_pruning] Route '{route}': {len(tools)} → {len(pruned)} tools")
     return pruned
+
+
+# =============================================================================
+# Tool Discovery
+# =============================================================================
+
+def initialize_enhanced_tools() -> None:
+    """Auto-discover and register WeaverTool instances from the tools package."""
+    try:
+        if not bool(getattr(settings, "enhanced_tool_discovery_enabled", True)):
+            logger.info("Enhanced tool discovery disabled, skipping initialization")
+            return
+
+        from tools.core.registry import get_global_registry
+
+        registry = get_global_registry()
+        discovered = []
+
+        logger.info("Discovering tools from module 'tools'...")
+        try:
+            discovered.extend(
+                registry.discover_from_module(
+                    module_name="tools",
+                    tags=["weaver", "auto_discovered"],
+                )
+            )
+        except Exception as e:
+            logger.warning(f"Failed to discover tools from module 'tools': {e}")
+
+        if bool(getattr(settings, "enhanced_tool_discovery_recursive", False)):
+            exclude_dirs = set(
+                getattr(settings, "enhanced_tool_discovery_exclude_list", []) or []
+            )
+            logger.info("Discovering tools from 'tools' directory (recursive)...")
+            discovered.extend(
+                registry.discover_from_directory(
+                    directory="tools",
+                    pattern="*.py",
+                    recursive=True,
+                    tags=["weaver", "auto_discovered"],
+                    exclude_dirs=exclude_dirs,
+                    exclude_globs=["tools/core/*", "tools/examples/*"],
+                )
+            )
+
+        logger.info(f"Discovered and registered {len(discovered)} tools")
+        all_tools = registry.list_names()
+        logger.info(f"Total tools in registry: {len(all_tools)}")
+        if all_tools:
+            logger.info(
+                f"Available tools: {', '.join(all_tools[:10])}{'...' if len(all_tools) > 10 else ''}"
+            )
+    except Exception as e:
+        logger.error(f"Failed to initialize enhanced tools: {e}", exc_info=True)
+
+
+# =============================================================================
+# Deep Agent Prompt
+# =============================================================================
+
+DEEP_AGENT_PROMPT = """You are Weaver, a deep research AI agent.
+
+## Research Methodology
+
+1. **Decompose the question** into sub-questions
+2. **Search broadly** with web_search to discover relevant sources
+3. **Deep-dive** with crawl_url on the most promising results
+4. **Synthesize findings** into a coherent analysis
+5. **Verify** key claims with additional searches when needed
+
+## Guidelines
+
+- Always cite sources with URLs
+- Use Python for data analysis and calculations
+- Report uncertainty when information is incomplete
+- Cross-reference claims across multiple sources
+- Structure findings with clear headings and logical flow
+"""
+
+
+def get_deep_agent_prompt() -> str:
+    """Return the deep agent system prompt."""
+    return DEEP_AGENT_PROMPT
