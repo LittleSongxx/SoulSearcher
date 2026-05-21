@@ -73,46 +73,70 @@ class ComplexityAssessment(BaseModel):
 
 
 class ConductResearch(BaseModel):
-    """Delegate a research task to a specialized sub-researcher.
+    """Delegate a research task to a specialised sub-researcher.
 
-    The supervisor uses this tool to spawn parallel research subgraphs.
-    Pattern from open_deep_research.
+    Use this tool when you need in-depth investigation of a specific topic.
+    You can call this tool multiple times in parallel for different topics.
+    Each call spawns an independent researcher that searches, reads, and
+    synthesises findings.
+
+    This tool replaces the old ResearchDeep — set thoroughness to
+    "very_thorough" for the recursive depth×breadth behaviour.
+
+    Thoroughness levels (from Claude Code's sub-agent model):
+      - "quick"   — surface scan, 2 searches, no recursion
+      - "medium"  — balanced investigation, 4 searches, standard coverage (default)
+      - "very_thorough" — deep recursive research, 4 searches × 2 depth levels
+
+    Choose "quick" for simple fact-checks, "medium" for typical research
+    questions, and "very_thorough" for academic/comprehensive topics.
     """
-    research_topic: str = Field(
-        description="The topic to research. Must be a single, well-defined topic "
-                    "described in detail (at least a paragraph). Include specific "
-                    "instructions for the researcher."
+    topic: str = Field(
+        description="The specific topic to research. Be precise — one well-scoped "
+                    "subject per call. For example: 'safety record of mRNA vaccines "
+                    "in elderly populations' rather than 'vaccines'."
+    )
+    context: str = Field(
+        default="",
+        description="Brief context to help the researcher: what is already known, "
+                    "what specific angles matter, or what type of sources to prefer."
+    )
+    thoroughness: Literal["quick", "medium", "very_thorough"] = Field(
+        default="medium",
+        description="How deeply to research. See the tool description for details."
     )
 
 
 class ThinkTool(BaseModel):
-    """Enhanced strategic reflection tool.
+    """Pause and reflect on research progress before deciding next steps.
 
-    Unlike open_deep_research's basic think_tool that just logs thoughts,
-    this enhanced version structures thinking into actionable data that
-    downstream nodes can consume for automated decision-making.
-
-    Pattern: open_deep_research think_tool + gpt-researcher's structured reflection.
+    Use this tool when you need to step back and assess whether the research
+    has covered enough ground.  The structured reflection fields help you
+    identify gaps and choose the right next action.
     """
     reflection: str = Field(
-        description="Detailed reflection on current research progress and strategy."
+        description="What have we learned so far?  What patterns emerged across "
+                    "the collected sources?  Are there contradictions to resolve?"
     )
     gaps_identified: list[str] = Field(
-        description="Specific information gaps that still need to be filled."
+        description="Specific information gaps that still need to be filled. "
+                    "Be concrete: name the missing data point, comparison, or angle."
     )
     confidence_level: Literal["low", "medium", "high"] = Field(
-        description="Current confidence level in research completeness."
+        description="How confident are you that the collected evidence fully "
+                    "answers the research brief?"
     )
     next_strategy: Literal["search_more", "curate", "complete"] = Field(
-        description="Recommended next action: search for more info, curate existing "
-                    "sources, or complete the research phase."
+        description="What to do next: search for missing information, curate "
+                    "and rank the collected sources, or conclude the research phase."
     )
 
 
 class SourceCurate(BaseModel):
-    """Curate and rank collected sources by quality and relevance.
+    """Rank and filter the collected sources by quality and relevance.
 
-    From gpt-researcher's SourceCurator pattern.
+    Call this when enough raw research has been gathered and you need to
+    select the best sources for the final report.
     """
     max_sources: int = Field(
         default=10,
@@ -121,33 +145,14 @@ class SourceCurate(BaseModel):
 
 
 class ResearchComplete(BaseModel):
-    """Signal that the research phase is complete.
-
-    Called by supervisor when satisfied with research coverage.
-    From open_deep_research.
+    """Signal that the research phase is complete and findings are ready for
+    final report generation.  Only call this when you are confident that the
+    collected evidence sufficiently addresses the research brief.
     """
     summary: str = Field(
         default="",
-        description="Optional summary of why research is considered complete."
-    )
-
-
-class ResearchDeep(BaseModel):
-    """Initiate deep recursive research using breadth x depth algorithm.
-
-    This triggers deterministic deep research when the supervisor
-    determines comprehensive coverage is needed.
-    """
-    research_topic: str = Field(
-        description="The research topic for deep recursive exploration."
-    )
-    breadth: int = Field(
-        default=4,
-        description="Number of search queries to generate per depth level."
-    )
-    depth: int = Field(
-        default=2,
-        description="How many levels deep to recursively research."
+        description="Brief summary of what was covered and why the research "
+                    "is considered complete."
     )
 
 
@@ -210,7 +215,6 @@ class SupervisorState(TypedDict):
     notes: Annotated[list[str], override_reducer]
     raw_notes: Annotated[list[str], override_reducer]
     research_iterations: int
-    deep_research_count: int
     curated_sources: list[dict[str, Any]]
 
 
@@ -220,10 +224,16 @@ class ResearcherState(TypedDict):
     Each researcher is spawned by the supervisor with a specific research_topic.
     It uses search tools to gather information, reflects via think_tool,
     and produces compressed research output.
+
+    ``thoroughness`` follows Claude Code's sub-agent model:
+    - "quick" → surface scan
+    - "medium" → balanced investigation (default)
+    - "very_thorough" → recursive depth×breadth research
     """
     researcher_messages: Annotated[list[MessageLikeRepresentation], operator.add]
     tool_call_iterations: int
     research_topic: str
+    thoroughness: str  # "quick" | "medium" | "very_thorough"
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer]
 

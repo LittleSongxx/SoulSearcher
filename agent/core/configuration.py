@@ -138,15 +138,8 @@ class ResearchConfiguration:
     """Maximum retries for structured output parsing failures."""
 
     # =========================================================================
-    # Deep Research (Phase 2)
+    # Deep Research (recursive breadth×depth, gpt-researcher pattern)
     # =========================================================================
-    max_deep_research_calls: int = field(
-        default_factory=lambda: int(
-            os.environ.get("MAX_DEEP_RESEARCH_CALLS", "2")
-        )
-    )
-    """Maximum number of ResearchDeep calls per research session."""
-
     deep_research_breadth: int = 4
     deep_research_depth: int = 2
     deep_research_concurrency: int = 2
@@ -242,6 +235,32 @@ class ResearchConfiguration:
     mcp_prompt: str = ""
 
     # =========================================================================
+    # Task-Type-Based Model Overrides (open_deep_research 4-role pattern)
+    # =========================================================================
+    # Each task type can override the complexity-based default.  Empty means
+    # "use the complexity-based selection".  This follows open_deep_research's
+    # decomposition of LLM roles — Summarization / Research / Compression /
+    # Final Report — extended with finer-grained Weaver-specific tasks.
+
+    query_generation_model: str = ""
+    """Model for generating search queries (high-volume, cheap). Falls back to fast_llm."""
+
+    content_summarization_model: str = ""
+    """Model for summarising single web pages (highest volume, cheapest). Falls back to fast_llm."""
+
+    web_reading_model: str = ""
+    """Model for reading/extracting facts from web content. Falls back to fast_llm."""
+
+    result_synthesis_model: str = ""
+    """Model for synthesising multiple search results. Falls back to smart_llm."""
+
+    strategic_decision_model: str = ""
+    """Model for supervisor-level strategy decisions. Falls back to strategic_llm."""
+
+    quality_check_model: str = ""
+    """Model for Level-1 quality checks (fast, cheap). Falls back to fast_llm."""
+
+    # =========================================================================
     # Methods
     # =========================================================================
 
@@ -267,6 +286,61 @@ class ResearchConfiguration:
                 kwargs[field_name] = configurable[field_name]
 
         return cls(**kwargs)
+
+    # ------------------------------------------------------------------
+    # Task-Type-Based Model Routing
+    # ------------------------------------------------------------------
+    # Follows open_deep_research's decomposition of LLM roles into
+    # summarization / research / compression / final-report, extended with
+    # finer-grained Weaver task types.  Each task has a dedicated override
+    # field; when empty the complexity-based fallback is used.
+    #
+    # Rationale (from Anthropic's "Building Effective Agents"):
+    #   "LLMs generally perform better when each consideration is handled
+    #    by a separate LLM call."  Separating task types lets us route
+    #    cheap/fast models to high-volume mechanical work while reserving
+    #    powerful models for reasoning-heavy decisions.
+    # ------------------------------------------------------------------
+
+    _TASK_FALLBACK_MAP: dict[str, str] = {
+        "query_generation":       "fast_llm",
+        "content_summarization":  "fast_llm",
+        "web_reading":            "fast_llm",
+        "result_synthesis":       "smart_llm",
+        "strategic_decision":     "strategic_llm",
+        "compression":            "smart_llm",
+        "report_writing":         "smart_llm",
+        "quality_check":          "fast_llm",
+    }
+
+    def get_model_for_task(self, task_type: str, complexity: str = "standard") -> str:
+        """Select the model for a specific task type.
+
+        Checks the dedicated override field first (e.g. ``query_generation_model``),
+        then falls back to the complexity-based default from ``_TASK_FALLBACK_MAP``,
+        which resolves to fast_llm / smart_llm / strategic_llm.
+
+        Task types (from open_deep_research 4-role extension):
+          - query_generation       — generating diverse search queries
+          - content_summarization  — condensing a single web page
+          - web_reading            — extracting structured facts from content
+          - result_synthesis       — merging multiple search results
+          - strategic_decision     — supervisor-level strategy choices
+          - compression            — compressing accumulated research
+          - report_writing         — composing the final report
+          - quality_check          — Level-1 instant validation
+        """
+        override_attr = f"{task_type}_model"
+        override = getattr(self, override_attr, "")
+        if override:
+            return override
+
+        fallback_attr = self._TASK_FALLBACK_MAP.get(task_type, "smart_llm")
+        return getattr(self, fallback_attr, self.smart_llm)
+
+    # ------------------------------------------------------------------
+    # Legacy complexity-based routing (kept for minimal-diff transitions)
+    # ------------------------------------------------------------------
 
     def get_model_for_complexity(self, complexity: str) -> str:
         """Get the appropriate research model based on task complexity.

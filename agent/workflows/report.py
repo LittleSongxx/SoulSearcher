@@ -9,7 +9,7 @@ Integrates patterns from:
 Pipeline:
 1. Source Curation: Rank and filter collected sources
 2. Report Generation: Multi-stage writing with token-limit handling
-3. (Phase 3 will add: fast_llm quality check → revise loop)
+3. Quality Check: Level 1 fast_llm evaluation → auto-revise (up to 2 iterations)
 """
 
 from __future__ import annotations
@@ -23,10 +23,8 @@ from langchain_core.runnables import RunnableConfig
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
 from agent.core.prompts import (
-    FINAL_REPORT_PROMPT,
     HTML_REPORT_CSS_TEMPLATE,
-    HTML_REPORT_PROMPT,
-    SOURCE_CURATION_PROMPT,
+    resolve_prompt,
 )
 from agent.core.state import AgentState
 
@@ -362,23 +360,23 @@ async def final_report_generation(
     current_date = datetime.now().strftime("%Y-%m-%d")
 
     if report_format == "html":
-        base_prompt = HTML_REPORT_PROMPT
+        prompt_name = "final_report_html"
         # No structure template injection for HTML (structure is built into prompt)
     else:
-        base_prompt = FINAL_REPORT_PROMPT
+        prompt_name = "final_report"
         report_structure = compose_report_structure(research_brief)
 
     for attempt in range(max_retries + 1):
         try:
             if report_format == "html":
-                prompt = base_prompt.format(
+                prompt = resolve_prompt(prompt_name,
                     research_brief=research_brief,
                     messages=get_buffer_string(messages),
                     findings=findings_truncated,
                     date=current_date,
                 )
             else:
-                prompt = base_prompt.format(
+                prompt = resolve_prompt(prompt_name,
                     research_brief=research_brief,
                     messages=get_buffer_string(messages),
                     findings=findings_truncated,
@@ -579,7 +577,7 @@ async def curate_sources(
         for i, s in enumerate(sources[:50])  # Limit to 50 for prompt size
     ])
 
-    prompt = SOURCE_CURATION_PROMPT.format(
+    prompt = resolve_prompt("source_curation",
         research_topic=research_topic,
         sources=sources_text,
         max_sources=min(max_sources, len(sources)),

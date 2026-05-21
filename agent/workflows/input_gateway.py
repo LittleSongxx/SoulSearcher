@@ -25,9 +25,7 @@ from langgraph.types import Command
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
 from agent.core.prompts import (
-    CLARIFY_WITH_USER_PROMPT,
-    COMPLEXITY_CLASSIFIER_PROMPT,
-    RESEARCH_BRIEF_PROMPT,
+    resolve_prompt,
 )
 from agent.core.state import (
     AgentState,
@@ -75,7 +73,7 @@ async def clarify_with_user(
         .with_config(model_config)
     )
 
-    prompt = CLARIFY_WITH_USER_PROMPT.format(
+    prompt = resolve_prompt("clarify_with_user",
         messages=get_buffer_string(messages),
         date=datetime.now().strftime("%Y-%m-%d"),
     )
@@ -157,7 +155,7 @@ async def write_research_brief(
     # Build skill context (deer-flow pattern: inject SKILL.md guidance)
     skill_context = _build_skill_context(state)
 
-    prompt = RESEARCH_BRIEF_PROMPT.format(
+    prompt = resolve_prompt("research_brief",
         messages=get_buffer_string(messages),
         date=datetime.now().strftime("%Y-%m-%d"),
         skill_context=skill_context,
@@ -181,7 +179,7 @@ async def write_research_brief(
 
 async def classify_complexity(
     state: AgentState, config: RunnableConfig
-) -> Command[Literal["direct_answer", "research_supervisor"]]:
+) -> Command[Literal["direct_answer", "plan_research"]]:
     """Classify the research task complexity and route accordingly.
 
     - simple → direct_answer (fast path, single LLM call, no supervisor)
@@ -209,7 +207,7 @@ async def classify_complexity(
         .with_config(model_config)
     )
 
-    prompt = COMPLEXITY_CLASSIFIER_PROMPT.format(research_brief=research_brief)
+    prompt = resolve_prompt("complexity_classifier", research_brief=research_brief)
     response = await classifier_model.ainvoke([HumanMessage(content=prompt)])
 
     logger.info(
@@ -228,9 +226,14 @@ async def classify_complexity(
             },
         )
     else:
-        logger.info(f"[Complexity] Routing to research_supervisor ({response.complexity} path)")
+        # Route through the plan gate (Google Gemini HITL pattern).
+        # The plan node generates a research plan and pauses for user approval
+        # before the expensive supervisor loop starts.
+        logger.info(
+            f"[Complexity] Routing to plan_research ({response.complexity} path)"
+        )
         return Command(
-            goto="research_supervisor",
+            goto="plan_research",
             update={
                 "complexity": response.complexity,
                 "estimated_depth": response.estimated_depth,
@@ -268,9 +271,7 @@ async def direct_answer(state: AgentState, config: RunnableConfig) -> dict:
         "tags": ["langsmith:nostream"],
     }
 
-    from agent.core.prompts import DIRECT_ANSWER_PROMPT
-
-    prompt = DIRECT_ANSWER_PROMPT.format(
+    prompt = resolve_prompt("direct_answer",
         input=user_input,
         date=datetime.now().strftime("%Y-%m-%d"),
     )

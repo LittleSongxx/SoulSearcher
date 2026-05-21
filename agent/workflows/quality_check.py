@@ -57,12 +57,18 @@ Respond with a JSON object.
 {research_brief}
 </Research Brief>
 
+{evidence_context}
+
 Evaluation criteria:
 1. **citation_density**: Does each major claim have a source citation? (0-1)
 2. **section_completeness**: Are all promised sections present? (0-1)
 3. **format_correctness**: Proper markdown, no broken formatting? (0-1)
 4. **topic_relevance**: Does the report address the research brief? (0-1)
 5. **minimum_length**: Is the report substantial enough (not too short)? (0-1)
+6. **evidence_alignment**: Are sample claims actually supported by their cited sources?
+   Check: pick 3 factual claims with citations, then verify whether the cited source text
+   genuinely supports the claim. Score 0 if claims contradict sources or citations are
+   hallucinated, 0.5 if unclear, 1.0 if well-supported. (0-1)
 
 Respond with JSON:
 {{
@@ -73,7 +79,8 @@ Respond with JSON:
     "section_completeness": 0.0-1.0,
     "format_correctness": 0.0-1.0,
     "topic_relevance": 0.0-1.0,
-    "minimum_length": 0.0-1.0
+    "minimum_length": 0.0-1.0,
+    "evidence_alignment": 0.0-1.0
   }},
   "issues": ["list of specific issues found"],
   "suggestions": ["list of concrete improvement suggestions"],
@@ -84,15 +91,60 @@ Threshold: score >= 0.7 → pass | 0.4-0.7 → revise | <0.4 → incomplete
 """
 
 
+def _build_evidence_context(state: dict) -> str:
+    """Extract sampled cited-source pairs from state for evidence_alignment checking.
+
+    Follows open_deep_research's LLM-as-judge approach: sample a few claims
+    and their cited sources so the evaluator can check factual accuracy.
+    """
+    notes = state.get("notes", []) or state.get("raw_notes", []) or []
+    sources = state.get("sources", []) or state.get("curated_sources", []) or []
+
+    context_parts: list[str] = []
+
+    # Extract up to 3 source-text snippets from research notes
+    source_texts: list[str] = []
+    for note in notes[:5]:
+        text = str(note)[:1500]
+        source_texts.append(text)
+
+    if source_texts:
+        context_parts.append("<Source Evidence>")
+        for i, src in enumerate(source_texts[:3], 1):
+            context_parts.append(f"[Source {i}]: {src[:800]}")
+        context_parts.append("</Source Evidence>")
+
+    # List cited URLs for cross-reference
+    if sources:
+        context_parts.append("<Cited Sources>")
+        for s in sources[:10]:
+            url = s.get("url", "") if isinstance(s, dict) else str(s)
+            title = s.get("title", "") if isinstance(s, dict) else ""
+            if url:
+                context_parts.append(f"- {title}: {url}"[:200])
+        context_parts.append("</Cited Sources>")
+
+    return "\n".join(context_parts)
+
+
 async def run_level1_check(
     report: str,
     research_brief: str,
     config: RunnableConfig,
+    state: dict | None = None,
 ) -> QualityCheckResult:
     """Run instant quality check using fast_llm.
 
     Takes <5 seconds, runs after every report generation.
     Uses fast_llm for cost efficiency.
+
+    Args:
+        report: The report content to evaluate.
+        research_brief: The original research brief.
+        config: RunnableConfig for model selection.
+        state: Optional state dict for evidence_alignment checking.
+               If provided, source-text pairs are extracted and passed
+               to the evaluator for factual-accuracy verification.
     """
     research_config = ResearchConfiguration.from_runnable_config(config)
 
@@ -103,9 +155,12 @@ async def run_level1_check(
         "tags": ["langsmith:nostream"],
     }
 
+    evidence_context = _build_evidence_context(state) if state else ""
+
     prompt = LEVEL1_CHECK_PROMPT.format(
         report=report[:8000],  # Truncate for fast check
         research_brief=research_brief[:2000],
+        evidence_context=evidence_context,
     )
 
     try:
@@ -244,7 +299,9 @@ async def generate_report_with_quality_check(
 
     current_report = report_content
     for revision in range(max_revisions + 1):
-        check_result = await run_level1_check(current_report, research_brief, config)
+        check_result = await run_level1_check(
+            current_report, research_brief, config, state=state
+        )
 
         logger.info(
             f"[QualityCheck] Revision {revision}: "

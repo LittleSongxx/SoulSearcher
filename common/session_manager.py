@@ -325,6 +325,101 @@ class SessionManager:
             logger.error(f"Error deleting session {thread_id}: {e}")
             return False
 
+    # ------------------------------------------------------------------
+    # Session Fork (Claude Code pattern — explore alternative paths)
+    # ------------------------------------------------------------------
+
+    def fork_session(
+        self,
+        source_thread_id: str,
+        new_thread_id: Optional[str] = None,
+        *,
+        owner_id: Optional[str] = None,
+    ) -> Optional[SessionInfo]:
+        """Fork a session to explore an alternative research path.
+
+        Copies the latest checkpoint from the source thread to a new thread_id,
+        creating an independent branch.  The fork shares no state with the source
+        after creation — each can evolve independently.
+
+        Follows Claude Code's "fork a session to explore alternative approaches"
+        pattern.
+
+        Args:
+            source_thread_id: The thread to fork from.
+            new_thread_id: Optional target thread_id.  Auto-generated if omitted.
+            owner_id: Optional owner to assign to the forked thread.
+
+        Returns:
+            SessionInfo for the new fork, or None if the source doesn't exist.
+        """
+        import uuid
+
+        try:
+            source_config = {"configurable": {"thread_id": source_thread_id}}
+            checkpoint_tuple = self.checkpointer.get_tuple(source_config)
+
+            if not checkpoint_tuple:
+                logger.warning(
+                    "[SessionManager] Cannot fork — source thread %s not found",
+                    source_thread_id,
+                )
+                return None
+
+            if new_thread_id is None:
+                new_thread_id = f"fork_{source_thread_id}_{uuid.uuid4().hex[:8]}"
+
+            # Copy checkpoint state under the new thread_id.
+            # We preserve the full channel_values so the fork starts from the
+            # same state as the source.
+            checkpoint = checkpoint_tuple.checkpoint
+            channel_values = dict(checkpoint.get("channel_values", {}))
+
+            # Tag the fork for traceability
+            channel_values["forked_from"] = source_thread_id
+            channel_values["forked_at"] = (
+                __import__("datetime").datetime.utcnow().isoformat()
+            )
+            if owner_id:
+                channel_values["user_id"] = owner_id
+
+            metadata = {}
+            if hasattr(checkpoint_tuple, "metadata") and checkpoint_tuple.metadata:
+                metadata = dict(checkpoint_tuple.metadata)
+            metadata["forked_from"] = source_thread_id
+            metadata["forked_at"] = (
+                __import__("datetime").datetime.utcnow().isoformat()
+            )
+
+            fork_config = {"configurable": {"thread_id": new_thread_id}}
+
+            if hasattr(self.checkpointer, "put"):
+                self.checkpointer.put(
+                    fork_config,
+                    {"channel_values": channel_values},
+                    metadata,
+                    {},
+                )
+                logger.info(
+                    "[SessionManager] Forked %s → %s", source_thread_id, new_thread_id
+                )
+            else:
+                logger.warning(
+                    "[SessionManager] Checkpointer does not support put — fork skipped"
+                )
+                return None
+
+            return self._build_session_info(new_thread_id, channel_values, checkpoint_tuple)
+
+        except Exception as e:
+            logger.error(
+                "[SessionManager] Fork failed: %s → %s: %s",
+                source_thread_id,
+                new_thread_id or "?",
+                e,
+            )
+            return None
+
     def can_resume(self, thread_id: str) -> tuple[bool, str]:
         """
         Check if a session can be resumed.

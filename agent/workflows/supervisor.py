@@ -12,7 +12,7 @@ Key integrations from the unified design:
 - gpt-researcher: structured reflection with actionable data
 - Unified design: SourceCurate integration + enhanced think_tool
 
-Phase 2: ResearchDeep tool for breadth×depth recursion (integrated).
+Phase 2: ConductResearch.very_thorough for breadth×depth recursion (integrated).
 """
 
 from __future__ import annotations
@@ -35,11 +35,10 @@ from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
-from agent.core.prompts import LEAD_RESEARCHER_PROMPT
+from agent.core.prompts import resolve_prompt
 from agent.core.state import (
     ConductResearch,
     ResearchComplete,
-    ResearchDeep,
     SourceCurate,
     SupervisorState,
     ThinkTool,
@@ -89,19 +88,28 @@ async def supervisor(
         "tags": ["langsmith:nostream"],
     }
 
-    # Available supervisor tools
-    # ResearchDeep is available for deep tasks under the call limit
-    deep_count = state.get("deep_research_count", 0)
-    if complexity == "deep" and deep_count < research_config.max_deep_research_calls:
-        supervisor_tools = [
-            ConductResearch, ResearchDeep, ThinkTool, SourceCurate, ResearchComplete
-        ]
-        logger.info(
-            f"[Supervisor] ResearchDeep available (deep task, "
-            f"{deep_count}/{research_config.max_deep_research_calls} calls used)"
-        )
-    else:
-        supervisor_tools = [ConductResearch, ThinkTool, SourceCurate, ResearchComplete]
+    # Available supervisor tools.
+    #
+    # Two delegation options (Claude Code sub-agent model):
+    #   task()          — lightweight, fast model, limited tools → quick fact-check
+    #   ConductResearch — full Researcher subgraph, smart model → deep investigation
+    #
+    # The LLM learns to use task() for simple lookups ("what is X?") and
+    # ConductResearch for multi-step analysis ("compare X vs Y across dimensions A,B,C").
+    # This follows Anthropic's Orchestrator-Workers pattern and Claude Code's
+    # Explore (Haiku, read-only) / general-purpose (Sonnet, all tools) split.
+    supervisor_tools = [ConductResearch, ThinkTool, SourceCurate, ResearchComplete]
+
+    # Add the lightweight task() sub-agent tool (deer-flow SubagentExecutor).
+    # This merges the previously separate Lead Agent + Subagent runtime into the
+    # Supervisor-Worker graph, giving the supervisor a fast/cheap option for
+    # simple fact-checking.
+    try:
+        from agent.runtime.task_tool import task_tool
+        supervisor_tools.append(task_tool)
+        logger.debug("[Supervisor] task() sub-agent tool available")
+    except ImportError:
+        logger.debug("[Supervisor] task() sub-agent tool not available")
 
     research_model = (
         configurable_model
@@ -113,7 +121,7 @@ async def supervisor(
     # Always build context prefix (system prompt + research brief)
     # so the LLM has full task context on every iteration.
     # Only the conversation history (AI responses + tool messages) is stored in state.
-    system_prompt = LEAD_RESEARCHER_PROMPT.format(
+    system_prompt = resolve_prompt("lead_researcher",
         date=datetime.now().strftime("%Y-%m-%d"),
         max_concurrent_research_units=research_config.max_concurrent_research_units,
         max_researcher_iterations=research_config.max_researcher_iterations,
@@ -147,15 +155,10 @@ async def supervisor(
         state.get("supervisor_messages", [])
     )
 
-    # === Loop Detection ===
-    from agent.core.middleware import get_loop_detector
-    loop_detector = get_loop_detector()
-    recent_content = "\n".join([
-        str(m.content)[:200]
-        for m in supervisor_messages[-5:]
-        if hasattr(m, "content") and m.content
-    ])
-    if loop_detector.check(recent_content):
+    # === Loop Detection (via shared middleware — Anthropic Agent SDK hooks pattern) ===
+    from agent.runtime.middleware.shared import check_loop
+    is_looping, _hint = check_loop(supervisor_messages)
+    if is_looping:
         logger.warning("[Supervisor] Loop detected, forcing completion")
         return Command(
             goto="supervisor_tools",
@@ -197,7 +200,7 @@ async def supervisor_tools(
     Handles five types of supervisor tool calls:
     1. ThinkTool → Record structured reflection, continue loop
     2. ConductResearch → Spawn parallel researcher subgraphs
-    3. ResearchDeep → Breadth × depth recursive research (deep tasks)
+    3. ConductResearch (very_thorough) → Breadth × depth recursive research
     4. SourceCurate → Rank and filter collected sources
     5. ResearchComplete → End supervisor loop, proceed to report
 
@@ -257,62 +260,6 @@ async def supervisor_tools(
             tool_call_id=tc["id"],
         ))
 
-    # --- ResearchDeep calls (Phase 2: breadth × depth recursion) ---
-    deep_calls = [tc for tc in tool_calls if tc["name"] == "ResearchDeep"]
-    for tc in deep_calls:
-        research_topic = tc["args"].get("research_topic", state.get("research_brief", ""))
-        call_breadth = tc["args"].get("breadth", research_config.deep_research_breadth)
-        call_depth = tc["args"].get("depth", research_config.deep_research_depth)
-
-        logger.info(
-            f"[SupervisorTools] Executing ResearchDeep: "
-            f"topic='{research_topic[:100]}...', breadth={call_breadth}, depth={call_depth}"
-        )
-
-        try:
-            from agent.workflows.deep_research import (
-                execute_deep_research,
-                format_deep_research_result,
-            )
-
-            result = await execute_deep_research(
-                query=research_topic,
-                breadth=call_breadth,
-                depth=call_depth,
-                config=config,
-            )
-
-            formatted = format_deep_research_result(result)
-            all_tool_messages.append(ToolMessage(
-                content=formatted,
-                name="ResearchDeep",
-                tool_call_id=tc["id"],
-            ))
-
-            if result.learnings:
-                learnings_text = "\n".join(
-                    f"- {l}" for l in result.learnings[:30]
-                )
-                existing_raw = update_payload.get("raw_notes", [None])
-                if existing_raw and existing_raw[0]:
-                    update_payload["raw_notes"] = [
-                        existing_raw[0] + "\n\n## Deep Research Learnings\n" + learnings_text
-                    ]
-                else:
-                    update_payload["raw_notes"] = [learnings_text]
-
-            update_payload["deep_research_count"] = (
-                state.get("deep_research_count", 0) + 1
-            )
-
-        except Exception as e:
-            logger.error(f"[SupervisorTools] ResearchDeep execution failed: {e}")
-            all_tool_messages.append(ToolMessage(
-                content=f"Error during deep research: {str(e)}",
-                name="ResearchDeep",
-                tool_call_id=tc["id"],
-            ))
-
     # --- SourceCurate calls ---
     curate_calls = [tc for tc in tool_calls if tc["name"] == "SourceCurate"]
     if curate_calls:
@@ -326,20 +273,38 @@ async def supervisor_tools(
             ))
 
     # --- ConductResearch calls (parallel subgraph invocation) ---
+    # Follows Anthropic's Orchestrator-Workers pattern and Claude Code's
+    # sub-agent thoroughness levels (quick / medium / very_thorough).
+    # Each call spawns an independent Researcher subgraph with configurable
+    # depth×breadth derived from the thoroughness parameter.
     conduct_calls = [tc for tc in tool_calls if tc["name"] == "ConductResearch"]
     if conduct_calls:
         max_concurrent = research_config.max_concurrent_research_units
         allowed_calls = conduct_calls[:max_concurrent]
         overflow_calls = conduct_calls[max_concurrent:]
 
+        # Map ACI thoroughness levels → depth × breadth (Claude Code model)
+        _THOROUGHNESS_MAP = {
+            "quick":          (1, 2),
+            "medium":         (1, 4),
+            "very_thorough":  (2, 4),
+        }
+
         # Execute researcher subgraphs in parallel (open_deep_research pattern)
         research_tasks = [
             _get_researcher_subgraph().ainvoke(
                 {
                     "researcher_messages": [
-                        HumanMessage(content=tc["args"]["research_topic"])
+                        HumanMessage(
+                            content=(
+                                f"Research topic: {tc['args'].get('topic', tc['args'].get('research_topic', ''))}\n"
+                                f"Context: {tc['args'].get('context', '')}"
+                            )
+                        )
                     ],
-                    "research_topic": tc["args"]["research_topic"],
+                    "research_topic": tc["args"].get("topic", tc["args"].get("research_topic", "")),
+                    "thoroughness": tc["args"].get("thoroughness", "medium"),
+                    "tool_call_iterations": 0,
                 },
                 config,
             )
@@ -360,7 +325,7 @@ async def supervisor_tools(
                     tool_call_id=tc["id"],
                 ))
 
-            # Aggregate raw notes
+            # Aggregate raw notes from all parallel researchers
             raw_notes_concat = "\n".join([
                 obs.get("raw_notes", [None])[0] if obs.get("raw_notes") else ""
                 for obs in tool_results
@@ -368,12 +333,13 @@ async def supervisor_tools(
             if raw_notes_concat.strip():
                 update_payload["raw_notes"] = [raw_notes_concat]
 
-            # Handle overflow
+            # Handle overflow — tell supervisor to retry with fewer
             for over_tc in overflow_calls:
                 all_tool_messages.append(ToolMessage(
                     content=(
-                        f"Error: Maximum concurrent research units ({max_concurrent}) exceeded. "
-                        f"Please retry with {max_concurrent} or fewer units."
+                        f"Too many parallel research calls ({len(conduct_calls)}) — "
+                        f"only {max_concurrent} can run at once. "
+                        f"Please retry the overflow topics in the next iteration."
                     ),
                     name="ConductResearch",
                     tool_call_id=over_tc["id"],
@@ -387,8 +353,14 @@ async def supervisor_tools(
                 tool_call_id=conduct_calls[0]["id"] if conduct_calls else "unknown",
             ))
 
-    # === Return to supervisor loop ===
-    update_payload["supervisor_messages"] = all_tool_messages
+    # === Return to supervisor loop (with context budget enforcement) ===
+    # Follows Claude Code's sub-agent principle: "the subagent does that work
+    # in its own context and returns only the summary."  Old supervisor_messages
+    # are trimmed to keep the LLM context focused on recent, high-signal results.
+    update_payload["supervisor_messages"] = _enforce_context_budget(
+        supervisor_messages + all_tool_messages,
+        max_tool_message_chars=research_config.compression_small_threshold,
+    )
     return Command(
         goto="supervisor",
         update=update_payload,
@@ -458,3 +430,75 @@ def _collect_source_urls(state: SupervisorState) -> list[dict]:
                 unique_urls.append({"url": url, "title": url.split("/")[-1] or url})
 
     return unique_urls
+
+
+# ---------------------------------------------------------------------------
+# Context Budget Enforcement (Claude Code sub-agent isolation model)
+# ---------------------------------------------------------------------------
+# Principle from Claude Code: "the subagent does that work in its own
+# context and returns only the summary."  We enforce a per-ToolMessage
+# character cap and an overall message count budget so the supervisor's
+# LLM context stays focused on high-signal recent results rather than
+# accumulating raw research dumps across iterations.
+# ---------------------------------------------------------------------------
+
+_SUPERVISOR_MAX_MESSAGES = 40
+"""Drop oldest messages beyond this count to keep the supervisor context lean."""
+
+
+def _enforce_context_budget(
+    messages: list,
+    max_tool_message_chars: int = 8000,
+) -> list:
+    """Trim and compress supervisor messages to stay within context budget.
+
+    1. Cap each ConductResearch ToolMessage at max_tool_message_chars characters
+       (the Researcher already returns compressed output; this is a safety net).
+    2. Drop oldest messages if total exceeds SUPERVISOR_MAX_MESSAGES, preserving
+       the most recent ThinkTool reflections and the system prefix.
+
+    Returns a new list — the caller should use this as the updated
+    supervisor_messages.
+    """
+    capped: list = []
+    for msg in messages:
+        if isinstance(msg, ToolMessage) and msg.name == "ConductResearch":
+            content = msg.content or ""
+            if len(content) > max_tool_message_chars:
+                truncated = content[:max_tool_message_chars] + (
+                    f"\n\n... [truncated from {len(content)} to "
+                    f"{max_tool_message_chars} chars for context budget]"
+                )
+                capped.append(ToolMessage(
+                    content=truncated,
+                    name=msg.name,
+                    tool_call_id=msg.tool_call_id,
+                ))
+            else:
+                capped.append(msg)
+        else:
+            capped.append(msg)
+
+    if len(capped) <= _SUPERVISOR_MAX_MESSAGES:
+        return capped
+
+    # Keep the first message (system prompt / research brief) and the
+    # most recent messages.  ThinkTool reflections are preferentially kept
+    # because they carry high-signal structural information.
+    keep_recent = _SUPERVISOR_MAX_MESSAGES - 1
+    think_msgs = [m for m in capped[1:] if isinstance(m, ToolMessage) and m.name == "ThinkTool"]
+    other_msgs = [m for m in capped[1:] if not (isinstance(m, ToolMessage) and m.name == "ThinkTool")]
+
+    # Always keep the last few think reflections
+    kept_think = think_msgs[-3:] if len(think_msgs) > 3 else think_msgs
+    # Fill the rest from the most recent other messages
+    remaining_slots = keep_recent - len(kept_think)
+    kept_other = other_msgs[-remaining_slots:] if remaining_slots > 0 else []
+
+    result = [capped[0]] + kept_other + kept_think
+    logger.info(
+        "[ContextBudget] Trimmed %d supervisor messages → %d "
+        "(kept %d think reflections, %d other)",
+        len(capped), len(result), len(kept_think), len(kept_other),
+    )
+    return result

@@ -577,3 +577,65 @@ Write a direct, well-structured answer. Include relevant facts and context.
 Use proper markdown formatting with headings where appropriate.
 Do NOT fabricate citations - only cite sources if you are certain of the URL.
 """
+
+
+# =============================================================================
+# PromptLoader Integration — filesystem-based prompt override
+# =============================================================================
+# Follows Claude Code's CLAUDE.md pattern: prompts can be loaded from .md files
+# in agent/prompts/deep_research/. When a file exists, it takes precedence over
+# the hardcoded constant. Users can customize prompts by editing the .md files.
+#
+# Usage:
+#   from agent.core.prompts import resolve_prompt
+#   prompt = resolve_prompt("lead_researcher")  # tries file, falls back to constant
+# =============================================================================
+
+_PROMPT_NAME_TO_CONSTANT = {
+    "clarify_with_user":    CLARIFY_WITH_USER_PROMPT,
+    "research_brief":       RESEARCH_BRIEF_PROMPT,
+    "complexity_classifier": COMPLEXITY_CLASSIFIER_PROMPT,
+    "lead_researcher":      LEAD_RESEARCHER_PROMPT,
+    "researcher":           RESEARCHER_SYSTEM_PROMPT,
+    "compression":          COMPRESSION_SYSTEM_PROMPT,
+    "final_report":         FINAL_REPORT_PROMPT,
+    "final_report_html":    HTML_REPORT_PROMPT,
+    "direct_answer":        DIRECT_ANSWER_PROMPT,
+    "source_curation":      SOURCE_CURATION_PROMPT,
+    "summarize_webpage":    SUMMARIZE_WEBPAGE_PROMPT,
+}
+
+
+def resolve_prompt(name: str, **kwargs) -> str:
+    """Resolve a prompt by name, trying filesystem first, then hardcoded fallback.
+
+    Args:
+        name: Prompt name (e.g. "lead_researcher", "final_report").
+        **kwargs: Format arguments to apply to the resolved prompt.
+
+    Returns:
+        The resolved prompt string, formatted if kwargs are provided.
+    """
+    try:
+        from agent.prompts.prompt_loader import get_prompt_loader
+        loader = get_prompt_loader()
+        return loader.get(name, **kwargs)
+    except Exception:
+        pass
+
+    # Fallback: use hardcoded constant
+    prompt = _PROMPT_NAME_TO_CONSTANT.get(name)
+    if prompt is None:
+        raise KeyError(f"Unknown prompt name: {name}")
+    if kwargs:
+        prompt = prompt.format(**kwargs)
+    return prompt
+
+
+def reload_prompts_from_disk() -> None:
+    """Force reload all prompts from the filesystem on the next resolve_prompt() call."""
+    try:
+        from agent.prompts.prompt_loader import reset_prompt_loader
+        reset_prompt_loader()
+    except ImportError:
+        pass

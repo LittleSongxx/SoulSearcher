@@ -13,7 +13,7 @@ Architecture (from unified design):
 │  │ SUPERVISOR SUBGRAPH                                        │  │
 │  │  supervisor ⇄ supervisor_tools                            │  │
 │  │    tools: ConductResearch, ThinkTool, SourceCurate,        │  │
-│  │           ResearchComplete, [ResearchDeep - Phase 2]       │  │
+│  │           ResearchComplete                                 │  │
 │  │    ConductResearch spawns Researcher Subgraphs in parallel │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                              ↓                                   │
@@ -38,12 +38,16 @@ Graph nodes:
     clarify_with_user ──→ write_research_brief ──→ classify_complexity
                                 │                          │
                     [always next]              simple → direct_answer → END
-                                               standard/deep → research_supervisor
-                                                                    │
+                                               standard/deep → plan_research
+                                                                   │
+                                                    [HITL: approve/revise/cancel]
+                                                                   │
+                                                       research_supervisor
+                                                                   │
                                                     supervisor_subgraph (nested)
-                                                                    │
+                                                                   │
                                                        final_report_generation
-                                                                    │
+                                                                   │
                                                                    END
 """
 
@@ -98,6 +102,9 @@ def create_research_graph(
         config_schema=ResearchConfiguration,
     )
 
+    # Import plan node (Google Gemini HITL pattern)
+    from agent.workflows.research_plan import plan_research
+
     # === Build and add nodes ===
 
     # Input Gateway nodes
@@ -107,6 +114,9 @@ def create_research_graph(
 
     # Fast path
     workflow.add_node("direct_answer", direct_answer)
+
+    # Research Plan (HITL — Google Gemini "plan first, approve, then execute" pattern)
+    workflow.add_node("plan_research", plan_research)
 
     # Research Supervisor (compiled subgraph - open_deep_research pattern)
     workflow.add_node("research_supervisor", build_supervisor_subgraph())
@@ -118,12 +128,10 @@ def create_research_graph(
 
     # Entry → Clarify
     workflow.add_edge(START, "clarify_with_user")
-    # clarify_with_user has conditional edges: write_research_brief or __end__
 
-    # Research brief → Complexity classification
-    # (write_research_brief always goes to classify_complexity via Command)
-
-    # classify_complexity has conditional edges: direct_answer or research_supervisor
+    # classify_complexity routes standard/deep tasks through the plan gate
+    # (plan_research itself may interrupt for user approval or route to __end__ on cancel)
+    workflow.add_edge("plan_research", "research_supervisor")
 
     # Research supervisor → Final report
     workflow.add_edge("research_supervisor", "final_report_generation")

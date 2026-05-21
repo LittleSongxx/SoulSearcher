@@ -33,8 +33,7 @@ from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import configurable_model
 from agent.core.prompts import (
     COMPRESSION_SIMPLE_HUMAN_MESSAGE,
-    COMPRESSION_SYSTEM_PROMPT,
-    RESEARCHER_SYSTEM_PROMPT,
+    resolve_prompt,
 )
 from agent.core.state import (
     ResearcherOutputState,
@@ -69,15 +68,64 @@ async def researcher(
             "(Tavily, etc.) or MCP server."
         )
 
-    # Configure model
-    complexity = "standard"  # Individual researcher always uses standard path
-    model_name = research_config.get_model_for_complexity(complexity)
+    # Configure model using task-type routing (open_deep_research 4-role pattern).
+    # The researcher's main loop is a synthesis task — it combines search results
+    # and decides next steps.  Content summarisation of individual pages is handled
+    # inside the search/read tools with their own model selection.
+    model_name = research_config.get_model_for_task(
+        "result_synthesis", complexity="standard"
+    )
 
     model_config = {
         "model": model_name,
         "max_tokens": research_config.research_model_max_tokens,
         "tags": ["langsmith:nostream"],
     }
+
+    # === Deep Research pre-processing (gpt-researcher breadth×depth recursion) ===
+    # When thoroughness is "very_thorough", run the recursive deep research
+    # pipeline BEFORE entering the ReAct loop.  This front-loads comprehensive
+    # coverage so the ReAct loop can focus on gap-filling and synthesis.
+    thoroughness = state.get("thoroughness", "medium")
+    if thoroughness == "very_thorough" and state.get("tool_call_iterations", 0) == 0:
+        research_topic = state.get("research_topic", "")
+        if research_topic:
+            logger.info(
+                f"[Researcher] very_thorough mode — running recursive deep research "
+                f"on '{research_topic[:100]}...'"
+            )
+            try:
+                from agent.workflows.deep_research import (
+                    execute_deep_research,
+                    format_deep_research_result,
+                )
+                result = await execute_deep_research(
+                    query=research_topic,
+                    breadth=research_config.deep_research_breadth,
+                    depth=research_config.deep_research_depth,
+                    config=config,
+                )
+                formatted = format_deep_research_result(result)
+                # Inject deep research findings as additional context so the
+                # ReAct loop builds on comprehensive initial coverage.
+                researcher_messages.append(
+                    HumanMessage(
+                        content=(
+                            f"[Pre-research findings from recursive depth×breadth scan]\n"
+                            f"{formatted}\n\n"
+                            f"Use these findings as a foundation.  Focus the ReAct "
+                            f"loop on filling gaps, verifying key claims, and "
+                            f"gathering additional recent sources."
+                        )
+                    )
+                )
+                logger.info(
+                    f"[Researcher] Deep research complete — "
+                    f"{len(result.learnings)} learnings, "
+                    f"{len(result.visited_urls)} URLs visited"
+                )
+            except Exception as e:
+                logger.error(f"[Researcher] Deep research pre-scan failed: {e}")
 
     # Build system prompt with MCP context and vision tool guidance
     mcp_prompt = research_config.mcp_prompt or ""
@@ -115,7 +163,7 @@ async def researcher(
     vision_tools_text = "\n".join(vision_tools_parts)
     vision_guidance_text = "\n".join(vision_guidance_parts)
 
-    system_prompt = RESEARCHER_SYSTEM_PROMPT.format(
+    system_prompt = resolve_prompt("researcher",
         mcp_prompt=f"\n3. **MCP Tools**: Additional research tools\n{mcp_prompt}" if mcp_prompt else "",
         vision_tools=vision_tools_text,
         vision_guidance=vision_guidance_text,
@@ -151,14 +199,9 @@ async def researcher(
             pass
 
     # === Loop Detection ===
-    from agent.core.middleware import get_loop_detector
-    loop_detector = get_loop_detector()
-    recent_content = "\n".join([
-        str(m.content)[:200]
-        for m in researcher_messages[-5:]
-        if hasattr(m, "content") and m.content
-    ])
-    if loop_detector.check(recent_content):
+    from agent.runtime.middleware.shared import check_loop
+    is_looping, _hint = check_loop(researcher_messages)
+    if is_looping:
         logger.warning("[Researcher] Loop detected, forcing compression")
         return Command(
             goto="compress_research",
@@ -680,7 +723,7 @@ async def _llm_compress(
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
-            compression_prompt = COMPRESSION_SYSTEM_PROMPT.format(
+            compression_prompt = resolve_prompt("compression",
                 date=datetime.now().strftime("%Y-%m-%d")
             )
             response = await synthesizer.ainvoke(

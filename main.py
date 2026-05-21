@@ -1518,6 +1518,112 @@ async def cancel_all_research(request: Request):
     }
 
 
+# ==================== Session Fork API ====================
+
+
+class ForkSessionRequest(BaseModel):
+    """Request payload for forking a research session.
+
+    Follows Claude Code's session fork pattern: creates an independent copy
+    of a session's checkpoint state so the user can explore alternative
+    research paths without affecting the original.
+    """
+
+    source_thread_id: str = Field(..., description="Thread ID to fork from")
+    new_thread_id: Optional[str] = Field(
+        default=None,
+        description="Optional target thread ID. Auto-generated if omitted.",
+    )
+    visibility: str = Field(
+        default="private",
+        description="Visibility for the forked session (private/group/public).",
+    )
+
+
+@app.post("/api/research/fork")
+async def fork_research_session(
+    request: Request,
+    payload: ForkSessionRequest,
+):
+    """Fork a research session to explore alternative paths.
+
+    Copies the latest checkpoint from source_thread_id to a new (or specified)
+    thread_id, creating an independent branch. Both sessions can evolve
+    independently from that point.
+
+    Reference: Claude Code Agent SDK — "you can fork a session to explore
+    alternative approaches."
+    """
+    if not checkpointer:
+        raise HTTPException(
+            status_code=400,
+            detail="Fork requires a persistent checkpointer (PostgreSQL). "
+                   "Set DATABASE_URL in .env.",
+        )
+
+    _require_thread_owner(request, payload.source_thread_id)
+
+    try:
+        from common.session_manager import get_session_manager
+
+        manager = get_session_manager(checkpointer)
+
+        # Verify the source session exists
+        source_session = manager.get_session(payload.source_thread_id)
+        if not source_session:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Source session not found: {payload.source_thread_id}",
+            )
+
+        # Determine owner for the new fork
+        owner_id = ""
+        internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
+        if internal_key:
+            owner_id = (getattr(request.state, "principal_id", "") or "").strip()
+
+        forked = manager.fork_session(
+            source_thread_id=payload.source_thread_id,
+            new_thread_id=payload.new_thread_id,
+            owner_id=owner_id,
+        )
+
+        if not forked:
+            raise HTTPException(
+                status_code=500,
+                detail="Fork operation failed. Check server logs for details.",
+            )
+
+        # Register thread ownership for the fork
+        if owner_id:
+            from common.thread_ownership import set_thread_owner
+
+            set_thread_owner(forked.thread_id, owner_id)
+
+        logger.info(
+            "[Fork] Session forked: %s → %s",
+            payload.source_thread_id,
+            forked.thread_id,
+        )
+
+        return {
+            "status": "forked",
+            "source_thread_id": payload.source_thread_id,
+            "forked_thread_id": forked.thread_id,
+            "session": forked.to_dict(),
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("[Fork] Unexpected error: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fork failed: {str(e)}",
+        )
+
+
 @app.get("/api/tasks/active")
 async def get_active_tasks(request: Request):
     """Get all active tasks."""
