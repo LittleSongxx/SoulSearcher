@@ -190,7 +190,6 @@ class Settings(BaseSettings):
     google_search_engine_id: str = ""  # Google Custom Search Engine ID (cx)
     e2b_api_key: str = ""
     anthropic_api_key: str = ""
-    dashscope_api_key: str = ""  # 阿里云 DashScope API Key (语音识别)
     mem0_api_key: str = ""
     enable_memory: bool = False
     memory_namespace: str = "default"
@@ -364,119 +363,32 @@ class Settings(BaseSettings):
     search_batch_size: int = 3  # 搜索批次大小
     api_rate_limit: float = 0.5  # API 调用间隔（秒）
 
-    # Deepsearch Settings
-    deepsearch_max_epochs: int = 3
-    deepsearch_query_num: int = 5
-    deepsearch_results_per_query: int = 5
-    deepsearch_enable_crawler: bool = False  # enable simple fallback crawler
-    deepsearch_enable_research_fetcher: bool = (
-        False  # fetch page bodies for evidence passages
-    )
-    deepsearch_save_data: bool = False  # save deepsearch run data to disk
-    deepsearch_save_dir: str = "eval/deepsearch_data"
-    deepsearch_use_gap_analysis: bool = (
-        True  # use knowledge gap analysis for targeted queries
-    )
+    # Deepsearch Settings (for supervisor_workers pipeline)
     deepsearch_mode: str = "supervisor_workers"
+    deepsearch_max_epochs: int = 3
     deepsearch_max_seconds: float = 0.0  # 0 = disabled
     deepsearch_max_tokens: int = 0  # 0 = disabled
-    deepsearch_max_research_units: int = 0  # 0 = derive from rounds * workers
-    deepsearch_max_search_queries: int = 0  # 0 = derive from workers * queries
-    deepsearch_max_tool_calls_per_unit: int = 0  # 0 = derive from queries per worker
-    deepsearch_max_context_tokens: int = 0  # 0 = model-derived context budget
-    deepsearch_max_compression_attempts: int = 0  # 0 = derive from research units
-    deepsearch_max_reflection_rounds: int = 0  # 0 = derive from supervisor rounds
-    deepsearch_max_skills: int = 3
-    deepsearch_loop_max_repeated_query: int = 1
-    deepsearch_loop_max_repeated_url: int = 2
-    deepsearch_loop_max_repeated_tool_call: int = 1
-    deepsearch_loop_max_empty_result_streak: int = 3
-    deepsearch_loop_warn_threshold: int = 3
-    deepsearch_loop_hard_limit: int = 5
-    deepsearch_loop_window_size: int = 20
-    deepsearch_loop_tool_freq_warn: int = 30
-    deepsearch_loop_tool_freq_hard_limit: int = 50
-    deepsearch_guardrail_denied_tools: str = ""
-    deepsearch_guardrail_allowed_domains: str = ""
-    deepsearch_supervisor_think_enabled: bool = True
-    deepsearch_max_seconds_per_worker: float = 0.0
-    deepsearch_forced_intermediate_report_fraction: float = 0.4
-    deepsearch_compression_citation_threshold: float = 0.8
-    deepsearch_encourage_open_url: bool = True
-    deepsearch_summary_trigger_tokens: int = 8000
-    deepsearch_summary_trigger_messages: int = 10
-    deepsearch_summary_keep_recent: int = 3
-    deepsearch_supervisor_max_depth: int = 1
-    deepsearch_supervisor_depth_confidence_threshold: float = 0.5
-    deepsearch_freshness_warning_min_known: int = (
-        3  # minimum dated results before warning checks
-    )
-    deepsearch_freshness_warning_min_ratio: float = (
-        0.4  # warn if fresh_30_ratio drops below this
-    )
-    deepsearch_event_results_limit: int = (
-        5  # max search results included in SSE event payloads
-    )
-    deepsearch_report_sources_limit: int = (
-        20  # max sources exposed to writer + appended to report
-    )
-    deepsearch_visualize_browser: bool = (
-        True  # drive sandbox browser so Live view isn't blank
-    )
-    deepsearch_claim_verifier_use_passages: bool = (
-        True  # use fetched passages for claim evidence
-    )
-    deepsearch_claim_verifier_min_overlap_tokens: int = (
-        2  # token overlap threshold for claim evidence
-    )
-    deepsearch_claim_verifier_max_evidence_per_claim: int = (
-        3  # max evidence passages/urls stored per claim
-    )
-    deepsearch_claim_verifier_max_claims: int = 10
-    deepsearch_semantic_claim_verifier_enabled: bool = False
-    deepsearch_semantic_claim_verifier_mode: str = "heuristic"
-    deepsearch_evidence_item_cap: int = 160
-    deepsearch_min_evidence_snippet_chars: int = 40
-    deepsearch_passage_cap: int = 40
-    deepsearch_claim_grounding_gate_enabled: bool = True
-    deepsearch_claim_grounding_max_passes: int = 3
-    deepsearch_citation_repair_enabled: bool = True
-    deepsearch_citation_repair_min_coverage: float = 0.85
-    deepsearch_supervisor_fetch_passages: bool = False
-    deepsearch_supervisor_fetch_source_limit: int = 8
-    deepsearch_enable_claim_ledger: bool = True
-    deepsearch_claim_ledger_max_claims: int = 24
-    deepsearch_final_verifier_revise: bool = False
-    deepsearch_final_verifier_max_revisions: int = 1
-    deepsearch_source_curator_enabled: bool = True
-    deepsearch_reflection_gap_queries: bool = False
-    deepsearch_fact_card_cap: int = 80
-    deepsearch_fact_card_writer_cap: int = 40
-    deepsearch_fact_card_min_quote_chars: int = 40
-    deepsearch_prewrite_gap_followup_enabled: bool = True
-    deepsearch_prewrite_gap_followup_queries: int = 2
-    deepsearch_stage_warn_after_s: float = 120.0
-    deepsearch_reader_plan_enabled: bool = True
-    deepsearch_reader_plan_mode: str = "search_fetch_browser_hint"
-    deepsearch_brief_review_required: bool = False
-    deepsearch_quality_gate_min_source_diversity: float = 0.35
-    deepsearch_quality_gate_min_primary_source_ratio: float = 0.0
-    deepsearch_quality_gate_max_low_value_source_ratio: float = 0.5
     deepsearch_supervisor_rounds: int = 2
     deepsearch_supervisor_max_workers: int = 4
     deepsearch_supervisor_queries_per_worker: int = 2
     deepsearch_supervisor_parallel_workers: int = 2
-    deepsearch_sectioned_report: bool = False
-    deepsearch_sectioned_report_requires_approval: bool = False
-    deepsearch_sectioned_report_max_sections: int = 8
-    deepsearch_sectioned_report_adaptive: bool = True
-    deepsearch_sectioned_report_adaptive_max_sections: int = 5
-    deepsearch_section_followups: int = 1
-    deepsearch_section_min_chars: int = 120
-    deepsearch_section_min_evidence: int = 1
-    deepsearch_section_results_cap: int = 6
-    deepsearch_section_evidence_cap: int = 8
-
+    deepsearch_supervisor_think_enabled: bool = True
+    deepsearch_supervisor_max_depth: int = 1
+    deepsearch_supervisor_depth_confidence_threshold: float = 0.5
+    deepsearch_max_seconds_per_worker: float = 0.0
+    deepsearch_max_skills: int = 3
+    deepsearch_reflection_loops: int = 0  # 0 = derive from supervisor rounds
+    deepsearch_claim_verifier_use_passages: bool = True
+    deepsearch_claim_verifier_min_overlap_tokens: int = 2
+    deepsearch_claim_verifier_max_evidence_per_claim: int = 3
+    deepsearch_claim_verifier_max_claims: int = 10
+    deepsearch_max_research_units: int = 0  # 0 = derive from rounds * workers
+    deepsearch_max_tool_calls_per_unit: int = 0  # 0 = derive from queries per worker
+    deepsearch_summary_trigger_tokens: int = 8000
+    deepsearch_summary_trigger_messages: int = 10
+    deepsearch_summary_keep_recent: int = 3
+    deepsearch_guardrail_denied_tools: str = ""
+    deepsearch_guardrail_allowed_domains: str = ""
     # Research Fetcher / Reader Settings
     reader_fallback_mode: str = "both"
     reader_public_base: str = "https://r.jina.ai"

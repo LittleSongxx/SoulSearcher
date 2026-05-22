@@ -82,51 +82,6 @@ async def researcher(
         "tags": ["langsmith:nostream"],
     }
 
-    # === Deep Research pre-processing (gpt-researcher breadth×depth recursion) ===
-    # When thoroughness is "very_thorough", run the recursive deep research
-    # pipeline BEFORE entering the ReAct loop.  This front-loads comprehensive
-    # coverage so the ReAct loop can focus on gap-filling and synthesis.
-    thoroughness = state.get("thoroughness", "medium")
-    if thoroughness == "very_thorough" and state.get("tool_call_iterations", 0) == 0:
-        research_topic = state.get("research_topic", "")
-        if research_topic:
-            logger.info(
-                f"[Researcher] very_thorough mode — running recursive deep research "
-                f"on '{research_topic[:100]}...'"
-            )
-            try:
-                from agent.workflows.deep_research import (
-                    execute_deep_research,
-                    format_deep_research_result,
-                )
-                result = await execute_deep_research(
-                    query=research_topic,
-                    breadth=research_config.deep_research_breadth,
-                    depth=research_config.deep_research_depth,
-                    config=config,
-                )
-                formatted = format_deep_research_result(result)
-                # Inject deep research findings as additional context so the
-                # ReAct loop builds on comprehensive initial coverage.
-                researcher_messages.append(
-                    HumanMessage(
-                        content=(
-                            f"[Pre-research findings from recursive depth×breadth scan]\n"
-                            f"{formatted}\n\n"
-                            f"Use these findings as a foundation.  Focus the ReAct "
-                            f"loop on filling gaps, verifying key claims, and "
-                            f"gathering additional recent sources."
-                        )
-                    )
-                )
-                logger.info(
-                    f"[Researcher] Deep research complete — "
-                    f"{len(result.learnings)} learnings, "
-                    f"{len(result.visited_urls)} URLs visited"
-                )
-            except Exception as e:
-                logger.error(f"[Researcher] Deep research pre-scan failed: {e}")
-
     # Build system prompt with MCP context and vision tool guidance
     mcp_prompt = research_config.mcp_prompt or ""
 
@@ -570,8 +525,8 @@ async def _get_researcher_tools(
     # Load MCP tools if enabled
     if research_config.mcp_enabled:
         try:
-            from tools.core.mcp import init_mcp_tools
-            mcp_tools = await init_mcp_tools(config)
+            from tools.mcp import init_mcp_tools as _init_mcp_tools
+            mcp_tools = await _init_mcp_tools(config)
             if mcp_tools:
                 tools.extend(mcp_tools)
                 logger.debug(f"[Researcher] Loaded {len(mcp_tools)} MCP tools")

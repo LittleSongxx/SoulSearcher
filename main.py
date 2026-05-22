@@ -7,7 +7,7 @@ import logging
 import re
 import time
 import uuid
-from collections import OrderedDict
+
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from enum import Enum
@@ -92,6 +92,11 @@ from common.config import settings
 from common.evidence_store import build_evidence_store_snapshot
 from common.logger import get_logger, setup_logging
 from common.metrics import metrics_registry
+from common.tracing import SpanKind, SpanStatus, record_span, trace_request
+
+# Router modules extracted from main.py for maintainability
+from agent.api import documents_router, tracing_router
+from agent.api.documents import _rag_collection_for_request
 from common.proxy_env import normalize_socks_proxy_env
 from common.research_events import build_research_run_event
 from common.sse import (
@@ -225,12 +230,8 @@ async def log_requests(request: Request, call_next):
             provided and hmac.compare_digest(provided, internal_key)
         )
 
-        # Basic in-memory rate limiting (token bucket) with response headers.
-        rate_limit_limit = 0
-        rate_limit_remaining = 0
-        rate_limit_reset_ts = 0
-        rate_limit_exceeded = False
-        rate_limit_retry_after = 0
+        # In-memory rate limiting via encapsulated token-bucket RateLimiter.
+        rate_limit_result = None
         if (
             rate_limit_enabled
             and path not in _RATE_LIMIT_EXEMPT
@@ -242,53 +243,18 @@ async def log_requests(request: Request, call_next):
                 else _get_client_ip(request)
             )
             is_research_stream = path == "/api/research/sse"
-            general_limit = int(getattr(settings, "rate_limit_general_per_minute", 60))
-            research_limit = int(
-                getattr(settings, "rate_limit_research_per_minute", 20)
-            )
-            window_seconds = int(getattr(settings, "rate_limit_window_seconds", 60))
-            rate_limit_limit = research_limit if is_research_stream else general_limit
-            bucket_key = f"{identity}:{'research' if is_research_stream else 'general'}"
-            now = time.time()
-            max_buckets = int(
-                getattr(settings, "rate_limit_max_buckets", 10_000) or 10_000
+            rate_limit_result = _rate_limiter.check(
+                identity, is_research=is_research_stream
             )
 
-            bucket = _rate_limit_buckets.get(bucket_key)
-            if bucket is None or now - bucket["window_start"] >= window_seconds:
-                bucket = {"tokens": rate_limit_limit - 1, "window_start": now}
-                _rate_limit_buckets[bucket_key] = bucket
-            else:
-                bucket["tokens"] -= 1
-                try:
-                    _rate_limit_buckets.move_to_end(bucket_key)
-                except Exception:
-                    pass
-
-            # Cap memory usage under many unique clients.
-            try:
-                while len(_rate_limit_buckets) > max_buckets:
-                    _rate_limit_buckets.popitem(last=False)
-            except Exception:
-                pass
-
-            rate_limit_remaining = int(max(bucket.get("tokens", 0), 0))
-            rate_limit_reset_ts = int(bucket["window_start"] + window_seconds)
-
-            if bucket.get("tokens", 0) < 0:
-                rate_limit_exceeded = True
-                rate_limit_retry_after = (
-                    int(window_seconds - (now - bucket["window_start"])) + 1
-                )
-
-        if rate_limit_exceeded:
+        if rate_limit_result and not rate_limit_result.allowed:
             response = JSONResponse(
                 status_code=429,
                 content={
                     "detail": "Too many requests. Please slow down.",
-                    "retry_after": rate_limit_retry_after,
+                    "retry_after": rate_limit_result.retry_after,
                 },
-                headers={"Retry-After": str(rate_limit_retry_after)},
+                headers={"Retry-After": str(rate_limit_result.retry_after)},
             )
         elif not authorized:
             response = JSONResponse(
@@ -305,12 +271,12 @@ async def log_requests(request: Request, call_next):
             response = await call_next(request)
 
         response.headers["X-Request-ID"] = request_id
-        if rate_limit_limit:
+        if rate_limit_result:
             _apply_rate_limit_headers(
                 response,
-                limit=rate_limit_limit,
-                remaining=0 if rate_limit_exceeded else rate_limit_remaining,
-                reset_ts=rate_limit_reset_ts,
+                limit=rate_limit_result.limit,
+                remaining=rate_limit_result.remaining,
+                reset_ts=rate_limit_result.reset_ts,
             )
         duration = time.time() - start_time
 
@@ -383,8 +349,6 @@ _rate_limiter = RateLimiter(
 )
 _stream_registry = StreamRegistry()
 _RATE_LIMIT_EXEMPT = {"/", "/health", "/metrics", "/docs", "/openapi.json", "/redoc"}
-# Legacy aliases kept for backwards compatibility within this file
-_rate_limit_buckets: "OrderedDict[str, dict[str, Any]]" = _rate_limiter._buckets
 
 
 def _get_client_ip(request: Request) -> str:
@@ -448,23 +412,6 @@ def _require_thread_owner(request: Request, thread_id: str) -> None:
         # Authorization is best-effort; never 500 due to ownership lookups.
         return
 
-
-# Periodic cleanup of stale rate-limit buckets (runs every 5 minutes)
-async def _cleanup_rate_limit_buckets():
-    try:
-        while True:
-            await asyncio.sleep(300)
-            now = time.time()
-            window_seconds = int(getattr(settings, "rate_limit_window_seconds", 60))
-            stale_keys = [
-                k
-                for k, v in _rate_limit_buckets.items()
-                if now - v["window_start"] > window_seconds * 2
-            ]
-            for k in stale_keys:
-                _rate_limit_buckets.pop(k, None)
-    except asyncio.CancelledError:
-        return
 
 
 # Initialize agent graphs with short-term memory (checkpointer)
@@ -982,92 +929,50 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "strategy",
     "deepsearch_mode",
     "deepsearch_max_epochs",
-    "deepsearch_query_num",
-    "deepsearch_results_per_query",
     "deepsearch_max_seconds",
     "deepsearch_max_tokens",
     "deepsearch_max_research_units",
-    "deepsearch_max_search_queries",
     "deepsearch_max_tool_calls_per_unit",
-    "deepsearch_max_context_tokens",
-    "deepsearch_max_compression_attempts",
-    "deepsearch_max_reflection_rounds",
     "deepsearch_max_skills",
     "deepsearch_reflection_loops",
     "deepsearch_supervisor_rounds",
     "deepsearch_supervisor_max_workers",
     "deepsearch_supervisor_queries_per_worker",
     "deepsearch_supervisor_parallel_workers",
-    "deepsearch_report_sources_limit",
-    "deepsearch_event_results_limit",
-    "deepsearch_visualize_browser",
-    "deepsearch_enable_research_fetcher",
-    "deepsearch_supervisor_fetch_passages",
-    "deepsearch_supervisor_fetch_source_limit",
-    "deepsearch_passage_cap",
-    "deepsearch_evidence_item_cap",
-    "deepsearch_min_evidence_snippet_chars",
-    "deepsearch_enable_claim_ledger",
-    "deepsearch_claim_ledger_max_claims",
+    "deepsearch_supervisor_think_enabled",
+    "deepsearch_supervisor_max_depth",
+    "deepsearch_supervisor_depth_confidence_threshold",
+    "deepsearch_max_seconds_per_worker",
     "deepsearch_claim_verifier_use_passages",
     "deepsearch_claim_verifier_min_overlap_tokens",
     "deepsearch_claim_verifier_max_evidence_per_claim",
     "deepsearch_claim_verifier_max_claims",
-    "deepsearch_claim_grounding_gate_enabled",
-    "deepsearch_claim_grounding_max_passes",
-    "deepsearch_final_verifier_revise",
-    "deepsearch_final_verifier_max_revisions",
-    "deepsearch_citation_repair_enabled",
-    "deepsearch_citation_repair_min_coverage",
-    "deepsearch_source_curator_enabled",
-    "deepsearch_reflection_gap_queries",
-    "deepsearch_fact_card_cap",
-    "deepsearch_fact_card_writer_cap",
-    "deepsearch_fact_card_min_quote_chars",
-    "deepsearch_prewrite_gap_followup_enabled",
-    "deepsearch_prewrite_gap_followup_queries",
-    "deepsearch_stage_warn_after_s",
-    "deepsearch_model_profile",
-    "deepsearch_supervisor_model",
+    "deepsearch_guardrail_denied_tools",
+    "deepsearch_guardrail_allowed_domains",
+    "deepsearch_summary_trigger_tokens",
+    "deepsearch_summary_trigger_messages",
+    "deepsearch_summary_keep_recent",
+    # Per-task model overrides
     "supervisor_model",
     "planner_model",
     "planning_model",
-    "deepsearch_query_model",
     "query_model",
     "query_gen_model",
-    "deepsearch_search_summary_model",
     "search_summary_model",
     "summary_model",
     "synthesis_model",
-    "deepsearch_worker_model",
     "worker_model",
     "researcher_model",
     "research_model",
-    "deepsearch_compression_model",
     "compression_model",
-    "deepsearch_writer_model",
     "writer_model",
     "final_report_model",
     "writing_model",
-    "deepsearch_verifier_model",
     "verifier_model",
     "evaluator_model",
     "evaluation_model",
     "reasoning_model",
-    "deepsearch_sectioned_report",
-    "sectioned_report",
-    "deepsearch_sectioned_report_requires_approval",
-    "sectioned_report_requires_approval",
-    "deepsearch_sectioned_report_review",
-    "sectioned_report_review",
-    "deepsearch_sectioned_report_max_sections",
-    "deepsearch_sectioned_report_adaptive",
-    "deepsearch_sectioned_report_adaptive_max_sections",
-    "deepsearch_section_followups",
-    "deepsearch_section_min_chars",
-    "deepsearch_section_min_evidence",
-    "deepsearch_section_results_cap",
-    "deepsearch_section_evidence_cap",
+    # Source/MCP configuration
     "source_policy",
     "source_routing",
     "source_providers",
@@ -1077,8 +982,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "allowed_domains",
     "denied_domains",
     "mcp_preset_ids",
-    "evidence_providers",
-    "mcp_evidence_results",
     "mcp_results",
     "mcp_auth_required",
     "mcp_requires_auth",
@@ -1087,52 +990,13 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "mcp_max_tools",
     "use_rag",
     "use_reflection_loop",
-    "deepsearch_loop_max_repeated_query",
-    "deepsearch_loop_max_repeated_url",
-    "deepsearch_loop_max_repeated_tool_call",
-    "deepsearch_loop_max_empty_result_streak",
-    "deepsearch_loop_warn_threshold",
-    "deepsearch_loop_hard_limit",
-    "deepsearch_loop_window_size",
-    "deepsearch_loop_tool_freq_warn",
-    "deepsearch_loop_tool_freq_hard_limit",
-    "deepsearch_guardrail_denied_tools",
-    "deepsearch_guardrail_allowed_domains",
-    "deepsearch_semantic_claim_verifier_enabled",
-    "deepsearch_semantic_claim_verifier_mode",
-    "semantic_claim_verifier_enabled",
-    "semantic_claim_verifier_mode",
-    "semantic_claim_verifier_results",
-    "deepsearch_semantic_claim_verifier_results",
-    "deepsearch_reader_plan_enabled",
-    "deepsearch_reader_plan_mode",
-    "deepsearch_brief_review_required",
-    "research_brief_review_required",
-    "deepsearch_quality_gate_min_source_diversity",
-    "deepsearch_quality_gate_min_primary_source_ratio",
-    "deepsearch_quality_gate_max_low_value_source_ratio",
-    "deepsearch_supervisor_think_enabled",
-    "deepsearch_max_seconds_per_worker",
-    "deepsearch_forced_intermediate_report_fraction",
-    "deepsearch_compression_citation_threshold",
-    "deepsearch_encourage_open_url",
-    "deepsearch_summary_trigger_tokens",
-    "deepsearch_summary_trigger_messages",
-    "deepsearch_summary_keep_recent",
-    "deepsearch_supervisor_max_depth",
-    "deepsearch_supervisor_depth_confidence_threshold",
 }
 
 
 _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
-    "deepsearch_sectioned_report_review",
-    "sectioned_report_review",
-    "deepsearch_brief_review",
-    "research_brief_review",
-    "semantic_claim_verifier_results",
-    "deepsearch_semantic_claim_verifier_results",
     "source_routing",
     "mcp_results",
+    "research_brief_review",
 }
 
 
@@ -1140,7 +1004,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
     "source_collections",
     "source_connectors",
     "source_index_attempts",
-    "mcp_evidence_results",
     "mcp_results",
 }
 
@@ -1357,6 +1220,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             "timestamp": datetime.now().isoformat(),
         },
     )
+
+
+app.include_router(tracing_router)
+app.include_router(documents_router)
 
 
 @app.get("/")
@@ -2113,6 +1980,7 @@ async def stream_agent_events(
 
     emitter.on_event(tool_event_listener)
 
+    _trace: Any = None
     try:
         logger.info(f"Agent stream started | Thread: {thread_id} | Model: {model}")
         logger.debug(f"  Input: {input_text[:100]}...")
@@ -2254,6 +2122,10 @@ async def stream_agent_events(
                 "thread_id": thread_id,
             },
         )
+
+        # Initialize tracing context for this request
+        _trace = trace_request(thread_id)
+        _trace.__enter__()
 
         # Stream graph execution
         graph_events = research_graph.astream_events(initial_state, config=config)
@@ -2405,6 +2277,13 @@ async def stream_agent_events(
                     data_dict.get("output", {}) if isinstance(data_dict, dict) else {}
                 )
                 metrics.mark_event(event_type, node_name)
+
+                # Record tracing span for node completion
+                record_span(
+                    name=name or node_name or "unknown",
+                    kind=SpanKind.NODE,
+                    attributes={"event_type": event_type},
+                )
 
                 # Extract messages from output
                 if isinstance(output, dict):
@@ -2561,6 +2440,13 @@ async def stream_agent_events(
 
                 yield await format_stream_event("tool", payload)
 
+                # Record tracing span for tool call
+                record_span(
+                    name=tool_name,
+                    kind=SpanKind.TOOL_CALL,
+                    attributes={"tool_call_id": tool_call_id or ""},
+                )
+
                 # Check for artifacts from code execution
                 if tool_name == "execute_python_code" and isinstance(output, dict):
                     image_data = output.get("image")
@@ -2669,6 +2555,13 @@ async def stream_agent_events(
         yield await format_stream_event("error", {"message": str(e)})
 
     finally:
+        # Finalize tracing
+        if _trace is not None:
+            try:
+                _trace.__exit__(None, None, None)
+            except Exception:
+                pass
+
         # Cleanup event emitter listener
         try:
             emitter.off_event(tool_event_listener)
@@ -3582,73 +3475,6 @@ async def public_config():
     }
 
 
-# ==================== Tracing API ====================
-
-
-@app.get("/api/traces/{thread_id}")
-async def get_traces(thread_id: str, request: Request):
-    """
-    Get traces for a thread.
-
-    Returns the latest trace with full span tree.
-    """
-    from common.tracing import get_trace
-
-    if not settings.enable_tracing:
-        raise HTTPException(status_code=400, detail="Tracing is not enabled")
-
-    _require_thread_owner(request, thread_id)
-
-    trace = get_trace(thread_id)
-    if not trace:
-        raise HTTPException(
-            status_code=404, detail=f"No traces found for thread {thread_id}"
-        )
-
-    return trace
-
-
-@app.get("/api/traces/{thread_id}/summary")
-async def get_trace_summary(thread_id: str, request: Request):
-    """
-    Get trace summary for a thread.
-
-    Returns high-level statistics: token counts, durations, node breakdown.
-    """
-    from common.tracing import get_trace_summary as _get_summary
-
-    if not settings.enable_tracing:
-        raise HTTPException(status_code=400, detail="Tracing is not enabled")
-
-    _require_thread_owner(request, thread_id)
-
-    summary = _get_summary(thread_id)
-    if not summary:
-        raise HTTPException(
-            status_code=404, detail=f"No traces found for thread {thread_id}"
-        )
-
-    return summary
-
-
-@app.get("/api/traces/{thread_id}/all")
-async def get_all_traces(thread_id: str, request: Request):
-    """
-    Get all traces for a thread.
-
-    Returns list of all stored traces (up to buffer limit).
-    """
-    from common.tracing import get_all_traces as _get_all
-
-    if not settings.enable_tracing:
-        raise HTTPException(status_code=400, detail="Tracing is not enabled")
-
-    _require_thread_owner(request, thread_id)
-
-    traces = _get_all(thread_id)
-    return {"thread_id": thread_id, "count": len(traces), "traces": traces}
-
-
 # ==================== Report Export API ====================
 
 
@@ -3930,176 +3756,6 @@ async def export_report_endpoint(
         raise
     except Exception as e:
         logger.error(f"Export error for thread {thread_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== RAG Document API ====================
-
-
-def _rag_collection_for_request(request: Request) -> str:
-    """
-    Resolve the Chroma collection name for RAG documents.
-
-    Hybrid behavior:
-    - Default/dev (internal auth disabled): single shared collection
-    - Enterprise internal (internal auth enabled): per-principal isolated collection
-    """
-    base = (
-        getattr(settings, "rag_collection_name", "") or "weaver_documents"
-    ).strip() or "weaver_documents"
-    internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
-    if not internal_key:
-        return base
-
-    principal_id = (
-        getattr(request.state, "principal_id", "") or ""
-    ).strip() or "internal"
-    suffix = hashlib.sha256(principal_id.encode("utf-8")).hexdigest()[:12]
-    return f"{base}__u_{suffix}"
-
-
-@app.post("/api/documents/upload", response_model=DocumentUploadResponse)
-async def upload_document(request: Request, file: UploadFile = File(...)):
-    """
-    Upload a document to the RAG knowledge base.
-
-    Supports PDF, DOCX, TXT, MD files.
-    """
-    if not settings.rag_enabled:
-        raise HTTPException(
-            status_code=400,
-            detail="RAG is not enabled. Set rag_enabled=True in settings.",
-        )
-
-    # Validate file size (max 50MB)
-    MAX_FILE_SIZE = 50 * 1024 * 1024
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB.",
-        )
-
-    # Validate file extension
-    ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "txt", "md", "csv"}
-    filename = file.filename or ""
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type '.{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
-        )
-
-    try:
-        from tools.rag.rag_tool import get_rag_tool
-
-        rag = get_rag_tool(collection_name=_rag_collection_for_request(request))
-        if rag is None:
-            raise HTTPException(status_code=500, detail="Failed to initialize RAG tool")
-
-        result = rag.add_document(content=content, filename=file.filename)
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400, detail=result.get("error", "Upload failed")
-            )
-
-        return {
-            "success": True,
-            "filename": file.filename,
-            "chunks": result.get("chunks", 0),
-            "message": f"Document '{file.filename}' uploaded successfully with {result.get('chunks', 0)} chunks",
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Document upload error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/documents/list", response_model=DocumentListResponse)
-async def list_documents(request: Request, limit: int = 100):
-    """
-    List all documents in the RAG knowledge base.
-    """
-    if not settings.rag_enabled:
-        raise HTTPException(status_code=400, detail="RAG is not enabled.")
-
-    try:
-        from tools.rag.rag_tool import get_rag_tool
-
-        rag = get_rag_tool(collection_name=_rag_collection_for_request(request))
-        if rag is None:
-            raise HTTPException(status_code=500, detail="Failed to initialize RAG tool")
-
-        documents = rag.list_documents(limit=limit)
-        count = rag.count()
-
-        return {
-            "total_chunks": count,
-            "documents": documents,
-        }
-
-    except Exception as e:
-        logger.error(f"List documents error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/documents/{source:path}", response_model=DocumentDeleteResponse)
-async def delete_document(source: str, request: Request):
-    """
-    Delete a document from the RAG knowledge base by source path.
-    """
-    if not settings.rag_enabled:
-        raise HTTPException(status_code=400, detail="RAG is not enabled.")
-
-    try:
-        from tools.rag.rag_tool import get_rag_tool
-
-        rag = get_rag_tool(collection_name=_rag_collection_for_request(request))
-        if rag is None:
-            raise HTTPException(status_code=500, detail="Failed to initialize RAG tool")
-
-        result = rag.delete_document(source)
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400, detail=result.get("error", "Delete failed")
-            )
-
-        return {"success": True, "message": f"Document '{source}' deleted"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Delete document error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/documents/search", response_model=DocumentSearchResponse)
-async def search_documents(request: Request, query: str, n_results: int = 5):
-    """
-    Search the RAG knowledge base.
-    """
-    if not settings.rag_enabled:
-        raise HTTPException(status_code=400, detail="RAG is not enabled.")
-
-    try:
-        from tools.rag.rag_tool import get_rag_tool
-
-        rag = get_rag_tool(collection_name=_rag_collection_for_request(request))
-        if rag is None:
-            raise HTTPException(status_code=500, detail="Failed to initialize RAG tool")
-
-        results = rag.search(query, n_results=n_results)
-
-        return {
-            "query": query,
-            "results": results,
-        }
-
-    except Exception as e:
-        logger.error(f"Search documents error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

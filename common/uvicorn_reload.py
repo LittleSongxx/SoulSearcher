@@ -7,7 +7,6 @@ _DEFAULT_RELOAD_SUBDIRS: tuple[str, ...] = (
     "agent",
     "common",
     "tools",
-    "triggers",
     # Runtime prompts + SDK types often change during dev
     "prompts",
     "sdk",

@@ -13,9 +13,7 @@ from agent.runtime.sandbox_policy import (
     should_expose_host_bash,
 )
 from tools import execute_python_code, tavily_search
-from tools.automation.ask_human_tool import ask_human
 from tools.automation.bash_tool import safe_bash
-from tools.automation.computer_use_tool import build_computer_use_tools
 from tools.automation.str_replace_tool import str_replace
 from tools.automation.task_list_tool import build_task_list_tools
 from tools.browser.browser_tools import build_browser_tools
@@ -128,7 +126,6 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
     - crawl: crawl_url(s) helpers
     - python: execute_python_code
     - task_list: task management tools (create, update, view tasks)
-    - computer_use: desktop automation (mouse, keyboard, screenshots)
     - mcp: any loaded MCP tools
     """
     cfg = _configurable(config)
@@ -243,16 +240,6 @@ def build_agent_tools(config: RunnableConfig) -> list[BaseTool]:
     if _enabled(profile, "task_list", default=True):
         tools.extend(build_task_list_tools(thread_id))
 
-    # Computer use tools for desktop automation
-    if _enabled(profile, "computer_use", default=False):
-        computer_tools = build_computer_use_tools(thread_id)
-        if computer_tools:  # Only add if pyautogui is available
-            tools.extend(computer_tools)
-
-    # AskHuman HITL tool always available unless disabled
-    if _enabled(profile, "ask_human", default=True):
-        tools.append(ask_human)
-
     # Str replace editor
     if _enabled(profile, "str_replace", default=True):
         tools.append(str_replace)
@@ -351,7 +338,6 @@ _AGENT_CORE_TOOLS = {
     "execute_python_code",
     "chart_visualize",
     "plan_steps",
-    "ask_human",
     "str_replace",
     "safe_bash",
 }
@@ -432,7 +418,7 @@ def initialize_enhanced_tools() -> None:
                     recursive=True,
                     tags=["weaver", "auto_discovered"],
                     exclude_dirs=exclude_dirs,
-                    exclude_globs=["tools/core/*", "tools/examples/*"],
+                    exclude_globs=["tools/core/*"],
                 )
             )
 

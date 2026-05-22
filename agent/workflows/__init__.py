@@ -13,17 +13,12 @@ from typing import Any
 __all__ = [
     "ContinuationHandler",
     "ContinuationState",
-    "QueryDeduplicator",
-    "ResponseHandler",
-    "ResultAggregator",
-    "SearchCache",
     "ToolResultInjector",
     "build_agent_tools",
     "build_tool_agent",
     "build_writer_agent",
     "check_cancellation",
     "get_deep_agent_prompt",
-    "get_search_cache",
     "initialize_enhanced_tools",
 ]
 
@@ -37,17 +32,10 @@ _SYMBOL_TO_MODULE: dict[str, str] = {
     "build_tool_agent": "agent.workflows.agent_factory",
     "build_writer_agent": "agent.workflows.agent_factory",
     "build_agent_tools": "agent.workflows.agent_tools",
-    # Response/aggregation
-    "ResponseHandler": "agent.workflows.response_handler",
-    "ResultAggregator": "agent.workflows.result_aggregator",
     # Continuation helpers
     "ContinuationHandler": "agent.workflows.continuation",
     "ContinuationState": "agent.workflows.continuation",
     "ToolResultInjector": "agent.workflows.continuation",
-    # Search cache (workflow-local)
-    "QueryDeduplicator": "agent.workflows.search_cache",
-    "SearchCache": "agent.workflows.search_cache",
-    "get_search_cache": "agent.workflows.search_cache",
 }
 
 

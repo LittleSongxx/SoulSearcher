@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { ResearchTreeView } from './ResearchTree'
 import {
   ChevronDown,
   Loader2,
@@ -300,16 +301,7 @@ function EventRow({ ev, t }: { ev: ProcessEvent; t: (key: any) => string }) {
   }
 
   if (kind === 'research_tree_update') {
-    return (
-      <div className="flex items-start gap-2">
-        <TreePine className="mt-0.5 h-4 w-4 text-muted-foreground/60" />
-        <div className="min-w-0">
-          <div className="truncate">
-            <span className="font-medium text-foreground/80">{t('researchTreeUpdated')}</span>
-          </div>
-        </div>
-      </div>
-    )
+    return <ResearchTreeView data={ev.data} />
   }
 
   if (kind === 'search') {

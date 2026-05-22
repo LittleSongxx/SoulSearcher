@@ -138,13 +138,6 @@ class ResearchConfiguration:
     """Maximum retries for structured output parsing failures."""
 
     # =========================================================================
-    # Deep Research (recursive breadth×depth, gpt-researcher pattern)
-    # =========================================================================
-    deep_research_breadth: int = 4
-    deep_research_depth: int = 2
-    deep_research_concurrency: int = 2
-
-    # =========================================================================
     # Compression Configuration
     # =========================================================================
     compression_small_threshold: int = 8000

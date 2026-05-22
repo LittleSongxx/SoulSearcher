@@ -100,17 +100,6 @@ async def supervisor(
     # Explore (Haiku, read-only) / general-purpose (Sonnet, all tools) split.
     supervisor_tools = [ConductResearch, ThinkTool, SourceCurate, ResearchComplete]
 
-    # Add the lightweight task() sub-agent tool (deer-flow SubagentExecutor).
-    # This merges the previously separate Lead Agent + Subagent runtime into the
-    # Supervisor-Worker graph, giving the supervisor a fast/cheap option for
-    # simple fact-checking.
-    try:
-        from agent.runtime.task_tool import task_tool
-        supervisor_tools.append(task_tool)
-        logger.debug("[Supervisor] task() sub-agent tool available")
-    except ImportError:
-        logger.debug("[Supervisor] task() sub-agent tool not available")
-
     research_model = (
         configurable_model
         .bind_tools(supervisor_tools)
@@ -283,12 +272,36 @@ async def supervisor_tools(
         allowed_calls = conduct_calls[:max_concurrent]
         overflow_calls = conduct_calls[max_concurrent:]
 
-        # Map ACI thoroughness levels → depth × breadth (Claude Code model)
+        # Map thoroughness levels → depth × breadth
         _THOROUGHNESS_MAP = {
             "quick":          (1, 2),
             "medium":         (1, 4),
-            "very_thorough":  (2, 4),
         }
+
+        # Emit research tree update — all tasks starting
+        thread_id = str(config.get("configurable", {}).get("thread_id", "default"))
+        try:
+            from agent.core.events import get_emitter
+
+            emitter = await get_emitter(thread_id)
+            research_topic = state.get("research_brief", "")[:200]
+            tree_root = {
+                "id": "root",
+                "name": research_topic or "Research",
+                "status": "running",
+                "children": [
+                    {
+                        "id": f"task_{i}",
+                        "name": tc["args"].get("topic", tc["args"].get("research_topic", f"Task {i+1}")),
+                        "status": "running",
+                        "thoroughness": tc["args"].get("thoroughness", "medium"),
+                    }
+                    for i, tc in enumerate(allowed_calls)
+                ],
+            }
+            await emitter.emit_research_tree_update(tree_root)
+        except Exception:
+            pass
 
         # Execute researcher subgraphs in parallel (open_deep_research pattern)
         research_tasks = [
@@ -324,6 +337,28 @@ async def supervisor_tools(
                     name="ConductResearch",
                     tool_call_id=tc["id"],
                 ))
+
+            # Emit research tree update — all tasks completed
+            try:
+                research_topic = state.get("research_brief", "")[:200]
+                tree_root = {
+                    "id": "root",
+                    "name": research_topic or "Research",
+                    "status": "completed",
+                    "children": [
+                        {
+                            "id": f"task_{i}",
+                            "name": tc["args"].get("topic", tc["args"].get("research_topic", f"Task {i+1}")),
+                            "status": "completed",
+                            "thoroughness": tc["args"].get("thoroughness", "medium"),
+                            "result_preview": obs.get("compressed_research", "")[:200],
+                        }
+                        for i, (tc, obs) in enumerate(zip(allowed_calls, tool_results))
+                    ],
+                }
+                await emitter.emit_research_tree_update(tree_root)
+            except Exception:
+                pass
 
             # Aggregate raw notes from all parallel researchers
             raw_notes_concat = "\n".join([

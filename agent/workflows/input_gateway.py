@@ -183,12 +183,7 @@ async def classify_complexity(
     """Classify the research task complexity and route accordingly.
 
     - simple → direct_answer (fast path, single LLM call, no supervisor)
-    - standard → research_supervisor (supervisor + 2-3 researchers)
-    - deep → research_supervisor (supervisor + depth×breadth recursion)
-
-    This is the key routing decision that optimizes cost and latency.
-    New in the unified design - neither open_deep_research nor gpt-researcher
-    has this explicit adaptive routing.
+    - deep → research_supervisor (Orchestrator-Workers: supervisor + N researchers)
     """
     research_config = ResearchConfiguration.from_runnable_config(config)
 
@@ -226,18 +221,15 @@ async def classify_complexity(
             },
         )
     else:
-        # Route through the plan gate (Google Gemini HITL pattern).
-        # The plan node generates a research plan and pauses for user approval
-        # before the expensive supervisor loop starts.
-        logger.info(
-            f"[Complexity] Routing to plan_research ({response.complexity} path)"
-        )
+        # deep → Orchestrator-Workers pipeline
+        # Route through the plan gate (HITL: plan → approve → execute)
+        logger.info("[Complexity] Routing to plan_research (deep → Orchestrator-Workers)")
         return Command(
             goto="plan_research",
             update={
-                "complexity": response.complexity,
-                "estimated_depth": response.estimated_depth,
-                "estimated_breadth": response.estimated_breadth,
+                "complexity": "deep",
+                "estimated_depth": 2,
+                "estimated_breadth": 4,
             },
         )
 

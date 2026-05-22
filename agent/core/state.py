@@ -56,12 +56,12 @@ class ResearchQuestion(BaseModel):
 
 class ComplexityAssessment(BaseModel):
     """Structured complexity classification for routing."""
-    complexity: Literal["simple", "standard", "deep"] = Field(
+    complexity: Literal["simple", "deep"] = Field(
         description="Complexity level of the research task."
     )
     estimated_depth: int = Field(
-        description="Recommended recursion depth (1=surface, 2=moderate, 3=thorough).",
-        ge=1, le=3
+        description="Recommended recursion depth (1=surface, 2=thorough).",
+        ge=1, le=2
     )
     estimated_breadth: int = Field(
         description="Recommended search breadth (number of parallel queries).",
@@ -78,18 +78,14 @@ class ConductResearch(BaseModel):
     Use this tool when you need in-depth investigation of a specific topic.
     You can call this tool multiple times in parallel for different topics.
     Each call spawns an independent researcher that searches, reads, and
-    synthesises findings.
+    synthesises findings via the ReAct loop with mixed compression.
 
-    This tool replaces the old ResearchDeep — set thoroughness to
-    "very_thorough" for the recursive depth×breadth behaviour.
+    Thoroughness levels:
+      - "quick"  — surface scan, fewer search iterations
+      - "medium" — balanced investigation (default)
 
-    Thoroughness levels (from Claude Code's sub-agent model):
-      - "quick"   — surface scan, 2 searches, no recursion
-      - "medium"  — balanced investigation, 4 searches, standard coverage (default)
-      - "very_thorough" — deep recursive research, 4 searches × 2 depth levels
-
-    Choose "quick" for simple fact-checks, "medium" for typical research
-    questions, and "very_thorough" for academic/comprehensive topics.
+    Choose "quick" for simple fact-checks and "medium" for typical
+    research questions requiring multi-source synthesis.
     """
     topic: str = Field(
         description="The specific topic to research. Be precise — one well-scoped "
@@ -101,7 +97,7 @@ class ConductResearch(BaseModel):
         description="Brief context to help the researcher: what is already known, "
                     "what specific angles matter, or what type of sources to prefer."
     )
-    thoroughness: Literal["quick", "medium", "very_thorough"] = Field(
+    thoroughness: Literal["quick", "medium"] = Field(
         default="medium",
         description="How deeply to research. See the tool description for details."
     )

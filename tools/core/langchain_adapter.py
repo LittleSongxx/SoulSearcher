@@ -247,63 +247,28 @@ def batch_convert_weaver_tools(
     return all_tools
 
 
-# Example usage
-if __name__ == "__main__":
-    print("=" * 60)
-    print("LangChain Adapter Test")
-    print("=" * 60)
+# Standalone demo helper
+def _demo_tool_conversion():
+    """Demonstrate WeaverTool → LangChain conversion (requires discoverable tools)."""
+    from tools.core.registry import get_global_registry
 
-    # Import example tool
-    import sys
-    from pathlib import Path
+    registry = get_global_registry()
+    names = registry.list_names()
+    if not names:
+        print("[demo] No registered tools found — run initialize_enhanced_tools() first.")
+        return
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+    weaver_tools = [registry.get(name) for name in names[:2] if registry.get(name)]
+    if not weaver_tools:
+        print("[demo] No tool instances available.")
+        return
 
-    from tools.examples.example_enhanced_tool import DataAnalysisTool, EnhancedSearchTool
-
-    # Create WeaverTool instances
-    search_tool = EnhancedSearchTool(api_key="test-key")
-    data_tool = DataAnalysisTool()
-
-    print("\n1. Converting WeaverTools to LangChain...")
-
-    # Convert to LangChain tools
-    langchain_tools = batch_convert_weaver_tools([search_tool, data_tool])
-
-    print(f"   Created {len(langchain_tools)} LangChain tools:")
+    langchain_tools = batch_convert_weaver_tools(weaver_tools)
+    print(f"[demo] Converted {len(langchain_tools)} tool(s):")
     for tool in langchain_tools:
-        print(f"   - {tool.name}: {tool.description[:60]}...")
+        desc = (tool.description or "")[:80]
+        print(f"  - {tool.name}: {desc}")
 
-    # Test individual tool execution
-    print("\n2. Testing tool execution...")
 
-    search_langchain = langchain_tools[0]  # search_web
-    try:
-        result = search_langchain.invoke(
-            {"query": "artificial intelligence", "max_results": 3, "search_type": "general"}
-        )
-        print("   Search result (first 200 chars):")
-        print(f"   {result[:200]}...")
-    except Exception as e:
-        print(f"   Error: {e}")
-
-    # Test data analysis tool
-    if len(langchain_tools) >= 4:
-        analyze_langchain = langchain_tools[3]  # analyze_data
-        try:
-            result = analyze_langchain.invoke(
-                {"data": [1, 2, 3, 4, 5], "operations": ["mean", "std"]}
-            )
-            print("\n   Analysis result:")
-            print(f"   {result}")
-        except Exception as e:
-            print(f"   Error: {e}")
-
-    # Test selective conversion
-    print("\n3. Testing selective method conversion...")
-    search_only = weaver_tool_to_langchain(search_tool, method_name="search")
-    print(f"   Converted only 'search' method: {len(search_only)} tool(s)")
-
-    print("\n" + "=" * 60)
-    print("[OK] LangChain adapter test completed!")
-    print("=" * 60)
+if __name__ == "__main__":
+    _demo_tool_conversion()
