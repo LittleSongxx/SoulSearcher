@@ -36,7 +36,11 @@ def create_chat_model_params(
             ):
                 api_key = settings.openai_api_key
     else:
-        api_key = settings.openai_api_key
+        # No TOML app config — resolve key from .env / environment
+        if base_url and "dashscope.aliyuncs.com" in base_url.lower():
+            api_key = settings.dashscope_api_key or settings.openai_api_key
+        else:
+            api_key = settings.openai_api_key
 
     params: dict[str, Any] = {
         "temperature": temperature,

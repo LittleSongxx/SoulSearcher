@@ -153,18 +153,33 @@ class TokenUsageTracker:
             "by_phase": dict(self.usage_by_phase),
         }
 
+    # Per-1M-token pricing (input, output) in USD — approximate, update as needed.
+    _MODEL_PRICING: dict[str, tuple[float, float]] = {
+        # DashScope Qwen (Alibaba Cloud)
+        "qwen3.6-flash": (0.10, 0.40),
+        "qwen3.6-plus":  (0.40, 1.60),
+        "qwen3.7-max":   (1.00, 4.00),
+        # OpenAI
+        "gpt-4.1-mini":  (0.15, 0.60),
+        "gpt-4.1":       (2.00, 8.00),
+        "gpt-4o":        (2.50, 10.00),
+        "gpt-4o-mini":   (0.15, 0.60),
+        "o3-mini":       (1.10, 4.40),
+        "o1":            (15.00, 60.00),
+        # DeepSeek
+        "deepseek-v4-flash": (0.28, 1.10),
+        "deepseek-v4-pro":   (0.55, 2.20),
+    }
+
     @staticmethod
     def estimate_cost(model_name: str, input_tokens: int, output_tokens: int) -> float:
-        """Estimate API cost based on model pricing (approximate)."""
-        pricing = {
-            "gpt-4.1-mini": (0.15, 0.60),      # per 1M input, per 1M output
-            "gpt-4.1": (2.00, 8.00),
-            "gpt-4o": (2.50, 10.00),
-            "gpt-4o-mini": (0.15, 0.60),
-            "o3-mini": (1.10, 4.40),
-            "o1": (15.00, 60.00),
-        }
-        input_price, output_price = pricing.get(model_name, (1.0, 4.0))
+        """Estimate API cost based on model pricing (approximate).
+
+        Pricing is per 1M tokens. Unknown models use a conservative default (1.0, 4.0).
+        """
+        input_price, output_price = TokenUsageTracker._MODEL_PRICING.get(
+            model_name, (1.0, 4.0)
+        )
         return (input_tokens / 1_000_000) * input_price + (output_tokens / 1_000_000) * output_price
 
 

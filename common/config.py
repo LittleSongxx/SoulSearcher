@@ -302,21 +302,34 @@ class Settings(BaseSettings):
     otlp_endpoint: str = ""  # Optional OTLP exporter endpoint
 
     # Model Config
-    primary_model: str = "deepseek-v4-flash"
-    reasoning_model: str = "deepseek-v4-pro"  # For planning
+    primary_model: str = "qwen3.6-plus"
+    reasoning_model: str = "qwen3.7-max"  # For planning
 
-    # Multi-Model Research Config (Task-specific models)
-    planner_model: str = ""  # Model for research planning (defaults to reasoning_model)
-    researcher_model: str = (
-        ""  # Model for research analysis (defaults to primary_model)
-    )
-    writer_model: str = ""  # Model for report writing (defaults to primary_model)
-    evaluator_model: str = (
-        ""  # Model for quality evaluation (defaults to reasoning_model)
-    )
-    critic_model: str = (
-        ""  # Model for URL selection/critique (defaults to reasoning_model)
-    )
+    # Three-Tier Model Routing (fast / smart / strategic)
+    # Falls back to primary_model / reasoning_model when empty
+    fast_llm_model: str = "qwen3.6-flash"   # Cheap, fast model for high-volume tasks
+    smart_llm_model: str = "qwen3.6-plus"   # Balanced model for synthesis & writing
+    strategic_llm_model: str = "qwen3.7-max" # Most capable model for planning & deep reasoning
+
+    # DashScope (Alibaba Cloud) API
+    dashscope_api_key: str = ""  # Required when using DashScope models via compatible API
+
+    # Multi-Model Research Config (Task-specific overrides)
+    # Each overrides the three-tier default for a specific phase.
+    # Empty = use the tier-appropriate model from above.
+    fast_llm_max_tokens: int = 4096
+    smart_llm_max_tokens: int = 8192
+    strategic_llm_max_tokens: int = 8192
+    planner_model: str = ""      # Model for research planning (defaults to strategic_llm)
+    researcher_model: str = ""   # Model for research analysis (defaults to smart_llm)
+    writer_model: str = ""       # Model for report writing (defaults to smart_llm)
+    evaluator_model: str = ""    # Model for quality evaluation (defaults to fast_llm)
+    critic_model: str = ""       # Model for URL selection/critique (defaults to reasoning_model)
+    compression_model: str = ""  # Model for research compression (defaults to smart_llm)
+    summarization_model: str = ""# Model for summarization (defaults to fast_llm)
+    final_report_model: str = "" # Model for final report (defaults to smart_llm)
+    research_model: str = ""     # Model for research phase (defaults to smart_llm)
+    vision_model: str = ""       # Vision-capable model override
 
     # RAG (Retrieval-Augmented Generation) Config
     rag_enabled: bool = False  # Enable local document RAG
@@ -355,7 +368,7 @@ class Settings(BaseSettings):
         12  # when messages count exceeds this, summarize middle
     )
     summary_messages_keep_last: int = 4
-    summary_messages_model: str = "deepseek-v4-flash"
+    summary_messages_model: str = ""  # Empty = use fast_llm_model
     summary_messages_word_limit: int = 200
 
     # Concurrency Control (并发控制)

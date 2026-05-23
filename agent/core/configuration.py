@@ -45,7 +45,7 @@ class ResearchConfiguration:
     fast_llm: str = field(
         default_factory=lambda: os.environ.get(
             "FAST_LLM",
-            getattr(app_settings, "fast_llm_model", "gpt-4.1-mini")
+            getattr(app_settings, "fast_llm_model", "") or app_settings.primary_model
         )
     )
     """Fast, cheap model for summarization, memory extraction, simple queries."""
@@ -53,7 +53,7 @@ class ResearchConfiguration:
     smart_llm: str = field(
         default_factory=lambda: os.environ.get(
             "SMART_LLM",
-            getattr(app_settings, "smart_llm_model", "gpt-4.1")
+            getattr(app_settings, "smart_llm_model", "") or app_settings.primary_model
         )
     )
     """Balanced model for research, writing, compression."""
@@ -61,14 +61,20 @@ class ResearchConfiguration:
     strategic_llm: str = field(
         default_factory=lambda: os.environ.get(
             "STRATEGIC_LLM",
-            getattr(app_settings, "strategic_llm_model", "o3-mini")
+            getattr(app_settings, "strategic_llm_model", "") or app_settings.reasoning_model
         )
     )
     """Most capable model for planning, complex analysis, deep research."""
 
-    fast_llm_max_tokens: int = 4096
-    smart_llm_max_tokens: int = 8192
-    strategic_llm_max_tokens: int = 8192
+    fast_llm_max_tokens: int = field(
+        default_factory=lambda: getattr(app_settings, "fast_llm_max_tokens", 4096)
+    )
+    smart_llm_max_tokens: int = field(
+        default_factory=lambda: getattr(app_settings, "smart_llm_max_tokens", 8192)
+    )
+    strategic_llm_max_tokens: int = field(
+        default_factory=lambda: getattr(app_settings, "strategic_llm_max_tokens", 8192)
+    )
 
     # =========================================================================
     # Phase-specific Model Mapping (open_deep_research pattern)
@@ -202,7 +208,7 @@ class ResearchConfiguration:
     vision_model: str = field(
         default_factory=lambda: os.environ.get(
             "VISION_MODEL",
-            getattr(app_settings, "vision_model", "")
+            getattr(app_settings, "vision_model", "") or ""
         )
     )
     """Specific vision-capable model override. Falls back to smart_llm when empty."""
@@ -383,7 +389,12 @@ class ResearchConfiguration:
 
     def get_model_max_tokens(self, model_name: str) -> int:
         """Get max tokens for a model, consulting the model token limit map."""
-        token_limits = {
+        # Per-model token limits. Add new models here.
+        # For DashScope Qwen models: qwen3.6-flash=131072, qwen3.6-plus=131072, qwen3.7-max=131072
+        token_limits: dict[str, int] = {
+            "qwen3.6-flash": 131072,
+            "qwen3.6-plus": 131072,
+            "qwen3.7-max": 131072,
             "gpt-4.1-mini": 1048576,
             "gpt-4.1": 1048576,
             "gpt-4o": 128000,
@@ -392,5 +403,7 @@ class ResearchConfiguration:
             "o1": 200000,
             "claude-sonnet-4-6": 200000,
             "claude-opus-4-7": 200000,
+            "deepseek-v4-flash": 131072,
+            "deepseek-v4-pro": 131072,
         }
-        return token_limits.get(model_name, 128000)
+        return token_limits.get(model_name, 131072)

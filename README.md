@@ -93,7 +93,7 @@ Weaver is a **Deep Research Agent** platform built on LangGraph. It decomposes c
 | **MCP** | OAuth support (client_credentials/refresh_token), deferred tool search, mtime cache invalidation |
 | **Multimodal** | Vision support (view_image, extract_web_images), user-uploaded image injection, HTML report image embedding |
 | **Sandbox** | E2B/Daytona isolation, opt-in host bash with command auditing, pipe-to-shell detection |
-| **Middleware** | 12-layer chain: context injection, summarization, loop detection, tool error handling, sandbox audit, etc. |
+| **Middleware** | 4 core concerns (ToolErrorHandler, LoopDetector, TokenUsageTracker, MemoryMiddleware) + shared graph functions |
 | **Channels** | Feishu/Lark IM integration via abstract Channel base class |
 | **Tool Registry** | Dynamic registration/discovery, tag-based lookup, usage statistics, LangChain compatibility |
 
@@ -238,9 +238,11 @@ The platform uses a three-tier model strategy inspired by Anthropic's "Building 
 
 | Tier | Default Model | Use Case |
 |------|--------------|----------|
-| `fast_llm` | gpt-4.1-mini | Summarization, quality checks, simple classification |
-| `smart_llm` | gpt-4.1 | Research synthesis, report writing, compression |
-| `strategic_llm` | o3-mini | Planning, strategy decisions, deep analysis |
+| `fast_llm` | qwen3.6-flash | Summarization, quality checks, simple classification |
+| `smart_llm` | qwen3.6-plus | Research synthesis, report writing, compression |
+| `strategic_llm` | qwen3.7-max | Planning, strategy decisions, deep analysis |
+
+All model names are configurable via `FAST_LLM_MODEL` / `SMART_LLM_MODEL` / `STRATEGIC_LLM_MODEL` in `.env`.
 
 Plus **8 task-type specific overrides**: query_generation, content_summarization, web_reading, result_synthesis, strategic_decision, compression, report_writing, quality_check.
 
@@ -344,14 +346,16 @@ Key settings in `.env`:
 ```bash
 # Core
 OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.deepseek.com
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+DASHSCOPE_API_KEY=sk-...
 TAVILY_API_KEY=tvly-...
-PRIMARY_MODEL=gpt-4.1
+PRIMARY_MODEL=qwen3.6-plus
+REASONING_MODEL=qwen3.7-max
 
-# Three-Tier Model Routing
-FAST_LLM=gpt-4.1-mini
-SMART_LLM=gpt-4.1
-STRATEGIC_LLM=o3-mini
+# Three-Tier Model Routing (configured via Settings class)
+FAST_LLM_MODEL=qwen3.6-flash
+SMART_LLM_MODEL=qwen3.6-plus
+STRATEGIC_LLM_MODEL=qwen3.7-max
 
 # Per-phase model overrides (empty = use tier default)
 RESEARCH_MODEL=

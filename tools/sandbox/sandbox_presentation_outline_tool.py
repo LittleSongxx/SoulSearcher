@@ -168,7 +168,7 @@ class _PresentationOutlineBaseTool(BaseTool):
 
     def _get_llm(self) -> ChatOpenAI:
         """Get LLM for outline generation."""
-        model = settings.reasoning_model or "gpt-4o-mini"
+        model = settings.reasoning_model or settings.primary_model
         return create_chat_model(model, temperature=0.7)
 
 
