@@ -340,6 +340,7 @@ Create a detailed answer that:
 3. References sources using [Title](URL) format
 4. Provides a balanced, thorough analysis - be as comprehensive as possible
 5. Includes a "### Sources" section at the end with all referenced links
+{skill_writing_context}
 
 Report structure options:
 - Comparison: intro → overview A → overview B → comparison → conclusion
@@ -453,6 +454,7 @@ Include a <style> block at the very beginning with CSS for:
    <li id="src-N"> in the sources section
 </Content Guidelines>
 
+{skill_writing_context}
 <Image & Chart Rules>
 - If research involved charts/graphs/diagrams, add <!-- IMAGE: key --> placeholders
   where images should appear. The platform will replace these with actual <img> tags.

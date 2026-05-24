@@ -220,12 +220,150 @@ class MemoryMiddleware:
 
 
 # =============================================================================
+# 5. Error Recovery Statistics — independent tracking for A/B comparison
+# =============================================================================
+
+class RecoveryTracker:
+    """Track tool-call outcomes for error recovery rate measurement.
+
+    Records every tool invocation as success / failure / recovered so the
+    recovery rate can be computed independently of the main pipeline.
+    Supports A/B comparison: run with and without error handling, compare.
+    """
+
+    def __init__(self):
+        self.total_calls: int = 0
+        self.successes: int = 0
+        self.failures: int = 0
+        self.recovered: int = 0
+        self.unrecovered: int = 0
+        self.events: list[dict[str, Any]] = []
+
+    def record_attempt(self, tool_name: str, success: bool) -> None:
+        self.total_calls += 1
+        if success:
+            self.successes += 1
+
+    def record_failure(self, tool_name: str, recovered: bool, error: str = "") -> None:
+        self.failures += 1
+        if recovered:
+            self.recovered += 1
+        else:
+            self.unrecovered += 1
+        self.events.append({
+            "tool": tool_name,
+            "recovered": recovered,
+            "error": error[:200],
+        })
+
+    @property
+    def recovery_rate(self) -> float:
+        if self.failures == 0:
+            return 1.0
+        return self.recovered / self.failures
+
+    @property
+    def success_rate(self) -> float:
+        if self.total_calls == 0:
+            return 1.0
+        return self.successes / self.total_calls
+
+    def get_summary(self) -> dict[str, Any]:
+        return {
+            "total_calls": self.total_calls,
+            "successes": self.successes,
+            "failures": self.failures,
+            "recovered": self.recovered,
+            "unrecovered": self.unrecovered,
+            "recovery_rate": round(self.recovery_rate, 4),
+            "success_rate": round(self.success_rate, 4),
+        }
+
+    def reset(self) -> None:
+        self.total_calls = 0
+        self.successes = 0
+        self.failures = 0
+        self.recovered = 0
+        self.unrecovered = 0
+        self.events.clear()
+
+
+# =============================================================================
+# A/B Comparison Runner for Error Recovery
+# =============================================================================
+
+async def run_recovery_ab_test(
+    tasks: list[dict[str, Any]],
+    graph,
+) -> dict[str, Any]:
+    """Compare error recovery with and without error-handling middleware.
+
+    Runs each task twice:
+      - Group A: with ToolErrorHandler active (default)
+      - Group B: tool errors propagate as exceptions (no recovery)
+
+    Returns comparative statistics on recovery rates.
+    """
+    tracker_a = RecoveryTracker()
+    tracker_b = RecoveryTracker()
+
+    for task in tasks:
+        query = task.get("query") or task.get("question", "")
+        task_id = task.get("id", task.get("task_id", "?"))
+
+        # Group A: with error handling
+        try:
+            from agent.core.state import build_initial_state
+            state_a = build_initial_state(input_text=query)
+            await graph.ainvoke(state_a, {
+                "configurable": {
+                    "thread_id": f"ab_a_{task_id}",
+                    "allow_clarification": False,
+                    "max_researcher_iterations": 2,
+                    "_recovery_tracker": tracker_a,
+                }
+            })
+        except Exception:
+            pass  # Group A should not crash
+
+        # Group B: without error handling (track any unhandled exceptions)
+        try:
+            from agent.core.state import build_initial_state
+            state_b = build_initial_state(input_text=query)
+            await graph.ainvoke(state_b, {
+                "configurable": {
+                    "thread_id": f"ab_b_{task_id}",
+                    "allow_clarification": False,
+                    "max_researcher_iterations": 2,
+                    "_recovery_tracker": tracker_b,
+                    "_disable_error_handling": True,
+                }
+            })
+        except Exception as e:
+            tracker_b.record_failure("pipeline", recovered=False, error=str(e))
+
+    return {
+        "with_error_handling": tracker_a.get_summary(),
+        "without_error_handling": tracker_b.get_summary(),
+        "improvement": {
+            "recovery_rate_delta": round(
+                tracker_a.recovery_rate - tracker_b.recovery_rate, 4
+            ),
+            "success_rate_delta": round(
+                tracker_a.success_rate - tracker_b.success_rate, 4
+            ),
+        },
+    }
+
+
+# =============================================================================
 # Global Instances
 # =============================================================================
 
 _loop_detector: Optional[LoopDetector] = None
 _token_tracker: Optional[TokenUsageTracker] = None
 _memory_middleware: Optional[MemoryMiddleware] = None
+_recovery_tracker: Optional[RecoveryTracker] = None
 
 
 def get_loop_detector() -> LoopDetector:
@@ -247,5 +385,12 @@ def get_memory_middleware() -> MemoryMiddleware:
     if _memory_middleware is None:
         _memory_middleware = MemoryMiddleware()
     return _memory_middleware
+
+
+def get_recovery_tracker() -> RecoveryTracker:
+    global _recovery_tracker
+    if _recovery_tracker is None:
+        _recovery_tracker = RecoveryTracker()
+    return _recovery_tracker
 
 

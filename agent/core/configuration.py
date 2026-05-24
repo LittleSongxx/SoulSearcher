@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, ClassVar, Optional
 
 from langchain_core.runnables import RunnableConfig
 from pydantic import Field
@@ -301,7 +301,7 @@ class ResearchConfiguration:
     #    powerful models for reasoning-heavy decisions.
     # ------------------------------------------------------------------
 
-    _TASK_FALLBACK_MAP: dict[str, str] = {
+    _TASK_FALLBACK_MAP: ClassVar[dict[str, str]] = {
         "query_generation":       "fast_llm",
         "content_summarization":  "fast_llm",
         "web_reading":            "fast_llm",

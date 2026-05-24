@@ -108,6 +108,114 @@ You have access to skills that provide optimized workflows for specific tasks.
     return result
 
 
+# ---------------------------------------------------------------------------
+# Skill context builders for different pipeline phases
+# ---------------------------------------------------------------------------
+
+_RESEARCH_SECTIONS = [
+    "## When to Use",
+    "## Core Principle",
+    "## Research Methodology",
+]
+
+_WRITING_SECTIONS = [
+    "## Output Format",
+    "## Writing Guidelines",
+    "## Report Structure Template",
+    "## Formatting & Tone Standards",
+    "## Script Writing Guidelines",
+    "## Style-Specific Guidelines",
+    "## Newsletter Output Template",
+    "## Review Output Template",
+    "## Supported Output Formats",
+    "## Output",
+]
+
+
+def build_skill_context(skill_ids: list[str], purpose: str = "research") -> str:
+    """Build skill context string for injection into prompts.
+
+    Args:
+        skill_ids: List of skill names to include.
+        purpose: "research" to extract methodology sections,
+                 "writing" to extract output/writing sections.
+
+    Returns:
+        Formatted XML string for prompt injection, or "" if no skills matched.
+    """
+    if not skill_ids:
+        return ""
+
+    import os
+    from pathlib import Path
+
+    from agent.skills.parser import parse_skill_file
+    from agent.skills.types import SkillCategory
+
+    sections = _RESEARCH_SECTIONS if purpose == "research" else _WRITING_SECTIONS
+    tag = "Skill Guidance" if purpose == "research" else "Skill Writing Guidance"
+    instruction = (
+        "Apply the methodology from these skills during research."
+        if purpose == "research"
+        else "Apply the writing and formatting guidelines from these skills to the final output."
+    )
+
+    skills_base = os.environ.get(
+        "WEAVER_SKILLS_PATH",
+        os.path.join(os.path.dirname(__file__), "..", "..", "skills", "public"),
+    )
+    skills_base = os.path.abspath(skills_base)
+
+    if not os.path.isdir(skills_base):
+        return ""
+
+    parts = [f"\n\n<{tag}>\nThe following skills are active:\n"]
+    loaded = 0
+
+    for entry in sorted(os.listdir(skills_base)):
+        entry_path = os.path.join(skills_base, entry)
+        if not os.path.isdir(entry_path):
+            continue
+
+        if entry not in skill_ids:
+            continue
+
+        skill_file = os.path.join(entry_path, "SKILL.md")
+        if not os.path.isfile(skill_file):
+            continue
+
+        try:
+            skill = parse_skill_file(Path(skill_file), SkillCategory.PUBLIC, Path(entry_path))
+            if not skill:
+                continue
+
+            parts.append(f"- **{skill.name}**: {skill.description}")
+            loaded += 1
+
+            content = open(skill_file, "r", encoding="utf-8").read()
+            for section in sections:
+                section_start = content.find(section)
+                if section_start >= 0:
+                    next_heading = content.find("\n## ", section_start + len(section) + 1)
+                    section_text = (
+                        content[section_start:next_heading]
+                        if next_heading > 0
+                        else content[section_start:2000]
+                    )
+                    if len(section_text) > 20:
+                        parts.append(f"  {section_text[:800]}...\n")
+                        break
+        except Exception:
+            parts.append(f"- Skill: {entry}")
+
+    if loaded == 0:
+        return ""
+
+    parts.append(f"\n{instruction}\n")
+    parts.append(f"</{tag}>\n")
+    return "\n".join(parts)
+
+
 def clear_skills_prompt_cache() -> None:
     """Clear the skills prompt cache (call when skills change)."""
     global _SKILLS_PROMPT_CACHE

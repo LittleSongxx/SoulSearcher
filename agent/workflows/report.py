@@ -95,6 +95,68 @@ REPORT_STRUCTURE_TEMPLATES = {
 - ## Conclusion: Synthesis and recommendations
 - ## Appendices: Data tables, methodology details (if needed)
 - ### Sources: Comprehensive reference list""",
+
+    "policy_brief": """Report structure: Policy Brief / Regulatory Analysis.
+- Title: Policy-focused title with jurisdiction and topic
+- ## Executive Summary: 3-5 key findings for policymakers
+- ## Policy Context: Legislative/regulatory background and timeline
+- ## Current Framework: Existing rules, their rationale, and implementation status
+- ## Comparative Analysis: How other jurisdictions handle this issue
+- ## Stakeholder Impact: Effects on industry, consumers, government
+- ## Recommendations: Actionable policy options with pros/cons
+- ### Sources: Legal references, official documents, expert commentary""",
+
+    "investment_analysis": """Report structure: Investment Research Report.
+- Title: Ticker/company name — investment thesis
+- ## Investment Summary: Thesis in 3-5 sentences, target price/valuation
+- ## Business Overview: Revenue model, competitive moat, market position
+- ## Financial Analysis: Revenue growth, margins, cash flow, balance sheet health
+- ## Industry & Competitive Landscape: Market structure, peers comparison table
+- ## Catalysts & Risks: Near-term triggers, downside scenarios
+- ## Valuation: Comparable company analysis, DCF assumptions
+- ## Conclusion: Clear buy/hold/sell recommendation with conviction level
+- ### Sources: Financial filings, analyst reports, industry data""",
+
+    "technical_review": """Report structure: Technical Review / Architecture Analysis.
+- Title: Technology, system, or architecture under review
+- ## Overview: What is being reviewed and evaluation criteria
+- ## Architecture & Design: System components, data flow, design patterns
+- ## Key Technical Decisions: Trade-offs made, alternatives considered
+- ## Performance & Scalability: Benchmarks, bottlenecks, scaling characteristics
+- ## Code Quality & Maintainability: Patterns, test coverage, documentation
+- ## Security & Compliance: Threat surface, known issues, compliance status
+- ## Recommendations: Prioritized improvements with effort/impact estimates
+- ### Sources: Code repositories, documentation, benchmarks, CVE references""",
+
+    "trend_report": """Report structure: Trend Analysis / Horizon Scan.
+- Title: Domain trend analysis with time horizon
+- ## Executive Summary: Major trends and their significance
+- ## Methodology: Data sources, search strategy, time range
+- ## Trend 1..N: For each trend — evidence, trajectory, key players, implications
+- ## Cross-Trend Patterns: Interactions and reinforcing/opposing forces
+- ## Emerging Signals: Weak signals worth monitoring
+- ## Outlook: 2-5 year projections with confidence levels
+- ### Sources: Publications, patents, funding data, expert interviews""",
+
+    "newsletter": """Report structure: Newsletter / Curated Briefing.
+- Title: Issue title with date and volume number
+- ## Top Stories: 3-5 stories with 2-3 sentence summaries and links
+- ## Deep Dive: One story with detailed analysis and context
+- ## Industry Moves: Key hires, funding rounds, acquisitions
+- ## Worth Reading: Curated links with one-line descriptions
+- ## Coming Up: Events, deadlines, expected announcements
+- ### Sources: Original reporting, press releases, official announcements""",
+
+    "audit_report": """Report structure: Audit / Reproducibility Report.
+- Title: Audit scope and subject
+- ## Executive Summary: Overall finding and confidence level
+- ## Audit Scope & Methodology: What was checked and how
+- ## Claim-by-Claim Verification: Each claim → evidence found → verdict (✓/✗/⚠)
+- ## Reproducibility Assessment: Environment, dependencies, execution results
+- ## Data Integrity: Source data availability, preprocessing, statistical validity
+- ## Findings & Recommendations: Systematic issues and corrective actions
+- ## Appendix: Full evidence table, reproduction logs
+- ### Sources: Original paper, code repository, reproduced outputs""",
 }
 
 def compose_report_structure(research_brief: str) -> str:
@@ -359,9 +421,13 @@ async def final_report_generation(
     # === Select prompt based on report format ===
     current_date = datetime.now().strftime("%Y-%m-%d")
 
+    # === Skill Writing Context (inject output/writing guidelines from active skills) ===
+    from agent.skills.prompt import build_skill_context
+    skill_ids = state.get("skill_ids", [])
+    skill_writing_context = build_skill_context(skill_ids, purpose="writing")
+
     if report_format == "html":
         prompt_name = "final_report_html"
-        # No structure template injection for HTML (structure is built into prompt)
     else:
         prompt_name = "final_report"
         report_structure = compose_report_structure(research_brief)
@@ -374,6 +440,7 @@ async def final_report_generation(
                     messages=get_buffer_string(messages),
                     findings=findings_truncated,
                     date=current_date,
+                    skill_writing_context=skill_writing_context,
                 )
             else:
                 prompt = resolve_prompt(prompt_name,
@@ -381,6 +448,7 @@ async def final_report_generation(
                     messages=get_buffer_string(messages),
                     findings=findings_truncated,
                     date=current_date,
+                    skill_writing_context=skill_writing_context,
                 )
                 # Inject selected structure template into the markdown prompt
                 prompt = prompt.replace(
@@ -472,29 +540,82 @@ async def final_report_generation(
             except Exception as e:
                 logger.warning(f"[Report] Memory update failed: {e}")
 
-            # === Level 2 Evaluation (evaluation.py) ===
+            # === Level 2 Dev Evaluation (rubric-based, with legacy fallback) ===
+            l2_result = None
             try:
-                from agent.workflows.evaluation import run_level2_evaluation
+                from agent.workflows.rubric import run_level2_rubric
                 eval_content = final_content
                 if report_format == "html":
                     import re
                     eval_content = re.sub(
                         r"<[^>]+>", "", final_content[:20000]
                     )
-                eval_result = await run_level2_evaluation(
+                l2_result = await run_level2_rubric(
                     report=eval_content,
                     research_brief=research_brief,
                     topic=research_brief[:500] if research_brief else "",
-                    model_name=research_config.smart_llm,
+                    config=config,
                 )
                 logger.info(
-                    f"[Report] Level 2 eval: score={eval_result.overall_score:.2f}, "
-                    f"passed={eval_result.overall_passed}"
+                    f"[Report] Level 2 rubric eval: score={l2_result.overall_score:.2f}, "
+                    f"passed={l2_result.passed}, verdict={l2_result.verdict}"
                 )
             except ImportError:
-                logger.debug("[Report] Evaluation system not available")
+                # Fall back to legacy prompt-based L2 evaluation
+                try:
+                    from agent.workflows.evaluation import run_level2_evaluation
+                    eval_content = final_content
+                    if report_format == "html":
+                        import re
+                        eval_content = re.sub(
+                            r"<[^>]+>", "", final_content[:20000]
+                        )
+                    eval_result = await run_level2_evaluation(
+                        report=eval_content,
+                        research_brief=research_brief,
+                        topic=research_brief[:500] if research_brief else "",
+                        model_name=research_config.smart_llm,
+                    )
+                    logger.info(
+                        f"[Report] Level 2 eval: score={eval_result.overall_score:.2f}, "
+                        f"passed={eval_result.overall_passed}"
+                    )
+                except ImportError:
+                    logger.debug("[Report] Evaluation system not available")
+                except Exception as e:
+                    logger.warning(f"[Report] Level 2 evaluation failed: {e}")
             except Exception as e:
-                logger.warning(f"[Report] Level 2 evaluation failed: {e}")
+                logger.warning(f"[Report] Level 2 rubric evaluation failed: {e}")
+
+            # === Level 3 Deep Evaluation (strategic_llm, for deep complexity only) ===
+            if complexity == "deep":
+                try:
+                    from agent.workflows.evaluation import run_level3_evaluation
+                    eval_content = final_content
+                    if report_format == "html":
+                        import re
+                        eval_content = re.sub(
+                            r"<[^>]+>", "", final_content[:20000]
+                        )
+                    l3_result = await run_level3_evaluation(
+                        report=eval_content,
+                        research_brief=research_brief,
+                        model_name=research_config.strategic_llm,
+                    )
+                    logger.info(
+                        f"[Report] Level 3 deep eval: score={l3_result.overall_score:.2f}, "
+                        f"passed={l3_result.overall_passed}, "
+                        f"degradation={l3_result.metadata.get('degradation_detected', False)}"
+                    )
+                    if l3_result.metadata.get("degradation_detected"):
+                        logger.warning(
+                            f"[Report] Degradation detected: "
+                            f"{l3_result.metadata.get('degradation_details', '')}"
+                        )
+                except ImportError:
+                    logger.debug("[Report] Level 3 evaluation not available")
+                except Exception as e:
+                    logger.warning(f"[Report] Level 3 deep evaluation failed: {e}")
 
             return {
                 "final_report": final_content,

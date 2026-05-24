@@ -56,12 +56,26 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.state import AgentInputState, AgentState
 
 logger = logging.getLogger(__name__)
+
+
+def _route_after_supervisor(state: dict, config: RunnableConfig) -> str:
+    """Route to GAIA short-answer node or full report generation.
+
+    When ``gaia_mode`` is set in the runnable config, the supervisor's
+    research output is fed to a concise-answer node instead of the full
+    report writer, matching GAIA benchmark expectations.
+    """
+    configurable = config.get("configurable") or {}
+    if configurable.get("gaia_mode"):
+        return "gaia_answer"
+    return "final_report"
 
 
 # =============================================================================
@@ -87,6 +101,7 @@ def create_research_graph(
         Compiled LangGraph StateGraph.
     """
     # Lazy imports to avoid circular dependencies
+    from agent.workflows.gaia_mode import gaia_answer_node
     from agent.workflows.input_gateway import (
         clarify_with_user,
         classify_complexity,
@@ -124,6 +139,9 @@ def create_research_graph(
     # Final Report Generation
     workflow.add_node("final_report_generation", final_report_generation)
 
+    # GAIA mode — short-answer path for benchmark evaluation
+    workflow.add_node("gaia_answer", gaia_answer_node)
+
     # === Define edges ===
 
     # Entry → Clarify
@@ -133,11 +151,21 @@ def create_research_graph(
     # (plan_research itself may interrupt for user approval or route to __end__ on cancel)
     workflow.add_edge("plan_research", "research_supervisor")
 
-    # Research supervisor → Final report
-    workflow.add_edge("research_supervisor", "final_report_generation")
+    # Research supervisor → conditional: GAIA short-answer or full report
+    workflow.add_conditional_edges(
+        "research_supervisor",
+        _route_after_supervisor,
+        {
+            "gaia_answer": "gaia_answer",
+            "final_report": "final_report_generation",
+        },
+    )
 
     # Direct answer → End
     workflow.add_edge("direct_answer", END)
+
+    # GAIA answer → End
+    workflow.add_edge("gaia_answer", END)
 
     # Final report → End
     workflow.add_edge("final_report_generation", END)

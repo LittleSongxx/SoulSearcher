@@ -27,7 +27,7 @@ Create a detailed answer that:
 3. References sources using [Title](URL) format
 4. Provides a balanced, thorough analysis - be as comprehensive as possible
 5. Includes a "### Sources" section at the end with all referenced links
-
+{skill_writing_context}
 Report structure options:
 - Comparison: intro → overview A → overview B → comparison → conclusion
 - List: single section with the list, or one section per item

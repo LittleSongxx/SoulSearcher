@@ -89,6 +89,7 @@ Include a <style> block at the very beginning with CSS for:
    <li id="src-N"> in the sources section
 </Content Guidelines>
 
+{skill_writing_context}
 <Image & Chart Rules>
 - If research involved charts/graphs/diagrams, add <!-- IMAGE: key --> placeholders
   where images should appear. The platform will replace these with actual <img> tags.

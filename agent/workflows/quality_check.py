@@ -132,20 +132,34 @@ async def run_level1_check(
     research_brief: str,
     config: RunnableConfig,
     state: dict | None = None,
+    use_rubric: bool = True,
 ) -> QualityCheckResult:
     """Run instant quality check using fast_llm.
 
     Takes <5 seconds, runs after every report generation.
     Uses fast_llm for cost efficiency.
 
-    Args:
-        report: The report content to evaluate.
-        research_brief: The original research brief.
-        config: RunnableConfig for model selection.
-        state: Optional state dict for evidence_alignment checking.
-               If provided, source-text pairs are extracted and passed
-               to the evaluator for factual-accuracy verification.
+    When use_rubric=True (default), uses the structured rubric scoring system
+    (researchrubrics/DEER pattern) for more reliable, auditable results.
+    Falls back to legacy prompt-based scoring when use_rubric=False.
     """
+    if use_rubric:
+        try:
+            from agent.workflows.rubric import run_level1_rubric
+            rubric_result = await run_level1_rubric(report, research_brief, config, state)
+            return QualityCheckResult(
+                passed=rubric_result.passed,
+                score=rubric_result.overall_score,
+                issues=rubric_result.issues,
+                suggestions=rubric_result.suggestions,
+                verdict=rubric_result.verdict,
+            )
+        except ImportError:
+            logger.debug("[QualityCheck] Rubric system not available, falling back to legacy")
+        except Exception as e:
+            logger.warning(f"[QualityCheck] Rubric eval failed: {e}, falling back to legacy")
+
+    # Legacy prompt-based evaluation (fallback)
     research_config = ResearchConfiguration.from_runnable_config(config)
 
     model_config = {
@@ -158,7 +172,7 @@ async def run_level1_check(
     evidence_context = _build_evidence_context(state) if state else ""
 
     prompt = LEVEL1_CHECK_PROMPT.format(
-        report=report[:8000],  # Truncate for fast check
+        report=report[:8000],
         research_brief=research_brief[:2000],
         evidence_context=evidence_context,
     )
@@ -174,7 +188,7 @@ async def run_level1_check(
     except Exception as e:
         logger.error(f"[QualityCheck] Level 1 failed: {e}")
         return QualityCheckResult(
-            passed=True,  # Don't block on check failure
+            passed=True,
             score=0.5,
             issues=[f"Quality check error: {str(e)}"],
             verdict="pass",
@@ -287,10 +301,11 @@ async def generate_report_with_quality_check(
     report_content: str,
     config: RunnableConfig,
     max_revisions: int = 2,
+    use_rubric: bool = True,
 ) -> str:
     """Generate report with Level 1 quality assurance loop.
 
-    1. Run Level 1 check
+    1. Run Level 1 check (rubric-based by default)
     2. If "pass": return report as-is
     3. If "revise": trigger revision, re-check (up to max_revisions)
     4. If "incomplete": flag but don't loop indefinitely
@@ -300,7 +315,7 @@ async def generate_report_with_quality_check(
     current_report = report_content
     for revision in range(max_revisions + 1):
         check_result = await run_level1_check(
-            current_report, research_brief, config, state=state
+            current_report, research_brief, config, state=state, use_rubric=use_rubric,
         )
 
         logger.info(
