@@ -7,6 +7,9 @@ following DeerFlow's progressive loading pattern.
 from __future__ import annotations
 
 import logging
+import os
+import re
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,9 @@ complex task, consider whether a new or updated skill would help future runs.
 </skill_evolution>"""
 
 
-def get_skills_prompt_section(available_skills: set[str] | None = None, container_base_path: str = "/mnt/skills") -> str:
+def get_skills_prompt_section(
+    available_skills: set[str] | None = None, container_base_path: str = "/mnt/skills"
+) -> str:
     """Generate the skills prompt section with available skills list.
 
     Args:
@@ -59,10 +64,17 @@ def get_skills_prompt_section(available_skills: set[str] | None = None, containe
 
     # Build cache key from skill signatures
     skill_signature = tuple(
-        (s.name, s.description, s.category.value, s.get_container_file_path(container_base_path))
+        (
+            s.name,
+            s.description,
+            s.category.value,
+            s.get_container_file_path(container_base_path),
+        )
         for s in skills
     )
-    available_key = tuple(sorted(available_skills)) if available_skills is not None else None
+    available_key = (
+        tuple(sorted(available_skills)) if available_skills is not None else None
+    )
     cache_key = (skill_signature, available_key)
 
     if _SKILLS_PROMPT_CACHE is not None and _SKILLS_PROMPT_CACHE[0] == cache_key:
@@ -70,13 +82,16 @@ def get_skills_prompt_section(available_skills: set[str] | None = None, containe
 
     # Check if skill_evolution is enabled
     from common.config import settings
+
     skill_evolution_enabled = getattr(settings, "skill_evolution_enabled", False)
     skill_evolution_section = _build_skill_evolution_section(skill_evolution_enabled)
 
     # Build the available skills list
     skills_xml_parts = []
     for skill in skills:
-        editability = "[built-in]" if skill.category.value == "public" else "[custom, editable]"
+        editability = (
+            "[built-in]" if skill.category.value == "public" else "[custom, editable]"
+        )
         skills_xml_parts.append(
             f"    <skill>\n"
             f"        <name>{skill.name}</name>\n"
@@ -132,13 +147,47 @@ _WRITING_SECTIONS = [
 ]
 
 
-def build_skill_context(skill_ids: list[str], purpose: str = "research") -> str:
+def _extract_markdown_section(content: str, heading: str) -> str:
+    section_start = content.find(heading)
+    if section_start < 0:
+        return ""
+    next_heading = content.find("\n## ", section_start + len(heading) + 1)
+    if next_heading < 0:
+        return content[section_start:].strip()
+    return content[section_start:next_heading].strip()
+
+
+def _query_tokens(query: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[\w\u4e00-\u9fff]+", query.lower())
+        if len(token) >= 2
+    }
+
+
+def _relevance_score(text: str, tokens: set[str]) -> int:
+    if not tokens:
+        return 0
+    lowered = text.lower()
+    return sum(1 for token in tokens if token in lowered)
+
+
+def build_skill_context(
+    skill_ids: list[str],
+    purpose: str = "research",
+    query: str = "",
+    max_chars: int = 3000,
+    max_sections_per_skill: int = 2,
+) -> str:
     """Build skill context string for injection into prompts.
 
     Args:
         skill_ids: List of skill names to include.
         purpose: "research" to extract methodology sections,
                  "writing" to extract output/writing sections.
+        query: Current task text used to rank relevant sections.
+        max_chars: Approximate context budget for disclosed section snippets.
+        max_sections_per_skill: Maximum phase-specific sections per skill.
 
     Returns:
         Formatted XML string for prompt injection, or "" if no skills matched.
@@ -146,14 +195,11 @@ def build_skill_context(skill_ids: list[str], purpose: str = "research") -> str:
     if not skill_ids:
         return ""
 
-    import os
-    from pathlib import Path
-
     from agent.skills.parser import parse_skill_file
     from agent.skills.types import SkillCategory
 
     sections = _RESEARCH_SECTIONS if purpose == "research" else _WRITING_SECTIONS
-    tag = "Skill Guidance" if purpose == "research" else "Skill Writing Guidance"
+    tag = "skill_guidance" if purpose == "research" else "skill_writing_guidance"
     instruction = (
         "Apply the methodology from these skills during research."
         if purpose == "research"
@@ -169,8 +215,13 @@ def build_skill_context(skill_ids: list[str], purpose: str = "research") -> str:
     if not os.path.isdir(skills_base):
         return ""
 
-    parts = [f"\n\n<{tag}>\nThe following skills are active:\n"]
+    parts = [
+        f'\n\n<{tag} disclosure="progressive" phase="{purpose}">\n'
+        "Active skills are listed first; only task-relevant phase sections are disclosed below.\n"
+    ]
     loaded = 0
+    candidates: list[tuple[int, str, str, str, str]] = []
+    tokens = _query_tokens(query)
 
     for entry in sorted(os.listdir(skills_base)):
         entry_path = os.path.join(skills_base, entry)
@@ -185,31 +236,57 @@ def build_skill_context(skill_ids: list[str], purpose: str = "research") -> str:
             continue
 
         try:
-            skill = parse_skill_file(Path(skill_file), SkillCategory.PUBLIC, Path(entry_path))
+            skill = parse_skill_file(
+                Path(skill_file), SkillCategory.PUBLIC, Path(entry_path)
+            )
             if not skill:
                 continue
 
             parts.append(f"- **{skill.name}**: {skill.description}")
             loaded += 1
 
-            content = open(skill_file, "r", encoding="utf-8").read()
+            content = Path(skill_file).read_text(encoding="utf-8")
+            skill_candidates: list[tuple[int, str, str, str, str]] = []
             for section in sections:
-                section_start = content.find(section)
-                if section_start >= 0:
-                    next_heading = content.find("\n## ", section_start + len(section) + 1)
-                    section_text = (
-                        content[section_start:next_heading]
-                        if next_heading > 0
-                        else content[section_start:2000]
+                section_text = _extract_markdown_section(content, section)
+                if len(section_text) > 20:
+                    score_text = f"{skill.name}\n{skill.description}\n{section_text}"
+                    skill_candidates.append(
+                        (
+                            _relevance_score(score_text, tokens),
+                            skill.name,
+                            skill.description,
+                            section,
+                            section_text,
+                        )
                     )
-                    if len(section_text) > 20:
-                        parts.append(f"  {section_text[:800]}...\n")
-                        break
+            if skill_candidates:
+                ranked = sorted(
+                    skill_candidates, key=lambda item: item[0], reverse=True
+                )
+                relevant = [item for item in ranked if item[0] > 0]
+                candidates.extend((relevant or ranked)[:max_sections_per_skill])
         except Exception:
             parts.append(f"- Skill: {entry}")
 
     if loaded == 0:
         return ""
+
+    remaining = max_chars
+    if candidates and remaining > 0:
+        parts.append("\nDisclosed phase-specific snippets:\n")
+        for _, skill_name, _, section, section_text in sorted(
+            candidates, key=lambda item: item[0], reverse=True
+        ):
+            if remaining <= 0:
+                break
+            snippet_budget = min(remaining, 900)
+            snippet = section_text[:snippet_budget].strip()
+            if len(section_text) > snippet_budget:
+                snippet += "\n..."
+            block = f'\n<skill_section name="{skill_name}" section="{section}">\n{snippet}\n</skill_section>\n'
+            parts.append(block)
+            remaining -= len(snippet)
 
     parts.append(f"\n{instruction}\n")
     parts.append(f"</{tag}>\n")

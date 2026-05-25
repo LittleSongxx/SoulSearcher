@@ -152,11 +152,12 @@ async def write_research_brief(
         .with_config(model_config)
     )
 
+    message_text = get_buffer_string(messages)
     # Build skill context (deer-flow pattern: inject SKILL.md guidance)
-    skill_context = _build_skill_context(state)
+    skill_context = _build_skill_context(state, message_text)
 
     prompt = resolve_prompt("research_brief",
-        messages=get_buffer_string(messages),
+        messages=message_text,
         date=datetime.now().strftime("%Y-%m-%d"),
         skill_context=skill_context,
     )
@@ -282,7 +283,12 @@ async def direct_answer(state: AgentState, config: RunnableConfig) -> dict:
 # Helpers
 # =============================================================================
 
-def _build_skill_context(state: AgentState) -> str:
+def _build_skill_context(state: AgentState, query: str = "") -> str:
     """Build skill context string from active SKILL.md files for research brief injection."""
     from agent.skills.prompt import build_skill_context
-    return build_skill_context(state.get("skill_ids", []), purpose="research")
+    return build_skill_context(
+        state.get("skill_ids", []),
+        purpose="research",
+        query=query,
+        max_chars=2400,
+    )

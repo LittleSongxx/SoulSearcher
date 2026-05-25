@@ -409,6 +409,7 @@ async def final_report_generation(
     }
 
     messages = state.get("messages", [])
+    message_text = get_buffer_string(messages)
     cleared_state = {
         "notes": {"type": "override", "value": []},
         "supervisor_messages": {"type": "override", "value": []},
@@ -424,7 +425,12 @@ async def final_report_generation(
     # === Skill Writing Context (inject output/writing guidelines from active skills) ===
     from agent.skills.prompt import build_skill_context
     skill_ids = state.get("skill_ids", [])
-    skill_writing_context = build_skill_context(skill_ids, purpose="writing")
+    skill_writing_context = build_skill_context(
+        skill_ids,
+        purpose="writing",
+        query=f"{research_brief}\n{message_text}\nformat: {report_format}",
+        max_chars=3600,
+    )
 
     if report_format == "html":
         prompt_name = "final_report_html"
@@ -437,7 +443,7 @@ async def final_report_generation(
             if report_format == "html":
                 prompt = resolve_prompt(prompt_name,
                     research_brief=research_brief,
-                    messages=get_buffer_string(messages),
+                    messages=message_text,
                     findings=findings_truncated,
                     date=current_date,
                     skill_writing_context=skill_writing_context,
@@ -445,7 +451,7 @@ async def final_report_generation(
             else:
                 prompt = resolve_prompt(prompt_name,
                     research_brief=research_brief,
-                    messages=get_buffer_string(messages),
+                    messages=message_text,
                     findings=findings_truncated,
                     date=current_date,
                     skill_writing_context=skill_writing_context,
