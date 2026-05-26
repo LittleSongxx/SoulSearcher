@@ -190,6 +190,47 @@ class ResearchConfiguration:
     """When report_format='html', automatically inject viewed_images from the
     research phase into the final report as <img> tags."""
 
+    evaluation_pass_threshold: float = field(
+        default_factory=lambda: float(
+            getattr(app_settings, "evaluation_pass_threshold", 0.75)
+        )
+    )
+    evaluation_revise_threshold: float = field(
+        default_factory=lambda: float(
+            getattr(app_settings, "evaluation_revise_threshold", 0.5)
+        )
+    )
+    evaluation_claim_alignment_min_rate: float = field(
+        default_factory=lambda: float(
+            getattr(app_settings, "evaluation_claim_alignment_min_rate", 0.75)
+        )
+    )
+    evaluation_require_l2_pass: bool = field(
+        default_factory=lambda: bool(
+            getattr(app_settings, "evaluation_require_l2_pass", True)
+        )
+    )
+    evaluation_require_citation_evidence: bool = field(
+        default_factory=lambda: bool(
+            getattr(app_settings, "evaluation_require_citation_evidence", True)
+        )
+    )
+    evaluation_html_quality_check: bool = field(
+        default_factory=lambda: bool(
+            getattr(app_settings, "evaluation_html_quality_check", True)
+        )
+    )
+    evaluation_calibration_min_agreement: float = field(
+        default_factory=lambda: float(
+            getattr(app_settings, "evaluation_calibration_min_agreement", 0.7)
+        )
+    )
+    evaluation_calibration_min_samples: int = field(
+        default_factory=lambda: int(
+            getattr(app_settings, "evaluation_calibration_min_samples", 5)
+        )
+    )
+
     # =========================================================================
     # Memory (Phase 4)
     # =========================================================================

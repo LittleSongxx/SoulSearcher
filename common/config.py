@@ -217,6 +217,14 @@ class Settings(BaseSettings):
     citation_gate_min_coverage: float = Field(default=0.6, ge=0.0, le=1.0)
     claim_verifier_gate_max_contradicted: int = Field(default=0, ge=0)
     claim_verifier_gate_max_unsupported: int = Field(default=0, ge=0)
+    evaluation_pass_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    evaluation_revise_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    evaluation_claim_alignment_min_rate: float = Field(default=0.75, ge=0.0, le=1.0)
+    evaluation_require_l2_pass: bool = True
+    evaluation_require_citation_evidence: bool = True
+    evaluation_html_quality_check: bool = True
+    evaluation_calibration_min_agreement: float = Field(default=0.7, ge=0.0, le=1.0)
+    evaluation_calibration_min_samples: int = Field(default=5, ge=1)
 
     # Environment
     app_env: str = "dev"  # dev | test | prod

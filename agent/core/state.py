@@ -192,6 +192,10 @@ class AgentState(MessagesState):
     sources: list[dict[str, str]]
     curated_sources: list[dict[str, Any]]
 
+    quality_summary: dict[str, Any]
+    quality_gates: list[dict[str, Any]]
+    deepsearch_artifacts: dict[str, Any]
+
     # === Final output ===
     final_report: str
 
@@ -282,6 +286,9 @@ def build_initial_state(
         "research_iterations": 0,
         "sources": [],
         "curated_sources": [],
+        "quality_summary": {},
+        "quality_gates": [],
+        "deepsearch_artifacts": {},
         "final_report": "",
         "report_format": kwargs.get("report_format", "markdown"),
         "messages": messages or [],

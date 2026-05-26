@@ -70,6 +70,8 @@ class RubricResult(BaseModel):
     verdict: str = Field(default="pass", description="pass | revise | incomplete")
     issues: list[str] = Field(default_factory=list)
     suggestions: list[str] = Field(default_factory=list)
+    summary: str = Field(default="")
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     def compute_overall(self) -> float:
         total_w = sum(d.weight for d in self.dimensions)
@@ -263,53 +265,136 @@ def _build_l1_rubric_json() -> str:
     )
 
 
-def _parse_rubric_response(content: str) -> RubricResult:
-    """Parse LLM rubric response into a RubricResult."""
+def _coerce_score(value: Any) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = 0.0
+    return max(0.0, min(1.0, score))
+
+
+def _compute_l1_verdict(overall_score: float, dimensions: list[RubricDimension]) -> tuple[bool, str]:
+    blocker_scores = {
+        d.name: d.score
+        for d in dimensions
+        if d.name in {"citation_density", "topic_relevance", "evidence_alignment"}
+    }
+    if overall_score >= 0.7 and all(score >= 0.5 for score in blocker_scores.values()):
+        return True, "pass"
+    if overall_score >= 0.4:
+        return False, "revise"
+    return False, "incomplete"
+
+
+def _compute_l2_verdict(overall_score: float, dimensions: list[RubricDimension]) -> tuple[bool, str]:
+    critical_failed = any(d.weight > 1.0 and d.score < 0.6 for d in dimensions)
+    if overall_score >= 0.7 and not critical_failed:
+        return True, "pass"
+    if overall_score >= 0.45:
+        return False, "revise"
+    return False, "incomplete"
+
+
+def _parse_rubric_response(
+    content: str,
+    rubric_definition: list[dict[str, Any]],
+    mode: str,
+) -> RubricResult:
     try:
         json_match = re.search(r"\{[\s\S]*\}", content)
         if not json_match:
-            return RubricResult(passed=True, verdict="pass")
+            return RubricResult(
+                passed=False,
+                verdict="incomplete",
+                issues=["Evaluator did not return valid JSON."],
+                suggestions=["Retry the evaluation run."],
+                metadata={"parse_error": "missing_json"},
+            )
 
         data = json.loads(json_match.group(0))
+        parsed_dimensions = {
+            str(d.get("name", "")): d
+            for d in data.get("dimensions", [])
+            if isinstance(d, dict)
+        }
 
-        # Build dimension weight lookup from L1_RUBRIC
-        dim_weights = {d["name"]: d["weight"] for d in L1_RUBRIC}
-
-        dimensions = []
-        for d in data.get("dimensions", []):
-            name = d.get("name", "unknown")
-            items = [
-                RubricItem(
-                    id=it.get("id", ""),
-                    criterion="",
-                    weight=1.0,
-                    score=float(it.get("score", 0)),
-                    evidence=str(it.get("evidence", "")),
+        dimensions: list[RubricDimension] = []
+        for rubric_dim in rubric_definition:
+            name = str(rubric_dim.get("name", ""))
+            parsed_dim = parsed_dimensions.get(name, {})
+            parsed_items = {
+                str(it.get("id", "")): it
+                for it in parsed_dim.get("items", [])
+                if isinstance(it, dict)
+            }
+            items: list[RubricItem] = []
+            for rubric_item in rubric_dim.get("items", []):
+                item_id = str(rubric_item.get("id", ""))
+                parsed_item = parsed_items.get(item_id, {})
+                items.append(
+                    RubricItem(
+                        id=item_id,
+                        criterion=str(rubric_item.get("criterion", "")),
+                        weight=float(rubric_item.get("weight", 1.0) or 1.0),
+                        score=_coerce_score(parsed_item.get("score", 0.0)),
+                        evidence=str(parsed_item.get("evidence", "")),
+                    )
                 )
-                for it in d.get("items", [])
-            ]
-            dim = RubricDimension(
+
+            dimension = RubricDimension(
                 name=name,
-                description="",
+                description=str(rubric_dim.get("description", "")),
                 items=items,
-                weight=float(dim_weights.get(name, 1.0)),
+                weight=float(rubric_dim.get("weight", 1.0) or 1.0),
             )
-            dim.score = dim.compute_score()
-            dimensions.append(dim)
+            dimension.score = dimension.compute_score()
+            dimensions.append(dimension)
 
         result = RubricResult(
             dimensions=dimensions,
-            passed=bool(data.get("passed", False)),
-            verdict=str(data.get("verdict", "pass")),
             issues=[str(i) for i in data.get("issues", [])],
             suggestions=[str(s) for s in data.get("suggestions", [])],
+            summary=str(data.get("summary", "")),
+            metadata={
+                "raw_passed": bool(data.get("passed", False)),
+                "raw_verdict": str(data.get("verdict", "")),
+            },
         )
         result.overall_score = result.compute_overall()
+
+        if mode == "l2":
+            result.passed, result.verdict = _compute_l2_verdict(
+                result.overall_score, result.dimensions
+            )
+        else:
+            result.passed, result.verdict = _compute_l1_verdict(
+                result.overall_score, result.dimensions
+            )
+
+        if not result.issues:
+            result.issues = [
+                f"{dimension.name} scored {dimension.score:.2f}"
+                for dimension in result.dimensions
+                if dimension.score < 0.6
+            ]
+        if not result.suggestions:
+            result.suggestions = [
+                f"Improve {dimension.name.replace('_', ' ')} using stronger evidence and tighter structure."
+                for dimension in result.dimensions
+                if dimension.score < 0.6
+            ]
+
         return result
 
-    except (json.JSONDecodeError, ValueError, KeyError) as e:
+    except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
         logger.warning(f"[Rubric] Failed to parse response: {e}")
-        return RubricResult(passed=True, verdict="pass")
+        return RubricResult(
+            passed=False,
+            verdict="incomplete",
+            issues=["Failed to parse rubric evaluation output."],
+            suggestions=["Retry the evaluation run."],
+            metadata={"parse_error": str(e)},
+        )
 
 
 # =============================================================================
@@ -504,10 +589,16 @@ async def run_level1_rubric(
             HumanMessage(content=prompt),
         ])
         content = response.content if hasattr(response, "content") else str(response)
-        return _parse_rubric_response(content)
+        return _parse_rubric_response(content, L1_RUBRIC, "l1")
     except Exception as e:
         logger.error(f"[Rubric] Level 1 rubric eval failed: {e}")
-        return RubricResult(passed=True, verdict="pass")
+        return RubricResult(
+            passed=False,
+            verdict="incomplete",
+            issues=[f"Level 1 rubric evaluation failed: {e}"],
+            suggestions=["Retry the evaluation run."],
+            metadata={"error": str(e)},
+        )
 
 
 async def run_level2_rubric(
@@ -542,10 +633,16 @@ async def run_level2_rubric(
             HumanMessage(content=prompt),
         ])
         content = response.content if hasattr(response, "content") else str(response)
-        return _parse_rubric_response(content)
+        return _parse_rubric_response(content, L2_RUBRIC, "l2")
     except Exception as e:
         logger.error(f"[Rubric] Level 2 rubric eval failed: {e}")
-        return RubricResult(passed=False, verdict="incomplete")
+        return RubricResult(
+            passed=False,
+            verdict="incomplete",
+            issues=[f"Level 2 rubric evaluation failed: {e}"],
+            suggestions=["Retry the evaluation run."],
+            metadata={"error": str(e)},
+        )
 
 
 # =============================================================================
@@ -730,9 +827,11 @@ async def run_full_claim_alignment(
         # Parse JSON array
         json_match = re.search(r"\[[\s\S]*\]", content)
         claims = json.loads(json_match.group(0)) if json_match else []
+        if not isinstance(claims, list) or (markers and not claims):
+            raise ValueError("Claim alignment evaluator returned no claim assessments")
 
         total = len(claims)
-        aligned = sum(1 for c in claims if c.get("score", 0) >= 0.5)
+        aligned = sum(1 for c in claims if _coerce_score(c.get("score", 0)) >= 0.5)
         rate = aligned / total if total > 0 else 1.0
 
         return {
@@ -744,12 +843,100 @@ async def run_full_claim_alignment(
 
     except Exception as e:
         logger.error(f"[FullClaimAlignment] Failed: {e}")
-        return {"alignment_rate": 1.0, "total_claims": len(markers), "claims": [], "error": str(e)}
+        return {
+            "alignment_rate": 0.0,
+            "total_claims": len(markers),
+            "aligned": 0,
+            "claims": [],
+            "error": str(e),
+        }
 
 
 # =============================================================================
 # Helpers
 # =============================================================================
+
+
+def extract_source_texts(state: dict | None, max_chars: int = 8000) -> str:
+    if not state:
+        return ""
+
+    artifacts = state.get("deepsearch_artifacts", {})
+    candidates: list[tuple[str, str]] = []
+
+    if isinstance(artifacts, dict):
+        for passage in artifacts.get("passages", []) or []:
+            if not isinstance(passage, dict):
+                continue
+            source = str(
+                passage.get("url")
+                or passage.get("source_url")
+                or passage.get("title")
+                or ""
+            )
+            text = str(
+                passage.get("text")
+                or passage.get("content")
+                or passage.get("excerpt")
+                or ""
+            ).strip()
+            if text:
+                candidates.append((source, text))
+
+        for item in artifacts.get("evidence_items", []) or []:
+            if not isinstance(item, dict):
+                continue
+            source = str(item.get("source") or item.get("url") or item.get("title") or "")
+            text = str(item.get("content") or item.get("text") or item.get("evidence") or "").strip()
+            if text:
+                candidates.append((source, text))
+
+    notes = state.get("notes", []) or state.get("raw_notes", []) or []
+    for note in notes:
+        text = str(note).strip()
+        if text:
+            candidates.append(("", text))
+
+    parts: list[str] = []
+    seen: set[str] = set()
+    total = 0
+    for source, text in candidates:
+        normalized = re.sub(r"\s+", " ", text).strip()
+        if not normalized:
+            continue
+        dedupe_key = normalized[:200]
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        chunk = normalized[:1500]
+        if source:
+            chunk = f"{source}\n{chunk}"
+        if total + len(chunk) > max_chars:
+            remaining = max_chars - total
+            if remaining <= 0:
+                break
+            chunk = chunk[:remaining]
+        parts.append(chunk)
+        total += len(chunk) + 2
+        if total >= max_chars:
+            break
+
+    return "\n\n".join(parts)
+
+
+def extract_evidence_items(state: dict | None, max_items: int = 12) -> list[dict[str, Any]]:
+    text = extract_source_texts(state, max_chars=max_items * 600)
+    if not text:
+        return []
+    chunks = [chunk.strip() for chunk in text.split("\n\n") if chunk.strip()]
+    return [
+        {
+            "id": f"evidence_{idx}",
+            "type": "source_text",
+            "content": chunk[:800],
+        }
+        for idx, chunk in enumerate(chunks[:max_items], 1)
+    ]
 
 
 def _build_evidence_context(state: dict | None) -> str:
@@ -761,7 +948,11 @@ def _build_evidence_context(state: dict | None) -> str:
     sources = state.get("sources", []) or state.get("curated_sources", []) or []
 
     parts: list[str] = []
-    source_texts = [str(n)[:1500] for n in notes[:5]]
+    source_texts = [
+        text for text in extract_source_texts(state, max_chars=2400).split("\n\n") if text
+    ]
+    if not source_texts:
+        source_texts = [str(n)[:1500] for n in notes[:5]]
 
     if source_texts:
         parts.append("<Source Evidence>")

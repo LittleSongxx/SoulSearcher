@@ -28,6 +28,7 @@ class EvidenceStoreSnapshot:
         return {
             "sources": self.sources,
             "claims": self.claims,
+            "quality_details": _dict_from(self.metadata.get("quality_details")),
             "quality_gates": self.quality_results,
             "evidence_items": self.evidence_items,
             "citation_annotations": self.citation_annotations,
@@ -71,6 +72,7 @@ def build_evidence_store_snapshot(
         access_policy=access_policy,
         metadata={
             "quality_summary": _dict_from(artifacts.get("quality_summary")),
+            "quality_details": _dict_from(artifacts.get("quality_details")),
             "research_brief": _dict_from(artifacts.get("research_brief")),
             "fetched_pages": _list_from(artifacts.get("fetched_pages")),
             "provider_capabilities": _dict_from(artifacts.get("provider_capabilities")),

@@ -15,7 +15,9 @@ Pipeline:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
+from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, get_buffer_string
 from langchain_core.runnables import RunnableConfig
@@ -342,6 +344,116 @@ def _wrap_html_document(content: str, title: str = "Research Report") -> str:
     )
 
 
+def _strip_markup_for_evaluation(content: str) -> str:
+    text = str(content or "")
+    if "<" in text and ">" in text:
+        text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _eval_result_to_gate(name: str, level: int, result: Any) -> dict[str, Any]:
+    score = float(getattr(result, "overall_score", 0.0) or 0.0)
+    passed = bool(getattr(result, "overall_passed", False))
+    errors = list(getattr(result, "errors", []) or [])
+    metadata = dict(getattr(result, "metadata", {}) or {})
+    verdict = "pass" if passed and not errors else ("incomplete" if errors else "revise")
+    return {
+        "name": name,
+        "level": level,
+        "passed": passed and not errors,
+        "score": round(max(0.0, min(1.0, score)), 4),
+        "verdict": verdict,
+        "threshold": 0.7,
+        "details": {
+            "summary": getattr(result, "summary", ""),
+            "errors": errors,
+            "metadata": metadata,
+        },
+    }
+
+
+def _build_claim_artifacts(claim_alignment: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    claims: list[dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
+    for claim in claim_alignment.get("claims", []) or []:
+        if not isinstance(claim, dict):
+            continue
+        try:
+            score = float(claim.get("score", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            score = 0.0
+        score = max(0.0, min(1.0, score))
+        if score >= 1.0:
+            status = "supported"
+        elif score >= 0.5:
+            status = "partial"
+        else:
+            status = "unsupported"
+        citation_marker = str(claim.get("citation_marker", "")).strip()
+        claim_summary = str(claim.get("claim_summary", "")).strip()
+        support = str(claim.get("source_support", "")).strip()
+        claims.append(
+            {
+                "claim": claim_summary,
+                "status": status,
+                "score": round(score, 4),
+                "citation_marker": citation_marker,
+                "notes": support,
+                "evidence_passages": [support] if support else [],
+            }
+        )
+        annotations.append(
+            {
+                "citation_marker": citation_marker,
+                "claim_summary": claim_summary,
+                "status": status,
+                "score": round(score, 4),
+            }
+        )
+    return claims, annotations
+
+
+def _build_quality_summary(
+    report_format: str,
+    quality_result: Any | None,
+    l3_result: Any | None,
+) -> dict[str, Any]:
+    quality_result = quality_result or None
+    l1_snapshot = (
+        dict((quality_result.metadata or {}).get("level1_rubric", {}))
+        if quality_result else {}
+    )
+    l2_snapshot = (
+        dict((quality_result.metadata or {}).get("level2_rubric", {}))
+        if quality_result else {}
+    )
+    claim_alignment = (
+        dict((quality_result.metadata or {}).get("claim_alignment", {}))
+        if quality_result else {}
+    )
+    quality_gates = list(getattr(quality_result, "gates", []) or []) if quality_result else []
+    overall_verdict = getattr(quality_result, "verdict", "incomplete") if quality_result else "incomplete"
+    overall_passed = bool(getattr(quality_result, "passed", False)) if quality_result else False
+    if l3_result is not None and not bool(getattr(l3_result, "overall_passed", False)):
+        overall_passed = False
+        if overall_verdict == "pass":
+            overall_verdict = "revise"
+    return {
+        "overall_score": round(float(getattr(quality_result, "score", 0.0) or 0.0), 4) if quality_result else 0.0,
+        "overall_verdict": overall_verdict,
+        "publish_ready": overall_passed,
+        "level1_score": round(float(l1_snapshot.get("overall_score", 0.0) or 0.0), 4),
+        "level2_score": round(float(l2_snapshot.get("overall_score", 0.0) or 0.0), 4),
+        "level3_score": round(float(getattr(l3_result, "overall_score", 0.0) or 0.0), 4) if l3_result else None,
+        "citation_coverage_score": round(float((getattr(quality_result, "dimensions", {}) or {}).get("citation_density", 0.0) or 0.0), 4) if quality_result else 0.0,
+        "claim_alignment_rate": round(float(claim_alignment.get("alignment_rate", 1.0) or 0.0), 4),
+        "claim_alignment_total_claims": int(claim_alignment.get("total_claims", 0) or 0),
+        "degradation_detected": bool(getattr(l3_result, "metadata", {}).get("degradation_detected", False)) if l3_result else False,
+        "report_format": report_format,
+        "quality_gate_count": len(quality_gates) + (1 if l3_result else 0),
+    }
+
+
 # =============================================================================
 # Final Report Generation Node
 # =============================================================================
@@ -432,6 +544,9 @@ async def final_report_generation(
         max_chars=3600,
     )
 
+    quality_result = None
+    l3_result = None
+
     if report_format == "html":
         prompt_name = "final_report_html"
     else:
@@ -508,13 +623,12 @@ async def final_report_generation(
                 final_content = _wrap_html_document(final_content, title=title)
 
             # === Level 1 Quality Check (Phase 3) ===
-            # Skip quality check for HTML reports (different evaluation criteria)
-            if report_format != "html":
+            if report_format != "html" or research_config.evaluation_html_quality_check:
                 try:
                     from agent.workflows.quality_check import (
                         generate_report_with_quality_check,
                     )
-                    final_content = await generate_report_with_quality_check(
+                    final_content, quality_result = await generate_report_with_quality_check(
                         state=state,
                         report_content=final_content,
                         config=config,
@@ -531,7 +645,6 @@ async def final_report_generation(
             user_id = config.get("configurable", {}).get("user_id", "default")
             memory_content = final_content
             if report_format == "html":
-                import re
                 memory_content = re.sub(
                     r"<[^>]+>", "", final_content[:10000]
                 )
@@ -546,63 +659,11 @@ async def final_report_generation(
             except Exception as e:
                 logger.warning(f"[Report] Memory update failed: {e}")
 
-            # === Level 2 Dev Evaluation (rubric-based, with legacy fallback) ===
-            l2_result = None
-            try:
-                from agent.workflows.rubric import run_level2_rubric
-                eval_content = final_content
-                if report_format == "html":
-                    import re
-                    eval_content = re.sub(
-                        r"<[^>]+>", "", final_content[:20000]
-                    )
-                l2_result = await run_level2_rubric(
-                    report=eval_content,
-                    research_brief=research_brief,
-                    topic=research_brief[:500] if research_brief else "",
-                    config=config,
-                )
-                logger.info(
-                    f"[Report] Level 2 rubric eval: score={l2_result.overall_score:.2f}, "
-                    f"passed={l2_result.passed}, verdict={l2_result.verdict}"
-                )
-            except ImportError:
-                # Fall back to legacy prompt-based L2 evaluation
-                try:
-                    from agent.workflows.evaluation import run_level2_evaluation
-                    eval_content = final_content
-                    if report_format == "html":
-                        import re
-                        eval_content = re.sub(
-                            r"<[^>]+>", "", final_content[:20000]
-                        )
-                    eval_result = await run_level2_evaluation(
-                        report=eval_content,
-                        research_brief=research_brief,
-                        topic=research_brief[:500] if research_brief else "",
-                        model_name=research_config.smart_llm,
-                    )
-                    logger.info(
-                        f"[Report] Level 2 eval: score={eval_result.overall_score:.2f}, "
-                        f"passed={eval_result.overall_passed}"
-                    )
-                except ImportError:
-                    logger.debug("[Report] Evaluation system not available")
-                except Exception as e:
-                    logger.warning(f"[Report] Level 2 evaluation failed: {e}")
-            except Exception as e:
-                logger.warning(f"[Report] Level 2 rubric evaluation failed: {e}")
-
             # === Level 3 Deep Evaluation (strategic_llm, for deep complexity only) ===
             if complexity == "deep":
                 try:
                     from agent.workflows.evaluation import run_level3_evaluation
-                    eval_content = final_content
-                    if report_format == "html":
-                        import re
-                        eval_content = re.sub(
-                            r"<[^>]+>", "", final_content[:20000]
-                        )
+                    eval_content = _strip_markup_for_evaluation(final_content)[:20000]
                     l3_result = await run_level3_evaluation(
                         report=eval_content,
                         research_brief=research_brief,
@@ -623,10 +684,55 @@ async def final_report_generation(
                 except Exception as e:
                     logger.warning(f"[Report] Level 3 deep evaluation failed: {e}")
 
+            quality_gates = list(getattr(quality_result, "gates", []) or []) if quality_result else []
+            if l3_result is not None:
+                quality_gates.append(
+                    _eval_result_to_gate("level3_deep_evaluation", 3, l3_result)
+                )
+
+            claim_alignment = (
+                dict((quality_result.metadata or {}).get("claim_alignment", {}))
+                if quality_result else {}
+            )
+            claim_artifacts, citation_annotations = _build_claim_artifacts(
+                claim_alignment
+            )
+            evidence_items = list(
+                (quality_result.metadata or {}).get("evidence_items", [])
+            ) if quality_result else []
+            quality_summary = _build_quality_summary(
+                report_format=report_format,
+                quality_result=quality_result,
+                l3_result=l3_result,
+            )
+
+            deepsearch_artifacts = dict(state.get("deepsearch_artifacts", {}) or {})
+            if not isinstance(deepsearch_artifacts.get("sources"), list) or not deepsearch_artifacts.get("sources"):
+                deepsearch_artifacts["sources"] = list(curated_sources or state.get("sources", []))
+            deepsearch_artifacts["quality_summary"] = quality_summary
+            deepsearch_artifacts["quality_gates"] = quality_gates
+            deepsearch_artifacts["quality_details"] = {
+                "level1_rubric": dict((quality_result.metadata or {}).get("level1_rubric", {})) if quality_result else {},
+                "level2_rubric": dict((quality_result.metadata or {}).get("level2_rubric", {})) if quality_result else {},
+                "claim_alignment": claim_alignment,
+                "level3_evaluation": l3_result.to_dict() if l3_result is not None and hasattr(l3_result, "to_dict") else {},
+            }
+            deepsearch_artifacts["claims"] = claim_artifacts
+            deepsearch_artifacts["citation_annotations"] = citation_annotations
+            deepsearch_artifacts["evidence_items"] = evidence_items
+            deepsearch_artifacts["research_brief"] = {
+                "research_brief": research_brief,
+                "complexity": complexity,
+                "report_format": report_format,
+            }
+
             return {
                 "final_report": final_content,
                 "messages": [AIMessage(content=final_content)],
                 "report_format": report_format,
+                "quality_summary": quality_summary,
+                "quality_gates": quality_gates,
+                "deepsearch_artifacts": deepsearch_artifacts,
                 **cleared_state,
             }
 

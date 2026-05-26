@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -133,3 +134,62 @@ class TestRubric:
         score = result.compute_overall()
         # (1.0 * 2.0 + 0.0 * 1.0) / (2.0 + 1.0) = 2.0/3.0 ≈ 0.667
         assert abs(score - 0.667) < 0.001
+
+    def test_rubric_parse_invalid_json_is_incomplete(self):
+        from agent.workflows.rubric import L1_RUBRIC, _parse_rubric_response
+
+        result = _parse_rubric_response("not-json", L1_RUBRIC, "l1")
+        assert not result.passed
+        assert result.verdict == "incomplete"
+
+    def test_rubric_parse_uses_provided_weights(self):
+        from agent.workflows.rubric import _parse_rubric_response
+
+        rubric_definition = [
+            {
+                "name": "critical",
+                "description": "",
+                "weight": 2.0,
+                "items": [{"id": "a", "criterion": "", "weight": 1.0}],
+            },
+            {
+                "name": "secondary",
+                "description": "",
+                "weight": 1.0,
+                "items": [{"id": "b", "criterion": "", "weight": 1.0}],
+            },
+        ]
+        content = json.dumps(
+            {
+                "dimensions": [
+                    {"name": "critical", "items": [{"id": "a", "score": 1.0, "evidence": "ok"}]},
+                    {"name": "secondary", "items": [{"id": "b", "score": 0.0, "evidence": "bad"}]},
+                ]
+            }
+        )
+
+        result = _parse_rubric_response(content, rubric_definition, "l2")
+        assert abs(result.overall_score - (2.0 / 3.0)) < 0.001
+
+    def test_extract_source_texts_prefers_artifacts(self):
+        from agent.workflows.rubric import extract_source_texts
+
+        state = {
+            "deepsearch_artifacts": {
+                "passages": [
+                    {"url": "https://example.com", "text": "artifact evidence text"}
+                ]
+            },
+            "notes": ["fallback note"],
+        }
+
+        text = extract_source_texts(state)
+        assert "https://example.com" in text
+        assert "artifact evidence text" in text
+
+    def test_quality_response_invalid_json_is_incomplete(self):
+        from agent.workflows.quality_check import _parse_quality_response
+
+        result = _parse_quality_response("broken")
+        assert not result.passed
+        assert result.verdict == "incomplete"

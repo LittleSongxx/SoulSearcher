@@ -261,6 +261,10 @@ class CaseResult:
     citation_count: int = 0
     quality_score: float = 0.0
     quality_verdict: str = "unknown"
+    claim_alignment_rate: float = 0.0
+    level2_score: float = 0.0
+    level3_score: float = 0.0
+    publish_ready: bool = False
     error: str = ""
     report_preview: str = ""
 
@@ -386,14 +390,27 @@ async def run_asgi(
 
         final_state = await graph.ainvoke(initial_state, {"configurable": configurable})
         report = final_state.get("final_report", "")
+        artifacts = final_state.get("deepsearch_artifacts", {}) or {}
+        quality_summary = final_state.get("quality_summary", {}) or {}
+        if not isinstance(quality_summary, dict):
+            quality_summary = {}
+        if isinstance(artifacts, dict):
+            artifact_summary = artifacts.get("quality_summary", {})
+            if isinstance(artifact_summary, dict) and artifact_summary:
+                quality_summary = artifact_summary
 
         r.final_report_chars = len(report)
         r.citation_count = _count_citations(report)
         r.report_preview = report[:300]
-        r.quality_verdict = "completed"
+        r.quality_verdict = str(quality_summary.get("overall_verdict") or "completed")
+        r.quality_score = float(quality_summary.get("overall_score", 0.0) or 0.0)
+        r.claim_alignment_rate = float(quality_summary.get("claim_alignment_rate", 0.0) or 0.0)
+        r.level2_score = float(quality_summary.get("level2_score", 0.0) or 0.0)
+        r.level3_score = float(quality_summary.get("level3_score", 0.0) or 0.0)
+        r.publish_ready = bool(quality_summary.get("publish_ready", False))
 
         # Run rubric evaluation if report was generated
-        if report and len(report) >= case.get("min_chars", 0):
+        if report and len(report) >= case.get("min_chars", 0) and r.quality_score <= 0:
             try:
                 from agent.workflows.rubric import run_level1_rubric
                 rubric_result = await run_level1_rubric(
@@ -421,12 +438,18 @@ async def run_benchmark(
     base_url: str = "http://localhost:8002",
     model: str = "",
     max_concurrent: int = 2,
+    human_reference_path: str = "",
 ) -> BenchmarkReport:
     """Run the full benchmark suite."""
     report = BenchmarkReport(
         run_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
         timestamp=datetime.now().isoformat(),
-        config={"mode": mode, "model": model, "max_concurrent": max_concurrent},
+        config={
+            "mode": mode,
+            "model": model,
+            "max_concurrent": max_concurrent,
+            "human_reference_path": human_reference_path,
+        },
         total_cases=len(cases),
     )
 
@@ -466,10 +489,10 @@ async def run_benchmark(
     for r in report.results:
         if r.error:
             report.errored += 1
-        elif r.quality_verdict == "pass":
+        elif r.publish_ready or r.quality_verdict == "pass":
             report.passed += 1
         elif r.final_report_chars >= 100:
-            report.passed += 1  # Consider "completed with content" as passing
+            report.failed += 1
         else:
             report.failed += 1
 
@@ -478,7 +501,52 @@ async def run_benchmark(
     scores = [r.quality_score for r in report.results if r.quality_score > 0]
     report.avg_quality_score = sum(scores) / len(scores) if scores else 0
 
+    if human_reference_path:
+        try:
+            calibration = _run_calibration(report, human_reference_path)
+            report.config["calibration"] = calibration
+        except Exception as e:
+            report.config["calibration_error"] = str(e)
+
     return report
+
+
+def _run_calibration(report: BenchmarkReport, human_reference_path: str) -> dict[str, Any]:
+    from agent.workflows.rubric import get_calibration
+
+    with open(human_reference_path, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    if isinstance(payload, list):
+        references = payload
+    else:
+        references = payload.get("references", []) if isinstance(payload, dict) else []
+
+    reference_map = {
+        str(item.get("case_id", "")).strip(): item
+        for item in references
+        if isinstance(item, dict) and str(item.get("case_id", "")).strip()
+    }
+
+    calibration = get_calibration()
+    calibration.references.clear()
+
+    for result in report.results:
+        reference = reference_map.get(result.case_id)
+        if not reference:
+            continue
+        human_scores = reference.get("human_scores", {})
+        llm_scores = {
+            "overall": result.quality_score,
+            "claim_alignment": result.claim_alignment_rate,
+            "level2": result.level2_score,
+            "level3": result.level3_score,
+        }
+        calibration.add_reference(result.case_id, llm_scores, human_scores)
+
+    agreement = calibration.compute_agreement()
+    agreement["source"] = human_reference_path
+    return agreement
 
 
 def print_report(report: BenchmarkReport) -> None:
@@ -526,6 +594,10 @@ def save_report(report: BenchmarkReport, output_path: str) -> None:
                 "citation_count": r.citation_count,
                 "quality_score": r.quality_score,
                 "quality_verdict": r.quality_verdict,
+                "claim_alignment_rate": r.claim_alignment_rate,
+                "level2_score": r.level2_score,
+                "level3_score": r.level3_score,
+                "publish_ready": r.publish_ready,
                 "error": r.error,
             }
             for r in report.results
@@ -546,6 +618,7 @@ def main():
     parser.add_argument("--mode", default="asgi", choices=["asgi", "remote", "auto"])
     parser.add_argument("--model", default="", help="Model override")
     parser.add_argument("--output", default="", help="Output JSON path")
+    parser.add_argument("--human-reference", default="", help="Optional JSON file containing human reference scores for calibration")
     parser.add_argument("--concurrent", type=int, default=2)
     parser.add_argument("--url", default="http://localhost:8002",
                         help="Server URL for remote mode")
@@ -560,6 +633,7 @@ def main():
         base_url=args.url,
         model=args.model,
         max_concurrent=args.concurrent,
+        human_reference_path=args.human_reference,
     ))
 
     print_report(report)

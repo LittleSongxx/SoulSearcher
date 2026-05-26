@@ -3650,6 +3650,7 @@ async def export_report_endpoint(
                     ),
                     "claims": claims_payload,
                     "quality": quality_payload,
+                    "quality_details": deepsearch_artifacts.get("quality_details", {}),
                     "quality_gates": deepsearch_artifacts.get("quality_gates", []),
                     "exported_at": datetime.now().isoformat(),
                 },
@@ -3943,6 +3944,7 @@ class EvidenceResponse(BaseModel):
     sources: list[EvidenceSource] = []
     claims: list[EvidenceClaim] = []
     quality_summary: dict[str, Any] = {}
+    quality_details: dict[str, Any] = {}
     research_brief: dict[str, Any] = {}
     source_routing: dict[str, Any] = {}
     source_collections: list[dict[str, Any]] = []
@@ -4131,6 +4133,7 @@ async def get_session_evidence(thread_id: str, request: Request):
         sources = artifacts.get("sources", [])
         claims = artifacts.get("claims", [])
         quality_summary = artifacts.get("quality_summary", {})
+        quality_details = artifacts.get("quality_details", {})
         research_brief = artifacts.get("research_brief", {})
         quality_gates = artifacts.get("quality_gates", [])
         evidence_items = artifacts.get("evidence_items", [])
@@ -4181,6 +4184,9 @@ async def get_session_evidence(thread_id: str, request: Request):
             ),
             "quality_summary": (
                 quality_summary if isinstance(quality_summary, dict) else {}
+            ),
+            "quality_details": (
+                quality_details if isinstance(quality_details, dict) else {}
             ),
             "research_brief": (
                 research_brief if isinstance(research_brief, dict) else {}
