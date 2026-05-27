@@ -21,7 +21,7 @@ Please include:
 - This repo includes a lightweight secret scan for common key patterns:
 
 ```bash
-.venv/bin/python scripts/secret_scan.py
+python scripts/secret_scan.py
 ```
 
 If you accidentally committed a real secret:
@@ -29,7 +29,39 @@ If you accidentally committed a real secret:
 2. Remove it from the codebase.
 3. Consider rewriting git history if it was pushed.
 
+## API Authentication
+
+- Set `WEAVER_INTERNAL_API_KEY` to enable Bearer token or `X-API-Key` authentication on most `/api/*` endpoints.
+- The `WEAVER_AUTH_USER_HEADER` (default: `X-Weaver-User`) provides per-user session isolation behind an authenticated proxy.
+- For public deployments, enable rate limiting (`RATE_LIMIT_ENABLED=true`) to prevent abuse.
+
+## Sandbox Security
+
+- **Remote sandboxes** (E2B/Daytona): Code execution is fully isolated from the host. This is the recommended configuration for production.
+- **Host bash** (`HOST_BASH_ENABLED=true`): Opt-in only. When enabled, commands are audited and pipe-to-shell patterns are detected. Not recommended for untrusted environments.
+- **Tool approval** (`TOOL_APPROVAL=true`): Enable Human-in-the-Loop approval for potentially risky tool executions.
+
+## Skill Security
+
+- Installed skills undergo automatic security scanning via `agent/skills/security_scanner.py`.
+- Each skill declares allowed tools via `allowed-tools` in SKILL.md frontmatter; tool allowlisting is enforced at runtime.
+- Skill evolution (`SKILL_EVOLUTION_ENABLED`) is disabled by default. Enable only in trusted environments.
+
 ## Dependency Updates
 
-This project uses CI and automated checks to reduce common security footguns.
-When updating dependencies, ensure tests and CI remain green.
+- Dependabot is configured for weekly automated updates (pip, npm, GitHub Actions).
+- CI runs on every PR: linting, secret scanning, compilation checks, and tests.
+- Pre-commit hooks enforce code quality (trailing whitespace, YAML validation, merge conflict detection, Ruff linting + formatting).
+
+## Secure Development
+
+```bash
+# Run secret scan before commits
+make secret-scan
+
+# Full pre-commit check
+make check          # lint + test + secret-scan
+
+# Pre-commit hooks (auto-run on git commit)
+pre-commit install
+```
