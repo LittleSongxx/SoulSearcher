@@ -125,6 +125,32 @@ async def researcher(
         date=datetime.now().strftime("%Y-%m-%d"),
     )
 
+    # === Skill Progressive Loading (deer-flow pattern) ===
+    # Make active skills discoverable to the researcher so it can
+    # read_file on a SKILL.md and follow its workflow on demand.
+    configurable_skills = config.get("configurable") or {}
+    researcher_skill_ids: list[str] = (
+        configurable_skills.get("skill_ids")
+        or configurable_skills.get("deepsearch_skill_ids")
+        or []
+    )
+    if researcher_skill_ids:
+        try:
+            from agent.skills.prompt import get_skills_prompt_section
+            _skills_section = get_skills_prompt_section(
+                available_skills=set(researcher_skill_ids),
+            )
+            if _skills_section:
+                system_prompt += "\n\n" + _skills_section
+                logger.debug(
+                    "[Researcher] Injected skills progressive loading section "
+                    "(%d skills)", len(researcher_skill_ids)
+                )
+        except Exception as e:
+            logger.debug(
+                "[Researcher] Skills progressive loading skipped: %s", e
+            )
+
     research_model = (
         configurable_model
         .bind_tools(tools)
@@ -532,6 +558,54 @@ async def _get_researcher_tools(
                 logger.debug(f"[Researcher] Loaded {len(mcp_tools)} MCP tools")
         except Exception as e:
             logger.warning(f"[Researcher] Failed to load MCP tools: {e}")
+
+    # === Skill Tool Whitelist ===
+    # Filter tools based on active skills' allowed-tools declarations.
+    # Currently a no-op (no built-in skills declare allowed-tools), but the
+    # code path is integrated so custom skills with restrictions work immediately.
+    configurable = config.get("configurable") or {}
+    active_skill_ids: list[str] = (
+        configurable.get("skill_ids")
+        or configurable.get("deepsearch_skill_ids")
+        or []
+    )
+    if active_skill_ids:
+        try:
+            from agent.skills.tool_policy import filter_tools_by_skill_allowed_tools
+            from agent.skills.parser import parse_skill_file
+            from agent.skills.types import SkillCategory
+            import os as _os
+            from pathlib import Path as _Path
+
+            _skills_base = _os.path.join(
+                _os.path.dirname(__file__), "..", "..", "skills", "public"
+            )
+            _skills_base = _os.path.abspath(_skills_base)
+            _loaded = []
+            if _os.path.isdir(_skills_base):
+                for _entry in sorted(_os.listdir(_skills_base)):
+                    if _entry not in active_skill_ids:
+                        continue
+                    _sf = _os.path.join(_skills_base, _entry, "SKILL.md")
+                    if _os.path.isfile(_sf):
+                        try:
+                            _sk = parse_skill_file(
+                                _Path(_sf),
+                                SkillCategory.PUBLIC,
+                                _Path(_os.path.join(_skills_base, _entry)),
+                            )
+                            if _sk:
+                                _loaded.append(_sk)
+                        except Exception:
+                            pass
+            if _loaded:
+                tools = filter_tools_by_skill_allowed_tools(tools, _loaded)
+                logger.debug(
+                    "[Researcher] Skill tool whitelist applied "
+                    "(%d skills, %d tools remaining)", len(_loaded), len(tools)
+                )
+        except Exception as e:
+            logger.debug("[Researcher] Skill tool whitelist skipped: %s", e)
 
     return tools
 

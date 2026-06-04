@@ -1,671 +1,836 @@
 # Weaver 项目深度面试 Q&A 集
 
 > 由面试官视角对 Weaver (LangGraph Deep Research Agent) 项目的全面拷打。
-> 涵盖架构设计、多智能体编排、上下文工程、状态管理、模型路由、记忆系统、质量保障、MCP/Skills 集成及通用八股文考察。
+> 涵盖架构设计、多智能体编排、上下文工程、状态管理、模型路由、记忆系统、质量保障、搜索系统、沙箱安全、MCP/Skills 集成及通用八股文考察。
+> 
+> 本 Q&A 基于项目源码分析编写。面试时使用自然语言描述，仅保留 LangGraph interrupt、Orchestrator-Workers、ReAct、MCP、SSE 等通识技术名词。
 
 ---
 
 ## 目录
 
 1. [项目架构与 Deep Research Pipeline](#1-项目架构与-deep-research-pipeline)
-2. [多智能体编排 (Multi-Agent Orchestration)](#2-多智能体编排-multi-agent-orchestration)
-3. [上下文工程 (Context Engineering)](#3-上下文工程-context-engineering)
+2. [多智能体编排](#2-多智能体编排)
+3. [上下文工程](#3-上下文工程)
 4. [状态管理与 LangGraph](#4-状态管理与-langgraph)
 5. [模型路由与成本优化](#5-模型路由与成本优化)
-6. [记忆系统 (Memory System)](#6-记忆系统-memory-system)
+6. [记忆系统](#6-记忆系统)
 7. [质量保障与评估体系](#7-质量保障与评估体系)
-8. [MCP、Skills 与工具系统](#8-mcp、skills-与工具系统)
-9. [Agent 通用八股文](#9-agent-通用八股文)
-10. [系统设计与场景追问](#10-系统设计与场景追问)
+8. [搜索系统与来源管理](#8-搜索系统与来源管理)
+9. [沙箱与安全](#9-沙箱与安全)
+10. [MCP、Skills 与工具系统](#10-mcp-skills-与工具系统)
+11. [工程化与可观测性](#11-工程化与可观测性)
+12. [API 与多通道支持](#12-api-与多通道支持)
+13. [Agent 通用八股文](#13-agent-通用八股文)
+14. [系统设计与场景追问](#14-系统设计与场景追问)
 
 ---
 
 ## 1. 项目架构与 Deep Research Pipeline
 
-### Q1：你们整个 Deep Research 的 Pipeline 是怎么设计的？从用户输入到最终报告经历了哪些阶段？
+### Q1：整个 Deep Research Pipeline 是怎么设计的？从用户输入到最终报告经历了哪些阶段？
 
-**A**：整个 Pipeline 是一个 **LangGraph StateGraph**，分为五个阶段：
+**A**：整个 Pipeline 建立在 **LangGraph StateGraph** 之上，分为**四个高阶阶段**，通过条件路由形成**三条执行路径**：
 
-1. **Input Gateway（输入网关）**：clarify → research_brief → classify_complexity。先判断是否需要澄清问题，然后生成结构化研究简报，最后根据复杂度分流——**simple 走 direct_answer 快路径，standard/deep 进入完整 Orchestrator-Workers 模式**。
+1. **输入网关（Input Gateway）**：澄清判断 → 研究简报生成 → 复杂度分类。根据问题特征分为**简单**（走直接回答快路径）或**深度**（进入完整研究管道）。
 
-2. **Research Plan（HITL 计划门）**：使用 Google Gemini 模式——先规划，再通过 **LangGraph interrupt 暂停等用户 approve/revise/cancel**，通过后才执行昂贵的 supervisor。
+2. **HITL 计划门（Research Plan）**：借鉴 Google Gemini 的 **"先规划、经审批、再执行"** 模式（Gemini 将此作为内置能力，并提供 Standard / Max 两档研究深度，Weaver 则在 LangGraph 层面实现了等价的 HITL 控制）。用最强的模型生成研究计划（子主题拆分、搜索策略、来源偏好、预期产出、信心评估），通过 **LangGraph interrupt 机制暂停**，等待用户 approve / revise / cancel。通过后才进入昂贵的编排阶段。
 
-3. **Supervisor Subgraph（监督者循环）**：Orchestrator 根据研究简报，通过 ConductResearch tool **并行 spawn N 个 Researcher 子图**，每个 Researcher 是独立的 ReAct 循环。Supervisor 通过 ThinkTool 结构化反思（gaps/confidence/strategy），自主决定何时 ResearchComplete。
+3. **监督者 + 子研究员循环（Supervisor + N Researchers）**：**Orchestrator-Workers 模式**的编排核心。监督者 **自主决定** 每次迭代委托几个子研究员，每个子研究员是独立的 **ReAct 循环**——搜索 → 分析 → 反思 → 再搜索。子研究员完成后经**三段混合压缩**返回摘要。监督者通过结构化反思评估信息充分度，自主决定何时结束。
 
-4. **Researcher Subgraph（研究者 ReAct 循环）**：每个 Researcher 有搜索工具 + think_tool + ResearchComplete，在 **search → reflect → search → reflect** 循环中收集信息，最后走 **三层混合压缩** 输出压缩结果。
+4. **报告生成 + 质量保障（Report & Quality）**：来源策展 → 报告撰写 → **即时质量检查 + 自动修订**（最多2次）→ 深度评估（仅深度任务）→ 记忆异步更新。
 
-5. **Report Generation（报告生成）**：源策展 → 报告撰写 → **Level 1 即时质量检查 + 自动修订**（最多2次）→ Level 3 深度评估（仅 deep 复杂度）→ 记忆异步更新。
+**三条执行路径**：
+- **简单路径**：输入网关 → 直接回答（跳过所有编排，单次 LLM 调用）
+- **标准/深度路径**：输入网关 → HITL 计划门 → 监督者循环 → 报告
+- **GAIA Benchmark 路径**：跳过 clarify/brief/classify，直接进入监督者 → 输出短答案
 
-**关键设计决策**：**子图嵌套**（Supervisor 和 Researcher 都是独立编译的 StateGraph），边界清晰，每个子图有自己的 typed state。
-
----
-
-### Q2：为什么选择 LangGraph 而不是 LangChain 的 AgentExecutor，或者 CrewAI/AutoGen 这些框架？
-
-**A**：
-
-- **LangGraph vs LangChain AgentExecutor**：AgentExecutor 是一个黑盒循环，你无法精确控制每一步的状态流转。LangGraph **把控制权交给开发者**——每个节点是纯函数，状态通过 TypedDict 显式传递，图的拓扑完全可控。对于 Deep Research 这种需要子图嵌套、条件路由、HITL 的场景，LangGraph 是更合适的选择。
-
-- **LangGraph vs CrewAI**：CrewAI 适合角色化多 Agent 的快速原型，但它的任务分配和结果汇总比较粗粒度。Weaver 需要 **Orchestrator 自主决定何时 spawn 多少 Researcher、每个 Researcher 的 depth/breadth**，这需要精确的图控制而非角色扮演。
-
-- **LangGraph vs AutoGen**：AutoGen 偏向对话式多 Agent 协作，研究型友好但生产部署的确定性不如 LangGraph 的状态机模型。
-
-- **Anthropic 的建议**：**不要过早引入 Multi-Agent**。一个强大的单 Agent + 工具往往比多个简单 Agent 协作更稳定。Weaver 只在 "需要并行研究不同子主题" 时才 spawn 多个 Researcher，这符合 Orchestrator-Workers 模式而非松散的 Multi-Agent。
+**关键设计决策**：**子图嵌套**。监督者和研究者都是独立编译的 StateGraph，每个子图有自己完整的类型化状态、工具集和执行循环，边界清晰。
 
 ---
 
-### Q3：项目中多处提到 "集成 open_deep_research、gpt-researcher、deer-flow 三个项目的精华"，具体哪些设计来自哪个项目？
+### Q2：为什么选择 LangGraph 而不是 LangChain AgentExecutor，或 CrewAI/AutoGen？
 
 **A**：
 
-| 来源 | 借鉴的设计 | 在 Weaver 中的位置 |
+- **vs AgentExecutor**：AgentExecutor 是一个**黑盒循环**，你无法精确控制每一步的状态流转和路由条件。LangGraph **把控制权交给开发者**——每个节点是纯函数，状态通过 TypedDict 显式传递，图的拓扑完全可控。Deep Research 这种需要**子图嵌套、条件路由、HITL 中断**的场景，只有 LangGraph 的状态机模型能支撑。
+
+- **vs CrewAI**：CrewAI 适合角色化多 Agent 快速原型，但任务分配和结果汇总粒度粗。Weaver 需要编排者**自主决定**何时分配多少子任务、每个子任务的深度/广度，这需要精确的图控制，而非角色扮演。
+
+- **vs AutoGen**：AutoGen 偏向对话式多 Agent 协作，更适合研究探索，但**生产部署的确定性**不如 LangGraph 状态机模型。
+
+- **Anthropic 的核心建议**：**不要过早引入 Multi-Agent**。一个强大的**单 Agent + 工具**往往比多个简单 Agent 协作更稳定。Weaver 只在"需要并行研究不同子主题"时才分配多个子研究员，属于 **Orchestrator-Workers 模式**，而非松散的 Multi-Agent。
+
+---
+
+### Q3：具体借鉴了哪些项目的设计？做了哪些融合创新？
+
+**A**：
+
+| 来源 | 借鉴的设计 | 在 Weaver 中的体现 |
 |------|-----------|-------------------|
-| **open_deep_research** | supervisor ⇄ supervisor_tools 子图模式、override_reducer、compress_research、GAIA 评估、token-limit 重试 | supervisor.py, state.py, researcher.py, report.py |
-| **gpt-researcher** | 三层混合压缩 (raw→embedding→LLM)、三模型路由 (fast/smart/strategic)、ThinkTool 结构化反思、SourceCurator | researcher.py, configuration.py, supervisor.py, report.py |
-| **deer-flow** | 结构化输出模型 (Pydantic as LangChain tools)、ToolErrorHandler、LoopDetector、TokenUsageTracker、MemoryMiddleware、view_image/extract_web_images 多模态支持、SKILL.md 技能系统 | state.py, middleware.py, multimodal.py, tools/, skills/ |
+| **open_deep_research** | 监督者-工具子图嵌套模式、状态覆盖 reducer、上下文压缩、GAIA 评估、token超限重试 | 监督者子图、状态定义、研究者压缩、报告重试 |
+| **gpt-researcher** | 三段混合压缩（透传→embedding过滤→LLM压缩）、三层模型路由、结构化反思、来源策展 | 研究者压缩节点、配置系统模型路由、监督者反思工具 |
+| **deer-flow** | Pydantic 结构化输出作为 LangChain 工具、错误处理中间件、循环检测、token追踪、vision 多模态、SKILL.md 技能系统 | 状态定义中的结构化模型、中间件层、多模态工具、技能系统 |
+| **STORM (Stanford)** | 多视角提问引导（perspective-guided question asking），先调研已有文章发现不同视角，再用这些视角引导搜索；两步流程（预写→写作） | 未直接采用。Weaver 选择单视角 + ThinkTool 反思的收敛方式，与 STORM 的多视角发散形成设计对位 |
 
-核心创新点在于 **把三者的设计融合到一个统一的 LangGraph StateGraph 中**，而非简单堆砌。
-
----
-
-## 2. 多智能体编排 (Multi-Agent Orchestration)
-
-### Q4：你是如何实现 Supervisor 动态决定 spawn 多少个 Researcher 的？不是预先写死 3 个或 5 个？
-
-**A**：关键设计在于 **ConductResearch 被定义为 LangChain 的 bind_tools 工具**，不是一个预定义的节点。
-
-Supervisor 的 LLM 每次决策时可以调用 0 到 N 个 ConductResearch，每个指定不同的 topic、context、thoroughness。代码在 `supervisor_tools()` 中收集所有 ConductResearch tool_call，通过 **`asyncio.gather` 并行执行**：
-
-```python
-research_tasks = [
-    _get_researcher_subgraph().ainvoke({...}, config)
-    for tc in allowed_calls
-]
-tool_results = await asyncio.gather(*research_tasks)
-```
-
-**受限于 `max_concurrent_research_units`（默认5）**，超出的 call 会收到 overflow 提示，要求下个迭代重试。
-
-**ThinkTool 是收敛关键**：Supervisor 不是固定次数循环，而是通过结构化反思（`gaps_identified`、`confidence_level`、`next_strategy`）自主决定何时 `ResearchComplete`。这避免了固定迭代次数的浪费。
+核心创新在于**把四个项目的设计融合到一个统一的 LangGraph StateGraph 中**，而非简单堆砌。其中 STORM 的多视角思路虽然未直接实现，但在面试中可以作为有意义的对比——Weaver 的 ThinkTool 反思本质上是在单次研究中通过自我批判逼近多视角效果，代价更低但覆盖广度不如 STORM 的显式多视角检索。
 
 ---
 
-### Q5：Supervisor 和 Researcher 之间的通信协议是怎样的？Researcher 返回什么给 Supervisor？
+## 2. 多智能体编排
 
-**A**：通信通过 **LangGraph 子图状态** 实现：
+### Q4：监督者如何动态决定分配多少个子研究员？不是预先写死的？
 
-- Supervisor 调用 ConductResearch 时，为每个 Researcher 构建初始 `ResearcherState`（researcher_messages、research_topic、thoroughness）
-- Researcher 子图完成后，通过 `ResearcherOutputState` 返回：
-  - `compressed_research`：经过三层混合压缩后的结构化研究结果
-  - `raw_notes`：原始工具调用记录（供最终报告参考）
-- Supervisor 收到的是 **ToolMessage**，content 就是 compressed_research
+**A**：关键设计在于 **"执行研究"被定义为 LLM 的一个工具（tool）**，而非预定义的图节点。
 
-**关键设计**：Supervisor 收到的不是原始搜索结果（可能几万字），而是经过压缩的摘要。这遵循了 **Claude Code 的 sub-agent 原则："子代理在自己的上下文中完成工作，只返回摘要"**。
+每次迭代，监督者的 LLM 可以根据研究需要**调用 0 到 N 次**这个工具，每次指定不同的主题、上下文、深入程度（快速扫描或均衡研究）。所有调用被收集后通过**异步并发（asyncio.gather）并行执行**。
+
+**两个硬限制**：
+- **最大并行数默认 5**，超出的调用会收到溢出提示，要求下一轮迭代重试
+- **最大迭代次数默认 6**，超过后强制进入研究完成
+
+**收敛关键**：监督者不是固定次数循环，而是通过**结构化反思**（识别到的缺口、当前信心水平、下一步策略）自主决定何时发出"研究完成"信号。这避免了固定迭代次数的浪费。
 
 ---
 
-### Q6：为什么选择 Orchestrator-Workers 模式而不是完全去中心化的 Multi-Agent？Anthropic 的建议怎么落地的？
+### Q5：监督者和子研究员之间的通信协议是什么？子研究员返回什么？
 
-**A**：Anthropic 在 "Building Effective Agents" 中强调：
+**A**：通信通过 **LangGraph 子图状态**实现：
 
-1. **简单优先**：能用单 Agent + 工具解决的不要上多 Agent
-2. **Orchestrator-Workers 适用场景**：任务可以分解为独立子任务，子任务间不需要复杂协商
-3. **去中心化 Multi-Agent 的风险**：调试困难、token 消耗爆炸、收敛不可控
+- 监督者调用"执行研究"工具时，为每个子研究员构建**独立的初始状态**（对话历史、研究主题、深入程度）
+- 子研究员在其自己的上下文中完成 ReAct 循环，通过三段混合压缩后，返回**压缩后的研究成果**和原始工具调用记录
+- 监督者收到的是工具消息（ToolMessage），内容就是压缩后的摘要
+
+**核心设计思想**：监督者收到的不是原始搜索结果（可能几万字），而是经过压缩的摘要。这遵循了子代理模式的核心理念——**子代理在自己的上下文中完成工作，只返回摘要**。既控制了监督者的上下文膨胀，又保证了信息密度。
+
+---
+
+### Q6：为什么选择 Orchestrator-Workers 而不是去中心化多 Agent？具体的落地权衡是什么？
+
+**A**：Anthropic 在 "Building Effective Agents" 中的核心建议：
+
+1. **简单优先**：能用单 Agent + 工具的就不要上多 Agent
+2. **Orchestrator-Workers 适用场景**：任务可分解为独立子任务，**子任务间不需要复杂协商**
+3. **去中心化的风险**：调试困难、token 消耗爆炸、**收敛不可控**
 
 Weaver 的落地方式：
+- **简单复杂度**：直接跳过多 Agent 编排，单 Agent 直出答案——**零编排开销**
+- **标准/深度复杂度**：进入 Orchestrator-Workers 模式，集中决策、分散执行
+- **子研究员之间不通信**：所有结果汇总到监督者，避免 Agent-to-Agent 协商的不可控性
+- **每个子研究员是独立子图**：有自己完整的状态、工具和循环，但都受监督者控制
 
-- **Simple 复杂度**：直接跳过 Supervisor，单 Agent (direct_answer) 完成 → 零编排开销
-- **Standard/Deep 复杂度**：Orchestrator-Workers，Supervisor 集中决策，Researcher 独立执行
-- **没有引入 Agent-to-Agent 协商**：Researcher 之间不通信，所有结果汇总到 Supervisor
-- **每个 Researcher 是独立子图**：有自己完整的状态、工具、循环，但都受 Supervisor 控制
+### Q7：子研究员内部的 ReAct 循环是如何工作的？什么时候该停？
 
----
+**A**：每个子研究员内部是一个独立的**搜索-反思循环**：
 
-## 3. 上下文工程 (Context Engineering)
+1. **工具绑定**：搜索工具（Tavily、ArXiv、PubMed、沙箱等）+ 反思工具 + 研究完成信号
+2. **决策循环**：LLM 决定是继续搜索、反思分析、还是宣布完成
+3. **并行执行**：一轮中的多个工具调用并行执行（asyncio.gather）
 
-### Q7：你们的"三层混合压缩"具体是怎么工作的？每层的触发条件和 fallback 策略是什么？
-
-**A**：三层混合压缩位于 `researcher.py` 的 `compress_research()` 节点：
-
-**第一层：Raw Pass-through（<8K chars）**
-- 触发条件：聚合内容 < 8000 字符
-- 策略：**零成本，直接返回原始内容**
-- 适用：简单的 fact-check 或搜索结果很少的情况
-
-**第二层：Embedding Similarity Filter（8K-50K chars）**
-- 触发条件：内容在 8K-50K 字符之间
-- 策略：使用 `text-embedding-3-small` 对内容切片做 embedding，用 `EmbeddingsFilter` 按 `similarity_threshold`（默认 0.35）过滤与研究主题相关的 chunks
-- **代价低但效果中等**：不需要 LLM 调用，但可能丢失上下文关联
-- **Fallback**：如果 embedding 库不可用或失败，降级到第三层 LLM 压缩
-
-**第三层：LLM Semantic Compression（>50K chars）**
-- 触发条件：内容 > 50K 字符或 embedding 压缩失败
-- 策略：使用 smart_llm 做语义压缩，**保留所有关键信息并添加引用标记**
-- **最多3次重试**：每次失败后截断消息（移除旧消息以减少上下文大小）
-- **代价最高但质量最好**：LLM 理解语义后进行信息浓缩
+**停止条件有三层**：
+- **自主完成**：LLM 通过反思判断信息充分，主动发出完成信号
+- **步数限制**：默认 8 轮工具调用后强制进入压缩阶段
+- **循环检测**：MD5 哈希 + 前缀频率双重检测，检测到死循环立即终止
 
 ---
 
-### Q8：你们是怎么做上下文预算控制的？Supervisor 的上下文不会随着迭代无限膨胀吗？
+### Q7b：Weaver 用到了 Anthropic "Building Effective Agents" 中的哪些 Agent 模式？怎么映射的？
 
-**A**：上下文预算控制在两个层面：
+**A**：Anthropic 定义了五种可组合的 Agent 模式，Weaver 全部有对应实现——面试中展示这种**系统性映射能力**比零散描述更有说服力：
 
-**1. ToolMessage 层面**：`_enforce_context_budget()` 函数
-- **每个 ConductResearch 的 ToolMessage 截断到 8K 字符**（compression_small_threshold）
-- Researcher 已经返回压缩结果，这是安全网
+| Anthropic 模式 | 定义 | Weaver 中的实现 |
+|---------------|------|----------------|
+| **Prompt Chaining** | 线性 LLM 调用链，每步输出是下一步输入 | 输入网关三步流水线（clarify → brief → classify），每步使用不同模型和提示词 |
+| **Routing** | 分类器将输入分派到不同处理器 | 复杂度路由（simple→直出 / deep→监督者），来源路由（web/rag/hybrid/mcp 五种模式） |
+| **Parallelization** | 扇出 N 个独立调用后聚合 | 监督者并行 spawn 多个子研究员（asyncio.gather），一轮中的多个搜索并行执行 |
+| **Orchestrator-Worker** | 中央 LLM 规划、分派子任务、合并结果 | 监督者（编排者）+ 子研究员子图（执行者），动态决定何时 spawn 多少 worker |
+| **Evaluator-Optimizer** | 生成器出候选 → 评估器打分 → 循环改进 | 质量检查 + 自动修订循环（最多2轮），Level 2/3 评估作为 CI/CD 质量门 |
 
-**2. 消息数量层面**：
-- **Supervisor 最多保留 40 条消息**（`_SUPERVISOR_MAX_MESSAGES`）
-- 超出时：保留第一条（system prompt/research brief）+ 最近的消息
-- **ThinkTool 反思优先保留**：因为 ThinkTool 携带高信号结构化信息（gaps/confidence/strategy）
+**关键洞察**：五种模式不是互斥的，而是**层层嵌套**的。Weaver 的监督者循环内部既是 Orchestrator-Worker（spawn 子研究员），又包含 Evaluator-Optimizer（子研究员反思→压缩→再搜索），外层还套着 Routing（复杂度分类）。面试官问"用了哪些 pattern"时，应该展示这种**层次化理解**。
+
+---
+
+## 3. 上下文工程
+
+### Q8：三段混合压缩具体是怎么工作的？每层的触发条件和降级策略是什么？
+
+**A**：位于子研究员的压缩节点：
+
+**第一层：原始透传（<8000 字符）**
+- 触发：聚合内容不超过 8000 字符
+- 策略：**零成本**，直接返回原始内容
+- 适用：简单事实核查或搜索结果很少的场景
+
+**第二层：Embedding 相似度过滤（8000-50000 字符）**
+- 触发：内容在 8000 到 50000 字符之间
+- 策略：用 **text-embedding-3-small** 对内容切片做嵌入，按**相似度阈值（默认 0.35）**过滤与研究主题相关的片段
+- 成本低但效果中等：不需要 LLM 调用，但可能丢失上下文关联
+- 降级：如果 embedding 库不可用或失败，**自动降级到第三层**
+
+**第三层：LLM 语义压缩（>50000 字符）**
+- 触发：内容超过 50000 字符或 embedding 压缩失败
+- 策略：使用均衡模型做语义压缩，要求**保留所有关键信息并添加引用标记**
+- **最多 3 次重试**：每次失败后截断消息以减少上下文大小
+- 代价最高但质量最好：LLM 理解语义后进行信息浓缩
+
+---
+
+### Q9：监督者的上下文如何防止随着迭代无限膨胀？
+
+**A**：**四层预算控制**：
+
+**1. 工具消息截断**：每个子研究员的返回结果被截断到 **8000 字符**。因为子研究员已经返回压缩结果，这是安全网。
+
+**2. 消息数量限制**：
+- 监督者**最多保留 40 条消息**
+- 超出时保留第一条（系统提示词）+ 最近的消息
+- **结构化反思消息优先保留**（因为包含高信号的结构化信息：识别到的缺口、信心水平、下一步策略）
 - 丢弃最旧的中间结果
 
-**3. Researcher 层面**：在 `middleware/shared.py` 中 `enforce_context_budget()` 额外限制：
-- 最多 30 条消息
-- ConductResearch 结果截断到 8K
+**3. 系统提示词不持久化**：系统提示词和研究简报**不作为状态的一部分存储**。每次监督者执行时，从模板重新构建作为前缀。只有 AI 响应和工具消息存储在状态中。这样每条消息只包含当次迭代的上下文，系统提示词始终是固定长度。
+
+**4. 子研究员层面**：额外限制**最多 30 条消息**，工具结果同样截断到 8000 字符。
 
 ---
 
-### Q9：Context Engineering 中，你们的系统提示词是怎么设计的？怎么避免随着迭代导致提示词越来越长？
+### Q10：Context Engineering 中提示词设计的关键策略是什么？
 
-**A**：采用 **context prefix 模式**：
+**A**：采用**上下文前缀模式**：
 
-- 系统提示词和 research brief **不作为 state 的一部分存储**
-- 每次 Supervisor/Researcher 节点执行时，从模板重新构建 system prompt + research brief 作为前缀
-- 只有 AI 响应和 ToolMessage **存储在 state 的 supervisor_messages/researcher_messages 中**
-- 这样每条消息只包含当次迭代的上下文，系统提示词始终是固定长度的模板
+- 系统提示词和研究简报不存入消息列表，每次执行时从模板重建
+- 只有 AI 响应和工具结果存储在状态中
+- 技能上下文：根据激活的技能，从 SKILL.md 中提取相关章节注入到提示词
+- 动态提醒块：在每次 LLM 调用前注入当前日期、用户记忆等系统提醒
 
-**对比传统做法**：如果把 system prompt 放进 messages 列表并持久化，每次迭代都会重复存储，浪费 token。
+**为什么重要**：如果把系统提示词放进消息列表并持久化，每次迭代都会重复存储，浪费大量 token。而且随着对话增长，系统提示词的效果会逐渐被稀释。
 
 ---
 
 ## 4. 状态管理与 LangGraph
 
-### Q10：解释一下 `override_reducer` 的设计。为什么不用普通的 `operator.add`？
+### Q11：你们有三个 TypedDict 状态定义，它们之间是什么关系？
 
-**A**：LangGraph 的默认 reducer 是 `operator.add`（累加）。对于 `supervisor_messages` 这样的字段，如果每次节点返回都累加，会导致消息列表越来越长，且无法实现"完全替换"的语义。
+**A**：这是**子图嵌套的边界隔离**设计：
 
-`override_reducer` 的设计：
-
-```python
-def override_reducer(current_value, new_value):
-    if isinstance(new_value, dict) and new_value.get("type") == "override":
-        return new_value.get("value", new_value)  # 完全替换
-    return operator.add(current_value, new_value)  # 累加
-```
-
-**使用方式**：当需要完全替换时，返回 `{"type": "override", "value": [...]}`；正常情况累加。
-
-**典型场景**：Supervisor 完成一轮迭代后，要更新整个 supervisor_messages 列表（旧消息 + 新响应的组合），而不是只追加新响应。
-
----
-
-### Q11：你们有 AgentState、SupervisorState、ResearcherState 三个 TypedDict，它们之间是什么关系？为什么需要三个而不是一个？
-
-**A**：这是 **子图嵌套的边界隔离** 设计：
-
-- **AgentState**：主图状态，包含从 Input Gateway → Supervisor → Report 的全生命周期字段（30+ 字段）
-- **SupervisorState**：监督者子图状态，**仅包含 Supervisor 关心** 的字段（supervisor_messages、research_brief、notes 等）
-- **ResearcherState**：研究者子图状态，**仅包含单个 Researcher 关心** 的字段（researcher_messages、research_topic、compressed_research 等）
+- **主图状态（AgentState）**：包含从输入网关到监督者到报告的全生命周期字段（**30+ 字段**）
+- **监督者子图状态（SupervisorState）**：仅包含监督者关心的字段（对话历史、研究简报、笔记等）
+- **研究者子图状态（ResearcherState）**：仅包含单个子研究员关心的字段（对话历史、研究主题、压缩结果等）
 
 **为什么需要三个？**
-
-1. **职责隔离**：Researcher 不需要知道 `complexity`、`quality_summary` 等主图字段
+1. **职责隔离**：子研究员不需要知道复杂度、质量评分等主图字段
 2. **安全边界**：子图不能意外修改父图状态
-3. **可测试性**：每个子图可以独立测试，只需要构造自己的 State
+3. **可测试性**：每个子图可以独立测试，只需构造自己的状态
 4. **类型安全**：TypedDict 保证每个节点输入输出的字段是显式的
-5. **复用**：同一个 Researcher 子图被多个 Supervisor call 并行复用，每次传入不同的 ResearcherState
+5. **复用**：同一个子研究员子图被监督者的多次调用并行复用，每次传入不同的初始状态
 
 ---
 
-### Q12：LangGraph 的 interrupt 机制你是怎么用的？HITL 的具体流程是怎样的？
+### Q12：LangGraph 的 interrupt 机制在 HITL 中怎么用的？流程是怎样的？
 
-**A**：LangGraph 的 `interrupt()` 在 `research_plan.py` 的 `plan_research()` 节点中使用：
+**A**：在计划节点中调用 **`interrupt()`** 暂停图执行。
 
-**流程**：
-1. `plan_research()` 使用 strategic_llm 生成研究计划（子主题、搜索策略、来源偏好、预期输出、置信度）
-2. 调用 `interrupt()` 暂停图执行，等待外部输入
-3. 用户通过 API/UI 传入三种操作之一：
-   - **approve**：继续执行，进入 research_supervisor
-   - **revise**：用 fast_llm 根据用户反馈修订计划，再次 interrupt
-   - **cancel**：返回 Command(goto="__end__") 直接结束图
+**完整流程**：
+1. 计划节点用**最强模型**生成研究计划（子主题、搜索策略、来源偏好、预期产出、信心评估）
+2. 调用 interrupt 暂停，等待外部输入
+3. 用户通过 API/UI 传入三种操作：
+   - **批准（approve）**：继续执行，进入监督者循环
+   - **修订（revise）**：用轻量模型根据用户反馈修订计划，再次 interrupt
+   - **取消（cancel）**：直接结束图
 
-**为什么需要**：Supervisor + 多个 Researcher 的并行执行非常昂贵（token 成本高、耗时长）。在投入大量资源之前让用户确认研究方向是否正确，**显著降低浪费**。这是 Google Gemini 的 "plan first, approve, then execute" 模式。
+**为什么必须这么做**：监督者 + 多个子研究员的并行执行非常昂贵（token 成本高、耗时长）。在投入大量资源之前让用户确认研究方向，**显著降低浪费**。
+
+---
+
+### Q13：override_reducer 是做什么的？为什么不用默认的累加？
+
+**A**：LangGraph 的默认 reducer 是**累加**。对于监督者的消息列表，如果每次节点返回都累加，会导致消息越来越长，且无法实现**"完全替换"**的语义。
+
+override_reducer 的设计：正常情况累加，但当返回值包含特定标记（`type: "override"`）时，**完全替换整个字段**。典型场景是监督者完成一轮迭代后，要更新整个消息列表（旧消息 + 新响应的组合），而不是只追加新响应。
 
 ---
 
 ## 5. 模型路由与成本优化
 
-### Q13：你们的三层模型路由 (fast/smart/strategic) 是怎么决策的？8种任务类型的映射关系是什么？
+### Q14：三层模型路由（fast/smart/strategic）是怎么决策的？8 种任务类型的映射是什么？
 
-**A**：三模型决策逻辑在 `ResearchConfiguration.get_model_for_task()` 中：
+**A**：决策逻辑是**两级查找**：
+1. 先检查该任务类型是否有**专用模型覆盖字段**（如查询生成专用模型），如果有就用
+2. 否则查任务类型映射表，找到对应的模型层级
 
-1. **先检查专用覆盖字段**（如 `query_generation_model`），如果配置了就用
-2. **再查 `_TASK_FALLBACK_MAP`** 按任务类型映射到复杂度层
-
-**8种任务类型映射**：
+**8 种任务类型映射**：
 
 | 任务类型 | 默认模型层 | 原因 |
 |---------|-----------|------|
-| query_generation | **fast_llm** | 高频、低价值，只需生成搜索关键词 |
-| content_summarization | **fast_llm** | 最高频，单页面摘要无需深度理解 |
-| web_reading | **fast_llm** | 提取事实，机械性工作 |
-| result_synthesis | **smart_llm** | 需要理解和综合多个结果 |
-| strategic_decision | **strategic_llm** | 决策质量直接影响整体产出 |
-| compression | **smart_llm** | 语义压缩需要理解能力 |
-| report_writing | **smart_llm** | 报告质量是最终交付物 |
-| quality_check | **fast_llm** | 低成本快速检查 |
+| 查询生成 | **fast** | 高频、低价值，只需生成搜索关键词 |
+| 内容摘要 | **fast** | 最高频，单页面摘要无需深度理解 |
+| 网页阅读 | **fast** | 提取事实，机械性工作 |
+| 结果综合 | **smart** | 需要理解和综合多个结果 |
+| 战略决策 | **strategic** | 决策质量直接影响整体产出 |
+| 压缩 | **smart** | 语义压缩需要理解能力 |
+| 报告撰写 | **smart/strategic** | 按复杂度选择，报告质量是最终交付物 |
+| 质量检查 | **fast** | 低成本快速检查 |
 
-**设计原理**（来自 Anthropic Building Effective Agents）：**LLM 在执行独立子任务时表现更好**。把任务按认知负载拆分，将便宜模型用于机械性工作，将昂贵模型用于推理密集型决策。
+**设计原理**：LLM 在执行独立子任务时表现更好。把任务按**认知负载**拆分，将便宜模型用于机械性工作，将昂贵模型用于推理密集型决策。
 
 ---
 
-### Q14：为什么要做模型路由？不能所有任务都用最强的模型吗？
+### Q15：为什么要做模型路由？所有任务用最强模型不就完了？
 
 **A**：三个原因：
 
-1. **成本**：一次 Deep Research 可能涉及 50+ 次搜索、10+ 次页面阅读、N 次压缩。全部用 strategic_llm（如 GPT-4.1）的成本是直接用 fast_llm 做摘要的 **10-20 倍**。
-2. **延迟**：fast_llm 通常比 strategic_llm 快 3-5 倍。大量并行任务用慢模型会导致整体延迟不可接受。
-3. **认知负载匹配**：让 strategic_llm 做 "提取这个网页的三个关键事实" 是浪费。**用对的工具做对的事**。
+1. **成本**：一次 Deep Research 可能涉及 **50+ 次搜索、10+ 次页面阅读、N 次压缩**。全部用最贵模型（如 GPT-4.1）的成本是直接用便宜模型做摘要的 **10-20 倍**。
 
-**量化示例**：假设一次 Deep Research 有 30 次 web_reading + 5 次 synthesis + 1 次 report。用 gpt-4.1-mini 做 web_reading（$0.15/1M input），gpt-4.1 做 report（$2/1M input），比全部用 gpt-4.1 省约 **60-70% 的 API 费用**。
+2. **延迟**：便宜模型通常比贵模型**快 3-5 倍**。大量并行任务用慢模型会让整体延迟不可接受。
 
----
+3. **认知负载匹配**：让最贵模型做"提取这个网页的三个关键事实"是浪费。**用对的模型做对的事**。
 
-### Q15：你是怎么估算和控制整个研究过程的 token 消耗的？
-
-**A**：通过 `TokenUsageTracker` 实现按阶段追踪：
-
-- **记录维度**：每个 LLM 调用记录 `input_tokens` + `output_tokens`
-- **阶段分类**：supervisor / research / report 三个独立 phase
-- **内置定价表**：`_MODEL_PRICING` 覆盖 DashScope Qwen、OpenAI、DeepSeek 等
-- **成本估算**：`estimate_cost(model_name, input_tokens, output_tokens)` 按 1M tokens 单价计算
-
-**在代码中的埋点位置**：
-- Supervisor 节点每次 LLM 调用后 `tracker.record("supervisor", input, output)`
-- Researcher 节点类似，记为 "research"
-- Report 节点记为 "report"
-
-**为什么不直接用 LangSmith？**LangSmith 是事后分析工具，TokenUsageTracker 提供**实时成本感知**，可以在超预算时触发告警或降级。
+**量化示例**：假设一次研究有 30 次网页阅读 + 5 次综合 + 1 次报告。用 gpt-4.1-mini 做网页阅读，gpt-4.1 做报告，比全部用 gpt-4.1 省约 **60-70%** 的 API 费用。
 
 ---
 
-## 6. 记忆系统 (Memory System)
+### Q16：怎么估算和控制 token 消耗？
 
-### Q16：你们的双重模式记忆系统是怎么设计的？结构化记忆和语义记忆分别做什么？
+**A**：通过 **token 追踪器按阶段追踪**：
 
-**A**：双模式设计来自 deer-flow + gpt-researcher 的融合：
+- **记录维度**：每个 LLM 调用记录输入 + 输出 token 数
+- **阶段分类**：监督者 / 研究 / 报告三个独立阶段
+- **内置定价表**：覆盖 DashScope Qwen、OpenAI、DeepSeek 等主流模型
+- **成本估算**：按每百万 token 单价**实时计算**
 
-**结构化记忆（deer-flow 风格）**：
-- **存储**：`users/{user_id}/memory.json`（per-user 文件隔离）
-- **内容**：
-  - `UserContext`：角色、偏好、专家级别、语言偏好、格式偏好、详细程度偏好
-  - `Facts[]`：从研究历史中 LLM 提取的事实
-  - `ResearchHistory`：过往查询和结果摘要（保留最近 20 条）
-- **用途**：**个性化**——在 clarify 阶段注入用户偏好，在 report 阶段按用户格式习惯输出
+**埋点位置**：监督者节点、子研究员节点、报告节点每次 LLM 调用后自动记录。提供**实时成本感知**能力，可以在超预算时触发告警或降级，而非等事后通过 LangSmith 分析。
 
-**语义记忆（gpt-researcher 风格）**：
-- **存储**：`users/{user_id}/embeddings/` 目录下的 JSON 文件（生产环境可替换为向量数据库）
-- **内容**：用 `text-embedding-3-small` 对事实和研究结果做 embedding
-- **用途**：**相似研究复用**——当用户提类似问题时，通过嵌入相似度检索过往发现
+---
+
+## 6. 记忆系统
+
+### Q17：双重模式记忆系统是怎么设计的？分别做什么？
+
+**A**：**双模式设计**——结构化记忆 + 语义记忆：
+
+**结构化记忆**：
+- 存储：**按用户隔离的 JSON 文件**
+- 内容：用户偏好（角色、专家级别、语言偏好、格式偏好）+ LLM 从研究历史中提取的事实 + 过往研究摘要（保留最近 **20 条**）
+- 用途：个性化——在澄清阶段注入用户偏好，在报告阶段按用户格式习惯输出
+
+**语义记忆**：
+- 存储：每个用户的 embeddings 目录下按条目存储的 JSON（生产可替换为向量数据库）
+- 内容：用 **text-embedding-3-small** 对事实和研究结果做嵌入
+- 用途：**相似研究复用**——当用户提类似问题时，通过嵌入相似度检索过往发现
+- LLM 驱动的事实提取：用 LLM 分析对话，提取新事实 / 需移除的旧事实 / 用户摘要，**置信度阈值过滤（默认 0.7）**，去重，**上限 100 条**
 
 **记忆注入点**：
-1. Clarify Node → 用户偏好（角色、来源偏好）
-2. ResearchBrief Node → 研究历史（之前研究过什么）
-3. Researcher System Prompt → top-N 相关事实
-4. Report Generator → 用户格式/语言偏好
-
-**当前局限**：语义检索目前是**关键字匹配**（简单但可靠），嵌入搜索是预留接口。因为对于记忆量不大的场景，关键字匹配已经够用。
+1. 澄清节点 → 用户偏好
+2. 研究简报节点 → 历史研究记录
+3. 子研究员系统提示词 → 相关事实
+4. 报告生成器 → 用户格式/语言偏好
 
 ---
 
-### Q17：记忆更新是同步还是异步的？怎么保证不阻塞报告生成？
+### Q18：记忆更新是同步还是异步的？怎么保证不阻塞报告生成？
 
 **A**：**Fire-and-forget 异步模式**。
 
-在 `report.py` 的 `final_report_generation()` 中：
-
-```python
-await memory_mw.update_memory(...)  # 用 try/except 包裹
-```
-
-`MemoryMiddleware.update_memory()` 是一个**异步调用但不阻塞**的设计：
-- 先同步写入 JSON 文件（轻量操作，<10ms）
-- 语义索引更新是 `await` 但在后台执行
-- 即使记忆更新失败，**报告照样返回用户**（通过 try/except 兜底）
-- 去抖动队列 `MemoryUpdateQueue` 防止短时间内重复写入
+- 先用 try/except 包裹记忆更新调用
+- JSON 文件同步写入（轻量操作，**<10ms**）
+- 语义索引更新在**后台执行**
+- 即使记忆更新失败，**报告照样返回用户**
+- 去抖动队列防止短时间内重复写入
 
 ---
 
 ## 7. 质量保障与评估体系
 
-### Q18：你们的三级评估体系具体是怎么分的？每级干什么？
+### Q19：三级评估体系具体是怎么分的？每级干什么？
 
 **A**：
 
-**Level 1：即时质量检查（fast_llm，<5s）**
-- 每次报告生成后自动运行
-- **6个维度**：citation_density、section_completeness、format_correctness、topic_relevance、minimum_length、evidence_alignment
-- **自动修订**：score < 0.7 触发 revise → re-check，最多 2 次
-- 支持 rubric 系统（结构化评分 + 主张对齐检查）
+**Level 1：即时质量检查**（**fast 模型**，每次报告后自动运行）
+- **6 个维度**：引用密度、章节完整性、格式正确性、主题相关性、最小长度、证据对齐
+- 加权综合评分（规范评分 45% + L2 规范 35% + 主张对齐 20%）
+- 评分 **< 0.7 触发自动修订，最多 2 轮**
+- 评分 **< 0.5 标记为不完整**
 
-**Level 2：9维度加权评估（smart_llm）**
-- 开发阶段运行（Pytest 集成）
-- 加权评分：topic_relevance_overall=1.5, section_relevance_critical=2.0 等
-- 比 Level 1 更细粒度、更多维度
+**Level 2：9 维度加权评估**（**smart 模型**，开发阶段）
+- 9 个维度：整体主题相关性(1.5)、关键章节相关性(2.0)、结构与流程(1.0)、引言质量(1.0)、结论质量(1.0)、结构元素(0.5)、章节标题(0.5)、引用(1.0)、整体质量(1.5)
+- **高权重要求项（>1.0）必须全部通过（≥0.6）**
+- 可集成到 **Pytest** 中做 CI/CD 质量门
 
-**Level 3：4维度深度评估（strategic_llm）**
-- 仅对 deep 复杂度任务运行
-- 4 维度 1-5 评分：coverage(0.30), accuracy(0.25), freshness(0.20), coherence(0.25)
-- **退化检测**：如果 Level 3 分数显著低于 Level 1/2，标记为退化
+**Level 3：4 维度深度评估**（**strategic 模型**，仅深度任务）
+- 4 维度 1-5 分制：覆盖面(0.30)、准确性(0.25)、时效性(0.20)、连贯性(0.25)
+- **退化检测**：与历史分数对比，下降超过 1.0 分触发
 
-**为什么要三级**：Level 1 是**成本最低的即时反馈**，Level 2 是**开发期的全面检查**，Level 3 是**关键任务的深度保障**。根据任务复杂度适配评估深度，不浪费资源。
-
----
-
-### Q19：Evidence Alignment（主张对齐）具体怎么做的？怎么检查 LLM 有没有编造引用？
-
-**A**：在 `quality_check.py` 中实现：
-
-1. **提取引用**：用正则提取报告中的 `[N]` 引用标记
-2. **提取源文本**：从 research notes 中提取 cited sources 的原文片段
-3. **LLM-as-Judge**：将报告中的主张 + 对应的源文本一起发给 fast_llm，要求判断：
-   - 主张是否真实被源文本支持（supported/partial/unsupported）
-   - 给每个主张打分（0.0-1.0）
-4. **对齐率计算**：supported 主张数 / 总主张数
-
-**对齐率阈值**：`evaluation_claim_alignment_min_rate`（默认 0.75）。低于阈值 → revise
-
-**局限性**：LLM-as-Judge 本身也可能出错（二次幻觉）。这是当前研究领域的开放问题，Weaver 的做法是**只对有明显矛盾的主张判定为 unsupported，边界情况给 partial**。
+**为什么分三级**：Level 1 是成本最低的即时反馈，Level 2 是开发期的全面检查，Level 3 是关键任务的深度保障。**按任务复杂度适配评估深度**。
 
 ---
 
-## 8. MCP、Skills 与工具系统
+### Q20：证据对齐检查具体是怎么做的？如何防止 LLM 编造引用？
 
-### Q20：MCP 在 Weaver 中是怎么集成的？什么时候会用 MCP 工具而不是内置工具？
+**A**：多层防御体系：
 
-**A**：MCP 工具加载在 `_get_researcher_tools()` 中：
+1. **引用强制要求**：报告生成提示词要求每个主张附带引用标记 `[N]`，没有引用的内容在质量检查中扣分
 
-```python
-if research_config.mcp_enabled:
-    from tools.mcp import init_mcp_tools as _init_mcp_tools
-    mcp_tools = await _init_mcp_tools(config)
-    tools.extend(mcp_tools)
-```
+2. **LLM-as-Judge 验证**：从报告中提取带引用的主张，将主张 + 对应的源文本一起发给 LLM 判断（supported / partial / unsupported），对每个主张打分 0-1。**对齐率低于阈值（默认 0.75）触发修订**
+
+3. **确定性规则匹配器**：作为 LLM-as-Judge 的补充
+   - 从报告中提取包含研究信号或数字的主张
+   - 基于 token 重叠 + **数值别名**（百分比标准化、金额标准化、日期标准化）+ 语义别名（预定义的同义词映射）进行匹配
+   - 矛盾检测：否定标记对比 + 趋势方向对比
+
+4. **搜索工具原始内容**：不依赖 LLM 记忆，每次都从搜索结果中提取事实
+
+**工程兜底**：承认 LLM-as-Judge 本身也可能出错（**二次幻觉**）。当前做法是对明显矛盾严格拦截，边界情况标记为 partial。
+
+---
+
+### Q21：规范评分系统（Rubric）是怎么设计的？
+
+**A**：遵循 **ResearchRubrics 设计模式**（Scale AI 2025），采用**三元评分（0 / 0.5 / 1）**替代纯 LLM 自由打分。
+
+**Level 1 规范**：5 个维度 × 3-4 个评分项
+- 引用密度(w=1.0)：每个主张是否有引用？引用是否真实可查？
+- 章节完整性(w=0.8)：是否包含所有承诺的章节？章节之间是否平衡？
+- 格式正确性(w=0.5)：markdown 格式是否正确？表格是否对齐？
+- 主题相关性(w=1.2)：报告是否针对研究简报？是否存在偏离？
+- **证据对齐(w=1.5)**：抽样验证引用是否对应源文本？
+
+**人类-LLM 对齐校准**：计算 LLM 评分与人类评分的一致率（**±0.15 范围内**）和 Pearson 相关系数。阈值要求 **≥70% 一致率**，最少 5 个校准样本。
+
+---
+
+## 8. 搜索系统与来源管理
+
+### Q22：支持哪些搜索引擎？搜索策略是怎样的？
+
+**A**：**9+ 搜索引擎**，按类型分类：
+
+| 类型 | 引擎 | 特点 |
+|------|------|------|
+| AI 优化 | Tavily | 带 AI 摘要的 web 搜索 |
+| 中文搜索 | Bocha | 中文语境优化 |
+| 隐私搜索 | DuckDuckGo | **无需 API Key** |
+| Google | Serper、Google CSE | Google 搜索结果 |
+| 微软 | Bing | Bing 搜索 |
+| 神经搜索 | Exa、Brave | 语义搜索 |
+| 网页抓取 | Firecrawl | AI 增强的网页抓取 |
+
+**四种搜索策略**：
+- **fallback**：主引擎失败后依次尝试备选
+- **parallel**：多引擎并发搜索，取并集
+- **round_robin**：轮流使用不同引擎
+- **best_first**：优先使用口碑最好的引擎
+
+**学术搜索**：arXiv、PubMed/NCBI、Semantic Scholar（各带独立 provider、速率限制、**API key 轮换**）
+
+**实时信息源**：Twitter/X API v2、Reddit、HackerNews（适用于时效性研究）
+
+---
+
+### Q23：搜索的可靠性是怎么保证的？
+
+**A**：
+
+- **熔断器**：某个 provider 连续失败 N 次后自动禁用一段时间
+- **指数退避重试**：瞬时错误自动重试，重试间隔按指数增长
+- **API Key 池**：Tavily 等多 key 服务支持 key 轮换，避免配额耗尽
+- **新鲜度加权**：对时效敏感查询按时间衰减加权
+- **查询缓存**：会话级别的 LRU 缓存，**TTL 默认 30 分钟**，支持模糊匹配（序列匹配器相似度 ≥ 0.9）
+- **查询去重**：O(1) 精确匹配 + O(n) 相似度检测
+
+---
+
+### Q24：来源路由（Source Routing）是怎么设计的？
+
+**A**：来源路由策略是一个数据类，定义研究从哪里获取信息：
+
+**五种模式**：
+- **仅网络**：只用搜索引擎
+- **仅本地文档**：只用私有 RAG 文档库
+- **私有优先**：先查私有文档，不足时补充网络搜索
+- **混合**：同时使用网络和私有文档
+- **仅 MCP**：只用 MCP 连接的外部数据源
+
+**策略要素**：
+- 访问控制：owner、visibility、**允许/拒绝的域名列表**
+- 引用策略：要求所有主张附带引用
+- MCP 治理：认证方式、工具白名单、审计日志
+- 来源评分：按相关性和可信度对来源进行排名筛选（**默认保留前 10 个**）
+
+**构建方式**：从多处来源（运行时配置、状态、研究简报）**合并构建**，支持细粒度的覆盖控制。
+
+---
+
+## 9. 沙箱与安全
+
+### Q25：沙箱系统是怎么设计的？支持哪些平台？
+
+**A**：支持 **E2B** 和 **Daytona** 两种沙箱平台（可配置切换或关闭）：
+
+**沙箱工具**：
+- Shell：在隔离沙箱中执行 Python/bash
+- 文件：读写沙箱文件系统
+- 浏览器：带界面的浏览器自动化
+- 视觉：截屏捕获和分析
+- 表格：电子表格创建和操作
+- 演示文稿：幻灯片生成
+- Web 开发：带实时预览
+- 图片编辑：图片操作和处理
+
+**可选的宿主机 bash 访问**：带命令审计的安全策略控制。
+
+---
+
+### Q26：沙箱安全是怎么做的？
+
+**A**：命令审计策略：
+
+- **管道到 shell 检测**：识别并拒绝 `curl ... | bash` 等危险模式
+- **危险命令黑名单**：chmod、rm、sudo、wget 等 **15 个命令被拦截**
+- **Netcat 别名检测**：nc、netcat、ncat、socat 全部拦截
+- **审计日志**：所有沙箱操作记录（工具名、动作、线程ID、是否允许、原因、时间戳）
+
+---
+
+## 10. MCP、Skills 与工具系统
+
+### Q27：MCP 在 Weaver 中是怎么集成的？
+
+**A**：MCP 工具在子研究员初始化时**动态加载**：
+- 当 MCP 开关启用时，从配置中读取 MCP 服务器列表
+- 连接各 MCP Server，获取工具列表
+- 将 MCP 工具追加到子研究员的可用工具集中
+
+**OAuth 安全**：自动管理 token 获取和刷新（支持 **client_credentials** 和 **refresh_token** 两种授权模式），自动注入 Authorization header。
 
 **使用场景**：
-- 内置工具（Tavily、DuckDuckGo、ArXiv、PubMed、沙箱 Shell/Code）是**通用研究工具**
-- MCP 工具是**用户自定义的扩展**，例如：
-  - 企业内部 API（CRM、ERP、数据库查询）
-  - 专业数据源（Bloomberg、Wind）
-  - 第三方服务（Slack、GitHub、Jira）
-
-**OAuth 安全**：`mcp/oauth.py` 的 `OAuthTokenManager` 自动管理 token 刷新和 Authorization header 注入。
-
-**MCP 和 Function Call 的关系**：MCP 是**工具发现的标准化协议**（N+M 问题），Function Call 是**LLM 调用工具的具体机制**。Weaver 用 MCP 协议连接外部工具，用 LangChain 的 bind_tools + tool_calls 执行。
+- 内置工具（Tavily、DuckDuckGo、ArXiv、沙箱）是通用研究工具
+- MCP 工具是用户自定义的扩展——企业内部 API（CRM、ERP）、专业数据源（Bloomberg）、第三方服务（Slack、GitHub、Jira）
 
 ---
 
-### Q21：Skills 系统和 System Prompt 有什么区别？在 Weaver 中 Skills 是怎么加载和生效的？
+### Q28：Skills 系统和 System Prompt 有什么区别？怎么加载和生效的？
 
 **A**：
 
 | 维度 | System Prompt | Skills |
 |------|-------------|--------|
-| 作用范围 | 全局，一直生效 | **按需激活**，场景触发 |
-| 内容 | 通用行为规范 | **特定领域专业指导** |
-| 可维护性 | 随功能增多变复杂 | **模块化，各自独立** |
-| 示例 | "你是一个研究助手..." | "代码审查 Skill：检查安全/性能/代码质量" |
+| 作用范围 | 全局，一直生效 | 按需激活，场景触发 |
+| 内容 | 通用行为规范 | 特定领域专业指导 |
+| 可维护性 | 随功能增多变复杂 | 模块化，各自独立 |
+| 示例 | "你是一个研究助手..." | "系统性文献综述：PRISMA 流程..." |
 
-**Weaver 中 Skills 的加载流程**：
+**20 个内置技能**按用途分为四类：
 
-1. **解析**：`parser.py` 解析 SKILL.md 的 YAML front-matter，提取 name、description、allowed-tools
-2. **工具白名单**：`tool_policy.py` 汇总所有 Skill 声明的 allowed-tools，过滤 Researcher 可用工具
-3. **上下文注入**：
-   - `prompt.py` 的 `get_skills_prompt_section()` 生成 `<skill_system>` 提示段
-   - `build_skill_context()` 按阶段（research/writing）从 Skill 文件中提取相关章节注入到提示词
+**研究方法 + 输出规范双覆盖（10 个）**：
+`systematic-literature-review`、`deep-research`、`academic-paper-review`、`consulting-analysis`、`github-deep-research`、`newsletter-generation`、`paper-decomposition`、`reproducibility-audit`、`research-proposal-generator`、`research-trend-analysis`
 
-**关键设计**：Skills **不增加 LLM 调用次数**，而是**在现有调用中注入领域知识**。这比用 Multi-Agent 让一个 "专家 Agent" 参与讨论更高效。
+**纯输出规范（7 个）**：
+`html-report`、`science-communication`、`code-documentation`、`podcast-generation`、`ppt-generation`、`frontend-design`、`bootstrap`
+
+**辅助/元技能（3 个）**：
+`skill-creator`、`vision-enrich`、`web-design-guidelines`
+
+**三条激活路径**：
+
+1. **上下文注入（研究阶段）**：在输入网关的"撰写研究简报"节点，从激活技能中提取研究方法论相关章节（研究流程、核心原则），以 `<skill_guidance>` 块注入 LLM 提示词，预算上限 2400 字符
+
+2. **上下文注入（写作阶段）**：在报告生成节点，从激活技能中提取输出/写作指导章节（输出格式、写作规范、报告模板），以 `<skill_writing_guidance>` 块注入，预算上限 3600 字符
+
+3. **渐进式加载**：子研究员的系统提示词中包含 `<skill_system>` 块，列出当前激活技能的目录（名称、描述、容器内路径），子研究员可按需调用 `read_file` 读取完整的 SKILL.md 并遵循其中的工作流指导。这使偏工具操作类的技能（如 `skill-creator` 的技能创建流程）也能被自主发现和使用
+
+**工具白名单**：技能可声明 `allowed-tools` 字段限制子研究员的可用工具集。当前内置技能均未声明（全量放行），但过滤代码已集成到子研究员工具组装流程——自定义技能声明后自动生效。
+
+**关键设计**：Skills 不增加 LLM 调用次数，而是在现有调用中注入领域知识。比用 Multi-Agent 让"专家 Agent"参与讨论更高效。
 
 ---
 
-## 9. Agent 通用八股文
+## 11. 工程化与可观测性
 
-### Q22：LLM 和 Agent 的本质区别是什么？
+### Q29：中间件系统是怎么设计的？有哪些横向切面？
 
-**A**：**LLM 是"大脑"（推理引擎），Agent 是"完整的执行者"**。
+**A**：四层核心中间件，每个都是横向切面：
+
+| 中间件 | 机制 |
+|--------|------|
+| **工具错误处理** | 所有工具调用被静态包装，**失败时返回错误消息而非抛出异常**。一个搜索失败不会崩溃整个研究流程 |
+| **循环检测** | **双层检测**——MD5 哈希精确匹配（连续3次相同 → 循环）+ 前缀频率检测（前100字符重复5次 → 循环）。检测到循环后强制终止，不继续浪费资源 |
+| **Token 追踪** | 按阶段（监督者/研究/报告）记录 token 消耗，内置多模型定价表，**实时成本估算** |
+| **记忆更新** | **Fire-and-forget** 背景更新用户记忆，不阻塞主流程 |
+
+**额外的图级中间件**（共享函数）：
+- 循环安全检查
+- Token 使用记录
+- 上下文预算强制（消息修剪 + 工具结果截断）
+- 动态系统提醒构建（日期 + 记忆注入）
+- 安全工具执行封装
+
+---
+
+### Q30：多代理工厂（Agent Factory）是怎么组装代理的？
+
+**A**：代理工厂为不同角色创建带中间件栈的代理：
+
+- **工具选择器**：LLM 自主选择合适的工具（最多 N 个），**减少 token 开销**
+- **工具重试**：失败自动重试（最大重试次数 + 退避 + 抖动）
+- **工具调用限制**：防止工具调用失控
+- **上下文清理**：自动清除旧的工具结果以控制上下文膨胀
+- **任务列表**：可选的 TodoList 结构化任务追踪
+- **人机交互**：**高风险工具**（代码执行、浏览器、爬虫）需要人工审批
+
+---
+
+### Q31：可观测性是怎么做的？
+
+**A**：
+
+- **SSE 事件发射器**：向客户端实时推送事件（工具启动、研究树更新、进度等），支持流式传输
+- **Prometheus 指标**：Counter 和 Gauge 指标集成到 FastAPI
+- **LangSmith 追踪**：通过 LangChain 标签集成
+- **PostgreSQL 检查点**：支持**跨进程状态恢复**，从中断的节点继续执行
+- **恢复追踪器**：独立统计工具调用的恢复率，支持**A/B 对比测试**（有/无错误处理）
+
+---
+
+## 12. API 与多通道支持
+
+### Q32：API 层是怎么设计的？
+
+**A**：技术栈 **FastAPI + CORS + Prometheus + LangGraph**：
+
+**核心请求模型**：研究请求（query、model、search_mode、user_id、images、deepsearch_config），支持 **50+ 可配置项**（来源策略、MCP、模型覆盖等），通过 runtime config 的 configurable 字典传入。
+
+**API 路由**：
+- 研究执行：创建研究任务，返回 **SSE 事件流**
+- HITL 中断恢复：外部传入 approve/revise/cancel 恢复暂停的图
+- 文档管理：RAG 文档上传/搜索/删除
+- 追踪与监控：运行状态和指标查询
+- 报告导出：支持 **Markdown / HTML / PDF**（WeasyPrint）
+
+**多通道支持**：通过抽象的 **Channel 基类**支持飞书/Lark 等 IM 平台集成，卡片流式推送。
+
+---
+
+## 13. Agent 通用八股文
+
+### Q33：LLM 和 Agent 的本质区别是什么？
+
+**A**：LLM 是"大脑"（推理引擎），Agent 是"完整的执行者"。
 
 | 维度 | LLM | Agent |
 |------|-----|-------|
 | 能力边界 | 只能输出文本 | 可以执行动作 |
-| 记忆 | 无状态（每次调用独立） | 有短期+长期记忆 |
+| 记忆 | 无状态（每次调用独立） | 有**短期+长期记忆** |
 | 工具 | 无 | 可以调用 API、搜索、执行代码 |
-| 规划 | 线性输出 | 多步规划+反思 |
-| 本质 | 条件概率模型 P(token_n \| context) | **LLM + 工具 + 记忆 + 规划循环** |
+| 规划 | 线性输出 | **多步规划+反思** |
 
-**一个例子说清楚**：用户说"帮我查北京天气，如果下雨就取消跑步计划"。LLM 告诉你"可以打开天气 App 查询..."，Agent 直接**调用天气 API → 查到中雨 → 调用日历 API → 删除跑步计划 → 回复已完成**。
+**直观例子**：用户说"帮我查北京天气，如果下雨就取消跑步计划"。LLM 告诉你"可以打开天气 App"，Agent **直接调用天气 API → 查到中雨 → 调用日历 API → 删除跑步计划 → 回复已完成**。
 
 ---
 
-### Q23：ReAct 模式是什么？怎么避免死循环？
+### Q34：ReAct 模式是什么？怎么避免死循环？
 
-**A**：ReAct = **Reasoning + Acting**（推理+行动交替）。
+**A**：**ReAct = Reasoning + Acting**（推理+行动交替）。
 
-核心循环：**Thought → Action → Observation → Thought → ...** 直到任务完成。
+核心循环：思考 → 行动 → 观察 → 思考 → ... 直到任务完成。
 
-**避免死循环的三个方法**（面试高频）：
-
-1. **最大步数限制**：如 Weaver 的 `max_react_tool_calls`（默认 8），超过强制终止
-2. **重复动作检测**：Weaver 的 `LoopDetector` 双层检测：
-   - MD5 哈希检测：连续 N 次完全相同响应
-   - 前缀频率检测：前 100 字符重复次数超过阈值
+**防死循环三招**：
+1. **最大步数限制**：超过上限强制终止
+2. **重复动作检测（双层）**：哈希精确匹配 + 前缀频率检测
 3. **超时控制**：整个任务设置最大执行时间
 
-Weaver 的实现：`check_loop()` 在每次 Researcher/Supervisor LLM 调用前执行，检测到循环后**直接强制进入压缩/结束阶段**，而不是继续循环。
+---
+
+### Q35：Function Call 的底层原理是什么？
+
+**A**：**LLM 不执行函数**，它只输出结构化的调用指令。
+
+四步流程：
+1. 通过 JSON Schema 定义工具
+2. LLM 输出结构化 tool_calls（函数名 + 参数）
+3. **代码真正执行**
+4. 结果回传给 LLM
+
+**安全关键**：LLM 无法绕过代码直接操作系统，这是**沙箱安全的核心设计**。
 
 ---
 
-### Q24：Function Call 的底层原理是什么？LLM 自己执行函数吗？
-
-**A**：**LLM 不执行函数，它只输出结构化的"我想调用什么"的指令**。
-
-**四步流程**：
-1. **定义工具**：通过 JSON Schema 告诉 LLM 可用的函数名、参数、描述
-2. **LLM 判断并输出**：LLM 输出不是文本，是结构化 JSON（tool_calls），包含函数名和参数
-3. **你的代码执行**：解析 tool_calls，真正调用 API/数据库
-4. **结果回传**：把执行结果作为 ToolMessage 追加到对话历史，LLM 基于结果继续推理
-
-**为什么 LLM 不自己执行**：安全——LLM 无法绕过你的代码直接操作系统。这是**沙箱安全的核心设计**。
-
----
-
-### Q25：MCP 协议解决的核心问题是什么？和 A2A 的区别是什么？
+### Q36：MCP 解决的核心问题是什么？和 A2A 的区别？
 
 **A**：
 
-**MCP 解决的核心问题**：**N × M 爆炸**。N 个 AI 应用 × M 个工具 = N × M 套集成代码。MCP 把问题变成 N + M（每个应用只需实现 MCP Client，每个工具只需实现一个 MCP Server）。
-
-**MCP vs A2A**：
-
-| 维度 | MCP | A2A |
-|------|-----|-----|
-| 解决的问题 | Agent ↔ 工具（纵向集成） | Agent ↔ Agent（横向协作） |
-| 通信方向 | 一个 Agent 调用多个外部服务 | 多个 Agent 之间互相委托任务 |
-| 核心机制 | tools/list 工具发现 | Agent Card 能力声明 |
-| 当前状态 | 已是事实标准 | 早期阶段（Google 推动） |
+- **MCP**：解决 **N×M 爆炸**（N 个 AI 应用 × M 个工具 = N×M 套集成 → N+M）。**纵向的工具集成标准化**。
+- **A2A**：Agent ↔ Agent 的**横向协作协议**。Agent Card 声明能力，互相委托任务。
 
 **两者互补，不替代**：Agent 内部用 MCP 调工具，Agent 之间用 A2A 协作。
 
 ---
 
-### Q26：Agent 的记忆系统怎么分层设计？
+### Q37：Agent 的记忆系统怎么分层？
 
 **A**：两层结构：
 
-**1. 上下文窗口（In-Context Memory）**
-- 当前对话、任务状态、工具调用历史、注入的 Skill 和长期记忆
-- 限制：上下文窗口大小（如 128K tokens）
-- 超出窗口时需压缩或归档
+**1. 上下文窗口（短期记忆）**：当前对话、任务状态、工具调用历史、注入的 Skill 和长期记忆。受**窗口大小限制**，超出需压缩或归档。
 
-**2. 外部记忆（External Memory）**
+**2. 外部记忆（长期记忆）**：
 
 | 类型 | 存什么 | 检索方式 | Weaver 实现 |
 |------|--------|---------|------------|
-| 结构化存储 | 用户偏好、研究历史、提取的事实 | 关键字/时间 | JSON 文件 |
-| 向量数据库 | 历史研究的语义内容 | 嵌入相似度 | embedding JSON + 预留向量库 |
-| 知识图谱 | 实体关系 | 图查询 | 未实现 |
-
-**Weaver 的双模式**：结构化（快速精确）+ 语义（模糊相关），两者互补。
+| 结构化 | 用户偏好、研究历史、提取的事实 | 关键字/时间 | JSON 文件 |
+| 语义 | 历史研究的语义内容 | 嵌入相似度 | embedding JSON |
+| 知识图谱 | 实体关系 | 图查询 | **未实现** |
 
 ---
 
-### Q27：RAG 和 Agent 是什么关系？
+### Q38：RAG 和 Agent 是什么关系？
 
-**A**：**RAG 是 Agent 的一个工具/能力，不是对立概念**。
+**A**：**RAG 是 Agent 的一个工具/能力**，不是对立概念。
 
-- **RAG**：检索增强生成——先检索相关文档，再把文档作为上下文输入 LLM。本质是解决 LLM 知识截止和幻觉问题。
-- **Agent**：自主感知环境、规划、执行动作的智能体。Agent 可以使用 RAG 作为其中一个信息获取工具。
+- RAG：检索→增强→生成，解决 LLM **知识截止和幻觉**问题
+- Agent：自主感知环境、规划、执行动作
 
-**在 Weaver 中的体现**：
-- Researcher 的搜索工具（Tavily、ArXiv、PubMed）本质就是 RAG 的 retrieval 部分
-- Researcher 的工具调用循环就是 Agent 使用 RAG 的模式
-- 来源路由 `source_routing.py` 的 RAG 模式允许用户指定从私有文档库检索
-
-**面试加分点**：高级 RAG 不止是 naive retrieval，还包括 query rewriting、hybrid search、re-ranking、self-reflection（检索结果不好时改写 query 再试）。
+Weaver 中子研究员的搜索工具本质上就是 RAG 的 retrieval 部分。高级 RAG 还包括**查询改写、混合搜索、重排序、自我反思**。
 
 ---
 
-### Q28：Agent 和 Workflow 的区别？什么时候用哪个？
+### Q39：Agent 和 Workflow 的区别？什么时候用哪个？
 
-**A**：
-
-**核心区别**：**Workflow 的控制权在代码手里，Agent 的控制权在 LLM 手里**。
+**A**：核心区别——**Workflow 的控制权在代码手里，Agent 的控制权在 LLM 手里**。
 
 | 维度 | Workflow | Agent |
 |------|----------|-------|
-| 流程控制 | 开发者预定义 if/else | LLM 自主决策下一步 |
+| 流程控制 | 预定义 if/else | LLM 自主决策 |
 | 可预测性 | 高 | 低 |
 | 灵活性 | 低 | 高 |
-| Token 消耗 | 低 (~1x) | 高 (~4-8x) |
-| 调试难度 | 容易 | 困难 |
-| 适合场景 | 固定流程（订单处理、审批） | 开放式目标（研究分析、客服） |
+| Token 消耗 | 低 (~1x) | 高 (**~4-8x**) |
 
-**实际生产**：**混合架构最主流**。Weaver 本身就是一个混合架构——Input Gateway 是 Workflow（固定顺序），Supervisor 循环是 Agent（LLM 自主决策）。
+**实际生产用混合架构**。Weaver 本身就是——输入网关是 Workflow（固定顺序），监督者循环是 Agent（LLM 自主决策）。
 
 ---
 
-## 10. 系统设计与场景追问
+## 14. 系统设计与场景追问
 
-### Q29：如果用户想研究一个非常宽泛的话题（如"AI 对教育的影响"），你的系统怎么做范围控制？
+### Q40：宽泛话题（如"AI 对教育的影响"）怎么做范围控制？
 
-**A**：三个层面的范围控制：
+**A**：**四层范围控制**：
 
-1. **Clarify 阶段**：如果 `allow_clarification=True`，系统会先判断是否需要澄清，追问用户具体关心的角度（K12？高等教育？职业培训？）
-
-2. **Complexity 分类**：宽泛话题会被分类为 deep 复杂度，进入完整 Supervisor 循环
-
-3. **Research Plan 阶段**：HITL 计划门——用 strategic_llm 先生成研究计划（子主题拆分 + 搜索策略），用户 approve 后才执行。用户可以在此阶段调整方向。
-
-4. **Supervisor ThinkTool**：如果 Supervisor 发现研究发散，可以通过 ThinkTool 的 `gaps_identified` 和 `next_strategy` 自动收窄方向
+1. **澄清阶段**：主动追问具体关心的角度（K12？高等教育？职业培训？）
+2. **复杂度分类**：宽泛话题自动分为深度复杂度
+3. **HITL 计划门**：用最强模型先生成研究计划，用户审批后才执行
+4. **监督者反思**：发现研究发散时，通过结构化反思自动收窄方向
 
 ---
 
-### Q30：如果同时有 1000 个用户并发使用 Weaver，你会怎么设计？瓶颈在哪里？
+### Q41：1000 并发用户怎么设计？瓶颈在哪？
 
 **A**：
 
-**瓶颈分析**：
-1. **LLM API 速率限制**：最直接的瓶颈。OpenAI/阿里云的 API 有 RPM/TPM 限制
-2. **搜索引擎配额**：Tavily/Bocha 等有月度配额和并发限制
-3. **内存和 CPU**：每个并发请求有独立的 StateGraph 实例和消息历史
-4. **沙箱资源**：E2B/Daytona 沙箱有限
+**瓶颈**：
+1. **LLM API 速率限制**（最直接）
+2. 搜索引擎配额和并发限制
+3. 每个请求独立的 StateGraph 实例和消息历史消耗内存
+4. 沙箱资源有限
 
 **优化策略**：
-- **请求级隔离**：LangGraph 的 thread_id 天然支持多租户隔离，每个用户的图实例独立
-- **速率限制**：`common/rate_limiter.py` 的 token bucket 限制器，按用户/全局维度限流
-- **搜索缓存**：`agent/core/search_cache.py` 的 LRU 缓存 + 查询去重，减少重复搜索
-- **模型降级**：高负载时 dynamic routing 可以降级到更便宜/更快模型
-- **异步非阻塞**：Memory 更新、EventEmitter 都是异步 fire-and-forget，不阻塞主流程
-- **PostgreSQL 持久化**：checkpointer 支持跨进程状态恢复，配合连接池
+- LangGraph 的 **thread_id 天然支持多租户隔离**
+- Token bucket 速率限制器（按用户/全局维度）
+- LRU 搜索缓存 + 查询去重
+- 高负载时**模型动态降级**
+- Memory 更新、事件发射器全异步 **fire-and-forget**
+- **PostgreSQL 检查点**支持跨进程状态恢复
 
 ---
 
-### Q31：你们怎么处理 LLM 幻觉？有哪些具体的兜底机制？
+### Q42：怎么处理 LLM 幻觉？兜底机制有哪些？
 
-**A**：Weaver 的多层幻觉防御：
+**A**：**多层防御**：
 
-1. **来源强制关联**：报告要求每个主张附带引用 `[N]`，没有引用的内容在 Level 1 质量检查中扣分
-2. **Evidence Alignment 检查**：LLM-as-Judge 验证报告中的主张是否被源文本支持
-3. **搜索工具返回原始内容**：不依赖 LLM 记忆，每次都从搜索结果中提取事实
-4. **ThinkTool 反思**：Supervisor 和 Researcher 都会反思发现的矛盾
-5. **压缩时保留引用**：`COMPRESSION_SIMPLE_HUMAN_MESSAGE` 明确要求 "preserve all information and add citation markers"
-6. **质量检查自动修订**：如果 Level 1 检测到 evidence_alignment 分数低，触发 revise 重新生成
+1. 引用强制关联：每个主张附带引用，无引用扣分
+2. 证据对齐检查：**LLM-as-Judge + 确定性规则匹配器**双重验证
+3. 搜索工具原始内容：不依赖 LLM 记忆
+4. 结构化反思：监督者和子研究员都会反思发现的矛盾
+5. 压缩时保留引用标记
+6. 质量检查自动修订：证据对齐分数低 → revise → re-check
 
-**工程兜底**：承认 LLM-as-Judge 也可能出错（二次幻觉）。当前的做法是容忍部分边界性错误，但对明显矛盾（主张和源文本直接冲突）严格拦截。
-
----
-
-### Q32：LangGraph 的 StateGraph 中，你是怎么做错误恢复的？一个 Researcher 崩了会影响整个 Supervisor 吗？
-
-**A**：
-
-1. **Tool Error Handling**：所有工具调用都经过 `ToolErrorHandler.execute_with_error_handling()`，工具失败返回 ToolMessage 而非 Exception。一个搜索失败不会崩溃整个流程。
-
-2. **Researcher 隔离**：每个 Researcher 是独立子图。如果单个 Researcher 抛出异常，`asyncio.gather` 会捕获它，Supervisor 收到的是错误 ToolMessage。**其他 Researcher 不受影响**。
-
-3. **LLM 调用重试**：使用 LangChain 的 `.with_retry(stop_after_attempt=3)`，LLM 调用失败自动重试。
-
-4. **结构化输出重试**：Pydantic 解析失败重试最多 `max_structured_output_retries`（默认 3）次。
-
-5. **整个图的重试**：PostgreSQL checkpointer 支持从断点恢复，整个图可以从失败的节点重新开始。
-
-6. **A/B 测试**：`run_recovery_ab_test()` 对比有/无错误处理的恢复率。
+**工程兜底**：LLM-as-Judge 也可能出错。明显矛盾严格拦截，边界情况宽容处理。
 
 ---
 
-### Q33：你怎么衡量 Weaver 系统的质量？有没有做过 Benchmark？
+### Q43：一个子研究员崩了会影响整个监督者吗？
 
-**A**：支持 **GAIA Benchmark**：
+**A**：**不会**。多层隔离：
 
-- 图中有 `gaia_answer` 节点，专用于输出短答案（符合 GAIA 评估格式）
-- 通过 `configurable.gaia_mode` 开关控制
-- Supervisor 完成后走 GAIA 短答案路径而非完整报告
+1. **工具错误处理**：所有工具失败返回错误消息，**不抛出异常**
+2. **子研究员隔离**：每个是独立子图，单个异常被异步并发捕获，监督者收到的是错误消息，**其他子研究员不受影响**
+3. **LLM 调用重试**：自动重试最多 **3 次**
+4. **结构化输出重试**：Pydantic 解析失败自动重试最多 **3 次**
+5. **整个图可从断点恢复**：PostgreSQL 检查点支持从中断节点重新开始
+
+---
+
+### Q43b：Weaver 采用"静态计划 + 动态反思"，而 Perplexity 是"边搜边改计划"，为什么这么设计？
+
+**A**：这是两种 Deep Research 流派的核心差异：
+
+| 维度 | 静态计划 + 动态反思（Weaver） | 动态计划（Perplexity） |
+|------|---------------------------|----------------------|
+| 计划时机 | 研究开始前一次性生成，用户审批 | 研究过程中持续调整 |
+| 用户介入 | 计划门 HITL（可见、可控） | 无用户介入（全自动） |
+| 调整粒度 | 通过 ThinkTool 反思调整搜索方向，不改变计划结构 | 整体计划可被重写 |
+| 风险 | 如果初始计划偏差大，浪费前期 tokens | 计划漂移，可能偏离用户原始意图 |
+| 适用场景 | 用户有明确研究方向偏好的场景 | 用户完全不知道从何入手的探索性场景 |
+
+**Weaver 的选择理由**：
+1. **成本控制**：研究计划在最贵模型上生成一次，后续调整由 ThinkTool 在监督者内部轻量完成（不重新生成计划）。动态计划需要多次调用战略模型重新规划，token 成本不可控。
+2. **用户信任**：HITL 让用户在研究开始前确认方向，比全自动的"黑盒研究"更容易建立信任。
+3. **可审计性**：固定计划 + 反思日志构成完整的决策链路，便于事后追溯"为什么研究了这些角度"。
+
+**当前局限**：如果用户对研究领域完全不了解，静态计划可能遗漏关键角度。可引入 Perplexity 式的**轻量计划更新**（在监督者 ThinkTool 中增加"计划修正"能力），但这会增加 token 消耗和收敛难度。
+
+---
+
+### Q44：怎么衡量系统的质量？有没有做过 Benchmark？
+
+**A**：**内置 GAIA 兼容模式**（非完整的 Benchmark 评测框架）：
+- 图中有专门的 GAIA 模式节点，输出符合 GAIA 评估格式的**短答案**
+- 通过运行时配置开关控制
+- 监督者完成后走 GAIA 短答案路径而非完整报告
 
 **内部评估体系**：
-- **Level 1**：每次运行自动评分
-- **Level 2**：开发阶段 Pytest 集成，9 维度加权评分
-- **Level 3**：深度任务的手动/LLM 深度评估
+- Level 1：每次运行自动评分（6 维度）
+- Level 2：开发阶段 **Pytest 集成**（9 维度加权）
+- Level 3：深度任务的 4 维度评估 + **退化检测**
 
-**实际质量指标**：citation_density、evidence_alignment、topic_relevance、quality_gates 通过率等。
-
----
-
-### Q34：如果让你从头重新设计 Weaver，你会做什么不同的选择？
-
-**A**：
-
-1. **向量数据库替代 JSON 嵌入文件**：当前语义记忆用 JSON 文件存储 embedding，生产环境应使用 Milvus/Qdrant/Weaviate
-2. **更好的评估体系**：当前 LLM-as-Judge 做主张对齐有一定误差，可以考虑引入结构化知识图谱做校验
-3. **流式输出的精细控制**：当前报告生成是一次性输出，应该支持 SSE 逐 token 流式（已在 EventEmitter 中有基础）
-4. **更灵活的 Source Routing**：当前是基于配置的策略路由，可以引入 LLM 自主判断使用 web/rag/hybrid
-5. **A2A 协议支持**：当前是单 Agent（Orchestrator-Workers 是内部子图），未来可能需要 A2A 与外部 Agent 协作
-6. **更好的可观测性**：当前只有 LangSmith tracing，可以增加 OpenTelemetry 和更细粒度的 metric
+**实际质量指标**：引用密度、证据对齐率、主题相关性、质量门通过率等。
 
 ---
 
-### Q35：未来的几个技术方向你怎么看？比如 agent 的自我进化、长时任务执行、agent swarm？
+### Q45：如果让你重新设计 Weaver，会做哪些不同的选择？
 
 **A**：
 
-1. **Agent 自我进化（Self-Improving）**：当前 Weaver 的记忆系统是基础——记录结果、下次检索。未来的方向是通过 RLHF 或 preference optimization 让 agent 从错误中学习，而不仅是记录事实。
+1. **向量数据库替代 JSON 嵌入文件**：语义记忆当前用 JSON 文件存 embedding，生产环境应使用 Milvus/Qdrant
+2. **更好的评估体系**：LLM-as-Judge 有误差，可引入结构化知识图谱做校验
+3. **流式输出精细控制**：报告生成应支持 SSE 逐 token 流式（EventEmitter 已有基础）
+4. **更灵活的来源路由**：当前基于配置，可引入 LLM 自主判断使用哪种来源模式
+5. **A2A 协议支持**：当前是单 Agent 内部编排，未来需要与外部 Agent 协作
+6. **更好的可观测性**：增加 OpenTelemetry 和更细粒度的 metric
 
-2. **长时任务执行（Long-Running Tasks）**：Deep Research 本身就是一个长时任务。关键挑战是上下文窗口管理和中间状态持久化。Weaver 通过压缩 + checkpointer 部分解决了，但还需要更好的任务分解和并行化。
+---
 
-3. **Agent Swarm（智能体集群）**：当前 Orchestrator-Workers 是集中式的。去中心化 Swarm 更适合高度动态和不确定的环境，但调试和控制难度剧增。Anthropic 的建议仍然适用——不要过早引入。
+### Q46：长时任务执行的核心挑战是什么？Weaver 怎么解决的？
 
-4. **MCP 生态的愿景**：MCP 解决了工具接口标准化，未来可能出现 **Agent App Store** 模式——任何人都可以发布 MCP Server，Agent 可以动态发现和使用任意工具。
+**A**：Deep Research 本身就是一个长时任务（几分钟到几十分钟）。两个核心挑战：
 
-5. **成本和延迟优化**：MoE 模型、speculative decoding、语义缓存、请求批处理——这些工程优化对于大规模部署同样重要。
+**1. 上下文窗口管理**：
+- 三段混合压缩：小内容透传 → 中内容 embedding 过滤 → 大内容 LLM 压缩
+- 消息数量限制：监督者 **40 条**、子研究员 **30 条**
+- 上下文前缀模式：系统提示词不持久化
+- 子代理上下文隔离：子研究员在自己的上下文中工作
+
+**2. 中间状态持久化**：
+- **PostgreSQL 检查点**：每步执行后自动保存状态
+- 中断恢复：可从任意失败节点重新开始
+- 异步非阻塞：记忆更新、事件推送不阻塞主流程
 
 ---
 
@@ -674,14 +839,24 @@ Weaver 的实现：`check_loop()` 在每次 Researcher/Supervisor LLM 调用前�
 - [ ] LLM vs Agent 四大区别：会做 vs 会说、有记忆 vs 无状态、能用工具 vs 纯文本、能规划 vs 线性输出
 - [ ] Agent 四模块：LLM（大脑）、规划（拆解）、记忆（存储）、工具（执行）
 - [ ] ReAct 三步循环：Thought → Action → Observation
-- [ ] 防死循环三招：最大步数、重复检测、超时控制
+- [ ] 防死循环三招：最大步数、重复检测（**哈希+前缀**）、超时控制
 - [ ] Function Call 四步：定义工具 → LLM 输出指令 → 代码执行 → 结果回传
-- [ ] MCP 解决 N×M 爆炸 → N+M
-- [ ] MCP vs A2A：纵向工具集成 vs 横向 Agent 协作
-- [ ] Skills vs System Prompt：按需激活 vs 全局生效
-- [ ] Agent vs Workflow：LLM 控制流程 vs 代码控制流程
-- [ ] 记忆分层：上下文窗口（短期）+ 外部存储（长期：结构化/向量/图谱）
-- [ ] Orchestrator-Workers vs 去中心化多 Agent：Anthropic 建议优先单 Agent
-- [ ] 上下文预算控制：截断 + 消息数限制 + 高信号优先保留
-- [ ] 三级模型路由：fast（机械）/smart（综合）/strategic（推理）
-- [ ] 幻觉防御：引用强制 + Evidence Alignment + LLM-as-Judge + 自动修订
+- [ ] MCP 解决 **N×M → N+M**：纵向工具集成标准化
+- [ ] MCP vs A2A：纵向工具集成 vs 横向 Agent 协作，**互补不替代**
+- [ ] Skills vs System Prompt：按需激活 vs 全局生效，**三条激活路径**（研究注入+写作注入+渐进式加载）
+- [ ] Agent vs Workflow：LLM 控制 vs 代码控制，**生产用混合架构**
+- [ ] 记忆分层：上下文窗口（短期）+ 外部存储（**结构化/语义/图谱**）
+- [ ] Orchestrator-Workers：集中决策 + 分散执行，**子代理间不通信**
+- [ ] 上下文预算控制：截断 + 消息数限制 + **高信号优先保留** + 前缀模式
+- [ ] 三段混合压缩：透传(<8K) → embedding过滤(8-50K) → LLM压缩(>50K)
+- [ ] 三级模型路由：fast（机械）/ smart（综合）/ strategic（推理）+ **8 种任务类型覆盖**
+- [ ] 幻觉防御：引用强制 + 证据对齐(**LLM-as-Judge + 规则匹配**) + 搜索原始内容 + 自动修订
+- [ ] 质量三级评估：Level1(6维即时) → Level2(9维加权) → Level3(**4维深度+退化检测**)
+- [ ] HITL 中断：LangGraph interrupt → 用户 approve/revise/cancel → 继续/修订/结束
+- [ ] 搜索可靠性：熔断器 + 退避重试 + **key池** + 缓存 + 去重
+- [ ] 沙箱安全：管道到shell检测 + **危险命令黑名单** + 审计日志
+- [ ] 来源路由五模式：仅网络 / 仅本地文档 / 私有优先 / 混合 / 仅MCP
+- [ ] 20 个内置技能，四类分组（**研究+输出双覆盖10/纯输出7/辅助3**），工具白名单 + 按需上下文注入
+- [ ] Anthropic 五种 Agent 模式全覆盖：Prompt Chaining / Routing / Parallelization / **Orchestrator-Worker / Evaluator-Optimizer**
+- [ ] 静态计划 + 动态反思 vs Perplexity 动态计划：成本可控 + 用户信任 + 可审计，局限是探索性话题可能遗漏角度
+- [ ] GAIA：内置兼容模式（短答案输出），**非完整 Benchmark 评测框架**

@@ -7,25 +7,13 @@
     "bootstrap": {
       "enabled": true
     },
-    "chart-visualization": {
-      "enabled": true
-    },
-    "claude-to-deerflow": {
-      "enabled": true
-    },
     "code-documentation": {
       "enabled": true
     },
     "consulting-analysis": {
       "enabled": true
     },
-    "data-analysis": {
-      "enabled": true
-    },
     "deep-research": {
-      "enabled": true
-    },
-    "find-skills": {
       "enabled": true
     },
     "frontend-design": {
@@ -34,10 +22,13 @@
     "github-deep-research": {
       "enabled": true
     },
-    "image-generation": {
+    "html-report": {
       "enabled": true
     },
     "newsletter-generation": {
+      "enabled": true
+    },
+    "paper-decomposition": {
       "enabled": true
     },
     "podcast-generation": {
@@ -46,19 +37,25 @@
     "ppt-generation": {
       "enabled": true
     },
-    "skill-creator": {
+    "reproducibility-audit": {
       "enabled": true
     },
-    "surprise-me": {
+    "research-proposal-generator": {
+      "enabled": true
+    },
+    "research-trend-analysis": {
+      "enabled": true
+    },
+    "science-communication": {
+      "enabled": true
+    },
+    "skill-creator": {
       "enabled": true
     },
     "systematic-literature-review": {
       "enabled": true
     },
-    "vercel-deploy-claimable": {
-      "enabled": true
-    },
-    "video-generation": {
+    "vision-enrich": {
       "enabled": true
     },
     "web-design-guidelines": {
