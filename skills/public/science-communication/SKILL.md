@@ -1,6 +1,8 @@
 ---
 name: science-communication
-description: Use this skill when the user wants to translate academic research into content for different audiences — lay summaries for the public, policy briefs for decision-makers, press releases for media, social media threads for academic networking, or visual abstracts. Trigger on requests like "explain this paper to a general audience", "write a press release about our research", "create a Twitter thread summary", "make a policy brief", or "generate a graphical abstract summary".
+description: Translates academic research into audience-tailored formats including lay summaries, policy briefs, press releases, social media threads, and visual abstracts.
+version: "1.0.0"
+tags: [academic, communication, writing]
 ---
 
 # Science Communication Skill

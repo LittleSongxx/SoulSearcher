@@ -1,6 +1,8 @@
 ---
 name: research-trend-analysis
-description: Use this skill when the user wants to analyze research trends, map the evolution of a scientific field, identify emerging topics, track keyword popularity over time, or predict future research directions. Searches academic databases across years, builds trend curves, and generates visualizations. Trigger on requests like "research trends in X", "how has Y field evolved", "emerging topics in Z", "what's hot in AI research", "analyze publication trends".
+description: Analyzes research trends across years by searching academic databases, building trend curves, identifying emerging topics, and generating visualizations.
+version: "1.0.0"
+tags: [academic, research, analytics]
 ---
 
 # Research Trend Analysis Skill

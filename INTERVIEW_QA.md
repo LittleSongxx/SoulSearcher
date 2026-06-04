@@ -536,11 +536,17 @@ override_reducer 的设计：正常情况累加，但当返回值包含特定标
 
 2. **上下文注入（写作阶段）**：在报告生成节点，从激活技能中提取输出/写作指导章节（输出格式、写作规范、报告模板），以 `<skill_writing_guidance>` 块注入，预算上限 3600 字符
 
-3. **渐进式加载**：子研究员的系统提示词中包含 `<skill_system>` 块，列出当前激活技能的目录（名称、描述、容器内路径），子研究员可按需调用 `read_file` 读取完整的 SKILL.md 并遵循其中的工作流指导。这使偏工具操作类的技能（如 `skill-creator` 的技能创建流程）也能被自主发现和使用
+3. **渐进式加载**：遵循 **SKILL.md 开放标准（Anthropic 2025）**，实现完整的三层渐进披露：
+
+   - **层级 1 — 元数据**：子研究员系统提示词中的 `<skill_system>` 块列出所有激活技能的 `name` + `description` + `tags`，约 100 tokens/skill，Agent 据此判断技能是否匹配当前任务
+   - **层级 2 — 指令体**：技能匹配后，Agent 调用 `read_skill_guide` 工具按需读取完整的 SKILL.md，获得完整的工作流指导
+   - **层级 3 — 支持资源**：SKILL.md 中引用的 scripts/、references/、templates/ 等附件文件，Agent 继续通过 `read_skill_guide` 按需加载
+
+**SKILL.md 标准兼容**：所有技能 frontmatter 包含标准字段（`name`、`description`、`version`、`tags`），外加 Weaver 扩展字段（`license`、`allowed-tools`）。description 遵循行业最佳实践——写成纯触发条件描述（20-30 词），而非长篇行为指令。
 
 **工具白名单**：技能可声明 `allowed-tools` 字段限制子研究员的可用工具集。当前内置技能均未声明（全量放行），但过滤代码已集成到子研究员工具组装流程——自定义技能声明后自动生效。
 
-**关键设计**：Skills 不增加 LLM 调用次数，而是在现有调用中注入领域知识。比用 Multi-Agent 让"专家 Agent"参与讨论更高效。
+**关键设计**：Skills 不增加 LLM 调用次数，而是在现有调用中注入领域知识。渐进式加载确保上下文窗口不被不相关的技能占满。比用 Multi-Agent 让"专家 Agent"参与讨论更高效。
 
 ---
 
@@ -856,7 +862,7 @@ Weaver 中子研究员的搜索工具本质上就是 RAG 的 retrieval 部分。
 - [ ] 搜索可靠性：熔断器 + 退避重试 + **key池** + 缓存 + 去重
 - [ ] 沙箱安全：管道到shell检测 + **危险命令黑名单** + 审计日志
 - [ ] 来源路由五模式：仅网络 / 仅本地文档 / 私有优先 / 混合 / 仅MCP
-- [ ] 20 个内置技能，四类分组（**研究+输出双覆盖10/纯输出7/辅助3**），工具白名单 + 按需上下文注入
+- [ ] 20 个内置技能，四类分组（**研究+输出双覆盖10/纯输出7/辅助3**），SKILL.md 开放标准兼容（version+tags+渐进三层），工具白名单 + 按需上下文注入
 - [ ] Anthropic 五种 Agent 模式全覆盖：Prompt Chaining / Routing / Parallelization / **Orchestrator-Worker / Evaluator-Optimizer**
 - [ ] 静态计划 + 动态反思 vs Perplexity 动态计划：成本可控 + 用户信任 + 可审计，局限是探索性话题可能遗漏角度
 - [ ] GAIA：内置兼容模式（短答案输出），**非完整 Benchmark 评测框架**

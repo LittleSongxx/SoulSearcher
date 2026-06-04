@@ -1,6 +1,8 @@
 ---
 name: reproducibility-audit
-description: Use this skill when the user wants to assess the reproducibility of an academic paper, verify its reported results, reproduce its experiments, or perform a computational reproducibility audit. Automatically detects code repositories, builds environments in sandbox, runs experiments, and compares outputs against paper claims. Trigger on requests like "check if this paper is reproducible", "reproduce these results", "audit reproducibility", "verify paper claims", or when reviewing a paper that includes code.
+description: Assesses the computational reproducibility of academic papers by detecting code repositories, building sandbox environments, running experiments, and comparing outputs against paper claims.
+version: "1.0.0"
+tags: [academic, verification, sandbox]
 ---
 
 # Reproducibility Audit Skill

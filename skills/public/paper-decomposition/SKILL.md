@@ -1,6 +1,8 @@
 ---
 name: paper-decomposition
-description: Use this skill when the user wants to deeply decompose a research paper into its structured knowledge components — extracting the research question, methodology chain, claims hierarchy, evidence graph, and building a machine-readable knowledge graph representation. Supports cross-paper linking for multi-paper analysis. Trigger on requests like "decompose this paper", "extract the knowledge graph", "map paper structure", "build paper ontology", or when you need structured paper understanding for downstream tasks.
+description: Decomposes research papers into structured knowledge graphs including research questions, methodology chains, claims hierarchy, and evidence graphs.
+version: "1.0.0"
+tags: [academic, paper, knowledge-graph]
 ---
 
 # Paper Decomposition Skill

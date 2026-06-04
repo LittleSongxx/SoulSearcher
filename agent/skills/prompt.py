@@ -106,11 +106,10 @@ def get_skills_prompt_section(
 You have access to skills that provide optimized workflows for specific tasks.
 
 **Progressive Loading Pattern:**
-1. When a user query matches a skill's use case, immediately call `read_file` on the skill's main file using the path attribute
+1. When a user query matches a skill's use case, immediately call `read_skill_guide` on the skill's main file (e.g., 'deep-research/SKILL.md')
 2. Read and understand the skill's workflow and instructions
-3. The skill file contains references to external resources under the same folder
-4. Load referenced resources only when needed during execution
-5. Follow the skill's instructions precisely
+3. The skill file contains references to external resources under the same folder — call `read_skill_guide` again for scripts, templates, or references as needed
+4. Follow the skill's instructions precisely
 
 **Skills are located at:** {container_base_path}
 

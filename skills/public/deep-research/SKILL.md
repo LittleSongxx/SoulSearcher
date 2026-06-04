@@ -1,6 +1,8 @@
 ---
 name: deep-research
-description: Use this skill instead of WebSearch for ANY question requiring web research. Trigger on queries like "what is X", "explain X", "compare X and Y", "research X", or before content generation tasks. Provides systematic multi-angle research methodology instead of single superficial searches. Use this proactively when the user's question needs online information.
+description: Conducts systematic multi-angle web research for complex questions requiring multiple sources, cross-validation, and depth beyond single-search answers.
+version: "1.0.0"
+tags: [research, methodology, core]
 ---
 
 # Deep Research Skill

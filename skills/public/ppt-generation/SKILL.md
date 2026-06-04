@@ -1,6 +1,8 @@
 ---
 name: ppt-generation
-description: Use this skill when the user requests to generate, create, or make presentations (PPT/PPTX). Creates visually rich slides by generating images for each slide and composing them into a PowerPoint file.
+description: Creates visually rich presentation slides by generating images for each slide and composing them into PowerPoint files.
+version: "1.0.0"
+tags: [content, presentation, slides]
 ---
 
 # PPT Generation Skill

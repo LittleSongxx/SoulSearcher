@@ -1,6 +1,8 @@
 ---
 name: research-proposal-generator
-description: Use this skill when the user wants to generate a research proposal, grant application draft, or project plan based on identified research gaps. Leverages literature review findings and trend analysis to generate testable hypotheses, design methodologies, and draft structured proposals. Trigger on requests like "write a research proposal", "generate research ideas for X", "create a grant proposal", "what should I research next in Y", or "draft a PhD proposal on Z".
+description: Generates research proposals and grant applications based on identified research gaps, with testable hypotheses, methodology design, and structured proposal templates.
+version: "1.0.0"
+tags: [academic, proposal, writing]
 ---
 
 # Research Proposal Generator Skill

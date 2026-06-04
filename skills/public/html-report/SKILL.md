@@ -1,6 +1,8 @@
 ---
 name: html-report
-description: Use this skill when generating the final research report in HTML format. This skill provides the semantic HTML5 structure, CSS styling rules, image/chart/table embedding patterns, and quality guidelines for producing professional, visually rich research reports instead of plain markdown. Trigger when report_format is "html" or when the user requests a visually enhanced report.
+description: Generates professional HTML5 research reports with semantic structure, CSS styling, embedded images, charts, tables, and responsive layout.
+version: "1.0.0"
+tags: [report, html, output]
 ---
 
 # HTML Report Skill

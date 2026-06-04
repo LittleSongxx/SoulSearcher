@@ -1,6 +1,8 @@
 ---
 name: academic-paper-review
-description: Use this skill when the user requests to review, analyze, critique, or summarize academic papers, research articles, preprints, or scientific publications. Supports comprehensive structured reviews covering methodology assessment, contribution evaluation, literature positioning, and constructive feedback generation. Trigger on queries involving paper URLs, uploaded PDFs, arXiv links, or requests like "review this paper", "analyze this research", "summarize this study", or "write a peer review".
+description: Reviews academic papers and preprints for methodology rigor, contribution significance, and reproducibility. Triggers on paper URLs, PDF uploads, arXiv links, or review requests.
+version: "1.0.0"
+tags: [academic, review, paper]
 ---
 
 # Academic Paper Review Skill

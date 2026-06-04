@@ -484,6 +484,44 @@ async def _get_researcher_tools(
     """
     tools = [ThinkTool, ResearchComplete]
 
+    # === Skill Guide Reader (Progressive Loading Layer 3) ===
+    # Allows the researcher to load full SKILL.md content and supporting
+    # resources (scripts, templates, references) on demand, following the
+    # SKILL.md open standard progressive disclosure pattern.
+    try:
+        from langchain_core.tools import tool as lc_tool
+        from pathlib import Path as _Path
+        import os as _os
+
+        _skills_base = _os.path.join(
+            _os.path.dirname(__file__), "..", "..", "skills", "public"
+        )
+        _skills_base = _os.path.abspath(_skills_base)
+
+        @lc_tool
+        def read_skill_guide(file_path: str) -> str:
+            """Read a SKILL.md file or supporting resource from the skills directory.
+
+            Args:
+                file_path: Relative path within the skills directory
+                           (e.g., 'deep-research/SKILL.md' or 'html-report/templates/report.css')
+
+            Returns:
+                The full content of the requested file.
+            """
+            _safe = _os.path.normpath(file_path).lstrip("/")
+            if ".." in _safe:
+                return "Error: path traversal not allowed"
+            full = _os.path.join(_skills_base, _safe)
+            if not _os.path.isfile(full):
+                return f"Error: file not found at '{_safe}'"
+            return _Path(full).read_text(encoding="utf-8")
+
+        tools.append(read_skill_guide)
+        logger.debug("[Researcher] Loaded read_skill_guide tool for progressive loading")
+    except Exception as e:
+        logger.debug("[Researcher] read_skill_guide tool not available: %s", e)
+
     # === View Image Tool (Multimodal / Vision Support — deer-flow pattern) ===
     if research_config.supports_vision:
         try:

@@ -1,6 +1,8 @@
 ---
 name: vision-enrich
-description: Use this skill when the research topic involves domains where visual data provides high information density — financial reports, statistical data, charts, architecture diagrams, scientific figures, dashboards, infographics, or any task where "seeing" the data matters as much as reading about it. This skill guides the LLM to autonomously decide when to activate web image extraction and when visual analysis adds sufficient value to justify the token cost.
+description: Guides autonomous decisions on when extracting and analyzing web images adds sufficient value to justify the token cost for visually dense research domains.
+version: "1.0.0"
+tags: [research, multimodal, vision]
 ---
 
 # Vision Enrich Skill
