@@ -78,6 +78,13 @@ def _route_after_supervisor(state: dict, config: RunnableConfig) -> str:
     return "final_report"
 
 
+def _route_after_report(state: dict, config: RunnableConfig) -> str:
+    """Route failed quality gates back to the supervisor for follow-up research."""
+    if state.get("quality_followup_required"):
+        return "research_supervisor"
+    return "__end__"
+
+
 # =============================================================================
 # Graph Construction
 # =============================================================================
@@ -167,8 +174,15 @@ def create_research_graph(
     # GAIA answer → End
     workflow.add_edge("gaia_answer", END)
 
-    # Final report → End
-    workflow.add_edge("final_report_generation", END)
+    # Final report → either follow-up research or End
+    workflow.add_conditional_edges(
+        "final_report_generation",
+        _route_after_report,
+        {
+            "research_supervisor": "research_supervisor",
+            "__end__": END,
+        },
+    )
 
     # === Compile ===
     graph = workflow.compile(
@@ -256,5 +270,4 @@ def create_checkpointer(database_url: str):
 
     logger.info("[Graph] PostgreSQL checkpointer initialized")
     return checkpointer
-
 

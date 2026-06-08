@@ -23,7 +23,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.prompts import (
     resolve_prompt,
 )
@@ -60,11 +60,11 @@ async def clarify_with_user(
     messages = state.get("messages", [])
 
     # Use Pydantic structured output for reliable parsing
-    model_config = {
-        "model": research_config.smart_llm,
-        "max_tokens": 1024,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.smart_llm,
+        max_tokens=1024,
+        tags=["langsmith:nostream"],
+    )
 
     clarification_model = (
         configurable_model
@@ -139,11 +139,11 @@ async def write_research_brief(
     # Determine research model based on complexity hint (default to smart_llm)
     research_model_name = research_config.get_model_for_complexity(complexity)
 
-    model_config = {
-        "model": research_model_name,
-        "max_tokens": research_config.research_model_max_tokens,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_model_name,
+        max_tokens=research_config.research_model_max_tokens,
+        tags=["langsmith:nostream"],
+    )
 
     research_model = (
         configurable_model
@@ -190,11 +190,11 @@ async def classify_complexity(
 
     research_brief = state.get("research_brief", "")
 
-    model_config = {
-        "model": research_config.fast_llm,  # Fast model for simple classification
-        "max_tokens": 512,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.fast_llm,
+        max_tokens=512,
+        tags=["langsmith:nostream"],
+    )
 
     classifier_model = (
         configurable_model
@@ -258,11 +258,11 @@ async def direct_answer(state: AgentState, config: RunnableConfig) -> dict:
                 user_input = str(getattr(msg, "content", ""))
                 break
 
-    model_config = {
-        "model": research_config.fast_llm,
-        "max_tokens": research_config.final_report_model_max_tokens,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.fast_llm,
+        max_tokens=research_config.final_report_model_max_tokens,
+        tags=["langsmith:nostream"],
+    )
 
     prompt = resolve_prompt("direct_answer",
         input=user_input,

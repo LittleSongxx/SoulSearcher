@@ -23,12 +23,12 @@ from langchain_core.messages import AIMessage, HumanMessage, get_buffer_string
 from langchain_core.runnables import RunnableConfig
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.prompts import (
     HTML_REPORT_CSS_TEMPLATE,
     resolve_prompt,
 )
-from agent.core.state import AgentState
+from agent.core.state import AgentState, EvidenceItem
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +413,165 @@ def _build_claim_artifacts(claim_alignment: dict[str, Any]) -> tuple[list[dict[s
     return claims, annotations
 
 
+def _build_evidence_ledger(
+    state: dict[str, Any],
+    *,
+    curated_sources: list[dict[str, Any]] | None = None,
+    notes: list[str] | None = None,
+    max_items: int = 24,
+) -> list[dict[str, Any]]:
+    """Build a structured evidence ledger from sources and research notes."""
+    artifacts = state.get("deepsearch_artifacts", {}) or {}
+    if not isinstance(artifacts, dict):
+        artifacts = {}
+
+    now = datetime.now().isoformat(timespec="seconds")
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _add(item: dict[str, Any]) -> None:
+        if len(items) >= max_items:
+            return
+        url = str(item.get("url") or item.get("source") or "").strip()
+        content = str(
+            item.get("content")
+            or item.get("text")
+            or item.get("evidence")
+            or item.get("title")
+            or ""
+        ).strip()
+        if not url and not content:
+            return
+        key = f"{url}|{content[:240]}"
+        if key in seen:
+            return
+        seen.add(key)
+        score_value = item.get("score")
+        try:
+            score = float(score_value) if score_value is not None else None
+        except (TypeError, ValueError):
+            score = None
+        normalized = EvidenceItem(
+            id=str(item.get("id") or f"evidence_{len(items) + 1}"),
+            type=str(item.get("type") or ("source_text" if content else "source_url")),
+            source_id=str(item.get("source_id") or ""),
+            title=str(item.get("title") or "")[:240],
+            url=url,
+            source=str(item.get("source") or url or item.get("title") or ""),
+            content=content[:1600],
+            tool=str(item.get("tool") or ""),
+            query=str(item.get("query") or ""),
+            retrieved_at=str(item.get("retrieved_at") or now),
+            score=score,
+            metadata=dict(item.get("metadata") if isinstance(item.get("metadata"), dict) else {}),
+        )
+        items.append(normalized.to_artifact())
+
+    for item in state.get("evidence_items", []) or []:
+        if isinstance(item, dict):
+            _add(item)
+
+    for item in artifacts.get("evidence_items", []) or []:
+        if isinstance(item, dict):
+            _add(item)
+
+    sources = []
+    if curated_sources:
+        sources.extend(curated_sources)
+    state_sources = state.get("sources", []) or []
+    if isinstance(state_sources, list):
+        sources.extend(state_sources)
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or source.get("source_url") or "").strip()
+        title = str(source.get("title") or source.get("name") or url).strip()
+        if not url and not title:
+            continue
+        _add({
+            "type": "source_url",
+            "source_id": source.get("id") or source.get("source_id") or "",
+            "title": title[:240],
+            "url": url,
+            "source": url or title,
+            "content": str(source.get("snippet") or source.get("summary") or title)[:1200],
+            "score": source.get("relevance_score") or source.get("score"),
+            "tool": source.get("tool") or "source_curation",
+        })
+
+    note_values = notes if notes is not None else (state.get("notes", []) or [])
+    for note in note_values:
+        text = str(note or "").strip()
+        if not text:
+            continue
+        for chunk in re.split(r"\n\s*\n", text):
+            chunk = re.sub(r"\s+", " ", chunk).strip()
+            if len(chunk) < 80:
+                continue
+            url_match = re.search(r"https?://[^\s\])>\"']+", chunk)
+            url = url_match.group(0) if url_match else ""
+            _add({
+                "type": "research_note",
+                "source": url,
+                "url": url,
+                "content": chunk[:1600],
+                "tool": "researcher",
+            })
+            if len(items) >= max_items:
+                break
+        if len(items) >= max_items:
+            break
+
+    return items
+
+
+def _evidence_passages(evidence_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    passages: list[dict[str, Any]] = []
+    for item in evidence_items:
+        content = str(item.get("content") or item.get("text") or "").strip()
+        if not content:
+            continue
+        passages.append({
+            "url": str(item.get("url") or item.get("source") or ""),
+            "title": str(item.get("title") or item.get("source") or ""),
+            "text": content[:1600],
+            "evidence_id": str(item.get("id") or ""),
+        })
+    return passages
+
+
+def _persist_workspace_artifacts(
+    config: RunnableConfig,
+    artifacts: dict[str, Any],
+    *,
+    report_content: str = "",
+    report_format: str = "markdown",
+) -> dict[str, Any]:
+    """Persist key research artifacts into the per-thread workspace."""
+    configurable = config.get("configurable") or {}
+    thread_id = str(configurable.get("thread_id") or "default")
+    try:
+        from agent.runtime.workspace import get_research_workspace
+
+        workspace = get_research_workspace(thread_id)
+        artifacts["workspace"] = workspace.artifact()
+        workspace.write_json("artifacts.json", artifacts)
+        workspace.write_jsonl("evidence.jsonl", artifacts.get("evidence_items", []) or [])
+        workspace.write_jsonl("passages.jsonl", artifacts.get("passages", []) or [])
+        workspace.write_json("quality.json", {
+            "summary": artifacts.get("quality_summary", {}),
+            "gates": artifacts.get("quality_gates", []),
+            "details": artifacts.get("quality_details", {}),
+        })
+        workspace.write_json("sources.json", artifacts.get("sources", []) or [])
+        if report_content:
+            filename = "report.html" if report_format == "html" else "report.md"
+            workspace.write_text(filename, report_content)
+    except Exception as e:
+        logger.warning("[Workspace] Failed to persist report artifacts: %s", e)
+    return artifacts
+
+
 def _build_quality_summary(
     report_format: str,
     quality_result: Any | None,
@@ -434,12 +593,20 @@ def _build_quality_summary(
     quality_gates = list(getattr(quality_result, "gates", []) or []) if quality_result else []
     overall_verdict = getattr(quality_result, "verdict", "incomplete") if quality_result else "incomplete"
     overall_passed = bool(getattr(quality_result, "passed", False)) if quality_result else False
+    overall_score = (
+        float(getattr(quality_result, "score", 0.0) or 0.0)
+        if quality_result else 0.0
+    )
+    if quality_result is None and l3_result is not None:
+        overall_passed = bool(getattr(l3_result, "overall_passed", False))
+        overall_verdict = "pass" if overall_passed else "revise"
+        overall_score = float(getattr(l3_result, "overall_score", 0.0) or 0.0)
     if l3_result is not None and not bool(getattr(l3_result, "overall_passed", False)):
         overall_passed = False
         if overall_verdict == "pass":
             overall_verdict = "revise"
     return {
-        "overall_score": round(float(getattr(quality_result, "score", 0.0) or 0.0), 4) if quality_result else 0.0,
+        "overall_score": round(overall_score, 4),
         "overall_verdict": overall_verdict,
         "publish_ready": overall_passed,
         "level1_score": round(float(l1_snapshot.get("overall_score", 0.0) or 0.0), 4),
@@ -452,6 +619,57 @@ def _build_quality_summary(
         "report_format": report_format,
         "quality_gate_count": len(quality_gates) + (1 if l3_result else 0),
     }
+
+
+def _build_followup_research_brief(
+    research_brief: str,
+    quality_gates: list[dict[str, Any]],
+    quality_result: Any | None,
+) -> str:
+    """Create a focused research brief for quality-driven follow-up research."""
+    issues: list[str] = []
+    suggestions: list[str] = []
+    if quality_result is not None:
+        issues.extend(str(item) for item in getattr(quality_result, "issues", []) or [])
+        suggestions.extend(
+            str(item) for item in getattr(quality_result, "suggestions", []) or []
+        )
+    for gate in quality_gates:
+        if not isinstance(gate, dict) or gate.get("passed"):
+            continue
+        details = gate.get("details") if isinstance(gate.get("details"), dict) else {}
+        summary = details.get("summary") or details.get("error") or gate.get("name")
+        if summary:
+            issues.append(str(summary))
+
+    unique_issues = []
+    seen = set()
+    for issue in issues:
+        text = re.sub(r"\s+", " ", issue).strip()
+        if text and text not in seen:
+            seen.add(text)
+            unique_issues.append(text)
+
+    unique_suggestions = []
+    seen.clear()
+    for suggestion in suggestions:
+        text = re.sub(r"\s+", " ", suggestion).strip()
+        if text and text not in seen:
+            seen.add(text)
+            unique_suggestions.append(text)
+
+    issue_text = "\n".join(f"- {issue}" for issue in unique_issues[:8])
+    suggestion_text = "\n".join(f"- {item}" for item in unique_suggestions[:6])
+    return (
+        f"{research_brief}\n\n"
+        "[Quality Follow-up Research]\n"
+        "The previous draft did not pass quality gates. Conduct only the "
+        "additional research needed to fix the gaps below, prioritizing "
+        "source-backed evidence and citations. Return concise findings that can "
+        "be merged with the existing notes.\n\n"
+        f"Issues to address:\n{issue_text or '- Insufficient evidence or citation alignment.'}\n\n"
+        f"Suggested fixes:\n{suggestion_text or '- Gather stronger sources and verify unsupported claims.'}"
+    )
 
 
 # =============================================================================
@@ -514,11 +732,11 @@ async def final_report_generation(
     max_tokens = research_config.final_report_model_max_tokens
     if report_format == "html":
         max_tokens = max(max_tokens * 2, 16384)
-    model_config = {
-        "model": model_name,
-        "max_tokens": max_tokens,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=model_name,
+        max_tokens=max_tokens,
+        tags=["langsmith:nostream"],
+    )
 
     messages = state.get("messages", [])
     message_text = get_buffer_string(messages)
@@ -546,6 +764,19 @@ async def final_report_generation(
 
     quality_result = None
     l3_result = None
+    pre_quality_artifacts = dict(state.get("deepsearch_artifacts", {}) or {})
+    preliminary_evidence = _build_evidence_ledger(
+        state,
+        curated_sources=curated_sources,
+        notes=notes,
+    )
+    if preliminary_evidence:
+        pre_quality_artifacts["evidence_items"] = preliminary_evidence
+        pre_quality_artifacts["passages"] = _evidence_passages(preliminary_evidence)
+    if isinstance(state.get("source_routing"), dict) and state.get("source_routing"):
+        pre_quality_artifacts["source_routing"] = dict(state.get("source_routing") or {})
+    quality_state = dict(state)
+    quality_state["deepsearch_artifacts"] = pre_quality_artifacts
 
     if report_format == "html":
         prompt_name = "final_report_html"
@@ -629,7 +860,7 @@ async def final_report_generation(
                         generate_report_with_quality_check,
                     )
                     final_content, quality_result = await generate_report_with_quality_check(
-                        state=state,
+                        state=quality_state,
                         report_content=final_content,
                         config=config,
                         max_revisions=research_config.max_report_revisions,
@@ -697,20 +928,147 @@ async def final_report_generation(
             claim_artifacts, citation_annotations = _build_claim_artifacts(
                 claim_alignment
             )
-            evidence_items = list(
+            quality_evidence_items = list(
                 (quality_result.metadata or {}).get("evidence_items", [])
             ) if quality_result else []
+            evidence_items = _build_evidence_ledger(
+                quality_state,
+                curated_sources=curated_sources,
+                notes=notes,
+            )
+            seen_evidence = {
+                (
+                    str(item.get("url") or item.get("source") or ""),
+                    str(item.get("content") or item.get("text") or "")[:240],
+                )
+                for item in evidence_items
+                if isinstance(item, dict)
+            }
+            for item in quality_evidence_items:
+                if not isinstance(item, dict):
+                    continue
+                key = (
+                    str(item.get("url") or item.get("source") or ""),
+                    str(item.get("content") or item.get("text") or "")[:240],
+                )
+                if key not in seen_evidence:
+                    evidence_items.append(item)
+                    seen_evidence.add(key)
             quality_summary = _build_quality_summary(
                 report_format=report_format,
                 quality_result=quality_result,
                 l3_result=l3_result,
             )
+            evaluation_available = quality_result is not None or l3_result is not None
+            delivery_ready = (
+                bool(quality_summary.get("publish_ready"))
+                if evaluation_available
+                else True
+            )
+            followup_count = int(state.get("quality_followup_count", 0) or 0)
+            can_follow_up = (
+                evaluation_available
+                and
+                not delivery_ready
+                and complexity != "simple"
+                and followup_count < research_config.max_quality_followup_rounds
+            )
+            quality_summary["delivery_status"] = (
+                "ready" if delivery_ready else (
+                    "followup_research" if can_follow_up else "quality_failed"
+                )
+            )
+            if not evaluation_available:
+                quality_summary["delivery_status"] = "quality_unavailable"
+                quality_summary["publish_ready"] = True
+            if not delivery_ready:
+                quality_gates.append({
+                    "name": "delivery_gate",
+                    "level": 3,
+                    "passed": False,
+                    "score": float(quality_summary.get("overall_score", 0.0) or 0.0),
+                    "verdict": "blocked",
+                    "threshold": float(research_config.evaluation_pass_threshold),
+                    "details": {
+                        "issues": list(getattr(quality_result, "issues", []) or [])[:8]
+                        if quality_result else ["Quality evaluation did not pass."],
+                        "requires_followup_research": any(
+                            gate.get("verdict") == "incomplete"
+                            for gate in quality_gates
+                            if isinstance(gate, dict)
+                        ) or can_follow_up,
+                    },
+                })
+            quality_summary["quality_gate_count"] = len(quality_gates)
 
-            deepsearch_artifacts = dict(state.get("deepsearch_artifacts", {}) or {})
+            deepsearch_artifacts = dict(quality_state.get("deepsearch_artifacts", {}) or {})
+            if isinstance(state.get("source_routing"), dict) and state.get("source_routing"):
+                deepsearch_artifacts["source_routing"] = dict(state.get("source_routing") or {})
             if not isinstance(deepsearch_artifacts.get("sources"), list) or not deepsearch_artifacts.get("sources"):
                 deepsearch_artifacts["sources"] = list(curated_sources or state.get("sources", []))
+            deepsearch_artifacts["passages"] = _evidence_passages(evidence_items)
             deepsearch_artifacts["quality_summary"] = quality_summary
             deepsearch_artifacts["quality_gates"] = quality_gates
+            deepsearch_artifacts["delivery_status"] = quality_summary["delivery_status"]
+            if can_follow_up:
+                followup_requests = list(
+                    deepsearch_artifacts.get("quality_followup_requests", []) or []
+                )
+                followup_brief = _build_followup_research_brief(
+                    research_brief,
+                    quality_gates,
+                    quality_result,
+                )
+                followup_requests.append({
+                    "round": followup_count + 1,
+                    "brief": followup_brief,
+                    "quality_summary": quality_summary,
+                })
+                deepsearch_artifacts["quality_followup_requests"] = followup_requests
+                deepsearch_artifacts["quality_details"] = {
+                    "level1_rubric": dict((quality_result.metadata or {}).get("level1_rubric", {})) if quality_result else {},
+                    "level2_rubric": dict((quality_result.metadata or {}).get("level2_rubric", {})) if quality_result else {},
+                    "claim_alignment": claim_alignment,
+                    "level3_evaluation": l3_result.to_dict() if l3_result is not None and hasattr(l3_result, "to_dict") else {},
+                }
+                deepsearch_artifacts["claims"] = claim_artifacts
+                deepsearch_artifacts["citation_annotations"] = citation_annotations
+                deepsearch_artifacts["evidence_items"] = evidence_items
+                deepsearch_artifacts["research_brief"] = {
+                    "research_brief": research_brief,
+                    "complexity": complexity,
+                    "report_format": report_format,
+                }
+                deepsearch_artifacts = _persist_workspace_artifacts(
+                    config,
+                    deepsearch_artifacts,
+                    report_format=report_format,
+                )
+                logger.info(
+                    "[Report] Quality gates failed; routing to follow-up research "
+                    "(round %d/%d)",
+                    followup_count + 1,
+                    research_config.max_quality_followup_rounds,
+                )
+                return {
+                    "messages": [
+                        AIMessage(
+                            content=(
+                                "Quality gates found gaps; running focused "
+                                "follow-up research before delivering the report."
+                            )
+                        )
+                    ],
+                    "research_brief": followup_brief,
+                    "quality_summary": quality_summary,
+                    "quality_gates": quality_gates,
+                    "quality_followup_required": True,
+                    "quality_followup_count": followup_count + 1,
+                    "deepsearch_artifacts": deepsearch_artifacts,
+                    "supervisor_messages": {"type": "override", "value": []},
+                    "research_iterations": 0,
+                    "final_report": "",
+                }
             deepsearch_artifacts["quality_details"] = {
                 "level1_rubric": dict((quality_result.metadata or {}).get("level1_rubric", {})) if quality_result else {},
                 "level2_rubric": dict((quality_result.metadata or {}).get("level2_rubric", {})) if quality_result else {},
@@ -725,6 +1083,12 @@ async def final_report_generation(
                 "complexity": complexity,
                 "report_format": report_format,
             }
+            deepsearch_artifacts = _persist_workspace_artifacts(
+                config,
+                deepsearch_artifacts,
+                report_content=final_content,
+                report_format=report_format,
+            )
 
             return {
                 "final_report": final_content,
@@ -732,6 +1096,7 @@ async def final_report_generation(
                 "report_format": report_format,
                 "quality_summary": quality_summary,
                 "quality_gates": quality_gates,
+                "quality_followup_required": False,
                 "deepsearch_artifacts": deepsearch_artifacts,
                 **cleared_state,
             }
@@ -763,6 +1128,7 @@ async def final_report_generation(
                 return {
                     "final_report": f"Error generating final report: {error_str}",
                     "messages": [AIMessage(content="Report generation failed.")],
+                    "quality_followup_required": False,
                     **cleared_state,
                 }
 
@@ -771,6 +1137,7 @@ async def final_report_generation(
     return {
         "final_report": "Error: Report generation failed after maximum retries.",
         "messages": [AIMessage(content="Report generation failed after maximum retries.")],
+        "quality_followup_required": False,
         **cleared_state,
     }
 
@@ -816,11 +1183,11 @@ async def curate_sources(
         max_sources=min(max_sources, len(sources)),
     )
 
-    model_config = {
-        "model": research_config.smart_llm,
-        "max_tokens": 2048,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.smart_llm,
+        max_tokens=2048,
+        tags=["langsmith:nostream"],
+    )
 
     try:
         response = await configurable_model.with_config(model_config).ainvoke([

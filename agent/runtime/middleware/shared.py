@@ -31,17 +31,28 @@ def check_loop(messages: list, max_repetitions: int = 3) -> tuple[bool, str]:
     Returns (is_looping, hint_message).  Call this near the top of every
     tool-calling loop iteration (supervisor, researcher, etc.).
     """
-    from agent.core.middleware import get_loop_detector
-
-    detector = get_loop_detector()
-    recent_content = "\n".join([
-        str(getattr(m, "content", ""))[:200]
-        for m in messages[-5:]
+    contents = [
+        str(getattr(m, "content", "")).strip()
+        for m in messages[-max(5, max_repetitions + 2):]
         if hasattr(m, "content") and getattr(m, "content", None)
-    ])
-    if detector.check(recent_content):
+    ]
+    contents = [content for content in contents if content]
+    if len(contents) < max_repetitions:
+        return False, ""
+
+    recent = contents[-max_repetitions:]
+    exact_duplicate = len(set(recent)) == 1
+    prefix_counts: dict[str, int] = {}
+    for content in contents:
+        prefix = content[:100]
+        prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
+
+    if exact_duplicate or any(count >= max_repetitions + 1 for count in prefix_counts.values()):
         logger.warning("[SharedMiddleware] Loop detected")
-        return True, detector.get_hint()
+        return True, (
+            "\n[System Notice: You appear to be repeating yourself. "
+            "Please try a different approach or conclude your research if you're stuck.]"
+        )
     return False, ""
 
 

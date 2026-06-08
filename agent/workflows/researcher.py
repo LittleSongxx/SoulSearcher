@@ -14,9 +14,11 @@ The researcher subgraph is compiled once and invoked N times in parallel by the 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import re
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from langchain_core.messages import (
     AIMessage,
@@ -30,12 +32,13 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.prompts import (
     COMPRESSION_SIMPLE_HUMAN_MESSAGE,
     resolve_prompt,
 )
 from agent.core.state import (
+    EvidenceItem,
     ResearcherOutputState,
     ResearcherState,
     ResearchComplete,
@@ -76,11 +79,11 @@ async def researcher(
         "result_synthesis", complexity="standard"
     )
 
-    model_config = {
-        "model": model_name,
-        "max_tokens": research_config.research_model_max_tokens,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=model_name,
+        max_tokens=research_config.research_model_max_tokens,
+        tags=["langsmith:nostream"],
+    )
 
     # Build system prompt with MCP context and vision tool guidance
     mcp_prompt = research_config.mcp_prompt or ""
@@ -124,6 +127,10 @@ async def researcher(
         vision_guidance=vision_guidance_text,
         date=datetime.now().strftime("%Y-%m-%d"),
     )
+    source_policy = _researcher_source_policy(config)
+    source_guidance = _format_source_policy_guidance(source_policy)
+    if source_guidance:
+        system_prompt += "\n\n" + source_guidance
 
     # === Skill Progressive Loading (deer-flow pattern) ===
     # Make active skills discoverable to the researcher so it can
@@ -245,17 +252,39 @@ async def researcher_tools(
 
     # Execute all tool calls in parallel
     tools = await _get_researcher_tools(config, research_config)
-    tools_by_name = {
-        getattr(t, "name", t.get("name", "")): t
-        for t in tools
-    }
+    tools_by_name = _build_tools_by_name(tools)
 
     tool_calls = most_recent_message.tool_calls
+
+    # Researcher ThinkTool is a structured reflection checkpoint, not an external
+    # executable tool.  Preserve it as a ToolMessage so the next ReAct step can
+    # use the reflection without tripping generic tool execution.
+    think_calls = [tc for tc in tool_calls if tc.get("name") == "ThinkTool"]
+    think_tool_messages: list[ToolMessage] = []
+    for tc in think_calls:
+        args = tc.get("args") or {}
+        gaps = args.get("gaps_identified", []) or []
+        if not isinstance(gaps, list):
+            gaps = [str(gaps)]
+        think_tool_messages.append(ToolMessage(
+            content=(
+                "Reflection recorded:\n"
+                f"- Gaps identified: {', '.join(str(g) for g in gaps) if gaps else 'none'}\n"
+                f"- Confidence: {args.get('confidence_level', 'medium')}\n"
+                f"- Next strategy: {args.get('next_strategy', 'search_more')}\n"
+                f"- Details: {str(args.get('reflection', ''))[:800]}"
+            ),
+            name="ThinkTool",
+            tool_call_id=tc["id"],
+        ))
 
     # === Handle view_image + extract_web_images calls: capture base64 for injection ===
     image_tool_names = {"view_image", "extract_web_images"}
     image_tool_calls = [tc for tc in tool_calls if tc.get("name") in image_tool_names]
-    non_image_calls = [tc for tc in tool_calls if tc.get("name") not in image_tool_names]
+    non_image_calls = [
+        tc for tc in tool_calls
+        if tc.get("name") not in image_tool_names and tc.get("name") != "ThinkTool"
+    ]
 
     # Execute image tool calls directly to capture base64 data
     captured_images: dict[str, dict[str, str]] = {}
@@ -343,13 +372,22 @@ async def researcher_tools(
     observations = await asyncio.gather(*tasks)
 
     # Create tool messages
-    tool_outputs = list(image_tool_messages)
+    tool_outputs = list(think_tool_messages) + list(image_tool_messages)
+    evidence_items: list[dict[str, Any]] = []
     for tc, obs in zip(non_image_calls, observations):
         tool_outputs.append(ToolMessage(
             content=str(obs),
             name=tc["name"],
             tool_call_id=tc["id"],
         ))
+        evidence_items.extend(
+            _extract_evidence_from_observation(
+                tool_name=tc.get("name", ""),
+                args=tc.get("args", {}),
+                observation=str(obs),
+                research_topic=state.get("research_topic", ""),
+            )
+        )
 
     # Check iteration limits
     exceeded_iterations = (
@@ -359,13 +397,19 @@ async def researcher_tools(
         logger.info("[ResearcherTools] Max iterations exceeded, compressing")
         return Command(
             goto="compress_research",
-            update={"researcher_messages": tool_outputs},
+            update={
+                "researcher_messages": tool_outputs,
+                "evidence_items": evidence_items,
+            },
         )
 
     # Continue research loop
     return Command(
         goto="researcher",
-        update={"researcher_messages": tool_outputs},
+        update={
+            "researcher_messages": tool_outputs,
+            "evidence_items": evidence_items,
+        },
     )
 
 
@@ -406,6 +450,7 @@ async def compress_research(
         return {
             "compressed_research": raw_content,
             "raw_notes": [raw_notes],
+            "evidence_items": state.get("evidence_items", []),
         }
 
     # === Strategy 2: Medium content → embedding-based filtering ===
@@ -426,6 +471,7 @@ async def compress_research(
                 return {
                     "compressed_research": compressed,
                     "raw_notes": [raw_notes],
+                    "evidence_items": state.get("evidence_items", []),
                 }
         except Exception as e:
             logger.warning(f"[Compress] Embedding compression failed: {e}, falling back to LLM")
@@ -483,6 +529,11 @@ async def _get_researcher_tools(
     - MCP tools (from Weaver's MCP infrastructure)
     """
     tools = [ThinkTool, ResearchComplete]
+    source_policy = _researcher_source_policy(config)
+    include_web = source_policy["include_web"]
+    include_academic = source_policy["include_academic"]
+    include_rag = source_policy["include_rag"]
+    include_mcp = source_policy["include_mcp"]
 
     # === Skill Guide Reader (Progressive Loading Layer 3) ===
     # Allows the researcher to load full SKILL.md content and supporting
@@ -540,22 +591,36 @@ async def _get_researcher_tools(
         except ImportError:
             logger.debug("[Researcher] Extract web images tool not available")
 
-    # Load search tools from Weaver's existing ecosystem
-    try:
-        from tools import tavily_search, fallback_search
-        tools.append(tavily_search)
-        tools.append(fallback_search)
-        logger.debug("[Researcher] Loaded Tavily + fallback search")
-    except ImportError:
-        logger.warning("[Researcher] Could not import search tools from Weaver")
+    # Load search tools from Weaver's existing ecosystem, honoring source routing.
+    if include_web:
+        try:
+            from tools import tavily_search, fallback_search
+            tools.append(tavily_search)
+            tools.append(fallback_search)
+            logger.debug("[Researcher] Loaded Tavily + fallback search")
+        except ImportError:
+            logger.warning("[Researcher] Could not import search tools from Weaver")
+
+    # === RAG / uploaded document retrieval ===
+    if include_rag:
+        try:
+            from tools.rag.rag_tool import build_rag_search_tool
+            tools.append(build_rag_search_tool(source_policy["rag_collection_name"]))
+            logger.debug(
+                "[Researcher] Loaded rag_search (collection=%s)",
+                source_policy["rag_collection_name"] or "default",
+            )
+        except Exception as e:
+            logger.warning("[Researcher] Failed to load rag_search: %s", e)
 
     # === Academic Retrievers (ArXiv, PubMed, Semantic Scholar) ===
-    try:
-        from tools.search.academic import arxiv_search, pubmed_search, semantic_scholar_search
-        tools.extend([arxiv_search, pubmed_search, semantic_scholar_search])
-        logger.debug("[Researcher] Loaded academic search tools (ArXiv, PubMed, Semantic Scholar)")
-    except ImportError:
-        logger.debug("[Researcher] Academic search tools not available")
+    if include_academic:
+        try:
+            from tools.search.academic import arxiv_search, pubmed_search, semantic_scholar_search
+            tools.extend([arxiv_search, pubmed_search, semantic_scholar_search])
+            logger.debug("[Researcher] Loaded academic search tools (ArXiv, PubMed, Semantic Scholar)")
+        except ImportError:
+            logger.debug("[Researcher] Academic search tools not available")
 
     # === Sandbox Tools (code execution, shell, files) ===
     try:
@@ -586,11 +651,15 @@ async def _get_researcher_tools(
     except Exception as e:
         logger.warning(f"[Researcher] Failed to load sandbox tools: {e}")
 
-    # Load MCP tools if enabled
-    if research_config.mcp_enabled:
+    # Load MCP tools if enabled by config or selected source routing.
+    if research_config.mcp_enabled or include_mcp:
         try:
             from tools.mcp import init_mcp_tools as _init_mcp_tools
-            mcp_tools = await _init_mcp_tools(config)
+            configurable = config.get("configurable") or {}
+            mcp_tools = await _init_mcp_tools(
+                enabled=True,
+                policy_config=configurable,
+            )
             if mcp_tools:
                 tools.extend(mcp_tools)
                 logger.debug(f"[Researcher] Loaded {len(mcp_tools)} MCP tools")
@@ -645,7 +714,161 @@ async def _get_researcher_tools(
         except Exception as e:
             logger.debug("[Researcher] Skill tool whitelist skipped: %s", e)
 
-    return tools
+    return _dedupe_tools(tools)
+
+
+def _tool_name(tool: Any) -> str:
+    name = getattr(tool, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    if isinstance(tool, type):
+        return tool.__name__
+    name = getattr(tool, "__name__", None)
+    return str(name or "")
+
+
+def _build_tools_by_name(tools: list) -> dict[str, Any]:
+    return {name: tool for tool in tools if (name := _tool_name(tool))}
+
+
+def _dedupe_tools(tools: list) -> list:
+    deduped: dict[str, Any] = {}
+    for tool in tools:
+        name = _tool_name(tool)
+        if name and name not in deduped:
+            deduped[name] = tool
+    return list(deduped.values())
+
+
+def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
+    cfg = config.get("configurable") or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    try:
+        from agent.workflows.source_routing import build_source_routing_policy
+        routing = build_source_routing_policy(config={"configurable": cfg})
+    except Exception:
+        routing = cfg.get("source_routing") if isinstance(cfg.get("source_routing"), dict) else {}
+
+    mode = str(routing.get("mode") or cfg.get("source_policy") or "").strip().lower()
+    providers = routing.get("providers") if isinstance(routing.get("providers"), list) else []
+    budget_policy = (
+        routing.get("budget_policy")
+        if isinstance(routing.get("budget_policy"), dict)
+        else {}
+    )
+    provider_set = {str(provider).strip().lower() for provider in providers if str(provider).strip()}
+    if not provider_set:
+        if mode == "local_docs_only":
+            provider_set = {"rag"}
+        elif mode == "mcp_only":
+            provider_set = {"mcp"}
+        elif mode in {"hybrid", "private_first"}:
+            provider_set = {"web", "rag"}
+        else:
+            provider_set = {"web"}
+
+    use_rag = bool(cfg.get("use_rag")) or "rag" in provider_set
+    collection_name = str(cfg.get("rag_collection_name") or "").strip() or None
+    collections = routing.get("collections") if isinstance(routing, dict) else []
+    if isinstance(collections, list) and collections:
+        first_collection = collections[0]
+        if isinstance(first_collection, dict):
+            collection_name = str(
+                first_collection.get("id") or first_collection.get("name") or collection_name or ""
+            ).strip() or collection_name
+        elif isinstance(first_collection, str):
+            collection_name = first_collection.strip() or collection_name
+
+    return {
+        "mode": mode or ("hybrid" if use_rag else "web_only"),
+        "providers": sorted(provider_set),
+        "include_web": "web" in provider_set,
+        "include_academic": "academic" in provider_set or "web" in provider_set,
+        "include_rag": use_rag,
+        "include_mcp": "mcp" in provider_set,
+        "rag_collection_name": collection_name,
+        "budget_policy": budget_policy,
+    }
+
+
+def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
+    providers = ", ".join(source_policy.get("providers", []) or []) or "web"
+    budget = source_policy.get("budget_policy") or {}
+    budget_lines = []
+    if isinstance(budget, dict):
+        for key in ("web", "rag", "academic", "mcp", "max_sources", "min_sources"):
+            if key in budget:
+                budget_lines.append(f"- {key}: {budget[key]}")
+    collection = source_policy.get("rag_collection_name") or ""
+    lines = [
+        "<Source Policy>",
+        f"- mode: {source_policy.get('mode', 'web_only')}",
+        f"- providers: {providers}",
+    ]
+    if collection:
+        lines.append(f"- rag_collection: {collection}")
+    if budget_lines:
+        lines.append("- budgets:")
+        lines.extend(f"  {line}" for line in budget_lines)
+    lines.append(
+        "- Use only the available provider tools implied by this policy; if a "
+        "provider returns no results, state the gap and continue with the next "
+        "allowed provider."
+    )
+    lines.append("</Source Policy>")
+    return "\n".join(lines)
+
+
+def _extract_evidence_from_observation(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    observation: str,
+    research_topic: str,
+    max_items: int = 8,
+) -> list[dict[str, Any]]:
+    text = str(observation or "").strip()
+    if not text or text.startswith("Error"):
+        return []
+
+    url_pattern = re.compile(r"https?://[^\s\])>\"']+")
+    urls = []
+    seen = set()
+    for url in url_pattern.findall(text):
+        cleaned = url.rstrip(".,;")
+        if cleaned not in seen:
+            seen.add(cleaned)
+            urls.append(cleaned)
+        if len(urls) >= max_items:
+            break
+
+    chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n|---+", text) if chunk.strip()]
+    if not chunks:
+        chunks = [text]
+
+    evidence: list[dict[str, Any]] = []
+    query = str(args.get("query") or args.get("search_query") or research_topic or "")
+    for idx, chunk in enumerate(chunks[:max_items], 1):
+        url = urls[idx - 1] if idx - 1 < len(urls) else (urls[0] if urls else "")
+        content = re.sub(r"\s+", " ", chunk).strip()[:1600]
+        if len(content) < 40:
+            continue
+        evidence_hash = hashlib.sha1(
+            f"{tool_name}|{query}|{idx}|{content[:160]}".encode("utf-8")
+        ).hexdigest()[:16]
+        item = EvidenceItem(
+            id=f"{tool_name or 'tool'}_{evidence_hash}",
+            type="tool_observation",
+            url=url,
+            source=url,
+            content=content,
+            tool=tool_name,
+            query=query,
+            retrieved_at=datetime.now().isoformat(timespec="seconds"),
+        )
+        evidence.append(item.to_artifact())
+    return evidence
 
 
 def _aggregate_research_content(messages: list) -> str:
@@ -776,11 +999,11 @@ async def _llm_compress(
     """
     compression_model_name = research_config.get_compression_model()
 
-    model_config = {
-        "model": compression_model_name,
-        "max_tokens": research_config.compression_model_max_tokens,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=compression_model_name,
+        max_tokens=research_config.compression_model_max_tokens,
+        tags=["langsmith:nostream"],
+    )
 
     synthesizer = configurable_model.with_config(model_config)
 
@@ -806,6 +1029,7 @@ async def _llm_compress(
             return {
                 "compressed_research": str(response.content),
                 "raw_notes": [raw_notes],
+                "evidence_items": state.get("evidence_items", []),
             }
 
         except Exception as e:
@@ -825,4 +1049,5 @@ async def _llm_compress(
     return {
         "compressed_research": "Error: Research compression failed after maximum retries.",
         "raw_notes": [raw_notes],
+        "evidence_items": state.get("evidence_items", []),
     }

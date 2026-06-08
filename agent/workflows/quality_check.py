@@ -24,7 +24,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 
 logger = logging.getLogger(__name__)
 
@@ -418,12 +418,12 @@ async def run_level1_check(
             logger.warning(f"[QualityCheck] Rubric eval failed: {e}, falling back to legacy")
 
     # Legacy prompt-based evaluation (fallback)
-    model_config = {
-        "model": research_config.fast_llm,
-        "max_tokens": 1024,
-        "temperature": 0.0,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.fast_llm,
+        max_tokens=1024,
+        temperature=0.0,
+        tags=["langsmith:nostream"],
+    )
 
     evidence_context = _build_evidence_context(state) if state else ""
 
@@ -529,12 +529,12 @@ async def revise_report(
     """
     research_config = ResearchConfiguration.from_runnable_config(config)
 
-    model_config = {
-        "model": research_config.smart_llm,
-        "max_tokens": research_config.final_report_model_max_tokens,
-        "temperature": 0.3,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.smart_llm,
+        max_tokens=research_config.final_report_model_max_tokens,
+        temperature=0.3,
+        tags=["langsmith:nostream"],
+    )
 
     prompt = REVISION_PROMPT.format(
         report=report,

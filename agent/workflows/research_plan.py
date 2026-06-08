@@ -19,7 +19,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -78,11 +78,11 @@ async def plan_research(
 
     # Use strategic model for plan generation — this is a high-leverage decision
     model_name = research_config.get_model_for_task("strategic_decision")
-    model_config = {
-        "model": model_name,
-        "max_tokens": 2048,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=model_name,
+        max_tokens=2048,
+        tags=["langsmith:nostream"],
+    )
 
     prompt = RESEARCH_PLAN_PROMPT.format(
         research_brief=research_brief,
@@ -167,11 +167,11 @@ async def _revise_plan_with_feedback(
     plan: str, feedback: str, config: ResearchConfiguration
 ) -> str:
     """Revise the plan based on user feedback using fast model."""
-    model_config = {
-        "model": config.fast_llm,
-        "max_tokens": 2048,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=config.fast_llm,
+        max_tokens=2048,
+        tags=["langsmith:nostream"],
+    )
     prompt = (
         f"Original plan:\n{plan}\n\n"
         f"User feedback:\n{feedback}\n\n"

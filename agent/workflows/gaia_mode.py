@@ -18,7 +18,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.prompts import resolve_prompt
 
 logger = logging.getLogger(__name__)
@@ -57,12 +57,12 @@ async def gaia_answer_node(state: dict, config: RunnableConfig) -> dict:
 
     findings = "\n\n".join(notes) if notes else "No research findings."
 
-    model_config = {
-        "model": research_config.get_model_for_task("result_synthesis"),
-        "max_tokens": 512,
-        "temperature": 0.0,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.get_model_for_task("result_synthesis"),
+        max_tokens=512,
+        temperature=0.0,
+        tags=["langsmith:nostream"],
+    )
 
     response = await configurable_model.with_config(model_config).ainvoke([
         HumanMessage(content=GAIA_ANSWER_PROMPT.format(

@@ -34,7 +34,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.prompts import resolve_prompt
 from agent.core.state import (
     ConductResearch,
@@ -82,11 +82,11 @@ async def supervisor(
     complexity = state.get("complexity", "standard")
     model_name = research_config.get_supervisor_model(complexity)
 
-    model_config = {
-        "model": model_name,
-        "max_tokens": research_config.research_model_max_tokens,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=model_name,
+        max_tokens=research_config.research_model_max_tokens,
+        tags=["langsmith:nostream"],
+    )
 
     # Available supervisor tools.
     #
@@ -318,6 +318,7 @@ async def supervisor_tools(
                     "research_topic": tc["args"].get("topic", tc["args"].get("research_topic", "")),
                     "thoroughness": tc["args"].get("thoroughness", "medium"),
                     "tool_call_iterations": 0,
+                    "evidence_items": [],
                 },
                 config,
             )
@@ -367,6 +368,14 @@ async def supervisor_tools(
             ])
             if raw_notes_concat.strip():
                 update_payload["raw_notes"] = [raw_notes_concat]
+            evidence_items = [
+                item
+                for obs in tool_results
+                for item in (obs.get("evidence_items") or [])
+                if isinstance(item, dict)
+            ]
+            if evidence_items:
+                update_payload["evidence_items"] = evidence_items
 
             # Handle overflow — tell supervisor to retry with fewer
             for over_tc in overflow_calls:

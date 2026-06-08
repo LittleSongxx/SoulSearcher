@@ -20,7 +20,7 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
 from agent.core.configuration import ResearchConfiguration
-from agent.core.model_routing import configurable_model
+from agent.core.model_routing import build_model_config, configurable_model
 
 logger = logging.getLogger(__name__)
 
@@ -567,12 +567,12 @@ async def run_level1_rubric(
     """
     research_config = ResearchConfiguration.from_runnable_config(config) if config else ResearchConfiguration()
 
-    model_config = {
-        "model": research_config.fast_llm,
-        "max_tokens": 2048,
-        "temperature": 0.0,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.fast_llm,
+        max_tokens=2048,
+        temperature=0.0,
+        tags=["langsmith:nostream"],
+    )
 
     evidence_context = _build_evidence_context(state) if state else ""
 
@@ -613,12 +613,12 @@ async def run_level2_rubric(
     """
     research_config = ResearchConfiguration.from_runnable_config(config) if config else ResearchConfiguration()
 
-    model_config = {
-        "model": research_config.smart_llm,
-        "max_tokens": 3072,
-        "temperature": 0.0,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.smart_llm,
+        max_tokens=3072,
+        temperature=0.0,
+        tags=["langsmith:nostream"],
+    )
 
     prompt = L2_RUBRIC_PROMPT_TEMPLATE.format(
         report=report[:12000],
@@ -805,12 +805,12 @@ async def run_full_claim_alignment(
         if config else ResearchConfiguration()
     )
 
-    model_config = {
-        "model": research_config.smart_llm,
-        "max_tokens": 3072,
-        "temperature": 0.0,
-        "tags": ["langsmith:nostream"],
-    }
+    model_config = build_model_config(
+        model=research_config.smart_llm,
+        max_tokens=3072,
+        temperature=0.0,
+        tags=["langsmith:nostream"],
+    )
 
     prompt = FULL_CLAIM_ALIGNMENT_PROMPT.format(
         report=report[:12000],

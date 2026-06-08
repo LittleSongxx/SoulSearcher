@@ -9,7 +9,7 @@ Integrates patterns from:
 import operator
 from typing import Annotated, Any, Literal, Optional
 
-from langchain_core.messages import BaseMessage, MessageLikeRepresentation
+from langchain_core.messages import BaseMessage, HumanMessage, MessageLikeRepresentation
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
@@ -152,6 +152,25 @@ class ResearchComplete(BaseModel):
     )
 
 
+class EvidenceItem(BaseModel):
+    """Structured source evidence carried through research, report, and eval."""
+    id: str = Field(description="Stable evidence identifier within the run.")
+    type: str = Field(default="source_text", description="Evidence kind.")
+    source_id: str = Field(default="", description="Optional normalized source id.")
+    title: str = Field(default="", description="Source or passage title.")
+    url: str = Field(default="", description="Source URL when available.")
+    source: str = Field(default="", description="Human-readable source reference.")
+    content: str = Field(default="", description="Evidence passage or source excerpt.")
+    tool: str = Field(default="", description="Tool or stage that produced the evidence.")
+    query: str = Field(default="", description="Query or research task that found it.")
+    retrieved_at: str = Field(default="", description="ISO timestamp for retrieval.")
+    score: float | None = Field(default=None, description="Optional relevance score.")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def to_artifact(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True)
+
+
 # =============================================================================
 # State Definitions
 # =============================================================================
@@ -171,6 +190,7 @@ class AgentState(MessagesState):
     input: str
     skill_ids: list[str]
     images: list[dict[str, Any]]  # Base64-encoded images from user input (multimodal)
+    source_routing: dict[str, Any]
 
     # === Input Gateway outputs ===
     research_brief: Optional[str]
@@ -191,9 +211,12 @@ class AgentState(MessagesState):
     # === Collected sources ===
     sources: list[dict[str, str]]
     curated_sources: list[dict[str, Any]]
+    evidence_items: Annotated[list[dict[str, Any]], override_reducer]
 
     quality_summary: dict[str, Any]
     quality_gates: list[dict[str, Any]]
+    quality_followup_required: bool
+    quality_followup_count: int
     deepsearch_artifacts: dict[str, Any]
 
     # === Final output ===
@@ -214,8 +237,10 @@ class SupervisorState(TypedDict):
     estimated_breadth: int
     notes: Annotated[list[str], override_reducer]
     raw_notes: Annotated[list[str], override_reducer]
+    evidence_items: Annotated[list[dict[str, Any]], override_reducer]
     research_iterations: int
     curated_sources: list[dict[str, Any]]
+    source_routing: dict[str, Any]
 
 
 class ResearcherState(TypedDict):
@@ -236,17 +261,39 @@ class ResearcherState(TypedDict):
     thoroughness: str  # "quick" | "medium" | "very_thorough"
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer]
+    evidence_items: Annotated[list[dict[str, Any]], override_reducer]
 
 
 class ResearcherOutputState(BaseModel):
     """Output state from individual researchers (returned to supervisor)."""
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer]
+    evidence_items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # =============================================================================
 # State Bridge: Old → New State Adapter
 # =============================================================================
+
+def ensure_user_input_message(messages: list | None, input_text: str = "") -> list:
+    """Return messages with the current user query present as a HumanMessage."""
+    result = list(messages or [])
+    query = str(input_text or "").strip()
+    if not query:
+        return result
+
+    for message in result:
+        if isinstance(message, HumanMessage) and str(message.content).strip() == query:
+            return result
+        if isinstance(message, dict):
+            role = str(message.get("role") or message.get("type") or "").lower()
+            content = str(message.get("content") or "").strip()
+            if role in {"human", "user"} and content == query:
+                return result
+
+    result.append(HumanMessage(content=query))
+    return result
+
 
 def build_initial_state(
     input_text: str = "",
@@ -271,10 +318,23 @@ def build_initial_state(
     Returns:
         dict ready to be used as initial_state for the v2 graph.
     """
+    raw_skill_ids = kwargs.get("skill_ids", [])
+    if isinstance(raw_skill_ids, str):
+        skill_ids = [part.strip() for part in raw_skill_ids.split(",") if part.strip()]
+    elif isinstance(raw_skill_ids, list):
+        skill_ids = [str(part).strip() for part in raw_skill_ids if str(part).strip()]
+    else:
+        skill_ids = []
+
+    source_routing = kwargs.get("source_routing")
+    if not isinstance(source_routing, dict):
+        source_routing = {}
+
     initial_state: dict[str, Any] = {
         "input": input_text,
         "images": images or [],
-        "skill_ids": kwargs.get("skill_ids", []),
+        "skill_ids": skill_ids,
+        "source_routing": source_routing,
         "research_brief": None,
         "complexity": "standard",
         "estimated_depth": 1,
@@ -286,12 +346,15 @@ def build_initial_state(
         "research_iterations": 0,
         "sources": [],
         "curated_sources": [],
+        "evidence_items": [],
         "quality_summary": {},
         "quality_gates": [],
+        "quality_followup_required": False,
+        "quality_followup_count": 0,
         "deepsearch_artifacts": {},
         "final_report": "",
         "report_format": kwargs.get("report_format", "markdown"),
-        "messages": messages or [],
+        "messages": ensure_user_input_message(messages, input_text),
     }
 
     # Handle research_brief from store memory (pre-existing brief)
@@ -299,6 +362,9 @@ def build_initial_state(
         brief_text = research_brief.get("research_brief", "")
         if brief_text:
             initial_state["research_brief"] = brief_text
+        brief_source_routing = research_brief.get("source_routing")
+        if isinstance(brief_source_routing, dict) and not initial_state["source_routing"]:
+            initial_state["source_routing"] = brief_source_routing
 
     # Inject user_id into configurable metadata (not state directly)
     if user_id:

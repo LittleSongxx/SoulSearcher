@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ToolT = TypeVar("ToolT", bound="NamedTool")
+CORE_CONTROL_TOOLS = {"ThinkTool", "ResearchComplete", "read_skill_guide"}
 
 
 class NamedTool(Protocol):
@@ -48,4 +49,15 @@ def filter_tools_by_skill_allowed_tools(tools: list, skills: list[Skill]) -> lis
     allowed = allowed_tool_names_for_skills(skills)
     if allowed is None:
         return tools
-    return [tool for tool in tools if tool.name in allowed]
+    def _name(tool: Any) -> str:
+        name = getattr(tool, "name", None)
+        if isinstance(name, str) and name:
+            return name
+        if isinstance(tool, type):
+            return tool.__name__
+        return str(getattr(tool, "__name__", "") or "")
+
+    return [
+        tool for tool in tools
+        if (tool_name := _name(tool)) in allowed or tool_name in CORE_CONTROL_TOOLS
+    ]

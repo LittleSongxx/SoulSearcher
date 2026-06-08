@@ -78,6 +78,10 @@ from agent import (
 from agent.workflows.evidence_extractor import extract_message_sources
 from agent.workflows.research_brief import build_research_brief
 from agent.workflows.source_routing import build_source_routing_policy
+from agent.runtime.request_builder import (
+    ResearchRuntimeRequest,
+    build_research_runtime,
+)
 from common.agents_store import (
     AgentProfile,
     ensure_default_agent,
@@ -914,6 +918,7 @@ class ResearchRequest(BaseModel):
     model: Optional[str] = None
     search_mode: Optional[SearchMode] = None
     user_id: Optional[str] = None
+    skill_ids: Optional[list[str]] = None
     images: Optional[list[ImagePayload]] = None
     deepsearch_config: dict[str, Any] = Field(default_factory=dict)
     research_brief: dict[str, Any] = Field(default_factory=dict)
@@ -990,6 +995,8 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "mcp_max_tools",
     "use_rag",
     "use_reflection_loop",
+    "skill_ids",
+    "deepsearch_skill_ids",
 }
 
 
@@ -1989,17 +1996,9 @@ async def stream_agent_events(
         metrics = metrics_registry.start(
             thread_id, model=model, route=mode_info.get("mode", "")
         )
-
-        # Initialize state with cancellation support
-        initial_state = build_initial_state(
-            input_text=input_text,
-            user_id=user_id,
-            images=images,
-            research_brief=research_brief if isinstance(research_brief, dict) else None,
-            messages=[],
+        safe_deepsearch_config = _safe_research_deepsearch_config(
+            deepsearch_config or {}
         )
-        initial_state["cancel_token_id"] = thread_id
-        initial_state["is_cancelled"] = False
 
         # Load long-term memories (store) and inject deep prompt if needed
         messages: list[Any] = []
@@ -2023,39 +2022,48 @@ async def stream_agent_events(
                 SystemMessage(content=f"Relevant past knowledge:\n{mem_context}")
             )
 
-        if messages:
-            initial_state["messages"] = messages
-
-        config = {
-            "configurable": {
-                "thread_id": thread_id,
-                "model": model,
-                "search_mode": mode_info,
-                "agent_profile": (
-                    agent_profile.model_dump(mode="json") if agent_profile else None
-                ),
-                "user_id": user_id,
-                "allow_interrupts": bool(checkpointer),
-                "tool_approval": settings.tool_approval or False,
-                "human_review": settings.human_review or False,
-                "max_revisions": settings.max_revisions,
-                "rag_collection_name": (
-                    _rag_collection_for_request(request)
-                    if request is not None
-                    else (
-                        (
-                            getattr(settings, "rag_collection_name", "")
+        runtime_bundle = build_research_runtime(
+            ResearchRuntimeRequest(
+                input_text=input_text,
+                thread_id=thread_id,
+                model=model,
+                mode_info=mode_info,
+                user_id=user_id,
+                images=images,
+                research_brief=research_brief if isinstance(research_brief, dict) else None,
+                context_messages=messages,
+                deepsearch_config=safe_deepsearch_config,
+                base_configurable={
+                    "thread_id": thread_id,
+                    "model": model,
+                    "search_mode": mode_info,
+                    "agent_profile": (
+                        agent_profile.model_dump(mode="json") if agent_profile else None
+                    ),
+                    "user_id": user_id,
+                    "allow_interrupts": bool(checkpointer),
+                    "tool_approval": settings.tool_approval or False,
+                    "human_review": settings.human_review or False,
+                    "max_revisions": settings.max_revisions,
+                    "rag_collection_name": (
+                        _rag_collection_for_request(request)
+                        if request is not None
+                        else (
+                            (
+                                getattr(settings, "rag_collection_name", "")
+                                or "weaver_documents"
+                            ).strip()
                             or "weaver_documents"
-                        ).strip()
-                        or "weaver_documents"
-                    )
-                ),
-            },
-            "recursion_limit": 50,
-        }
-        config["configurable"].update(
-            _safe_research_deepsearch_config(deepsearch_config or {})
+                        )
+                    ),
+                },
+            )
         )
+        initial_state = runtime_bundle.initial_state
+        initial_state["cancel_token_id"] = thread_id
+        initial_state["is_cancelled"] = False
+        config = runtime_bundle.config
+        safe_deepsearch_config = runtime_bundle.deepsearch_config
 
         async def _drain_pending_tool_events() -> None:
             while not event_queue.empty():
@@ -5013,6 +5021,12 @@ async def research_sse(request: Request, payload: ResearchRequest):
     safe_deepsearch_config = _safe_research_deepsearch_config(
         payload.deepsearch_config or {}
     )
+    if payload.skill_ids:
+        safe_deepsearch_config["skill_ids"] = [
+            str(skill_id).strip()
+            for skill_id in payload.skill_ids
+            if str(skill_id).strip()
+        ]
     should_prepare_research_brief = bool(mode_info.get("use_deep"))
     preview_source_routing: dict[str, Any] = {}
     normalized_research_brief: dict[str, Any] = {}

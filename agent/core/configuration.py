@@ -172,6 +172,16 @@ class ResearchConfiguration:
     max_report_revisions: int = 2
     """Maximum revision attempts if quality check fails."""
 
+    max_quality_followup_rounds: int = field(
+        default_factory=lambda: int(
+            os.environ.get(
+                "MAX_QUALITY_FOLLOWUP_ROUNDS",
+                str(getattr(app_settings, "max_quality_followup_rounds", 1)),
+            )
+        )
+    )
+    """Maximum times a failed quality gate can send the graph back to research."""
+
     report_format: str = field(
         default_factory=lambda: (
             os.environ.get("REPORT_FORMAT", "markdown").strip().lower() or "markdown"

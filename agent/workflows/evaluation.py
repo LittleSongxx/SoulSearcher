@@ -152,14 +152,14 @@ async def run_level2_evaluation(
     }
 
     try:
-        from agent.core.model_routing import configurable_model
+        from agent.core.model_routing import build_model_config, configurable_model
 
-        model_config = {
-            "model": model_name,
-            "max_tokens": 2048,
-            "temperature": 0.0,
-            "tags": ["langsmith:nostream"],
-        }
+        model_config = build_model_config(
+            model=model_name,
+            max_tokens=2048,
+            temperature=0.0,
+            tags=["langsmith:nostream"],
+        )
 
         prompt = LEVEL2_EVAL_PROMPT.format(
             report=report[:12000],
@@ -294,14 +294,14 @@ async def run_level3_evaluation(
     }
 
     try:
-        from agent.core.model_routing import configurable_model
+        from agent.core.model_routing import build_model_config, configurable_model
 
-        model_config = {
-            "model": model_name,
-            "max_tokens": 2048,
-            "temperature": 0.0,
-            "tags": ["langsmith:nostream"],
-        }
+        model_config = build_model_config(
+            model=model_name,
+            max_tokens=2048,
+            temperature=0.0,
+            tags=["langsmith:nostream"],
+        )
 
         prompt = LEVEL3_EVAL_PROMPT.format(
             report=report[:15000],
