@@ -29,22 +29,56 @@ def test_researcher_tool_name_map_accepts_pydantic_tool_classes():
     assert tools_by_name["ResearchComplete"] is ResearchComplete
 
 
-def test_researcher_source_policy_enables_rag_without_web_for_local_docs():
+def test_researcher_source_policy_drops_unknown_provider():
     from agent.workflows.researcher import _researcher_source_policy
 
     policy = _researcher_source_policy({
         "configurable": {
             "source_routing": {
-                "mode": "local_docs_only",
-                "providers": ["rag"],
-                "collections": [{"id": "user_docs"}],
+                "mode": "web_only",
+                "providers": ["removed_provider"],
             }
         }
     })
 
-    assert policy["include_rag"] is True
-    assert policy["include_web"] is False
-    assert policy["rag_collection_name"] == "user_docs"
+    assert policy["include_web"] is True
+    assert policy["mode"] == "web_only"
+    assert policy["providers"] == ["web"]
+
+
+def test_parallel_researcher_configs_isolate_viewed_images():
+    from agent.workflows.supervisor import (
+        _isolated_researcher_config,
+        _merge_researcher_viewed_images,
+    )
+
+    parent_config = {
+        "configurable": {
+            "thread_id": "thread-a",
+            "viewed_images": {"existing": {"url": "https://example.com/existing.png"}},
+        }
+    }
+
+    first = _isolated_researcher_config(parent_config)
+    second = _isolated_researcher_config(parent_config)
+
+    first["configurable"]["viewed_images"]["first"] = {
+        "url": "https://example.com/first.png"
+    }
+
+    assert "first" not in second["configurable"]["viewed_images"]
+    assert "first" not in parent_config["configurable"]["viewed_images"]
+
+    second["configurable"]["viewed_images"]["second"] = {
+        "url": "https://example.com/second.png"
+    }
+    _merge_researcher_viewed_images(parent_config, [first, second])
+
+    assert set(parent_config["configurable"]["viewed_images"]) == {
+        "existing",
+        "first",
+        "second",
+    }
 
 
 def test_skill_tool_policy_keeps_core_control_tools_with_allowlist():
@@ -53,7 +87,7 @@ def test_skill_tool_policy_keeps_core_control_tools_with_allowlist():
 
     class Skill:
         name = "restricted"
-        allowed_tools = {"rag_search"}
+        allowed_tools = {"tavily_search"}
 
     filtered = filter_tools_by_skill_allowed_tools([ThinkTool, ResearchComplete], [Skill()])
 
@@ -197,3 +231,88 @@ def test_research_runtime_builder_creates_state_config_and_workspace(tmp_path, m
     assert bundle.initial_state["skill_ids"] == ["deep-research"]
     assert bundle.config["configurable"]["workspace_path"]
     assert bundle.initial_state["deepsearch_artifacts"]["workspace"]["path"]
+
+
+def test_memory_profile_updates_and_injection_are_structured():
+    from agent.runtime.memory.storage import format_memory_for_injection
+    from agent.runtime.memory.updater import MemoryUpdater
+
+    current = {
+        "user": {},
+        "history": {},
+        "facts": [],
+    }
+    updated = MemoryUpdater()._apply_updates(
+        current,
+        {
+            "profile": {
+                "role": {"shouldUpdate": True, "value": "research engineer"},
+                "preferred_sources": ["papers", "official docs"],
+                "preferences": {"tone": "concise"},
+            },
+            "newFacts": [
+                {
+                    "content": "User prefers code-first architecture analysis.",
+                    "category": "preference",
+                    "confidence": 0.95,
+                }
+            ],
+        },
+        thread_id="t1",
+    )
+
+    injected = format_memory_for_injection(updated)
+
+    assert updated["profile"]["role"] == "research engineer"
+    assert updated["profile"]["preferredSources"] == ["papers", "official docs"]
+    assert updated["profile"]["preferences"]["tone"] == "concise"
+    assert "<memory_profile>" in injected
+    assert "preferred_sources: papers, official docs" in injected
+    assert "[preference] User prefers code-first architecture analysis." in injected
+
+
+def test_search_cache_stats_include_policy_and_evictions():
+    from agent.core.search_cache import SearchCache
+
+    cache = SearchCache(max_size=1, ttl_seconds=60, similarity_threshold=0.8)
+    cache.set("weaver search", [{"title": "a"}])
+    assert cache.get("weaver search") == [{"title": "a"}]
+    cache.set("other query", [{"title": "b"}])
+
+    stats = cache.stats()
+
+    assert stats["hits"] == 1
+    assert stats["sets"] == 2
+    assert stats["evictions"] == 1
+    assert stats["total_requests"] == 1
+    assert stats["ttl_seconds"] == 60.0
+    assert stats["similarity_threshold"] == 0.8
+
+
+def test_provider_reliability_snapshot_tracks_retries_and_open_circuit():
+    from tools.search.reliability import ProviderReliabilityManager, ReliabilityPolicy
+
+    manager = ProviderReliabilityManager(
+        ReliabilityPolicy(
+            max_retries=1,
+            retry_backoff_seconds=0,
+            circuit_breaker_failures=2,
+            circuit_breaker_reset_seconds=60,
+        )
+    )
+
+    def failing_call():
+        raise RuntimeError("provider down")
+
+    assert manager.call("provider_a", failing_call) == []
+    snapshot = manager.snapshot("provider_a")
+
+    assert snapshot["is_open"] is True
+    assert snapshot["total_calls"] == 1
+    assert snapshot["attempted_calls"] == 2
+    assert snapshot["failure_count"] == 2
+    assert snapshot["retry_count"] == 1
+    assert snapshot["circuit_open_count"] == 1
+
+    assert manager.call("provider_a", lambda: [{"ok": True}]) == []
+    assert manager.snapshot("provider_a")["skipped_open_count"] == 1

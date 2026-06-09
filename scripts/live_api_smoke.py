@@ -623,7 +623,7 @@ async def _scenario_calls(
 
     Returns:
       - list of results
-      - ids dict with keys like: agent_id, scheduled_trigger_id, webhook_trigger_id, share_id, thread_id
+      - ids dict with keys like: scheduled_trigger_id, webhook_trigger_id, share_id, thread_id
       - list of (method, openapi-path) pairs already exercised
     """
     results: list[SmokeResult] = []
@@ -640,7 +640,11 @@ async def _scenario_calls(
     if resp is not None and resp.status_code == 200:
         try:
             data = resp.json()
-            if not isinstance(data, dict) or "agents_count" not in data or "tool_registry_total_tools" not in data:
+            if (
+                not isinstance(data, dict)
+                or "tool_registry_total_tools" not in data
+                or "search_providers_available" not in data
+            ):
                 res = replace(res, ok=False, note="invalid agent health shape")
         except Exception:
             res = replace(res, ok=False, note="invalid agent health JSON")
@@ -751,55 +755,6 @@ async def _scenario_calls(
     results.append(res)
     done.add(("GET", "/api/search/providers"))
 
-    # Agents CRUD
-    create_agent, resp = await _raw_request(
-        client,
-        method="POST",
-        path="/api/agents",
-        json_body={
-            "name": "Smoke Agent",
-            "description": "created by scripts/live_api_smoke.py",
-            "system_prompt": "You are a smoke test agent.",
-        },
-        timeout_s=timeout_s,
-    )
-    results.append(create_agent)
-    done.add(("POST", "/api/agents"))
-    agent_id = None
-    if resp is not None and resp.status_code < 300:
-        try:
-            agent_id = resp.json().get("id")
-        except Exception:
-            agent_id = None
-    if agent_id:
-        ids["agent_id"] = str(agent_id)
-        res, _ = await _raw_request(
-            client, method="GET", path=f"/api/agents/{agent_id}", timeout_s=timeout_s
-        )
-        results.append(res)
-        done.add(("GET", "/api/agents/{agent_id}"))
-        res, _ = await _raw_request(
-            client,
-            method="PUT",
-            path=f"/api/agents/{agent_id}",
-            json_body={
-                "name": "Smoke Agent Updated",
-                "description": "updated by scripts/live_api_smoke.py",
-                "system_prompt": "You are a smoke test agent (updated).",
-            },
-            timeout_s=timeout_s,
-        )
-        results.append(res)
-        done.add(("PUT", "/api/agents/{agent_id}"))
-        res, _ = await _raw_request(
-            client,
-            method="DELETE",
-            path=f"/api/agents/{agent_id}",
-            timeout_s=timeout_s,
-        )
-        results.append(res)
-        done.add(("DELETE", "/api/agents/{agent_id}"))
-
     # Collaboration: share + comments are backed by filesystem, should work without a session.
     thread_id = "smoke_thread"
     ids["thread_id"] = thread_id
@@ -886,8 +841,6 @@ async def _sweep_all_routes(
             concrete_path = path
             if "{thread_id}" in concrete_path:
                 concrete_path = concrete_path.replace("{thread_id}", pick_id("thread_id"))
-            if "{agent_id}" in concrete_path:
-                concrete_path = concrete_path.replace("{agent_id}", pick_id("agent_id"))
             if "{trigger_id}" in concrete_path:
                 trigger_key = (
                     "webhook_trigger_id"
@@ -929,12 +882,6 @@ async def _sweep_all_routes(
                 json_body = {"text": "Hello", "voice": "longxiaochun"}
             elif method_u == "POST" and path == "/api/asr/upload":
                 files = {"file": ("smoke.wav", b"\x00\x00\x00\x00", "audio/wav")}
-            elif method_u == "POST" and path == "/api/documents/upload":
-                files = {"file": ("smoke.txt", b"hello", "text/plain")}
-            elif method_u == "POST" and path == "/api/documents/search":
-                params = {"query": "smoke", "n_results": 3}
-            elif method_u == "GET" and path == "/api/documents/list":
-                params = {"limit": 10}
             elif method_u == "POST" and path == "/api/research":
                 # Query param, streaming response.
                 params = {"query": "smoke test"}

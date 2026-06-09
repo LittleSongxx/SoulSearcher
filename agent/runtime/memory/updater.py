@@ -36,6 +36,29 @@ _UPLOAD_SENTENCE_RE = re.compile(
 
 def _strip_upload_mentions(memory_data: dict[str, Any]) -> dict[str, Any]:
     """Remove upload-event sentences from memory."""
+    profile = memory_data.get("profile", {})
+    if isinstance(profile, dict):
+        for key, value in list(profile.items()):
+            if isinstance(value, str):
+                cleaned = _UPLOAD_SENTENCE_RE.sub("", value).strip()
+                profile[key] = re.sub(r"  +", " ", cleaned)
+            elif isinstance(value, list):
+                cleaned_values = []
+                for item in value:
+                    cleaned = _UPLOAD_SENTENCE_RE.sub("", str(item)).strip()
+                    cleaned = re.sub(r"  +", " ", cleaned)
+                    if cleaned:
+                        cleaned_values.append(cleaned)
+                profile[key] = cleaned_values
+            elif isinstance(value, dict):
+                cleaned_map = {}
+                for pref_key, pref_value in value.items():
+                    cleaned = _UPLOAD_SENTENCE_RE.sub("", str(pref_value)).strip()
+                    cleaned = re.sub(r"  +", " ", cleaned)
+                    if str(pref_key).strip() and cleaned:
+                        cleaned_map[str(pref_key)] = cleaned
+                profile[key] = cleaned_map
+
     for section in ("user", "history"):
         section_data = memory_data.get(section, {})
         for val in section_data.values():
@@ -107,9 +130,16 @@ class MemoryUpdater:
         update_data: dict[str, Any],
         thread_id: str | None,
     ) -> dict[str, Any]:
+        from agent.runtime.memory.storage import normalize_memory_data
+
+        current = normalize_memory_data(current)
         max_facts = getattr(settings, "memory_max_facts", 100)
         confidence_threshold = getattr(settings, "memory_fact_confidence_threshold", 0.7)
         now = _utc_now_iso()
+
+        # Update structured profile fields. Values may be direct scalars/lists/maps
+        # or wrapped as {"shouldUpdate": true, "value": ...}.
+        self._apply_profile_updates(current, update_data.get("profile", {}))
 
         # Update user summaries
         user_updates = update_data.get("user", {})
@@ -166,6 +196,94 @@ class MemoryUpdater:
             )[:max_facts]
 
         return current
+
+    def _apply_profile_updates(
+        self,
+        current: dict[str, Any],
+        profile_updates: Any,
+    ) -> None:
+        if not isinstance(profile_updates, dict):
+            return
+
+        profile = current.setdefault("profile", {})
+        if not isinstance(profile, dict):
+            profile = {}
+            current["profile"] = profile
+
+        aliases = {
+            "role": ("role",),
+            "expertise": ("expertise", "expertiseLevel", "expertise_level"),
+            "language": ("language", "languagePreference", "language_preference"),
+            "format": ("format", "formatPreference", "format_preference"),
+            "verbosity": ("verbosity", "verbosityPreference", "verbosity_preference"),
+            "preferredSources": ("preferredSources", "preferred_sources"),
+            "researchGoals": ("researchGoals", "research_goals", "goals"),
+            "preferences": ("preferences",),
+        }
+
+        for field_name, candidates in aliases.items():
+            raw_value = None
+            for candidate in candidates:
+                if candidate in profile_updates:
+                    raw_value = profile_updates.get(candidate)
+                    break
+            value = self._unwrap_profile_update(raw_value)
+            if value is None:
+                continue
+
+            if field_name == "preferences":
+                if isinstance(value, dict):
+                    existing = profile.get("preferences", {})
+                    if not isinstance(existing, dict):
+                        existing = {}
+                    for key, pref_value in value.items():
+                        clean_key = str(key).strip()
+                        clean_value = str(pref_value).strip()
+                        if clean_key and clean_value:
+                            existing[clean_key] = clean_value
+                    profile["preferences"] = existing
+                continue
+
+            if field_name in {"preferredSources", "researchGoals"}:
+                values = self._coerce_string_list(value)
+                if values:
+                    merged = []
+                    seen = set()
+                    for item in list(profile.get(field_name, [])) + values:
+                        normalized = str(item).strip()
+                        key = normalized.casefold()
+                        if normalized and key not in seen:
+                            merged.append(normalized)
+                            seen.add(key)
+                    profile[field_name] = merged[:20]
+                continue
+
+            if isinstance(value, (str, int, float, bool)):
+                text = str(value).strip()
+                if text:
+                    profile[field_name] = text
+
+    @staticmethod
+    def _unwrap_profile_update(raw_value: Any) -> Any:
+        if raw_value is None:
+            return None
+        if isinstance(raw_value, dict) and "shouldUpdate" in raw_value:
+            if not raw_value.get("shouldUpdate"):
+                return None
+            for key in ("value", "summary", "items", "content", "preferences"):
+                if key in raw_value:
+                    return raw_value.get(key)
+            return None
+        return raw_value
+
+    @staticmethod
+    def _coerce_string_list(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            parts = re.split(r"[,;\n]", value)
+            return [part.strip() for part in parts if part.strip()]
+        return []
 
 
 def get_memory_data(agent_name: str | None = None, user_id: str | None = None) -> dict[str, Any]:

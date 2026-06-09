@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ast
 import json
 import logging
 import os
@@ -288,6 +289,149 @@ class BenchmarkReport:
         return self.passed / self.total_cases if self.total_cases > 0 else 0
 
 
+def validate_benchmark_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    """Validate benchmark case shape and coverage before expensive execution."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    ids: set[str] = set()
+    level_counts: dict[int, int] = {}
+    report_types: set[str] = set()
+    categories: set[str] = set()
+
+    for idx, case in enumerate(cases):
+        case_id = str(case.get("id", "")).strip()
+        if not case_id:
+            errors.append(f"case[{idx}] missing id")
+        elif case_id in ids:
+            errors.append(f"duplicate case id: {case_id}")
+        else:
+            ids.add(case_id)
+
+        query = str(case.get("query", "")).strip()
+        if len(query) < 10:
+            errors.append(f"{case_id or idx}: query is too short")
+
+        level = case.get("level")
+        if level not in {1, 2, 3}:
+            errors.append(f"{case_id or idx}: level must be 1, 2, or 3")
+        else:
+            level_counts[int(level)] = level_counts.get(int(level), 0) + 1
+
+        min_chars = int(case.get("min_chars", 0) or 0)
+        min_citations = int(case.get("min_citations", 0) or 0)
+        if min_chars <= 0:
+            errors.append(f"{case_id or idx}: min_chars must be positive")
+        if min_citations < 0:
+            errors.append(f"{case_id or idx}: min_citations cannot be negative")
+        if level == 3 and min_citations < 4:
+            warnings.append(f"{case_id}: level 3 case has low citation threshold")
+
+        report_type = str(case.get("report_type", "")).strip()
+        if report_type:
+            report_types.add(report_type)
+        elif level in {2, 3}:
+            warnings.append(f"{case_id}: analytical case missing report_type")
+
+        category = str(case.get("category", "")).strip()
+        if category:
+            categories.add(category)
+
+    for level in (1, 2, 3):
+        if level_counts.get(level, 0) == 0:
+            warnings.append(f"benchmark slice has no level {level} cases")
+
+    expected_report_types = {
+        "academic",
+        "market_research",
+        "comparison",
+        "summary",
+        "deep_analysis",
+    }
+    missing_report_types = sorted(expected_report_types - report_types)
+    if missing_report_types:
+        warnings.append(
+            "missing expected report types: " + ", ".join(missing_report_types)
+        )
+
+    return {
+        "errors": errors,
+        "warnings": warnings,
+        "case_count": len(cases),
+        "level_counts": level_counts,
+        "category_count": len(categories),
+        "report_types": sorted(report_types),
+    }
+
+
+def validate_rubric_definitions() -> dict[str, Any]:
+    """Check rubric definitions for duplicate IDs and invalid weights."""
+    L1_RUBRIC, L2_RUBRIC = _load_rubric_definitions()
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    def check(name: str, rubric: list[dict[str, Any]]) -> None:
+        seen_items: set[str] = set()
+        if not rubric:
+            errors.append(f"{name}: rubric is empty")
+            return
+        for dim in rubric:
+            dim_name = str(dim.get("name", "")).strip()
+            if not dim_name:
+                errors.append(f"{name}: dimension missing name")
+            if float(dim.get("weight", 0) or 0) <= 0:
+                errors.append(f"{name}.{dim_name}: dimension weight must be positive")
+            items = dim.get("items", [])
+            if not isinstance(items, list) or not items:
+                errors.append(f"{name}.{dim_name}: dimension has no items")
+                continue
+            for item in items:
+                item_id = str(item.get("id", "")).strip()
+                if not item_id:
+                    errors.append(f"{name}.{dim_name}: item missing id")
+                    continue
+                if item_id in seen_items:
+                    errors.append(f"{name}: duplicate item id {item_id}")
+                seen_items.add(item_id)
+                if float(item.get("weight", 0) or 0) <= 0:
+                    errors.append(f"{name}.{item_id}: item weight must be positive")
+                criterion = str(item.get("criterion", "")).strip()
+                if len(criterion) < 20:
+                    warnings.append(f"{name}.{item_id}: criterion is very short")
+
+    check("L1", L1_RUBRIC)
+    check("L2", L2_RUBRIC)
+    return {"errors": errors, "warnings": warnings}
+
+
+def _load_rubric_definitions() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load static rubric constants without requiring LLM runtime dependencies."""
+    try:
+        from agent.workflows.rubric import L1_RUBRIC, L2_RUBRIC
+
+        return L1_RUBRIC, L2_RUBRIC
+    except ModuleNotFoundError:
+        rubric_path = Path(__file__).resolve().parent.parent / "agent" / "workflows" / "rubric.py"
+        tree = ast.parse(rubric_path.read_text(encoding="utf-8"))
+        values: dict[str, list[dict[str, Any]]] = {}
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                names = [target.id for target in node.targets if isinstance(target, ast.Name)]
+                value_node = node.value
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names = [node.target.id]
+                value_node = node.value
+            else:
+                continue
+            for name in names:
+                if name in {"L1_RUBRIC", "L2_RUBRIC"}:
+                    value = ast.literal_eval(value_node)
+                    if isinstance(value, list):
+                        values[name] = value
+
+        return values.get("L1_RUBRIC", []), values.get("L2_RUBRIC", [])
+
+
 # =============================================================================
 # Remote mode
 # =============================================================================
@@ -441,6 +585,8 @@ async def run_benchmark(
     human_reference_path: str = "",
 ) -> BenchmarkReport:
     """Run the full benchmark suite."""
+    preflight = validate_benchmark_cases(cases)
+    rubric_preflight = validate_rubric_definitions()
     report = BenchmarkReport(
         run_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
         timestamp=datetime.now().isoformat(),
@@ -449,9 +595,19 @@ async def run_benchmark(
             "model": model,
             "max_concurrent": max_concurrent,
             "human_reference_path": human_reference_path,
+            "preflight": preflight,
+            "rubric_preflight": rubric_preflight,
         },
         total_cases=len(cases),
     )
+
+    if preflight["errors"] or rubric_preflight["errors"]:
+        raise ValueError(
+            "Benchmark preflight failed: "
+            + "; ".join(preflight["errors"] + rubric_preflight["errors"])
+        )
+    for warning in preflight["warnings"] + rubric_preflight["warnings"]:
+        logger.warning("[preflight] %s", warning)
 
     if mode == "auto":
         try:

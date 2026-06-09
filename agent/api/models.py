@@ -71,6 +71,15 @@ class ProviderCircuitSnapshot(BaseModel):
     consecutive_failures: int
     opened_for_seconds: Optional[float] = None
     resets_in_seconds: Optional[float] = None
+    total_calls: int = 0
+    attempted_calls: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    skipped_open_count: int = 0
+    retry_count: int = 0
+    circuit_open_count: int = 0
+    last_failure: Optional[str] = None
+    last_failure_age_seconds: Optional[float] = None
 
 
 class SearchProviderSnapshot(BaseModel):
@@ -140,18 +149,8 @@ class ToolRegistryResponse(BaseModel):
     tools: list[ToolRegistryTool]
 
 
-class ToolRegistryRefreshResponse(BaseModel):
-    discovered: int
-    total_tools: int
-
-
 class AgentHealthResponse(BaseModel):
-    agents_count: int
-    agent_ids: list[str]
     tool_registry_total_tools: int
-    enhanced_tool_discovery_enabled: bool
-    enhanced_tool_discovery_recursive: bool
-    rag_enabled: bool
     search_strategy: str
     search_engines: list[str]
     search_providers_available: list[str]
@@ -198,7 +197,14 @@ class SearchCacheStats(BaseModel):
     hits: int
     similar_hits: int
     misses: int
+    sets: int = 0
+    evictions: int = 0
+    expired: int = 0
+    total_requests: int = 0
     hit_rate: float
+    capacity_utilization: float = 0.0
+    ttl_seconds: float = 0.0
+    similarity_threshold: float = 0.0
 
 
 class SearchCacheStatsResponse(BaseModel):
@@ -224,28 +230,6 @@ class ExportTemplateItem(BaseModel):
 
 class ExportTemplatesResponse(BaseModel):
     templates: list[ExportTemplateItem]
-
-
-class DocumentUploadResponse(BaseModel):
-    success: bool
-    filename: str
-    chunks: int
-    message: str
-
-
-class DocumentListResponse(BaseModel):
-    total_chunks: int
-    documents: list[dict[str, Any]]
-
-
-class DocumentDeleteResponse(BaseModel):
-    success: bool
-    message: str
-
-
-class DocumentSearchResponse(BaseModel):
-    query: str
-    results: list[dict[str, Any]]
 
 
 class ImagePayload(BaseModel):
@@ -321,9 +305,7 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "source_policy",
     "source_routing",
     "source_providers",
-    "source_collections",
     "source_connectors",
-    "source_index_attempts",
     "allowed_domains",
     "denied_domains",
     "mcp_preset_ids",
@@ -333,7 +315,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "mcp_tools_to_include",
     "mcp_tool_whitelist",
     "mcp_max_tools",
-    "use_rag",
     "use_reflection_loop",
 }
 
@@ -346,9 +327,7 @@ _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
 
 
 _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
-    "source_collections",
     "source_connectors",
-    "source_index_attempts",
     "mcp_results",
 }
 

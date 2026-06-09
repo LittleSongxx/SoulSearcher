@@ -29,6 +29,11 @@ from agent.core.prompts import (
     resolve_prompt,
 )
 from agent.core.state import AgentState, EvidenceItem
+from agent.workflows.research_todo import (
+    append_gap_todos,
+    emit_todo_updates,
+    summarize_todos,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -765,6 +770,10 @@ async def final_report_generation(
     quality_result = None
     l3_result = None
     pre_quality_artifacts = dict(state.get("deepsearch_artifacts", {}) or {})
+    research_todos = list(state.get("research_todos", []) or [])
+    todo_summary = summarize_todos(research_todos)
+    pre_quality_artifacts["research_todos"] = research_todos
+    pre_quality_artifacts["todo_summary"] = todo_summary
     preliminary_evidence = _build_evidence_ledger(
         state,
         curated_sources=curated_sources,
@@ -1024,7 +1033,24 @@ async def final_report_generation(
                     "brief": followup_brief,
                     "quality_summary": quality_summary,
                 })
+                previous_todos = list(research_todos)
+                research_todos = append_gap_todos(
+                    research_todos,
+                    [
+                        (
+                            f"Follow-up research round {followup_count + 1}: "
+                            f"{followup_brief[:140]}"
+                        )
+                    ],
+                )
+                todo_summary = summarize_todos(research_todos)
+                thread_id = str(
+                    (config.get("configurable") or {}).get("thread_id") or ""
+                )
+                await emit_todo_updates(thread_id, research_todos, previous_todos)
                 deepsearch_artifacts["quality_followup_requests"] = followup_requests
+                deepsearch_artifacts["research_todos"] = research_todos
+                deepsearch_artifacts["todo_summary"] = todo_summary
                 deepsearch_artifacts["quality_details"] = {
                     "level1_rubric": dict((quality_result.metadata or {}).get("level1_rubric", {})) if quality_result else {},
                     "level2_rubric": dict((quality_result.metadata or {}).get("level2_rubric", {})) if quality_result else {},
@@ -1065,6 +1091,8 @@ async def final_report_generation(
                     "quality_followup_required": True,
                     "quality_followup_count": followup_count + 1,
                     "deepsearch_artifacts": deepsearch_artifacts,
+                    "research_todos": {"type": "override", "value": research_todos},
+                    "todo_summary": todo_summary,
                     "supervisor_messages": {"type": "override", "value": []},
                     "research_iterations": 0,
                     "final_report": "",
@@ -1078,6 +1106,8 @@ async def final_report_generation(
             deepsearch_artifacts["claims"] = claim_artifacts
             deepsearch_artifacts["citation_annotations"] = citation_annotations
             deepsearch_artifacts["evidence_items"] = evidence_items
+            deepsearch_artifacts["research_todos"] = research_todos
+            deepsearch_artifacts["todo_summary"] = todo_summary
             deepsearch_artifacts["research_brief"] = {
                 "research_brief": research_brief,
                 "complexity": complexity,
@@ -1098,6 +1128,8 @@ async def final_report_generation(
                 "quality_gates": quality_gates,
                 "quality_followup_required": False,
                 "deepsearch_artifacts": deepsearch_artifacts,
+                "research_todos": {"type": "override", "value": research_todos},
+                "todo_summary": todo_summary,
                 **cleared_state,
             }
 

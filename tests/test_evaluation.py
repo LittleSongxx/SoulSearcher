@@ -77,6 +77,25 @@ class TestGAIAScorer:
         result = score_gaia_answer("Paris", "Paris")
         assert result["correct"]
 
+    def test_gaia_answer_auto_list_uses_keyword_coverage(self):
+        from scripts.gaia_scorer import score_gaia_answer
+
+        result = score_gaia_answer(
+            "The answer names John Hopfield and Geoffrey Hinton.",
+            "John Hopfield, Geoffrey Hinton",
+        )
+
+        assert result["correct"]
+        assert result["method"] == "list_auto"
+        assert result["answer_type"] == "list"
+
+    def test_infer_answer_type(self):
+        from scripts.gaia_scorer import infer_answer_type
+
+        assert infer_answer_type("42") == "numeric"
+        assert infer_answer_type("Paris") == "string"
+        assert infer_answer_type("A; B; C") == "list"
+
     def test_gaia_answer_no_answer(self):
         from scripts.gaia_scorer import score_gaia_answer
         result = score_gaia_answer("I don't know", "Paris")
@@ -193,3 +212,80 @@ class TestRubric:
         result = _parse_quality_response("broken")
         assert not result.passed
         assert result.verdict == "incomplete"
+
+
+class TestBenchmarkPreflight:
+    """Pure checks for benchmark input/rubric sanity helpers."""
+
+    def test_deep_research_benchmark_preflight_accepts_curated_cases(self):
+        from scripts.benchmark_deep_research import (
+            BENCHMARK_CASES,
+            validate_benchmark_cases,
+            validate_rubric_definitions,
+        )
+
+        case_result = validate_benchmark_cases(BENCHMARK_CASES)
+        rubric_result = validate_rubric_definitions()
+
+        assert case_result["errors"] == []
+        assert rubric_result["errors"] == []
+        assert case_result["level_counts"][1] > 0
+        assert case_result["level_counts"][2] > 0
+        assert case_result["level_counts"][3] > 0
+
+    def test_deep_research_benchmark_preflight_rejects_duplicate_ids(self):
+        from scripts.benchmark_deep_research import validate_benchmark_cases
+
+        cases = [
+            {
+                "id": "dup",
+                "query": "A sufficiently long question?",
+                "level": 1,
+                "min_chars": 100,
+                "min_citations": 1,
+            },
+            {
+                "id": "dup",
+                "query": "Another sufficiently long question?",
+                "level": 1,
+                "min_chars": 100,
+                "min_citations": 1,
+            },
+        ]
+
+        result = validate_benchmark_cases(cases)
+
+        assert any("duplicate case id" in error for error in result["errors"])
+
+    def test_gaia_benchmark_preflight_counts_answer_types(self):
+        from scripts.gaia_benchmark import validate_gaia_questions
+
+        questions = [
+            {
+                "task_id": "q1",
+                "question": "What number?",
+                "level": 1,
+                "ground_truth": "42",
+            },
+            {
+                "task_id": "q2",
+                "question": "Who are they?",
+                "level": 1,
+                "ground_truth": "A, B",
+            },
+        ]
+
+        result = validate_gaia_questions(questions)
+
+        assert result["errors"] == []
+        assert result["answer_type_counts"]["numeric"] == 1
+        assert result["answer_type_counts"]["list"] == 1
+
+    def test_gaia_benchmark_preflight_requires_scoring_signal(self):
+        from scripts.gaia_benchmark import validate_gaia_questions
+
+        result = validate_gaia_questions([
+            {"task_id": "q1", "question": "What happened?", "level": 1}
+        ])
+
+        assert any("ground_truth or expected_length" in error for error in result["errors"])

@@ -24,6 +24,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Channels Status
+         * @description Get the status of all IM channels.
+         */
+        get: operations["channels_status_api_channels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/{name}/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Channels Restart
+         * @description Restart a specific IM channel.
+         */
+        post: operations["channels_restart_api_channels__name__restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/config/public": {
         parameters: {
             query?: never;
@@ -42,88 +82,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/documents/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Documents
-         * @description List all documents in the RAG knowledge base.
-         */
-        get: operations["list_documents_api_documents_list_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/documents/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Search Documents
-         * @description Search the RAG knowledge base.
-         */
-        post: operations["search_documents_api_documents_search_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/documents/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload Document
-         * @description Upload a document to the RAG knowledge base.
-         *
-         *     Supports PDF, DOCX, TXT, MD files.
-         */
-        post: operations["upload_document_api_documents_upload_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/documents/{source}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Document
-         * @description Delete a document from the RAG knowledge base by source path.
-         */
-        delete: operations["delete_document_api_documents__source__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -267,6 +225,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Memory
+         * @description Get current memory data for the effective user.
+         */
+        get: operations["get_memory_api_memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reload Memory
+         * @description Force reload memory from disk.
+         */
+        post: operations["reload_memory_api_memory_reload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/status": {
         parameters: {
             query?: never;
@@ -324,6 +322,33 @@ export interface paths {
          *         request: Optional cancellation reason payload
          */
         post: operations["cancel_research_api_research_cancel__thread_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork Research Session
+         * @description Fork a research session to explore alternative paths.
+         *
+         *     Copies the latest checkpoint from source_thread_id to a new (or specified)
+         *     thread_id, creating an independent branch. Both sessions can evolve
+         *     independently from that point.
+         *
+         *     Reference: Claude Code Agent SDK — "you can fork a session to explore
+         *     alternative approaches."
+         */
+        post: operations["fork_research_session_api_research_fork_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -710,6 +735,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Skills
+         * @description List all available skills (public and custom).
+         */
+        get: operations["list_skills_api_skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Custom Skills
+         * @description List only custom (user-authored) skills.
+         */
+        get: operations["list_custom_skills_api_skills_custom_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/custom/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Custom Skill
+         * @description Get the full SKILL.md content for a custom skill.
+         */
+        get: operations["get_custom_skill_api_skills_custom__name__get"];
+        /**
+         * Edit Custom Skill
+         * @description Edit a custom skill's SKILL.md content.
+         */
+        put: operations["edit_custom_skill_api_skills_custom__name__put"];
+        post?: never;
+        /**
+         * Delete Custom Skill
+         * @description Delete a custom skill.
+         */
+        delete: operations["delete_custom_skill_api_skills_custom__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/custom/{name}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Skill History
+         * @description Get the edit history for a custom skill.
+         */
+        get: operations["get_skill_history_api_skills_custom__name__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/custom/{name}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rollback Skill
+         * @description Rollback a custom skill to a previous version in its history.
+         */
+        post: operations["rollback_skill_api_skills_custom__name__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Skill
+         * @description Install a skill from a .skill ZIP archive.
+         */
+        post: operations["install_skill_api_skills_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Skill
+         * @description Get details for a specific skill, including container path info.
+         */
+        get: operations["get_skill_api_skills__name__get"];
+        /**
+         * Update Skill
+         * @description Enable or disable a skill by updating extensions_config.json.
+         */
+        put: operations["update_skill_api_skills__name__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/active": {
         parameters: {
             query?: never;
@@ -744,30 +921,6 @@ export interface paths {
         get: operations["get_tool_registry_api_tools_registry_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tools/registry/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Refresh Tool Registry
-         * @description Re-run enhanced tool discovery at runtime.
-         *
-         *     Notes:
-         *     - This is intended for dev/debug (e.g., after editing tool modules).
-         *     - `reset=true` clears the global registry before discovery.
-         */
-        post: operations["refresh_tool_registry_api_tools_registry_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -886,16 +1039,6 @@ export interface components {
     schemas: {
         /** AgentHealthResponse */
         AgentHealthResponse: {
-            /** Agent Ids */
-            agent_ids: string[];
-            /** Agents Count */
-            agents_count: number;
-            /** Enhanced Tool Discovery Enabled */
-            enhanced_tool_discovery_enabled: boolean;
-            /** Enhanced Tool Discovery Recursive */
-            enhanced_tool_discovery_recursive: boolean;
-            /** Rag Enabled */
-            rag_enabled: boolean;
             /** Search Engines */
             search_engines: string[];
             /** Search Providers Available */
@@ -905,10 +1048,10 @@ export interface components {
             /** Tool Registry Total Tools */
             tool_registry_total_tools: number;
         };
-        /** Body_upload_document_api_documents_upload_post */
-        Body_upload_document_api_documents_upload_post: {
+        /** Body_install_skill_api_skills_install_post */
+        Body_install_skill_api_skills_install_post: {
             /** File */
-            file: string;
+            file?: string;
         };
         /**
          * CancelRequest
@@ -920,6 +1063,25 @@ export interface components {
              * @default User requested cancellation
              */
             reason: string | null;
+        };
+        /** ChannelRestartResponse */
+        ChannelRestartResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+        };
+        /** ChannelStatusResponse */
+        ChannelStatusResponse: {
+            /**
+             * Channels
+             * @default {}
+             */
+            channels: {
+                [key: string]: unknown;
+            };
+            /** Service Running */
+            service_running: boolean;
         };
         /** CitationAnnotationResponse */
         CitationAnnotationResponse: {
@@ -1033,42 +1195,6 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** DocumentDeleteResponse */
-        DocumentDeleteResponse: {
-            /** Message */
-            message: string;
-            /** Success */
-            success: boolean;
-        };
-        /** DocumentListResponse */
-        DocumentListResponse: {
-            /** Documents */
-            documents: {
-                [key: string]: unknown;
-            }[];
-            /** Total Chunks */
-            total_chunks: number;
-        };
-        /** DocumentSearchResponse */
-        DocumentSearchResponse: {
-            /** Query */
-            query: string;
-            /** Results */
-            results: {
-                [key: string]: unknown;
-            }[];
-        };
-        /** DocumentUploadResponse */
-        DocumentUploadResponse: {
-            /** Chunks */
-            chunks: number;
-            /** Filename */
-            filename: string;
-            /** Message */
-            message: string;
-            /** Success */
-            success: boolean;
-        };
         /** EvidenceClaim */
         EvidenceClaim: {
             /** Claim */
@@ -1180,6 +1306,27 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Branch Diagnostics
+             * @default {}
+             */
+            branch_diagnostics: {
+                [key: string]: unknown;
+            };
+            /**
+             * Brief Review
+             * @default {}
+             */
+            brief_review: {
+                [key: string]: unknown;
+            };
+            /**
+             * Browser Reader Plan
+             * @default {}
+             */
+            browser_reader_plan: {
+                [key: string]: unknown;
+            };
+            /**
              * Citation Annotations
              * @default []
              */
@@ -1209,6 +1356,13 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Fallback
+             * @default {}
+             */
+            fallback: {
+                [key: string]: unknown;
+            };
+            /**
              * Fetched Pages
              * @default []
              */
@@ -1223,6 +1377,13 @@ export interface components {
              * @default []
              */
             passages: components["schemas"]["EvidencePassageItem"][];
+            /**
+             * Quality Details
+             * @default {}
+             */
+            quality_details: {
+                [key: string]: unknown;
+            };
             /**
              * Quality Gates
              * @default []
@@ -1245,12 +1406,26 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
-             * Source Collections
+             * Research Pipeline
+             * @default {}
+             */
+            research_pipeline: {
+                [key: string]: unknown;
+            };
+            /**
+             * Research Todos
              * @default []
              */
-            source_collections: {
+            research_todos: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Source Quality
+             * @default {}
+             */
+            source_quality: {
+                [key: string]: unknown;
+            };
             /**
              * Source Routing
              * @default {}
@@ -1264,6 +1439,13 @@ export interface components {
              */
             sources: components["schemas"]["EvidenceSource"][];
             /**
+             * Stage Runtime
+             * @default {}
+             */
+            stage_runtime: {
+                [key: string]: unknown;
+            };
+            /**
              * Supervisor Decisions
              * @default []
              */
@@ -1273,6 +1455,20 @@ export interface components {
              * @default []
              */
             timeline: components["schemas"]["TimelineEventResponse"][];
+            /**
+             * Todo Summary
+             * @default {}
+             */
+            todo_summary: {
+                [key: string]: unknown;
+            };
+            /**
+             * Worker Orchestration
+             * @default {}
+             */
+            worker_orchestration: {
+                [key: string]: unknown;
+            };
             /**
              * Worker Runs
              * @default []
@@ -1338,6 +1534,32 @@ export interface components {
             title?: string | null;
             /** Url */
             url: string;
+        };
+        /**
+         * ForkSessionRequest
+         * @description Request payload for forking a research session.
+         *
+         *     Follows Claude Code's session fork pattern: creates an independent copy
+         *     of a session's checkpoint state so the user can explore alternative
+         *     research paths without affecting the original.
+         */
+        ForkSessionRequest: {
+            /**
+             * New Thread Id
+             * @description Optional target thread ID. Auto-generated if omitted.
+             */
+            new_thread_id?: string | null;
+            /**
+             * Source Thread Id
+             * @description Thread ID to fork from
+             */
+            source_thread_id: string;
+            /**
+             * Visibility
+             * @description Visibility for the forked session (private/group/public).
+             * @default private
+             */
+            visibility: string;
         };
         /** GraphInterruptResumeRequest */
         GraphInterruptResumeRequest: {
@@ -1412,6 +1634,42 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** MemoryDataResponse */
+        MemoryDataResponse: {
+            /**
+             * Fact Count
+             * @default 0
+             */
+            fact_count: number;
+            /**
+             * Facts
+             * @default []
+             */
+            facts: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * History
+             * @default {}
+             */
+            history: {
+                [key: string]: unknown;
+            };
+            /**
+             * Profile
+             * @default {}
+             */
+            profile: {
+                [key: string]: unknown;
+            };
+            /**
+             * User
+             * @default {}
+             */
+            user: {
+                [key: string]: unknown;
+            };
+        };
         /** MemoryStatusResponse */
         MemoryStatusResponse: {
             /** Backend */
@@ -1425,14 +1683,53 @@ export interface components {
         };
         /** ProviderCircuitSnapshot */
         ProviderCircuitSnapshot: {
+            /**
+             * Attempted Calls
+             * @default 0
+             */
+            attempted_calls: number;
+            /**
+             * Circuit Open Count
+             * @default 0
+             */
+            circuit_open_count: number;
             /** Consecutive Failures */
             consecutive_failures: number;
+            /**
+             * Failure Count
+             * @default 0
+             */
+            failure_count: number;
             /** Is Open */
             is_open: boolean;
+            /** Last Failure */
+            last_failure?: string | null;
+            /** Last Failure Age Seconds */
+            last_failure_age_seconds?: number | null;
             /** Opened For Seconds */
             opened_for_seconds?: number | null;
             /** Resets In Seconds */
             resets_in_seconds?: number | null;
+            /**
+             * Retry Count
+             * @default 0
+             */
+            retry_count: number;
+            /**
+             * Skipped Open Count
+             * @default 0
+             */
+            skipped_open_count: number;
+            /**
+             * Success Count
+             * @default 0
+             */
+            success_count: number;
+            /**
+             * Total Calls
+             * @default 0
+             */
+            total_calls: number;
         };
         /** PublicConfigDefaults */
         PublicConfigDefaults: {
@@ -1498,6 +1795,8 @@ export interface components {
                 [key: string]: unknown;
             };
             search_mode?: components["schemas"]["SearchMode"] | null;
+            /** Skill Ids */
+            skill_ids?: string[] | null;
             /** User Id */
             user_id?: string | null;
         };
@@ -1564,6 +1863,21 @@ export interface components {
         };
         /** SearchCacheStats */
         SearchCacheStats: {
+            /**
+             * Capacity Utilization
+             * @default 0
+             */
+            capacity_utilization: number;
+            /**
+             * Evictions
+             * @default 0
+             */
+            evictions: number;
+            /**
+             * Expired
+             * @default 0
+             */
+            expired: number;
             /** Hit Rate */
             hit_rate: number;
             /** Hits */
@@ -1572,10 +1886,30 @@ export interface components {
             max_size: number;
             /** Misses */
             misses: number;
+            /**
+             * Sets
+             * @default 0
+             */
+            sets: number;
             /** Similar Hits */
             similar_hits: number;
+            /**
+             * Similarity Threshold
+             * @default 0
+             */
+            similarity_threshold: number;
             /** Size */
             size: number;
+            /**
+             * Total Requests
+             * @default 0
+             */
+            total_requests: number;
+            /**
+             * Ttl Seconds
+             * @default 0
+             */
+            ttl_seconds: number;
         };
         /** SearchCacheStatsResponse */
         SearchCacheStatsResponse: {
@@ -1738,6 +2072,50 @@ export interface components {
              */
             permissions: string;
         };
+        /** SkillDetailResponse */
+        SkillDetailResponse: {
+            /** Allowed Tools */
+            allowed_tools?: string[] | null;
+            /** Category */
+            category: string;
+            /** Container Path */
+            container_path: string;
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** License */
+            license?: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
+        /** SkillHistoryResponse */
+        SkillHistoryResponse: {
+            /** History */
+            history: {
+                [key: string]: unknown;
+            }[];
+            /** Name */
+            name: string;
+        };
+        /** SkillInstallResponse */
+        SkillInstallResponse: {
+            /** Message */
+            message: string;
+            /** Skill Name */
+            skill_name: string;
+            /** Success */
+            success: boolean;
+        };
+        /** SkillListResponse */
+        SkillListResponse: {
+            /** Skills */
+            skills: {
+                [key: string]: unknown;
+            }[];
+        };
         /** SupervisorDecisionResponse */
         SupervisorDecisionResponse: {
             /** Action */
@@ -1828,13 +2206,6 @@ export interface components {
             call_count: number;
             /** Name */
             name: string;
-        };
-        /** ToolRegistryRefreshResponse */
-        ToolRegistryRefreshResponse: {
-            /** Discovered */
-            discovered: number;
-            /** Total Tools */
-            total_tools: number;
         };
         /** ToolRegistryResponse */
         ToolRegistryResponse: {
@@ -2056,6 +2427,57 @@ export interface operations {
             };
         };
     };
+    channels_status_api_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelStatusResponse"];
+                };
+            };
+        };
+    };
+    channels_restart_api_channels__name__restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRestartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     public_config_api_config_public_get: {
         parameters: {
             query?: never;
@@ -2072,133 +2494,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicConfigResponse"];
-                };
-            };
-        };
-    };
-    list_documents_api_documents_list_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    search_documents_api_documents_search_post: {
-        parameters: {
-            query: {
-                query: string;
-                n_results?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_document_api_documents_upload_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_document_api_documents_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentUploadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_document_api_documents__source__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                source: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentDeleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2377,6 +2672,46 @@ export interface operations {
             };
         };
     };
+    get_memory_api_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryDataResponse"];
+                };
+            };
+        };
+    };
+    reload_memory_api_memory_reload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     memory_status_api_memory_status_get: {
         parameters: {
             query?: never;
@@ -2429,6 +2764,39 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["CancelRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fork_research_session_api_research_fork_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkSessionRequest"];
             };
         };
         responses: {
@@ -3103,6 +3471,313 @@ export interface operations {
             };
         };
     };
+    list_skills_api_skills_get: {
+        parameters: {
+            query?: {
+                enabled_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_custom_skills_api_skills_custom_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_custom_skill_api_skills_custom__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_custom_skill_api_skills_custom__name__put: {
+        parameters: {
+            query: {
+                content: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_custom_skill_api_skills_custom__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_skill_history_api_skills_custom__name__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_skill_api_skills_custom__name__rollback_post: {
+        parameters: {
+            query?: {
+                version?: number;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_skill_api_skills_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_install_skill_api_skills_install_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillInstallResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_skill_api_skills__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_skill_api_skills__name__put: {
+        parameters: {
+            query?: {
+                enabled?: boolean;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_active_tasks_api_tasks_active_get: {
         parameters: {
             query?: never;
@@ -3139,37 +3814,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ToolRegistryResponse"];
-                };
-            };
-        };
-    };
-    refresh_tool_registry_api_tools_registry_refresh_post: {
-        parameters: {
-            query?: {
-                reset?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ToolRegistryRefreshResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

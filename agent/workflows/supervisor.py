@@ -19,18 +19,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from copy import copy
 from datetime import datetime
 from typing import Literal
 
-from langchain_core.messages import (
-    AIMessage,
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-    get_buffer_string,
-)
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
 from langgraph.types import Command
 
 from agent.core.configuration import ResearchConfiguration
@@ -42,6 +37,16 @@ from agent.core.state import (
     SourceCurate,
     SupervisorState,
     ThinkTool,
+)
+from agent.workflows.research_todo import (
+    append_gap_todos,
+    emit_todo_updates,
+    ensure_todo_for_topic,
+    format_todo_context,
+    mark_todo_blocked,
+    mark_todo_completed,
+    mark_todo_running,
+    summarize_todos,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,6 +125,9 @@ async def supervisor(
         SystemMessage(content=system_prompt),
         HumanMessage(content=research_brief),
     ]
+    todo_context = format_todo_context(state.get("research_todos", []))
+    if todo_context:
+        context_messages.append(SystemMessage(content=todo_context))
 
     # === Image Injection (multimodal — deer-flow pattern) ===
     configurable = config.get("configurable") or {}
@@ -216,17 +224,42 @@ async def supervisor_tools(
             "no_tool_calls"
         )
         logger.info(f"[SupervisorTools] Ending supervisor loop ({reason})")
+        update = {
+            "notes": _extract_notes_from_messages(supervisor_messages),
+        }
+        if research_complete_called:
+            current_todos = list(state.get("research_todos", []) or [])
+            previous_todos = list(current_todos)
+            for tc in most_recent_message.tool_calls or []:
+                if tc["name"] != "ThinkTool":
+                    continue
+                gaps = tc.get("args", {}).get("gaps_identified", [])
+                current_todos = append_gap_todos(
+                    current_todos,
+                    gaps if isinstance(gaps, list) else [],
+                )
+            if current_todos:
+                thread_id = str(
+                    config.get("configurable", {}).get("thread_id", "default")
+                )
+                await emit_todo_updates(thread_id, current_todos, previous_todos)
+                update["research_todos"] = {
+                    "type": "override",
+                    "value": current_todos,
+                }
+                update["todo_summary"] = summarize_todos(current_todos)
         return Command(
             goto="__end__",
-            update={
-                "notes": _extract_notes_from_messages(supervisor_messages),
-            },
+            update=update,
         )
 
     # === Process tool calls ===
     all_tool_messages = []
     update_payload = {"supervisor_messages": []}
     tool_calls = most_recent_message.tool_calls
+    current_todos = list(state.get("research_todos", []) or [])
+    previous_todos = list(current_todos)
+    thread_id = str(config.get("configurable", {}).get("thread_id", "default"))
 
     # --- ThinkTool calls ---
     think_calls = [tc for tc in tool_calls if tc["name"] == "ThinkTool"]
@@ -248,15 +281,37 @@ async def supervisor_tools(
             name="ThinkTool",
             tool_call_id=tc["id"],
         ))
+        current_todos = append_gap_todos(
+            current_todos,
+            gaps if isinstance(gaps, list) else [],
+        )
 
     # --- SourceCurate calls ---
     curate_calls = [tc for tc in tool_calls if tc["name"] == "SourceCurate"]
     if curate_calls:
         collected_urls = _collect_source_urls(state)
-        update_payload["curated_sources"] = collected_urls
+        max_sources = max(
+            int(tc.get("args", {}).get("max_sources") or 0)
+            for tc in curate_calls
+        ) or research_config.max_curated_sources
+        try:
+            from agent.workflows.report import curate_sources
+            curated_sources = await curate_sources(
+                research_topic=state.get("research_brief", ""),
+                sources=collected_urls,
+                config=config,
+                max_sources=max_sources,
+            )
+        except Exception as e:
+            logger.warning("[SupervisorTools] Source curation failed: %s", e)
+            curated_sources = collected_urls[:max_sources]
+        update_payload["curated_sources"] = curated_sources
         for tc in curate_calls:
             all_tool_messages.append(ToolMessage(
-                content=f"Sources collected. {len(collected_urls)} unique URLs will be curated during report generation.",
+                content=(
+                    f"Source curation complete. Ranked {len(curated_sources)} "
+                    f"of {len(collected_urls)} collected unique URLs."
+                ),
                 name="SourceCurate",
                 tool_call_id=tc["id"],
             ))
@@ -278,8 +333,21 @@ async def supervisor_tools(
             "medium":         (1, 4),
         }
 
+        todo_ids_by_call: list[str | None] = []
+        for tc in allowed_calls:
+            topic = _conduct_topic(tc)
+            current_todos, todo_id = ensure_todo_for_topic(
+                current_todos,
+                topic,
+                source="supervisor",
+            )
+            if todo_id:
+                current_todos = mark_todo_running(current_todos, todo_id)
+            todo_ids_by_call.append(todo_id)
+        await emit_todo_updates(thread_id, current_todos, previous_todos)
+        previous_todos = list(current_todos)
+
         # Emit research tree update — all tasks starting
-        thread_id = str(config.get("configurable", {}).get("thread_id", "default"))
         try:
             from agent.core.events import get_emitter
 
@@ -292,7 +360,7 @@ async def supervisor_tools(
                 "children": [
                     {
                         "id": f"task_{i}",
-                        "name": tc["args"].get("topic", tc["args"].get("research_topic", f"Task {i+1}")),
+                        "name": _conduct_topic(tc, f"Task {i + 1}"),
                         "status": "running",
                         "thoroughness": tc["args"].get("thoroughness", "medium"),
                     }
@@ -304,35 +372,58 @@ async def supervisor_tools(
             pass
 
         # Execute researcher subgraphs in parallel (open_deep_research pattern)
-        research_tasks = [
-            _get_researcher_subgraph().ainvoke(
+        research_inputs_and_configs = [
+            (
                 {
                     "researcher_messages": [
                         HumanMessage(
                             content=(
-                                f"Research topic: {tc['args'].get('topic', tc['args'].get('research_topic', ''))}\n"
+                                f"Research topic: {_conduct_topic(tc)}\n"
                                 f"Context: {tc['args'].get('context', '')}"
                             )
                         )
                     ],
-                    "research_topic": tc["args"].get("topic", tc["args"].get("research_topic", "")),
+                    "research_topic": _conduct_topic(tc),
                     "thoroughness": tc["args"].get("thoroughness", "medium"),
                     "tool_call_iterations": 0,
                     "evidence_items": [],
                 },
-                config,
+                _isolated_researcher_config(config),
             )
             for tc in allowed_calls
+        ]
+        research_tasks = [
+            _get_researcher_subgraph().ainvoke(research_input, task_config)
+            for research_input, task_config in research_inputs_and_configs
         ]
 
         try:
             tool_results = await asyncio.gather(*research_tasks)
+            _merge_researcher_viewed_images(
+                config,
+                [
+                    task_config
+                    for _research_input, task_config in research_inputs_and_configs
+                ],
+            )
 
-            for obs, tc in zip(tool_results, allowed_calls):
+            for obs, tc, todo_id in zip(tool_results, allowed_calls, todo_ids_by_call):
                 compressed = obs.get(
                     "compressed_research",
                     "Error: Research synthesis failed."
                 )
+                if str(compressed).lstrip().lower().startswith("error"):
+                    current_todos = mark_todo_blocked(
+                        current_todos,
+                        todo_id,
+                        result_preview=compressed,
+                    )
+                else:
+                    current_todos = mark_todo_completed(
+                        current_todos,
+                        todo_id,
+                        result_preview=compressed,
+                    )
                 all_tool_messages.append(ToolMessage(
                     content=compressed,
                     name="ConductResearch",
@@ -349,7 +440,7 @@ async def supervisor_tools(
                     "children": [
                         {
                             "id": f"task_{i}",
-                            "name": tc["args"].get("topic", tc["args"].get("research_topic", f"Task {i+1}")),
+                            "name": _conduct_topic(tc, f"Task {i + 1}"),
                             "status": "completed",
                             "thoroughness": tc["args"].get("thoroughness", "medium"),
                             "result_preview": obs.get("compressed_research", "")[:200],
@@ -391,11 +482,21 @@ async def supervisor_tools(
 
         except Exception as e:
             logger.error(f"[SupervisorTools] Research execution error: {e}")
+            for todo_id in todo_ids_by_call:
+                current_todos = mark_todo_blocked(
+                    current_todos,
+                    todo_id,
+                    result_preview=str(e),
+                )
             all_tool_messages.append(ToolMessage(
-                content=f"Error during research execution: {str(e)}",
+                content=f"Error during research execution: {e!s}",
                 name="ConductResearch",
                 tool_call_id=conduct_calls[0]["id"] if conduct_calls else "unknown",
             ))
+
+    await emit_todo_updates(thread_id, current_todos, previous_todos)
+    update_payload["research_todos"] = {"type": "override", "value": current_todos}
+    update_payload["todo_summary"] = summarize_todos(current_todos)
 
     # === Return to supervisor loop (with context budget enforcement) ===
     # Follows Claude Code's sub-agent principle: "the subagent does that work
@@ -455,8 +556,7 @@ def _extract_notes_from_messages(messages: list) -> list[str]:
 def _collect_source_urls(state: SupervisorState) -> list[dict]:
     """Collect source URLs from research notes for downstream curation.
 
-    Actual quality ranking happens during report generation (report.py::curate_sources).
-    This just extracts and deduplicates URLs from the supervisor's collected research.
+    SourceCurate uses these normalized candidates for immediate quality ranking.
     """
     import re
 
@@ -474,6 +574,47 @@ def _collect_source_urls(state: SupervisorState) -> list[dict]:
                 unique_urls.append({"url": url, "title": url.split("/")[-1] or url})
 
     return unique_urls
+
+
+def _conduct_topic(tool_call: dict, default: str = "") -> str:
+    args = tool_call.get("args", {}) if isinstance(tool_call, dict) else {}
+    if not isinstance(args, dict):
+        return default
+    return str(args.get("topic") or args.get("research_topic") or default)
+
+
+def _isolated_researcher_config(config: RunnableConfig) -> RunnableConfig:
+    """Create a per-researcher config so parallel workers cannot mutate each other."""
+    task_config = copy(config)
+    configurable = dict((config.get("configurable") or {}) if isinstance(config, dict) else {})
+    configurable["viewed_images"] = {}
+    task_config["configurable"] = configurable
+    return task_config
+
+
+def _merge_researcher_viewed_images(
+    parent_config: RunnableConfig,
+    task_configs: list[RunnableConfig],
+) -> None:
+    """Merge visual artifacts after parallel workers finish, avoiding live context bleed."""
+    if not isinstance(parent_config, dict):
+        return
+    merged: dict = {}
+    for task_config in task_configs:
+        configurable = task_config.get("configurable") if isinstance(task_config, dict) else {}
+        viewed_images = configurable.get("viewed_images") if isinstance(configurable, dict) else {}
+        if isinstance(viewed_images, dict):
+            merged.update(viewed_images)
+    if not merged:
+        return
+    parent_configurable = dict(parent_config.get("configurable") or {})
+    existing = parent_configurable.get("viewed_images")
+    if isinstance(existing, dict):
+        existing.update(merged)
+    else:
+        existing = merged
+    parent_configurable["viewed_images"] = existing
+    parent_config["configurable"] = parent_configurable
 
 
 # ---------------------------------------------------------------------------

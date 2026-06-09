@@ -57,13 +57,24 @@ export interface ContinueResearchRequestItem {
   created_at?: string
 }
 
+export interface ResearchTodo {
+  id?: string
+  title?: string
+  status?: 'pending' | 'running' | 'completed' | 'blocked' | 'cancelled' | string
+  progress?: number
+  source?: string
+  result_preview?: string
+  updated_at?: string
+}
+
 export interface EvidenceResponse {
   sources?: EvidenceSource[]
   claims?: EvidenceClaim[]
   quality_summary?: Record<string, any>
   research_brief?: Record<string, any>
+  research_todos?: ResearchTodo[]
+  todo_summary?: Record<string, any>
   source_routing?: Record<string, any>
-  source_collections?: Array<Record<string, any>>
   evidence_store?: Record<string, any>
   access_policy?: Record<string, any>
   quality_gates?: QualityGateRecord[]

@@ -9,6 +9,11 @@ Recent conversation:
 {conversation}
 
 Produce a JSON object with these keys:
+- profile: {{
+    role, expertise, language, format, verbosity,
+    preferredSources, researchGoals, preferences
+  }} — structured user profile fields. Use scalar strings, string arrays, or
+  preference key/value pairs. Only update stable, repeatedly useful preferences.
 - user: {{workContext, personalContext, topOfMind}} — each with shouldUpdate (bool) and summary (str)
 - history: {{recentMonths, earlierContext, longTermBackground}} — each with shouldUpdate (bool) and summary (str)
 - factsToRemove: list of fact IDs that are now incorrect or outdated

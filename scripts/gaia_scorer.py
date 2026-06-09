@@ -18,10 +18,38 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_ANSWER_TYPES = {"auto", "numeric", "string", "list"}
+LIST_SEPARATOR_RE = re.compile(r"[,;，；、\n]+")
+
 
 def normalize_answer(text: str) -> str:
     """Normalize answer text for comparison."""
-    return text.strip().lower().rstrip(".")
+    return text.strip().lower().rstrip(".。")
+
+
+def _split_list_items(text: str) -> list[str]:
+    """Split a list-style answer into normalized, non-empty items."""
+    return [
+        normalize_answer(item)
+        for item in LIST_SEPARATOR_RE.split(str(text))
+        if normalize_answer(item)
+    ]
+
+
+def infer_answer_type(ground_truth: str) -> str:
+    """Infer a simple GAIA answer type from the ground-truth shape."""
+    gt = str(ground_truth or "").strip()
+    if not gt:
+        return "string"
+
+    list_items = _split_list_items(gt)
+    if len(list_items) >= 2:
+        return "list"
+
+    if re.fullmatch(r"[-+]?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?", gt):
+        return "numeric"
+
+    return "string"
 
 
 def score_numeric(prediction: str, ground_truth: str) -> tuple[bool, float]:
@@ -67,21 +95,18 @@ def score_list(prediction: str, ground_truth: str) -> tuple[bool, float]:
 
     Splits on commas/semicolons, normalizes each item, computes overlap.
     """
-    pred_items = set(
-        it.strip().lower()
-        for it in re.split(r"[,;]", str(prediction))
-        if it.strip()
-    )
-    gt_items = set(
-        it.strip().lower()
-        for it in re.split(r"[,;]", str(ground_truth))
-        if it.strip()
-    )
+    pred_text = normalize_answer(str(prediction))
+    pred_items = set(_split_list_items(prediction))
+    gt_items = set(_split_list_items(ground_truth))
 
     if not gt_items:
         return False, 0.0
 
-    intersection = pred_items & gt_items
+    if len(pred_items) <= 1:
+        intersection = {item for item in gt_items if item and item in pred_text}
+    else:
+        intersection = pred_items & gt_items
+
     jaccard = len(intersection) / len(gt_items)
     return jaccard >= 0.8, jaccard
 
@@ -103,27 +128,58 @@ def score_gaia_answer(
     """
     pred = str(prediction).strip()
     gt = str(ground_truth).strip()
+    requested_type = str(answer_type or "auto").strip().lower()
+    if requested_type not in SUPPORTED_ANSWER_TYPES:
+        requested_type = "auto"
 
     if pred.lower() == "i don't know" or not pred:
-        return {"correct": False, "score": 0.0, "method": "no_answer"}
+        return {
+            "correct": False,
+            "score": 0.0,
+            "method": "no_answer",
+            "answer_type": requested_type,
+            "diagnostics": {"prediction_chars": len(pred), "ground_truth_chars": len(gt)},
+        }
 
-    if answer_type == "numeric":
+    if requested_type == "numeric":
         correct, score = score_numeric(pred, gt)
-        return {"correct": correct, "score": score, "method": "numeric"}
+        return {"correct": correct, "score": score, "method": "numeric", "answer_type": "numeric"}
 
-    if answer_type == "list":
+    if requested_type == "list":
         correct, score = score_list(pred, gt)
-        return {"correct": correct, "score": score, "method": "list"}
+        return {"correct": correct, "score": score, "method": "list", "answer_type": "list"}
 
-    if answer_type == "string":
+    if requested_type == "string":
         correct, score = score_string(pred, gt)
-        return {"correct": correct, "score": score, "method": "string"}
+        return {"correct": correct, "score": score, "method": "string", "answer_type": "string"}
 
-    # Auto-detect: try numeric first, then string
-    if re.search(r"\d", gt):
+    inferred_type = infer_answer_type(gt)
+    if inferred_type == "numeric":
         correct, score = score_numeric(pred, gt)
-        if correct:
-            return {"correct": True, "score": 1.0, "method": "numeric_auto"}
+        return {
+            "correct": correct,
+            "score": score,
+            "method": "numeric_auto",
+            "answer_type": inferred_type,
+        }
+
+    if inferred_type == "list":
+        correct, score = score_list(pred, gt)
+        return {
+            "correct": correct,
+            "score": score,
+            "method": "list_auto",
+            "answer_type": inferred_type,
+            "diagnostics": {
+                "ground_truth_items": len(_split_list_items(gt)),
+                "prediction_chars": len(pred),
+            },
+        }
 
     correct, score = score_string(pred, gt)
-    return {"correct": correct, "score": score, "method": "string_auto"}
+    return {
+        "correct": correct,
+        "score": score,
+        "method": "string_auto",
+        "answer_type": inferred_type,
+    }

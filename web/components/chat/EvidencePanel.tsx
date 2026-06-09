@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, ExternalLink, GitBranch, Layers, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ExternalLink, GitBranch, Layers, ListTodo, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { fetchResearchEvidence } from '@/lib/researchApiClient'
@@ -66,6 +66,21 @@ function percent(value: unknown) {
   return `${Math.round(num * 100)}%`
 }
 
+function todoTone(status?: string) {
+  const value = String(status || '').toLowerCase()
+  if (value === 'completed') return 'text-emerald-600 bg-emerald-500/10'
+  if (value === 'running') return 'text-blue-600 bg-blue-500/10'
+  if (value === 'blocked') return 'text-amber-600 bg-amber-500/10'
+  if (value === 'cancelled') return 'text-muted-foreground bg-muted'
+  return 'text-slate-600 bg-slate-500/10'
+}
+
+function todoProgress(value: unknown) {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 0
+  return Math.max(0, Math.min(100, Math.round(num)))
+}
+
 export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelProps) {
   const [data, setData] = useState<EvidenceResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -97,7 +112,9 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
   const claims = useMemo(() => data?.claims || [], [data])
   const passages = useMemo(() => data?.passages || [], [data])
   const gaps = useMemo(() => collectQualityGaps(data), [data])
+  const researchTodos = useMemo(() => data?.research_todos || [], [data])
   const quality = data?.quality_summary || {}
+  const todoSummary = data?.todo_summary || {}
   const pipeline = data?.research_pipeline || {}
   const sourceQuality = data?.source_quality || {}
   const readerPlan = data?.browser_reader_plan || {}
@@ -155,6 +172,36 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
             <Metric label="Claims" value={claims.length} />
             <Metric label="Passages" value={passages.length} />
           </div>
+
+          {researchTodos.length > 0 && (
+            <Section title="Research Todos">
+              <RuntimeCard icon={<ListTodo className="h-3.5 w-3.5" />} title="Progress">
+                <RuntimeRow label="complete" value={`${todoSummary.completed ?? researchTodos.filter((todo) => todo.status === 'completed').length}/${todoSummary.total ?? researchTodos.length}`} />
+                <RuntimeRow label="pending" value={todoSummary.pending} />
+                <RuntimeRow label="running" value={todoSummary.running} />
+                <RuntimeRow label="blocked" value={todoSummary.blocked} />
+              </RuntimeCard>
+              {researchTodos.slice(0, 8).map((todo, index) => {
+                const status = String(todo.status || 'pending')
+                const progress = todoProgress(todo.progress)
+                return (
+                  <div key={`${todo.id || todo.title}-${index}`} className="rounded-lg border p-3 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium leading-relaxed">{todo.title || `Task ${index + 1}`}</div>
+                        {todo.source && <div className="mt-1 text-muted-foreground">{todo.source}</div>}
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${todoTone(status)}`}>{status}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-primary/70" style={{ width: `${progress}%` }} />
+                    </div>
+                    {todo.result_preview && <p className="mt-2 line-clamp-2 text-muted-foreground">{todo.result_preview}</p>}
+                  </div>
+                )
+              })}
+            </Section>
+          )}
 
           {Object.keys(quality).length > 0 && (
             <Card className="border-none shadow-sm ring-1 ring-border/50">

@@ -176,15 +176,9 @@ def _derive_source_policy(state: dict[str, Any], config: dict[str, Any]) -> str:
     if configured in {
         "web",
         "web-only",
-        "private-first",
-        "hybrid",
-        "rag",
-        "local",
         "mcp",
     }:
         return "web" if configured == "web-only" else configured
-    if bool(cfg.get("use_rag") or state.get("use_rag")):
-        return "hybrid"
     return "web"
 
 

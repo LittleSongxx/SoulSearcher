@@ -532,7 +532,6 @@ async def _get_researcher_tools(
     source_policy = _researcher_source_policy(config)
     include_web = source_policy["include_web"]
     include_academic = source_policy["include_academic"]
-    include_rag = source_policy["include_rag"]
     include_mcp = source_policy["include_mcp"]
 
     # === Skill Guide Reader (Progressive Loading Layer 3) ===
@@ -600,18 +599,6 @@ async def _get_researcher_tools(
             logger.debug("[Researcher] Loaded Tavily + fallback search")
         except ImportError:
             logger.warning("[Researcher] Could not import search tools from Weaver")
-
-    # === RAG / uploaded document retrieval ===
-    if include_rag:
-        try:
-            from tools.rag.rag_tool import build_rag_search_tool
-            tools.append(build_rag_search_tool(source_policy["rag_collection_name"]))
-            logger.debug(
-                "[Researcher] Loaded rag_search (collection=%s)",
-                source_policy["rag_collection_name"] or "default",
-            )
-        except Exception as e:
-            logger.warning("[Researcher] Failed to load rag_search: %s", e)
 
     # === Academic Retrievers (ArXiv, PubMed, Semantic Scholar) ===
     if include_academic:
@@ -757,37 +744,29 @@ def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
         if isinstance(routing.get("budget_policy"), dict)
         else {}
     )
-    provider_set = {str(provider).strip().lower() for provider in providers if str(provider).strip()}
+    allowed_providers = {"web", "academic", "mcp"}
+    provider_set = {
+        provider
+        for provider in (
+            str(item).strip().lower() for item in providers if str(item).strip()
+        )
+        if provider in allowed_providers
+    }
     if not provider_set:
-        if mode == "local_docs_only":
-            provider_set = {"rag"}
-        elif mode == "mcp_only":
+        if mode == "mcp_only":
             provider_set = {"mcp"}
-        elif mode in {"hybrid", "private_first"}:
-            provider_set = {"web", "rag"}
         else:
             provider_set = {"web"}
 
-    use_rag = bool(cfg.get("use_rag")) or "rag" in provider_set
-    collection_name = str(cfg.get("rag_collection_name") or "").strip() or None
-    collections = routing.get("collections") if isinstance(routing, dict) else []
-    if isinstance(collections, list) and collections:
-        first_collection = collections[0]
-        if isinstance(first_collection, dict):
-            collection_name = str(
-                first_collection.get("id") or first_collection.get("name") or collection_name or ""
-            ).strip() or collection_name
-        elif isinstance(first_collection, str):
-            collection_name = first_collection.strip() or collection_name
+    if mode not in {"web_only", "mcp_only"}:
+        mode = "web_only"
 
     return {
-        "mode": mode or ("hybrid" if use_rag else "web_only"),
+        "mode": mode or "web_only",
         "providers": sorted(provider_set),
         "include_web": "web" in provider_set,
         "include_academic": "academic" in provider_set or "web" in provider_set,
-        "include_rag": use_rag,
         "include_mcp": "mcp" in provider_set,
-        "rag_collection_name": collection_name,
         "budget_policy": budget_policy,
     }
 
@@ -797,17 +776,14 @@ def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
     budget = source_policy.get("budget_policy") or {}
     budget_lines = []
     if isinstance(budget, dict):
-        for key in ("web", "rag", "academic", "mcp", "max_sources", "min_sources"):
+        for key in ("web", "academic", "mcp", "max_sources", "min_sources"):
             if key in budget:
                 budget_lines.append(f"- {key}: {budget[key]}")
-    collection = source_policy.get("rag_collection_name") or ""
     lines = [
         "<Source Policy>",
         f"- mode: {source_policy.get('mode', 'web_only')}",
         f"- providers: {providers}",
     ]
-    if collection:
-        lines.append(f"- rag_collection: {collection}")
     if budget_lines:
         lines.append("- budgets:")
         lines.extend(f"  {line}" for line in budget_lines)

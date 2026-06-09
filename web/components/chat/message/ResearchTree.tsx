@@ -3,8 +3,8 @@
 import React from 'react'
 import {
   ChevronRight,
+  CheckCircle2,
   Circle,
-  CircleCheck,
   CircleDot,
   Loader2,
   Search,
@@ -27,7 +27,7 @@ function TreeNodeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
       case 'running':
         return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
       case 'completed':
-        return <CircleCheck className="h-3.5 w-3.5 text-green-500" />
+        return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
       case 'error':
         return <Circle className="h-3.5 w-3.5 text-red-500" />
       default:
@@ -125,7 +125,7 @@ export function ResearchTreeView({ data }: { data: any }) {
           {tree.status === 'running' ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
           ) : tree.status === 'completed' ? (
-            <CircleCheck className="h-3.5 w-3.5 text-green-500" />
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
           ) : (
             <CircleDot className="h-3.5 w-3.5 text-muted-foreground/40" />
           )}

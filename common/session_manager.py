@@ -598,6 +598,21 @@ class SessionManager:
             enriched = dict(artifacts)
             enriched.setdefault("fetched_pages", [])
             enriched.setdefault("passages", [])
+            state_todos = state.get("research_todos")
+            if "research_todos" not in enriched and isinstance(state_todos, list):
+                enriched["research_todos"] = state_todos
+            state_todo_summary = state.get("todo_summary")
+            if "todo_summary" not in enriched and isinstance(state_todo_summary, dict):
+                enriched["todo_summary"] = state_todo_summary
+            if enriched.get("research_todos") and not enriched.get("todo_summary"):
+                try:
+                    from agent.workflows.research_todo import summarize_todos
+
+                    enriched["todo_summary"] = summarize_todos(
+                        enriched.get("research_todos", [])
+                    )
+                except Exception:
+                    enriched["todo_summary"] = {}
             if "sources" not in enriched:
                 sources = _maybe_extract_sources()
                 if sources:
@@ -652,6 +667,23 @@ class SessionManager:
         freshness_summary = state.get("freshness_summary")
         if not isinstance(freshness_summary, dict):
             freshness_summary = {}
+        research_todos = (
+            state.get("research_todos")
+            if isinstance(state.get("research_todos"), list)
+            else []
+        )
+        todo_summary = (
+            state.get("todo_summary")
+            if isinstance(state.get("todo_summary"), dict)
+            else {}
+        )
+        if research_todos and not todo_summary:
+            try:
+                from agent.workflows.research_todo import summarize_todos
+
+                todo_summary = summarize_todos(research_todos)
+            except Exception:
+                todo_summary = {}
 
         if (
             not queries
@@ -659,6 +691,7 @@ class SessionManager:
             and not quality_summary
             and not query_coverage
             and not freshness_summary
+            and not research_todos
         ):
             return {}
 
@@ -676,6 +709,8 @@ class SessionManager:
             "passages": [],
             "sources": sources,
             "claims": claims,
+            "research_todos": research_todos,
+            "todo_summary": todo_summary,
         }
 
 

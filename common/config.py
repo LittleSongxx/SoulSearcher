@@ -339,14 +339,6 @@ class Settings(BaseSettings):
     research_model: str = ""     # Model for research phase (defaults to smart_llm)
     vision_model: str = ""       # Vision-capable model override
 
-    # RAG (Retrieval-Augmented Generation) Config
-    rag_enabled: bool = False  # Enable local document RAG
-    rag_store_path: Optional[str] = None  # Path for persistent vector storage
-    rag_collection_name: str = "weaver_documents"  # ChromaDB collection name
-    rag_embedding_model: str = "text-embedding-3-small"  # OpenAI embedding model
-    rag_chunk_size: int = 1000  # Document chunk size
-    rag_chunk_overlap: int = 200  # Overlap between chunks
-
     # Report Visualization Config
     enable_report_charts: bool = True  # Generate charts from data in reports
 
@@ -587,16 +579,6 @@ class Settings(BaseSettings):
         False  # inject browser context prompt if available
     )
 
-    # Enhanced tool registry auto-discovery (dev ergonomics)
-    # Note: keep this lightweight by default. Recursive discovery can be enabled
-    # when you need full tool introspection.
-    enhanced_tool_discovery_enabled: bool = True
-    enhanced_tool_discovery_recursive: bool = False
-    enhanced_tool_discovery_exclude_dirs: str = "__pycache__,node_modules,web"
-    agent_use_enhanced_registry: bool = (
-        False  # reserved for future: build agent tools from ToolRegistry
-    )
-
     # Tool visibility / events
     emit_tool_events: bool = True  # wrap tools with event emitters for front-end
     tool_whitelist: str = ""  # comma-separated tool names to allow (empty = all)
@@ -683,15 +665,6 @@ class Settings(BaseSettings):
     def tool_blacklist_list(self) -> list[str]:
         """Comma separated tool blacklist."""
         return [t.strip() for t in self.tool_blacklist.split(",") if t.strip()]
-
-    @property
-    def enhanced_tool_discovery_exclude_list(self) -> list[str]:
-        """Comma separated directory names excluded from enhanced tool discovery."""
-        return [
-            d.strip()
-            for d in (self.enhanced_tool_discovery_exclude_dirs or "").split(",")
-            if d.strip()
-        ]
 
     @property
     def search_engines_list(self) -> list[str]:

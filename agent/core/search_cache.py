@@ -55,6 +55,9 @@ class SearchCache:
         self.hits = 0
         self.misses = 0
         self.similar_hits = 0
+        self.sets = 0
+        self.evictions = 0
+        self.expired = 0
 
     def _normalize_query(self, query: str) -> str:
         """Normalize query for consistent caching."""
@@ -69,7 +72,7 @@ class SearchCache:
         """Check if entry has expired."""
         return (time.time() - entry.timestamp) > self.ttl_seconds
 
-    def _find_similar(self, query: str) -> Optional[CacheEntry]:
+    def _find_similar(self, query: str) -> Optional[tuple[str, CacheEntry]]:
         """Find a similar query in cache using fuzzy matching."""
         normalized = self._normalize_query(query)
 
@@ -81,7 +84,7 @@ class SearchCache:
             similarity = SequenceMatcher(None, normalized, cached_normalized).ratio()
 
             if similarity >= self.similarity_threshold:
-                return entry
+                return key, entry
 
         return None
 
@@ -110,10 +113,13 @@ class SearchCache:
                 else:
                     # Remove expired entry
                     del self._cache[query_hash]
+                    self.expired += 1
 
             # Try similar query match
-            similar_entry = self._find_similar(query)
-            if similar_entry:
+            similar_match = self._find_similar(query)
+            if similar_match:
+                similar_key, similar_entry = similar_match
+                self._cache.move_to_end(similar_key)
                 similar_entry.hit_count += 1
                 self.similar_hits += 1
                 logger.debug(f"[search_cache] Similar hit for: {query[:50]}")
@@ -126,10 +132,21 @@ class SearchCache:
         """Cache search results for a query."""
         with self._lock:
             query_hash = self._query_hash(query)
+            self.sets += 1
+
+            if query_hash in self._cache:
+                self._cache.move_to_end(query_hash)
+                self._cache[query_hash] = CacheEntry(
+                    query=query,
+                    results=results,
+                    timestamp=time.time(),
+                )
+                return
 
             # Evict oldest if at capacity
             while len(self._cache) >= self.max_size:
                 self._cache.popitem(last=False)
+                self.evictions += 1
 
             self._cache[query_hash] = CacheEntry(
                 query=query,
@@ -144,6 +161,9 @@ class SearchCache:
             self.hits = 0
             self.misses = 0
             self.similar_hits = 0
+            self.sets = 0
+            self.evictions = 0
+            self.expired = 0
 
     def cleanup_expired(self) -> int:
         """Remove all expired entries. Returns count of removed entries."""
@@ -151,6 +171,7 @@ class SearchCache:
             expired_keys = [k for k, v in self._cache.items() if self._is_expired(v)]
             for k in expired_keys:
                 del self._cache[k]
+            self.expired += len(expired_keys)
             return len(expired_keys)
 
     def stats(self) -> dict[str, Any]:
@@ -158,6 +179,7 @@ class SearchCache:
         with self._lock:
             total_requests = self.hits + self.similar_hits + self.misses
             hit_rate = (self.hits + self.similar_hits) / max(total_requests, 1)
+            capacity_utilization = len(self._cache) / max(self.max_size, 1)
 
             return {
                 "size": len(self._cache),
@@ -165,7 +187,14 @@ class SearchCache:
                 "hits": self.hits,
                 "similar_hits": self.similar_hits,
                 "misses": self.misses,
+                "sets": self.sets,
+                "evictions": self.evictions,
+                "expired": self.expired,
+                "total_requests": total_requests,
                 "hit_rate": round(hit_rate, 3),
+                "capacity_utilization": round(capacity_utilization, 3),
+                "ttl_seconds": float(self.ttl_seconds),
+                "similarity_threshold": float(self.similarity_threshold),
             }
 
 

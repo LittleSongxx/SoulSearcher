@@ -386,5 +386,5 @@ class BrowserUseTool(BaseTool):
 
 
 def build_browser_use_tools(thread_id: str) -> list[BaseTool]:
-    """Factory to align with build_agent_tools."""
+    """Build browser automation tools for a thread."""
     return [BrowserUseTool(thread_id=thread_id)]

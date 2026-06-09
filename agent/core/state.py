@@ -9,11 +9,10 @@ Integrates patterns from:
 import operator
 from typing import Annotated, Any, Literal, Optional
 
-from langchain_core.messages import BaseMessage, HumanMessage, MessageLikeRepresentation
+from langchain_core.messages import HumanMessage, MessageLikeRepresentation
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
-
 
 # =============================================================================
 # Reducers
@@ -212,6 +211,8 @@ class AgentState(MessagesState):
     sources: list[dict[str, str]]
     curated_sources: list[dict[str, Any]]
     evidence_items: Annotated[list[dict[str, Any]], override_reducer]
+    research_todos: Annotated[list[dict[str, Any]], override_reducer]
+    todo_summary: dict[str, Any]
 
     quality_summary: dict[str, Any]
     quality_gates: list[dict[str, Any]]
@@ -238,6 +239,8 @@ class SupervisorState(TypedDict):
     notes: Annotated[list[str], override_reducer]
     raw_notes: Annotated[list[str], override_reducer]
     evidence_items: Annotated[list[dict[str, Any]], override_reducer]
+    research_todos: Annotated[list[dict[str, Any]], override_reducer]
+    todo_summary: dict[str, Any]
     research_iterations: int
     curated_sources: list[dict[str, Any]]
     source_routing: dict[str, Any]
@@ -347,6 +350,8 @@ def build_initial_state(
         "sources": [],
         "curated_sources": [],
         "evidence_items": [],
+        "research_todos": [],
+        "todo_summary": {},
         "quality_summary": {},
         "quality_gates": [],
         "quality_followup_required": False,

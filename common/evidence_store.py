@@ -14,8 +14,9 @@ class EvidenceStoreSnapshot:
     evidence_items: list[dict[str, Any]] = field(default_factory=list)
     citation_annotations: list[dict[str, Any]] = field(default_factory=list)
     quality_results: list[dict[str, Any]] = field(default_factory=list)
+    research_todos: list[dict[str, Any]] = field(default_factory=list)
+    todo_summary: dict[str, Any] = field(default_factory=dict)
     source_routing: dict[str, Any] = field(default_factory=dict)
-    source_collections: list[dict[str, Any]] = field(default_factory=list)
     access_policy: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     schema_version: int = 1
@@ -30,13 +31,14 @@ class EvidenceStoreSnapshot:
             "claims": self.claims,
             "quality_details": _dict_from(self.metadata.get("quality_details")),
             "quality_gates": self.quality_results,
+            "research_todos": self.research_todos,
+            "todo_summary": self.todo_summary,
             "evidence_items": self.evidence_items,
             "citation_annotations": self.citation_annotations,
             "fetched_pages": _list_from(self.metadata.get("fetched_pages")),
             "passages": self.passages,
             "evidence_store": self.to_dict(),
             "source_routing": self.source_routing,
-            "source_collections": self.source_collections,
             "access_policy": self.access_policy,
         }
 
@@ -67,8 +69,9 @@ def build_evidence_store_snapshot(
         evidence_items=_list_from(artifacts.get("evidence_items")),
         citation_annotations=_list_from(artifacts.get("citation_annotations")),
         quality_results=_list_from(artifacts.get("quality_gates")),
+        research_todos=_list_from(artifacts.get("research_todos")),
+        todo_summary=_dict_from(artifacts.get("todo_summary")),
         source_routing=_dict_from(artifacts.get("source_routing")),
-        source_collections=_list_from(artifacts.get("source_collections")),
         access_policy=access_policy,
         metadata={
             "quality_summary": _dict_from(artifacts.get("quality_summary")),

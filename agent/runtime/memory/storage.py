@@ -17,8 +17,22 @@ logger = logging.getLogger(__name__)
 DEFAULT_USER_ID = "default"
 
 
+def _empty_profile() -> dict[str, Any]:
+    return {
+        "role": "",
+        "expertise": "",
+        "preferences": {},
+        "preferredSources": [],
+        "language": "",
+        "format": "",
+        "verbosity": "",
+        "researchGoals": [],
+    }
+
+
 def create_empty_memory() -> dict[str, Any]:
     return {
+        "profile": _empty_profile(),
         "user": {
             "workContext": {"summary": "", "updatedAt": ""},
             "personalContext": {"summary": "", "updatedAt": ""},
@@ -31,6 +45,51 @@ def create_empty_memory() -> dict[str, Any]:
         },
         "facts": [],
     }
+
+
+def normalize_memory_data(data: dict[str, Any] | None) -> dict[str, Any]:
+    """Return memory data with all expected structured sections present."""
+    normalized = create_empty_memory()
+    if not isinstance(data, dict):
+        return normalized
+
+    profile = data.get("profile")
+    if isinstance(profile, dict):
+        merged_profile = dict(normalized["profile"])
+        for key in merged_profile:
+            value = profile.get(key)
+            if key == "preferences" and isinstance(value, dict):
+                merged_profile[key] = {
+                    str(k): str(v) for k, v in value.items() if str(k).strip()
+                }
+            elif key in {"preferredSources", "researchGoals"} and isinstance(value, list):
+                merged_profile[key] = [str(v) for v in value if str(v).strip()]
+            elif isinstance(value, str):
+                merged_profile[key] = value
+        normalized["profile"] = merged_profile
+
+    for section_name in ("user", "history"):
+        section = data.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        for key, default_value in normalized[section_name].items():
+            value = section.get(key)
+            if isinstance(value, dict):
+                normalized[section_name][key] = {
+                    "summary": str(value.get("summary", "") or ""),
+                    "updatedAt": str(value.get("updatedAt", "") or ""),
+                }
+            elif isinstance(value, str):
+                normalized[section_name][key] = {
+                    "summary": value,
+                    "updatedAt": default_value.get("updatedAt", ""),
+                }
+
+    facts = data.get("facts")
+    if isinstance(facts, list):
+        normalized["facts"] = [f for f in facts if isinstance(f, dict)]
+
+    return normalized
 
 
 def _default_memory_base_dir() -> Path:
@@ -74,7 +133,7 @@ class LocalMemoryStorage(MemoryStorage):
         if not path.exists():
             return create_empty_memory()
         try:
-            return json.loads(path.read_text(encoding="utf-8") or "{}")
+            return normalize_memory_data(json.loads(path.read_text(encoding="utf-8") or "{}"))
         except (json.JSONDecodeError, OSError):
             return create_empty_memory()
 
@@ -91,6 +150,7 @@ class LocalMemoryStorage(MemoryStorage):
     def save(self, data: dict[str, Any], agent_name: str | None = None, user_id: str | None = None) -> bool:
         path = self._storage_path(agent_name, user_id)
         try:
+            data = normalize_memory_data(data)
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(".tmp")
             tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -134,7 +194,41 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
 
     Includes top facts sorted by confidence and context summaries.
     """
+    memory_data = normalize_memory_data(memory_data)
     parts: list[str] = []
+
+    profile = memory_data.get("profile", {})
+    profile_lines: list[str] = []
+    for key, label in (
+        ("role", "role"),
+        ("expertise", "expertise"),
+        ("language", "language"),
+        ("format", "format"),
+        ("verbosity", "verbosity"),
+    ):
+        value = profile.get(key) if isinstance(profile, dict) else ""
+        if isinstance(value, str) and value.strip():
+            profile_lines.append(f"- {label}: {value.strip()}")
+
+    preferences = profile.get("preferences", {}) if isinstance(profile, dict) else {}
+    if isinstance(preferences, dict) and preferences:
+        rendered = ", ".join(
+            f"{str(k).strip()}={str(v).strip()}"
+            for k, v in preferences.items()
+            if str(k).strip() and str(v).strip()
+        )
+        if rendered:
+            profile_lines.append(f"- preferences: {rendered}")
+
+    for key, label in (("preferredSources", "preferred_sources"), ("researchGoals", "research_goals")):
+        value = profile.get(key) if isinstance(profile, dict) else []
+        if isinstance(value, list):
+            rendered = ", ".join(str(v).strip() for v in value[:8] if str(v).strip())
+            if rendered:
+                profile_lines.append(f"- {label}: {rendered}")
+
+    if profile_lines:
+        parts.append("<memory_profile>\n" + "\n".join(profile_lines) + "\n</memory_profile>")
 
     # Context summaries
     user_sections = memory_data.get("user", {})

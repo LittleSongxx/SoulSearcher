@@ -21,6 +21,11 @@ from langgraph.types import Command, interrupt
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import build_model_config, configurable_model
 from agent.core.state import AgentState
+from agent.workflows.research_todo import (
+    derive_todos_from_plan,
+    emit_todo_updates,
+    summarize_todos,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +152,11 @@ async def plan_research(
             plan_content = revised_plan
         logger.info("[ResearchPlan] Plan revised by user")
 
+    research_todos = derive_todos_from_plan(plan_content, research_brief)
+    todo_summary = summarize_todos(research_todos)
+    thread_id = str((config.get("configurable") or {}).get("thread_id") or "")
+    await emit_todo_updates(thread_id, research_todos, previous=[])
+
     # Proceed to supervisor with the approved plan injected
     return Command(
         goto="research_supervisor",
@@ -159,6 +169,8 @@ async def plan_research(
                 f"{research_brief}\n\n"
                 f"[Approved Research Plan]\n{plan_content}"
             ),
+            "research_todos": {"type": "override", "value": research_todos},
+            "todo_summary": todo_summary,
         },
     )
 

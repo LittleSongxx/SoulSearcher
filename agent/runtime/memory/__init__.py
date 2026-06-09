@@ -15,6 +15,7 @@ from agent.runtime.memory.storage import (
     LocalMemoryStorage,
     get_memory_storage,
     create_empty_memory,
+    normalize_memory_data,
     format_memory_for_injection,
 )
 from agent.runtime.memory.prompt import MEMORY_UPDATE_PROMPT, format_conversation_for_update
@@ -31,6 +32,7 @@ __all__ = [
     "LocalMemoryStorage",
     "get_memory_storage",
     "create_empty_memory",
+    "normalize_memory_data",
     "format_memory_for_injection",
     "MEMORY_UPDATE_PROMPT",
     "format_conversation_for_update",

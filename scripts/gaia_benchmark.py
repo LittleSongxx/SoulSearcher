@@ -41,10 +41,12 @@ class BenchmarkResult:
     question: str
     level: int
     ground_truth: str = ""
+    answer_type: str = "auto"
     prediction: str = ""
     correct: bool = False
     score: float = 0.0
     scoring_method: str = ""
+    scoring_diagnostics: dict[str, Any] = field(default_factory=dict)
     duration_ms: float = 0
     error: str = ""
     prediction_chars: int = 0
@@ -66,6 +68,78 @@ class BenchmarkReport:
     config: dict[str, Any] = field(default_factory=dict)
 
 
+def validate_gaia_questions(questions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Validate GAIA benchmark rows before expensive execution."""
+    from scripts.gaia_scorer import SUPPORTED_ANSWER_TYPES, infer_answer_type
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    ids: set[str] = set()
+    level_counts: dict[int, int] = {}
+    answer_type_counts: dict[str, int] = {}
+    with_ground_truth = 0
+    with_expected_length = 0
+
+    for idx, question in enumerate(questions):
+        task_id = str(question.get("id") or question.get("task_id") or "").strip()
+        if not task_id:
+            errors.append(f"question[{idx}] missing task_id/id")
+        elif task_id in ids:
+            errors.append(f"duplicate task id: {task_id}")
+        else:
+            ids.add(task_id)
+
+        query = str(question.get("query") or question.get("question") or "").strip()
+        if len(query) < 5:
+            errors.append(f"{task_id or idx}: question is too short")
+
+        level = question.get("level", 1)
+        if level not in {1, 2, 3}:
+            errors.append(f"{task_id or idx}: level must be 1, 2, or 3")
+        else:
+            level_counts[int(level)] = level_counts.get(int(level), 0) + 1
+
+        ground_truth = str(question.get("ground_truth", "") or "").strip()
+        if ground_truth:
+            with_ground_truth += 1
+        else:
+            warnings.append(f"{task_id or idx}: missing ground_truth")
+
+        expected_length = question.get("expected_length")
+        if expected_length is not None:
+            if (
+                not isinstance(expected_length, (list, tuple))
+                or len(expected_length) != 2
+                or int(expected_length[0]) < 0
+                or int(expected_length[1]) < int(expected_length[0])
+            ):
+                errors.append(f"{task_id or idx}: invalid expected_length")
+            else:
+                with_expected_length += 1
+
+        answer_type = str(question.get("answer_type") or "auto").strip().lower()
+        if answer_type not in SUPPORTED_ANSWER_TYPES:
+            errors.append(f"{task_id or idx}: unsupported answer_type {answer_type!r}")
+            answer_type = "auto"
+        effective_type = infer_answer_type(ground_truth) if answer_type == "auto" else answer_type
+        answer_type_counts[effective_type] = answer_type_counts.get(effective_type, 0) + 1
+
+    if not questions:
+        errors.append("no questions loaded")
+    if with_ground_truth == 0 and with_expected_length == 0:
+        errors.append("questions need ground_truth or expected_length for scoring")
+
+    return {
+        "errors": errors,
+        "warnings": warnings,
+        "question_count": len(questions),
+        "with_ground_truth": with_ground_truth,
+        "with_expected_length": with_expected_length,
+        "level_counts": level_counts,
+        "answer_type_counts": answer_type_counts,
+    }
+
+
 # =============================================================================
 # Remote mode — calls the running Weaver server via its research SSE endpoint
 # =============================================================================
@@ -84,6 +158,7 @@ async def run_remote(
         question=query,
         level=question.get("level", 1),
         ground_truth=question.get("ground_truth", ""),
+        answer_type=str(question.get("answer_type") or "auto"),
     )
 
     t0 = time.monotonic()
@@ -147,6 +222,7 @@ async def run_asgi(
         question=query,
         level=question.get("level", 1),
         ground_truth=question.get("ground_truth", ""),
+        answer_type=str(question.get("answer_type") or "auto"),
     )
 
     t0 = time.monotonic()
@@ -188,12 +264,21 @@ async def run_benchmark(
     """Run a full benchmark across all questions."""
     from scripts.gaia_scorer import score_gaia_answer
 
+    preflight = validate_gaia_questions(questions)
     report = BenchmarkReport(
         total=len(questions),
         run_id=datetime.now().strftime("%Y%m%d_%H%M%S"),
         timestamp=datetime.now().isoformat(),
-        config={"mode": mode, "max_concurrent": max_concurrent},
+        config={
+            "mode": mode,
+            "max_concurrent": max_concurrent,
+            "preflight": preflight,
+        },
     )
+    if preflight["errors"]:
+        raise ValueError("GAIA preflight failed: " + "; ".join(preflight["errors"]))
+    for warning in preflight["warnings"]:
+        logger.warning("[preflight] %s", warning)
 
     if mode == "asgi":
         from agent.core.graph import create_research_graph
@@ -218,15 +303,26 @@ async def run_benchmark(
 
             # Score against ground truth if available
             if not r.error and r.ground_truth:
-                scoring = score_gaia_answer(r.prediction, r.ground_truth)
+                scoring = score_gaia_answer(
+                    r.prediction,
+                    r.ground_truth,
+                    answer_type=str(q.get("answer_type") or "auto"),
+                )
                 r.correct = scoring["correct"]
                 r.score = scoring["score"]
                 r.scoring_method = scoring["method"]
+                r.answer_type = str(scoring.get("answer_type") or r.answer_type)
+                diagnostics = scoring.get("diagnostics", {})
+                r.scoring_diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
             elif not r.error and expected_len:
                 # No ground truth — use length check as pass/fail
                 r.correct = r.length_ok
                 r.score = 1.0 if r.length_ok else 0.0
                 r.scoring_method = "length_check"
+                r.scoring_diagnostics = {
+                    "expected_length": list(expected_len),
+                    "prediction_chars": r.prediction_chars,
+                }
 
             logger.info(
                 f"[{r.task_id}] {'✓' if r.correct else '✗'} "
@@ -313,10 +409,12 @@ def save_report(report: BenchmarkReport, output_path: str) -> None:
                 "question": r.question[:200],
                 "level": r.level,
                 "ground_truth": r.ground_truth,
+                "answer_type": r.answer_type,
                 "prediction": r.prediction,
                 "correct": r.correct,
                 "score": r.score,
                 "scoring_method": r.scoring_method,
+                "scoring_diagnostics": r.scoring_diagnostics,
                 "duration_ms": r.duration_ms,
                 "prediction_chars": r.prediction_chars,
                 "length_ok": r.length_ok,

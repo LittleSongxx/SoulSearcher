@@ -69,10 +69,7 @@ from agent import (
     ToolEvent,
     create_checkpointer,
     create_research_graph,
-    get_deep_agent_prompt,
-    get_default_agent_prompt,
     get_emitter,
-    initialize_enhanced_tools,
     remove_emitter,
 )
 from agent.workflows.evidence_extractor import extract_message_sources
@@ -81,14 +78,6 @@ from agent.workflows.source_routing import build_source_routing_policy
 from agent.runtime.request_builder import (
     ResearchRuntimeRequest,
     build_research_runtime,
-)
-from common.agents_store import (
-    AgentProfile,
-    ensure_default_agent,
-    load_agents,
-)
-from common.agents_store import (
-    get_agent as get_agent_profile,
 )
 from common.cancellation import TaskStatus, cancellation_manager
 from common.chat_stream_translate import translate_legacy_line_to_sse
@@ -99,8 +88,7 @@ from common.metrics import metrics_registry
 from common.tracing import SpanKind, SpanStatus, record_span, trace_request
 
 # Router modules extracted from main.py for maintainability
-from agent.api import documents_router, tracing_router
-from agent.api.documents import _rag_collection_for_request
+from agent.api.tracing import router as tracing_router
 from common.proxy_env import normalize_socks_proxy_env
 from common.research_events import build_research_run_event
 from common.sse import (
@@ -562,40 +550,6 @@ async def startup_event():
         logger.warning(f"MCP tools initialization failed: {e}", exc_info=settings.debug)
         mcp_loaded_tools = 0
 
-    # Initialize enhanced tool system (Phase 1-4)
-    try:
-        logger.info("Initializing enhanced tool system (Phase 1-4)...")
-        initialize_enhanced_tools()
-        logger.info("Enhanced tool system initialized")
-    except Exception as e:
-        logger.warning(
-            f"Enhanced tool system initialization failed: {e}", exc_info=settings.debug
-        )
-
-    # Ensure local research runtime agent profile exists.
-    try:
-        # Default agent: basic tools
-        ensure_default_agent(
-            default_profile=AgentProfile(
-                id="default",
-                name="Weaver Default Agent",
-                description="Default tool-using agent profile for agent mode.",
-                system_prompt=get_default_agent_prompt(),
-                enabled_tools={
-                    "web_search": True,
-                    "browser": True,
-                    "crawl": True,
-                    "python": True,
-                    "mcp": True,
-                },
-                metadata={"protected": True},
-            )
-        )
-
-        logger.info("Agents store initialized (data/agents.json)")
-    except Exception as e:
-        logger.warning(f"Agents store init failed: {e}", exc_info=settings.debug)
-
     # Start IM channel service (Feishu/Lark, etc.)
     try:
         if getattr(settings, "channels_enabled", False):
@@ -730,6 +684,15 @@ class ProviderCircuitSnapshot(BaseModel):
     consecutive_failures: int
     opened_for_seconds: Optional[float] = None
     resets_in_seconds: Optional[float] = None
+    total_calls: int = 0
+    attempted_calls: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    skipped_open_count: int = 0
+    retry_count: int = 0
+    circuit_open_count: int = 0
+    last_failure: Optional[str] = None
+    last_failure_age_seconds: Optional[float] = None
 
 
 class SearchProviderSnapshot(BaseModel):
@@ -799,18 +762,8 @@ class ToolRegistryResponse(BaseModel):
     tools: list[ToolRegistryTool]
 
 
-class ToolRegistryRefreshResponse(BaseModel):
-    discovered: int
-    total_tools: int
-
-
 class AgentHealthResponse(BaseModel):
-    agents_count: int
-    agent_ids: list[str]
     tool_registry_total_tools: int
-    enhanced_tool_discovery_enabled: bool
-    enhanced_tool_discovery_recursive: bool
-    rag_enabled: bool
     search_strategy: str
     search_engines: list[str]
     search_providers_available: list[str]
@@ -857,7 +810,14 @@ class SearchCacheStats(BaseModel):
     hits: int
     similar_hits: int
     misses: int
+    sets: int = 0
+    evictions: int = 0
+    expired: int = 0
+    total_requests: int = 0
     hit_rate: float
+    capacity_utilization: float = 0.0
+    ttl_seconds: float = 0.0
+    similarity_threshold: float = 0.0
 
 
 class SearchCacheStatsResponse(BaseModel):
@@ -883,28 +843,6 @@ class ExportTemplateItem(BaseModel):
 
 class ExportTemplatesResponse(BaseModel):
     templates: list[ExportTemplateItem]
-
-
-class DocumentUploadResponse(BaseModel):
-    success: bool
-    filename: str
-    chunks: int
-    message: str
-
-
-class DocumentListResponse(BaseModel):
-    total_chunks: int
-    documents: list[dict[str, Any]]
-
-
-class DocumentDeleteResponse(BaseModel):
-    success: bool
-    message: str
-
-
-class DocumentSearchResponse(BaseModel):
-    query: str
-    results: list[dict[str, Any]]
 
 
 class ImagePayload(BaseModel):
@@ -981,9 +919,7 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "source_policy",
     "source_routing",
     "source_providers",
-    "source_collections",
     "source_connectors",
-    "source_index_attempts",
     "allowed_domains",
     "denied_domains",
     "mcp_preset_ids",
@@ -993,7 +929,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "mcp_tools_to_include",
     "mcp_tool_whitelist",
     "mcp_max_tools",
-    "use_rag",
     "use_reflection_loop",
     "skill_ids",
     "deepsearch_skill_ids",
@@ -1008,9 +943,7 @@ _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
 
 
 _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
-    "source_collections",
     "source_connectors",
-    "source_index_attempts",
     "mcp_results",
 }
 
@@ -1230,7 +1163,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(tracing_router)
-app.include_router(documents_router)
 
 
 @app.get("/")
@@ -1258,13 +1190,6 @@ async def agent_health():
     """Lightweight agent subsystem health snapshot (no sandbox side effects)."""
     from tools.core.registry import get_global_registry
 
-    profiles = load_agents()
-    agent_ids = []
-    try:
-        agent_ids = [str(p.id) for p in profiles if getattr(p, "id", None)]
-    except Exception:
-        agent_ids = []
-
     registry = get_global_registry()
 
     orchestrator = get_search_orchestrator()
@@ -1274,16 +1199,7 @@ async def agent_health():
         available = []
 
     return {
-        "agents_count": len(profiles),
-        "agent_ids": sorted(agent_ids),
         "tool_registry_total_tools": len(registry.list_names()),
-        "enhanced_tool_discovery_enabled": bool(
-            getattr(settings, "enhanced_tool_discovery_enabled", True)
-        ),
-        "enhanced_tool_discovery_recursive": bool(
-            getattr(settings, "enhanced_tool_discovery_recursive", False)
-        ),
-        "rag_enabled": bool(getattr(settings, "rag_enabled", False)),
         "search_strategy": str(
             getattr(settings, "search_strategy", "fallback") or "fallback"
         ),
@@ -1572,7 +1488,6 @@ def _should_emit_main_text_for_node(node_name: str) -> bool:
         "writer",
         "direct_answer",
         "final_report",
-        "agent",
         "reviser",
     )
     return any(token in name for token in allow_tokens)
@@ -1725,13 +1640,6 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
             if use_zh
             else "I'll revise the draft for clarity and completeness."
         )
-    if name == "agent":
-        return (
-            "我会调用工具完成任务步骤，并记录关键过程。"
-            if use_zh
-            else "I'll call tools to execute steps and log key actions."
-        )
-
     return ""
 
 
@@ -1941,7 +1849,6 @@ async def stream_agent_events(
     images = images or []
     user_id = user_id or settings.memory_user_id
     model = (model or settings.primary_model).strip()
-    agent_profile = get_agent_profile("default")
 
     # Optional per-thread log handler for easier debugging
     thread_handler = None
@@ -2000,17 +1907,8 @@ async def stream_agent_events(
             deepsearch_config or {}
         )
 
-        # Load long-term memories (store) and inject deep prompt if needed
+        # Load long-term memories for request-scoped context.
         messages: list[Any] = []
-        if (
-            mode_info.get("mode") == "agent"
-            and agent_profile
-            and agent_profile.system_prompt
-        ):
-            messages.append(SystemMessage(content=agent_profile.system_prompt))
-        if mode_info.get("use_deep_prompt"):
-            messages.append(SystemMessage(content=get_deep_agent_prompt()))
-
         store_memories = _store_search(input_text, user_id=user_id)
         if store_memories:
             store_text = "\n".join(f"- {m}" for m in store_memories)
@@ -2037,25 +1935,11 @@ async def stream_agent_events(
                     "thread_id": thread_id,
                     "model": model,
                     "search_mode": mode_info,
-                    "agent_profile": (
-                        agent_profile.model_dump(mode="json") if agent_profile else None
-                    ),
                     "user_id": user_id,
                     "allow_interrupts": bool(checkpointer),
                     "tool_approval": settings.tool_approval or False,
                     "human_review": settings.human_review or False,
                     "max_revisions": settings.max_revisions,
-                    "rag_collection_name": (
-                        _rag_collection_for_request(request)
-                        if request is not None
-                        else (
-                            (
-                                getattr(settings, "rag_collection_name", "")
-                                or "weaver_documents"
-                            ).strip()
-                            or "weaver_documents"
-                        )
-                    ),
                 },
             )
         )
@@ -2273,13 +2157,6 @@ async def stream_agent_events(
                         "status",
                         {"text": "Synthesizing findings...", "step": "writing"},
                     )
-                elif node_name == "agent":
-                    logger.debug(f"  Agent node started | Thread: {thread_id}")
-                    yield await format_stream_event(
-                        "status",
-                        {"text": "Running agent (tool-calling)...", "step": "agent"},
-                    )
-
             elif event_type in {"on_chain_end", "on_node_end", "on_graph_end"}:
                 output = (
                     data_dict.get("output", {}) if isinstance(data_dict, dict) else {}
@@ -2626,7 +2503,6 @@ async def resume_interrupt(request: Request, payload: GraphInterruptResumeReques
 
     mode_info = _normalize_search_mode(payload.search_mode)
     model = (payload.model or settings.primary_model).strip()
-    agent_profile = get_agent_profile("default")
     # Fast path: avoid invoking the graph when no checkpoint exists for this thread.
     if not payload.thread_id or not str(payload.thread_id).strip():
         raise HTTPException(status_code=400, detail="thread_id is required")
@@ -2643,14 +2519,10 @@ async def resume_interrupt(request: Request, payload: GraphInterruptResumeReques
             "thread_id": payload.thread_id,
             "model": model,
             "search_mode": mode_info,
-            "agent_profile": (
-                agent_profile.model_dump(mode="json") if agent_profile else None
-            ),
             "allow_interrupts": True,
             "tool_approval": settings.tool_approval or False,
             "human_review": settings.human_review or False,
             "max_revisions": settings.max_revisions,
-            "rag_collection_name": _rag_collection_for_request(request),
         },
         "recursion_limit": 50,
     }
@@ -2716,30 +2588,6 @@ async def get_tool_registry():
     return {"stats": stats, "tools": tools_payload}
 
 
-@app.post("/api/tools/registry/refresh", response_model=ToolRegistryRefreshResponse)
-async def refresh_tool_registry(reset: bool = False):
-    """
-    Re-run enhanced tool discovery at runtime.
-
-    Notes:
-    - This is intended for dev/debug (e.g., after editing tool modules).
-    - `reset=true` clears the global registry before discovery.
-    """
-    from agent.workflows.agent_tools import initialize_enhanced_tools
-    from tools.core.registry import get_global_registry, reset_global_registry
-
-    if reset:
-        reset_global_registry()
-
-    registry = get_global_registry()
-    before = len(registry.list_names())
-
-    initialize_enhanced_tools()
-
-    after = len(get_global_registry().list_names())
-    return {"discovered": max(0, after - before), "total_tools": after}
-
-
 @app.get("/api/search/providers", response_model=SearchProvidersResponse)
 async def get_search_providers():
     """Expose multi-search provider availability, health, and circuit-breaker state."""
@@ -2756,6 +2604,14 @@ async def get_search_providers():
                 last_error = _sanitize_error_message(last_error)
             except Exception:
                 pass
+        circuit_last_failure = circuit.get("last_failure")
+        if circuit_last_failure:
+            try:
+                from tools.search.providers import _sanitize_error_message
+
+                circuit_last_failure = _sanitize_error_message(str(circuit_last_failure))
+            except Exception:
+                circuit_last_failure = str(circuit_last_failure)
         providers.append(
             SearchProviderSnapshot(
                 name=provider.name,
@@ -2776,6 +2632,21 @@ async def get_search_providers():
                     ),
                     opened_for_seconds=circuit.get("opened_for_seconds"),
                     resets_in_seconds=circuit.get("resets_in_seconds"),
+                    total_calls=int(circuit.get("total_calls", 0) or 0),
+                    attempted_calls=int(circuit.get("attempted_calls", 0) or 0),
+                    success_count=int(circuit.get("success_count", 0) or 0),
+                    failure_count=int(circuit.get("failure_count", 0) or 0),
+                    skipped_open_count=int(
+                        circuit.get("skipped_open_count", 0) or 0
+                    ),
+                    retry_count=int(circuit.get("retry_count", 0) or 0),
+                    circuit_open_count=int(
+                        circuit.get("circuit_open_count", 0) or 0
+                    ),
+                    last_failure=circuit_last_failure,
+                    last_failure_age_seconds=circuit.get(
+                        "last_failure_age_seconds"
+                    ),
                 ),
             )
         )
@@ -3316,6 +3187,7 @@ async def rollback_skill(name: str, version: int = 0):
 # ── DeerFlow-aligned: Memory API ──
 
 class MemoryDataResponse(BaseModel):
+    profile: dict[str, Any] = {}
     user: dict[str, Any] = {}
     history: dict[str, Any] = {}
     facts: list[dict[str, Any]] = []
@@ -3330,6 +3202,7 @@ async def get_memory():
         from agent.runtime.user_context import get_effective_user_id
         data = get_memory_storage().load(user_id=get_effective_user_id())
         return {
+            "profile": data.get("profile", {}),
             "user": data.get("user", {}),
             "history": data.get("history", {}),
             "facts": data.get("facts", []),
@@ -3954,8 +3827,9 @@ class EvidenceResponse(BaseModel):
     quality_summary: dict[str, Any] = {}
     quality_details: dict[str, Any] = {}
     research_brief: dict[str, Any] = {}
+    research_todos: list[dict[str, Any]] = []
+    todo_summary: dict[str, Any] = {}
     source_routing: dict[str, Any] = {}
-    source_collections: list[dict[str, Any]] = []
     evidence_store: dict[str, Any] = {}
     access_policy: dict[str, Any] = {}
     quality_gates: list[dict[str, Any]] = []
@@ -4143,6 +4017,8 @@ async def get_session_evidence(thread_id: str, request: Request):
         quality_summary = artifacts.get("quality_summary", {})
         quality_details = artifacts.get("quality_details", {})
         research_brief = artifacts.get("research_brief", {})
+        research_todos = artifacts.get("research_todos", [])
+        todo_summary = artifacts.get("todo_summary", {})
         quality_gates = artifacts.get("quality_gates", [])
         evidence_items = artifacts.get("evidence_items", [])
         citation_annotations = artifacts.get("citation_annotations", [])
@@ -4172,11 +4048,6 @@ async def get_session_evidence(thread_id: str, request: Request):
             or evidence_patch.get("source_routing")
             or {}
         )
-        source_collections = (
-            artifacts.get("source_collections")
-            or evidence_patch.get("source_collections")
-            or []
-        )
         access_policy = (
             artifacts.get("access_policy") or evidence_patch.get("access_policy") or {}
         )
@@ -4199,11 +4070,18 @@ async def get_session_evidence(thread_id: str, request: Request):
             "research_brief": (
                 research_brief if isinstance(research_brief, dict) else {}
             ),
+            "research_todos": (
+                research_todos
+                if isinstance(research_todos, list)
+                else evidence_patch.get("research_todos", [])
+            ),
+            "todo_summary": (
+                todo_summary
+                if isinstance(todo_summary, dict)
+                else evidence_patch.get("todo_summary", {})
+            ),
             "source_routing": (
                 source_routing if isinstance(source_routing, dict) else {}
-            ),
-            "source_collections": (
-                source_collections if isinstance(source_collections, list) else []
             ),
             "evidence_store": evidence_store.to_dict(),
             "access_policy": access_policy if isinstance(access_policy, dict) else {},
@@ -5040,7 +4918,6 @@ async def research_sse(request: Request, payload: ResearchRequest):
                 "model": model,
                 "search_mode": mode_info,
                 "user_id": user_id,
-                "rag_collection_name": _rag_collection_for_request(request),
                 **safe_deepsearch_config,
             }
         }
