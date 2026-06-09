@@ -9,7 +9,7 @@ import { ArtifactsPanel } from '@/components/chat/ArtifactsPanel'
 import { Header } from '@/components/chat/Header'
 import { ResearchInput } from './ResearchInput'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { useChatStream, type ChatExecutionMode, type DeepResearchStrategy } from '@/hooks/useChatStream'
+import { useChatStream, type ChatExecutionMode } from '@/hooks/useChatStream'
 import { STORAGE_KEYS, DEFAULT_MODEL } from '@/lib/constants'
 import { getApiBaseUrl } from '@/lib/api'
 import { Message } from '@/types/chat'
@@ -39,7 +39,6 @@ export function ResearchWorkspace() {
   const [input, setInput] = useState('')
   const [useWebSearch, setUseWebSearch] = useState(false)
   const [useDeepResearch, setUseDeepResearch] = useState(false)
-  const [deepResearchStrategy, setDeepResearchStrategy] = useState<DeepResearchStrategy>('supervisor_workers')
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const lastAtBottom = useRef<boolean | null>(null)
 
@@ -87,8 +86,7 @@ export function ResearchWorkspace() {
   const chatMode = useMemo<ChatExecutionMode>(() => ({
     useWebSearch: effectiveWebSearch,
     useDeepResearch,
-    deepResearchStrategy,
-  }), [effectiveWebSearch, useDeepResearch, deepResearchStrategy])
+  }), [effectiveWebSearch, useDeepResearch])
 
   const handleWebSearchChange = (enabled: boolean) => {
     if (!useDeepResearch) setUseWebSearch(enabled)
@@ -326,10 +324,8 @@ export function ResearchWorkspace() {
           onStop={handleStop}
           useWebSearch={effectiveWebSearch}
           useDeepResearch={useDeepResearch}
-          deepResearchStrategy={deepResearchStrategy}
           onWebSearchChange={handleWebSearchChange}
           onDeepResearchChange={handleDeepResearchChange}
-          onDeepResearchStrategyChange={setDeepResearchStrategy}
         />
       </main>
 

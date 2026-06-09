@@ -7,16 +7,13 @@ interface UseChatStreamProps {
   selectedModel: string
 }
 
-export type DeepResearchStrategy = 'supervisor_workers' | 'tree'
-
 export interface ChatExecutionMode {
   useWebSearch?: boolean
   useDeepResearch?: boolean
-  deepResearchStrategy?: DeepResearchStrategy
   images?: ImageAttachment[]
 }
 
-const DEFAULT_DEEP_RESEARCH_STRATEGY: DeepResearchStrategy = 'supervisor_workers'
+const DEFAULT_DEEP_RESEARCH_STRATEGY = 'supervisor_workers'
 
 function buildSearchMode(mode: ChatExecutionMode = {}) {
   const useDeepSearch = Boolean(mode.useDeepResearch)
@@ -28,7 +25,7 @@ function buildSearchMode(mode: ChatExecutionMode = {}) {
 
 function buildDeepsearchConfig(mode: ChatExecutionMode = {}) {
   if (!mode.useDeepResearch) return undefined
-  const strategy = mode.deepResearchStrategy || DEFAULT_DEEP_RESEARCH_STRATEGY
+  const strategy = DEFAULT_DEEP_RESEARCH_STRATEGY
   return {
     deepsearch_strategy: strategy,
     deepsearch_mode: strategy,
@@ -258,13 +255,10 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
           } else if (data.type === 'search') {
             searchCount += 1
             const query = String(data.data?.query || '').trim()
-            const mode = String(data.data?.mode || '').trim().toLowerCase()
             const epoch = data.data?.epoch
 
             if (query) {
-              if (mode === 'tree') {
-                setAutoStatus(`深度调研（树）：第 ${searchCount} 次检索 · ${query}`)
-              } else if (typeof epoch === 'number') {
+              if (typeof epoch === 'number') {
                 setAutoStatus(`深度调研：第 ${epoch} 轮检索（${searchCount}）· ${query}`)
               } else {
                 setAutoStatus(`检索中（${searchCount}）· ${query}`)
@@ -293,8 +287,6 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
             if (nodeId.includes('deepsearch')) {
               if (typeof epoch === 'number') {
                 setAutoStatus(`深度调研：完成第 ${epoch} 轮，继续…`)
-              } else if (nodeId.includes('tree')) {
-                setAutoStatus('深度调研：树调研完成，准备生成报告…')
               } else {
                 setAutoStatus('深度调研：本轮完成，继续…')
               }

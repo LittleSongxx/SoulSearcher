@@ -314,10 +314,10 @@ class Settings(BaseSettings):
     reasoning_model: str = "qwen3.7-max"  # For planning
 
     # Three-Tier Model Routing (fast / smart / strategic)
-    # Falls back to primary_model / reasoning_model when empty
-    fast_llm_model: str = "qwen3.6-flash"   # Cheap, fast model for high-volume tasks
-    smart_llm_model: str = "qwen3.6-plus"   # Balanced model for synthesis & writing
-    strategic_llm_model: str = "qwen3.7-max" # Most capable model for planning & deep reasoning
+    # Empty means the runtime falls back to primary_model / reasoning_model.
+    fast_llm_model: str = ""   # Cheap, fast model for high-volume tasks
+    smart_llm_model: str = ""  # Balanced model for synthesis & writing
+    strategic_llm_model: str = ""  # Most capable model for planning & deep reasoning
 
     # DashScope (Alibaba Cloud) API
     dashscope_api_key: str = ""  # Required when using DashScope models via compatible API
@@ -719,7 +719,7 @@ class Settings(BaseSettings):
             mode = "supervisor_workers"
         if mode in {"linear", "linear_light", "light"}:
             mode = "supervisor_workers"
-        if mode in {"tree", "supervisor_workers"}:
+        if mode in {"supervisor_workers"}:
             return mode
         return "supervisor_workers"
 
@@ -861,19 +861,14 @@ def load_yaml_config(yaml_path: str) -> dict[str, Any]:
     """
     root = _project_root()
     primary = Path(yaml_path) if Path(yaml_path).is_absolute() else root / yaml_path
-    example = (
-        primary.with_suffix(".yaml.example") if primary.suffix == ".yaml" else primary
-    )
-    candidates = [primary, example]
-    cfg_file = next((p for p in candidates if p.exists()), None)
-    if not cfg_file:
+    if not primary.exists():
         return {}
     try:
         import yaml
 
-        data = yaml.safe_load(cfg_file.read_text(encoding="utf-8"))
+        data = yaml.safe_load(primary.read_text(encoding="utf-8"))
     except Exception as exc:
-        logger.warning(f"Failed to load YAML config from {cfg_file}: {exc}")
+        logger.warning(f"Failed to load YAML config from {primary}: {exc}")
         return {}
     if not isinstance(data, dict):
         return {}
@@ -895,17 +890,36 @@ def _apply_yaml_overrides(settings_obj: Settings) -> None:
     yaml_data = load_yaml_config(settings_obj.yaml_config_path)
     if not yaml_data:
         return
-    defaults = Settings()
     for key, value in yaml_data.items():
         if not hasattr(settings_obj, key):
             continue
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        field_info = Settings.model_fields.get(key)
+        if field_info is None:
+            continue
         current = getattr(settings_obj, key, None)
-        default = getattr(defaults, key, None)
-        if current == default and value is not None:
+        default = field_info.get_default(call_default_factory=True)
+        if current == default:
             try:
                 setattr(settings_obj, key, value)
             except Exception:
                 pass
+
+
+def _normalize_model_defaults(settings_obj: Settings) -> None:
+    """Keep model tiers aligned when only PRIMARY_MODEL/REASONING_MODEL are set."""
+    primary = (settings_obj.primary_model or "").strip()
+    reasoning = (settings_obj.reasoning_model or "").strip() or primary
+
+    if not (settings_obj.fast_llm_model or "").strip() and primary:
+        settings_obj.fast_llm_model = primary
+    if not (settings_obj.smart_llm_model or "").strip() and primary:
+        settings_obj.smart_llm_model = primary
+    if not (settings_obj.strategic_llm_model or "").strip() and reasoning:
+        settings_obj.strategic_llm_model = reasoning
 
 
 def apply_app_config_overrides(settings: Settings) -> None:
@@ -917,6 +931,7 @@ def apply_app_config_overrides(settings: Settings) -> None:
     settings.app_config_object = app_cfg
     if not app_cfg:
         _apply_yaml_overrides(settings)
+        _normalize_model_defaults(settings)
         return
 
     default_llm = app_cfg.llm.get("default")
@@ -973,6 +988,7 @@ def apply_app_config_overrides(settings: Settings) -> None:
         settings.sandbox_mode = "none"
 
     _apply_yaml_overrides(settings)
+    _normalize_model_defaults(settings)
 
 
 def validate_critical_config(s: Settings) -> list[str]:

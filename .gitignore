@@ -129,6 +129,7 @@ y/
 # Runtime data
 .memory_store.json
 data/memory_store.json
+data/research_workspaces/
 third_party/research_refs/
 
 # Evaluation outputs

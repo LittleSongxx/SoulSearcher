@@ -102,8 +102,6 @@ services:
         "--reload-dir",
         "tools",
         "--reload-dir",
-        "triggers",
-        "--reload-dir",
         "prompts",
         "--reload-exclude",
         "web",

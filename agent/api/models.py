@@ -334,8 +334,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
 
 def _normalize_research_deepsearch_strategy(value: Any) -> str:
     mode = str(value or "").strip().lower().replace("-", "_")
-    if mode in {"tree", "supervisor_workers"}:
-        return mode
     if mode in {"supervisor", "workers", "supervisor_worker"}:
         return "supervisor_workers"
     return "supervisor_workers"

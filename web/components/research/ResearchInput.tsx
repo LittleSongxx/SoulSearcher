@@ -4,7 +4,6 @@ import React, { useEffect, useRef } from 'react'
 import { Paperclip, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { DeepResearchStrategy } from '@/hooks/useChatStream'
 
 interface ResearchInputProps {
   input: string
@@ -14,10 +13,8 @@ interface ResearchInputProps {
   onStop: () => void
   useWebSearch: boolean
   useDeepResearch: boolean
-  deepResearchStrategy: DeepResearchStrategy
   onWebSearchChange: (enabled: boolean) => void
   onDeepResearchChange: (enabled: boolean) => void
-  onDeepResearchStrategyChange: (strategy: DeepResearchStrategy) => void
 }
 
 export function ResearchInput({
@@ -28,10 +25,8 @@ export function ResearchInput({
   onStop,
   useWebSearch,
   useDeepResearch,
-  deepResearchStrategy,
   onWebSearchChange,
   onDeepResearchChange,
-  onDeepResearchStrategyChange,
 }: ResearchInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -121,32 +116,8 @@ export function ResearchInput({
       </div>
       <div className="mt-2 flex justify-between px-3 text-[10px] text-muted-foreground/70">
         <span>{useDeepResearch ? '深度研究会自动启用联网、agent 工具和研究编排。' : useWebSearch ? '联网搜索会使用在线来源回答。' : '普通聊天不会联网或调用工具。'}</span>
-        <span>{useDeepResearch ? `策略：${deepResearchStrategy === 'tree' ? 'tree' : 'supervisor_workers'}` : '需要报告时开启深度研究。'}</span>
+        <span>{useDeepResearch ? '架构：Supervisor Workers' : '需要报告时开启深度研究。'}</span>
       </div>
-      {useDeepResearch && (
-        <div className="mt-2 flex justify-end gap-2 px-3">
-          <Button
-            type="button"
-            size="sm"
-            variant={deepResearchStrategy === 'supervisor_workers' ? 'default' : 'outline'}
-            disabled={isLoading}
-            onClick={() => onDeepResearchStrategyChange('supervisor_workers')}
-            className="h-7 rounded-full px-3 text-[10px]"
-          >
-            Supervisor Workers
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={deepResearchStrategy === 'tree' ? 'default' : 'outline'}
-            disabled={isLoading}
-            onClick={() => onDeepResearchStrategyChange('tree')}
-            className="h-7 rounded-full px-3 text-[10px]"
-          >
-            Tree
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

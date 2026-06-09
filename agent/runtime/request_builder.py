@@ -84,6 +84,14 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
         "recursion_limit": request.recursion_limit,
     }
     config["configurable"].update(safe_deepsearch_config)
+    selected_model = str(request.model or "").strip()
+    if selected_model:
+        # The UI model selector is request-scoped. Unless the caller explicitly
+        # supplied tier overrides, use the selected model across the workflow so
+        # supervisor/researcher/report nodes cannot fall back to stale globals.
+        config["configurable"].setdefault("fast_llm", selected_model)
+        config["configurable"].setdefault("smart_llm", selected_model)
+        config["configurable"].setdefault("strategic_llm", selected_model)
 
     return ResearchRuntimeBundle(
         initial_state=initial_state,
