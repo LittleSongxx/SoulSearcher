@@ -245,7 +245,7 @@ def reset_prompt_manager():
 
 
 # ============================================================================
-# Convenience Functions (for backward compatibility)
+# Convenience Functions
 # ============================================================================
 
 

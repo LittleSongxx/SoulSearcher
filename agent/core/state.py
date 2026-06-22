@@ -55,12 +55,12 @@ class ResearchQuestion(BaseModel):
 
 class ComplexityAssessment(BaseModel):
     """Structured complexity classification for routing."""
-    complexity: Literal["simple", "deep"] = Field(
+    complexity: Literal["simple", "standard", "deep"] = Field(
         description="Complexity level of the research task."
     )
     estimated_depth: int = Field(
-        description="Recommended recursion depth (1=surface, 2=thorough).",
-        ge=1, le=2
+        description="Recommended recursion depth (1=surface, 2=thorough, 3=deep).",
+        ge=1, le=3
     )
     estimated_breadth: int = Field(
         description="Recommended search breadth (number of parallel queries).",
@@ -308,7 +308,7 @@ def build_initial_state(
 ) -> dict:
     """Build an initial AgentState from main.py fields.
 
-    Bridges legacy fields into the standard AgentState.
+    Bridges request-builder fields into the standard AgentState.
 
     Args:
         input_text: User's query text.
@@ -316,7 +316,7 @@ def build_initial_state(
         images: Optional images (stored in metadata, not core state).
         research_brief: Pre-existing research brief dict (from store).
         messages: Initial messages (system prompts, memory context, etc.).
-        **kwargs: Additional legacy fields (ignored).
+        **kwargs: Additional caller fields (ignored).
 
     Returns:
         dict ready to be used as initial_state for the v2 graph.
@@ -333,6 +333,15 @@ def build_initial_state(
     if not isinstance(source_routing, dict):
         source_routing = {}
 
+    initial_sources = kwargs.get("initial_sources")
+    if not isinstance(initial_sources, list):
+        initial_sources = []
+    initial_sources = [item for item in initial_sources if isinstance(item, dict)]
+
+    initial_artifacts = kwargs.get("initial_deepsearch_artifacts")
+    if not isinstance(initial_artifacts, dict):
+        initial_artifacts = {}
+
     initial_state: dict[str, Any] = {
         "input": input_text,
         "images": images or [],
@@ -347,7 +356,7 @@ def build_initial_state(
         "raw_notes": [],
         "notes": [],
         "research_iterations": 0,
-        "sources": [],
+        "sources": initial_sources,
         "curated_sources": [],
         "evidence_items": [],
         "research_todos": [],
@@ -356,7 +365,7 @@ def build_initial_state(
         "quality_gates": [],
         "quality_followup_required": False,
         "quality_followup_count": 0,
-        "deepsearch_artifacts": {},
+        "deepsearch_artifacts": dict(initial_artifacts),
         "final_report": "",
         "report_format": kwargs.get("report_format", "markdown"),
         "messages": ensure_user_input_message(messages, input_text),

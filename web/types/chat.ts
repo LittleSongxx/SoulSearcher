@@ -56,7 +56,7 @@ export interface Message {
 export interface ChatSession {
   id: string
   title: string
-  date: string // Legacy field, kept for compatibility
+  date: string
   updatedAt: number
   createdAt: number
   tags?: string[]

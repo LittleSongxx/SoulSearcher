@@ -17,7 +17,7 @@ agent/core/             # Graph, state, model routing, LLM factory, events, midd
   model_routing.py      # Configurable model with 3-tier + per-task-type routing
   llm_factory.py        # Centralized ChatOpenAI creation (multi-provider)
   events.py             # SSE event emitter (TOOL_START, RESEARCH_TREE_UPDATE, etc.)
-  middleware.py          # ToolErrorHandler, LoopDetector, TokenUsageTracker, MemoryMiddleware
+  middleware.py          # ToolErrorHandler, LoopDetector, TokenUsageTracker
   prompts.py            # resolve_prompt() template loading
   message_utils.py      # Message manipulation utilities
   search_cache.py       # Search result caching with fuzzy query matching
@@ -49,15 +49,19 @@ agent/workflows/        # Deep research pipeline nodes
 
 agent/runtime/          # Lightweight runtime harness
   context.py            # RuntimeContext dataclass
+  runs.py               # RunManager + persistent/fallback run records
   sandbox_policy.py     # Command auditing, pipe-to-shell detection
   user_context.py       # Per-request user_id via ContextVar
   middleware/shared.py  # Shared graph-middleware functions (loop check, token tracking, context budget)
-  memory/               # Per-user memory (structured + embedding dual-mode)
-    system.py           # MemorySystem: load/save/record/get_relevant_context
-    storage.py          # File-based per-user JSON storage
-    queue.py            # Debounced async update queue
-    updater.py          # LLM-driven fact extraction
-    prompt.py           # Memory system prompt builder
+
+agent/memory/           # Unified long-term memory service
+  models.py             # MemoryRecord, MemoryEntity, MemoryRelation, MemoryEpisode
+  store.py              # Postgres/pgvector store + in-memory test backend
+  service.py            # retrieve(), ingest_research_run(), upsert_record(), delete_record()
+  retrieval.py          # Hybrid vector/full-text/recency/importance/confidence/graph recall
+  ingestion.py          # Evidence-gated research artifact memory extraction
+  formatting.py         # Hidden <memory_context> formatter
+  skill_evolution.py    # Procedural memory -> custom skill proposals
 
 agent/skills/           # Skills system (SKILL.md parsing + tool allowlisting + security scanning)
 agent/mcp/              # MCP OAuth + interceptor
@@ -77,19 +81,17 @@ scripts/                # CLI tools, benchmarks (GAIA, deep research), smoke tes
 
 ## Cross-Cutting Concerns
 
-### Middleware (4 core concerns in agent/core/middleware.py)
+### Middleware (3 core concerns in agent/core/middleware.py)
 
 1. **ToolErrorHandling** — Tool failures return ToolMessages, never crash the graph
 2. **LoopDetection** — Hash-based + frequency-based duplicate response detection
 3. **TokenUsage** — Per-phase (supervisor/research/report) cost tracking
-4. **Memory** — Async per-user memory update (fire-and-forget after report)
 
 ### Shared Graph Middleware (agent/runtime/middleware/shared.py)
 
 - `check_loop()` — ReAct loop safety (used by supervisor and researcher nodes)
 - `record_token_usage()` — Per-phase cost attribution
 - `enforce_context_budget()` — Trim messages, cap tool results at 8K chars
-- `build_dynamic_context_reminder()` — Date + memory as `<system-reminder>` block
 - `safe_execute_tool()` — Wrap tool calls with error handling
 
 ### Quality Gates (evaluation pipeline)
@@ -141,8 +143,10 @@ context and returns only the summary."
 - **Quality evaluation**: Three levels — Level 1 fast auto-check with auto-revise, Level 2
   9-dim weighted scoring, Level 3 4-dim deep eval with degradation detection. Plus citation
   gate and claim verifier gate.
-- **Memory flow**: Report generation → MemoryMiddleware → MemorySystem.record_research()
-  (sync file write) → next-turn injection via get_relevant_context().
+- **Memory flow**: `report.py` ingests completed research artifacts through
+  `MemoryService.ingest_research_run()`. New requests call `MemoryService.retrieve()`
+  before graph execution and inject hidden `<memory_context>` as research leads only;
+  final citations still require current-run evidence provenance.
 - **Multi-agent mode**: Optional Coordinator/Planner/Researcher/Reporter agents with
   structured inter-agent messaging for complex multi-perspective research.
 - **Skill safety**: Skills declare allowed tools; installed skills undergo security scanning;

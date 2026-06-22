@@ -3,8 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from langchain_core.messages import SystemMessage
+
 from agent.core.state import build_initial_state
+from agent.runtime.context import RuntimeContext
 from agent.runtime.workspace import get_research_workspace
+from agent.skills.slash import build_slash_skill_context, resolve_slash_skill
 
 
 @dataclass
@@ -38,6 +42,12 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
         or safe_deepsearch_config.get("deepsearch_skill_ids")
         or []
     )
+    if isinstance(active_skill_ids, str):
+        active_skill_ids = [part.strip() for part in active_skill_ids.split(",") if part.strip()]
+    else:
+        active_skill_ids = [str(part).strip() for part in active_skill_ids if str(part).strip()]
+    slash_activation = resolve_slash_skill(request.input_text, active_skill_ids)
+    safe_deepsearch_config["skill_ids"] = active_skill_ids
 
     workspace = get_research_workspace(request.thread_id)
     workspace.write_json(
@@ -67,7 +77,26 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
             if isinstance(safe_deepsearch_config.get("source_routing"), dict)
             else {}
         ),
-        messages=request.context_messages,
+        initial_sources=(
+            safe_deepsearch_config.get("memory_source_candidates")
+            if isinstance(safe_deepsearch_config.get("memory_source_candidates"), list)
+            else []
+        ),
+        initial_deepsearch_artifacts={
+            "memory_retrieval": safe_deepsearch_config.get("memory_retrieval", {})
+        }
+        if isinstance(safe_deepsearch_config.get("memory_retrieval"), dict)
+        else {},
+        messages=(
+            [
+                SystemMessage(
+                    content=build_slash_skill_context(slash_activation),
+                    additional_kwargs={"hide_from_ui": True, "slash_skill_activation": True},
+                )
+            ]
+            if slash_activation
+            else []
+        ) + list(request.context_messages or []),
     )
     if (
         initial_state.get("source_routing")
@@ -78,12 +107,25 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
     workspace_artifact = workspace.artifact()
     initial_state["deepsearch_artifacts"]["workspace"] = workspace_artifact
     safe_deepsearch_config["workspace_path"] = str(workspace.root)
+    run_context = RuntimeContext.from_configurable(
+        {
+            **request.base_configurable,
+            **safe_deepsearch_config,
+            "thread_id": request.thread_id,
+            "user_id": request.user_id or "default_user",
+            "model": request.model,
+            "search_mode": request.mode_info,
+            "workspace_path": str(workspace.root),
+        }
+    )
 
     config = {
         "configurable": dict(request.base_configurable),
         "recursion_limit": request.recursion_limit,
     }
     config["configurable"].update(safe_deepsearch_config)
+    config["configurable"]["runtime_context"] = run_context
+    config["configurable"]["run_id"] = run_context.run_id
     selected_model = str(request.model or "").strip()
     if selected_model:
         # The UI model selector is request-scoped. Unless the caller explicitly

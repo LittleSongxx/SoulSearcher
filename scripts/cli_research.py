@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CLI helper to call /api/research and stream events.
+"""CLI helper to call /api/research/sse and stream events.
 Usage:
   python scripts/cli_research.py "your question" --host http://localhost:8001
 """
@@ -12,21 +12,36 @@ import httpx
 
 
 def stream_research(query: str, host: str):
-    url = f"{host.rstrip('/')}/api/research"
-    with httpx.stream("POST", url, params={"query": query}, timeout=None) as r:
+    url = f"{host.rstrip('/')}/api/research/sse"
+    headers = {"Accept": "text/event-stream", "Content-Type": "application/json"}
+    with httpx.stream(
+        "POST",
+        url,
+        json={"query": query},
+        headers=headers,
+        timeout=None,
+    ) as r:
         r.raise_for_status()
+        event_name = ""
+        data_lines: list[str] = []
         for line in r.iter_lines():
-            if not line:
+            if line == "":
+                if not data_lines:
+                    event_name = ""
+                    continue
+                raw_data = "\n".join(data_lines)
+                data_lines = []
+                try:
+                    payload = json.loads(raw_data)
+                    print({"type": event_name or payload.get("type"), "data": payload})
+                except Exception as e:
+                    print(f"[parse error] {e}: {raw_data}", file=sys.stderr)
+                event_name = ""
                 continue
-            try:
-                # format_stream_event uses "0:{json}\n"
-                if line.startswith("0:"):
-                    payload = json.loads(line[2:])
-                    print(payload)
-                else:
-                    print(line)
-            except Exception as e:
-                print(f"[parse error] {e}: {line}", file=sys.stderr)
+            if line.startswith("event:"):
+                event_name = line.split(":", 1)[1].strip()
+            elif line.startswith("data:"):
+                data_lines.append(line.split(":", 1)[1].lstrip())
 
 
 def main():

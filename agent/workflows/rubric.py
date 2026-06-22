@@ -780,6 +780,7 @@ async def run_full_claim_alignment(
     report: str,
     source_texts: str,
     config: RunnableConfig | None = None,
+    citation_bindings: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify ALL claims in the report against their cited sources.
 
@@ -799,6 +800,11 @@ async def run_full_claim_alignment(
 
     if not markers:
         return {"alignment_rate": 1.0, "total_claims": 0, "claims": []}
+
+    if citation_bindings:
+        binding_result = _run_binding_alignment(report, citation_bindings)
+        if binding_result is not None:
+            return binding_result
 
     research_config = (
         ResearchConfiguration.from_runnable_config(config)
@@ -850,6 +856,68 @@ async def run_full_claim_alignment(
             "claims": [],
             "error": str(e),
         }
+
+
+def _run_binding_alignment(
+    report: str,
+    citation_bindings: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not citation_bindings:
+        return None
+
+    markers = sorted({int(item.get("marker")) for item in citation_bindings if str(item.get("marker") or "").isdigit()})
+    if not markers:
+        return None
+
+    claims: list[dict[str, Any]] = []
+    aligned = 0
+    for marker in markers:
+        binding = next((item for item in citation_bindings if int(item.get("marker", 0) or 0) == marker), None)
+        if not binding:
+            continue
+        matched_passages = binding.get("matched_passages") or []
+        traceable = bool(binding.get("traceable"))
+        source_id = str(binding.get("source_id") or "")
+        canonical_url = str(binding.get("canonical_url") or "")
+        snippet_hash = str(binding.get("snippet_hash") or "")
+        support_text = ""
+        if matched_passages and isinstance(matched_passages, list):
+            first = matched_passages[0]
+            if isinstance(first, dict):
+                support_text = " | ".join(
+                    part for part in [
+                        str(first.get("title") or ""),
+                        str(first.get("canonical_url") or first.get("url") or ""),
+                        str(first.get("snippet_hash") or ""),
+                    ]
+                    if part
+                )
+        score = 1.0 if traceable and matched_passages else 0.0
+        if score >= 0.5:
+            aligned += 1
+        claims.append(
+            {
+                "claim_summary": f"Claim cited by marker [{marker}]",
+                "citation_marker": str(marker),
+                "score": score,
+                "source_support": support_text or f"source_id={source_id}; canonical_url={canonical_url}; snippet_hash={snippet_hash}",
+                "source_id": source_id,
+                "canonical_url": canonical_url,
+                "snippet_hash": snippet_hash,
+                "traceable": traceable,
+            }
+        )
+
+    total = len(claims)
+    if not total:
+        return None
+    return {
+        "alignment_rate": round(aligned / total if total else 1.0, 4),
+        "total_claims": total,
+        "aligned": aligned,
+        "claims": claims,
+        "mode": "citation_binding",
+    }
 
 
 # =============================================================================

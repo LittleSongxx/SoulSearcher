@@ -9,7 +9,7 @@ from common.config import settings
 from prompts.templates.deepsearch import get_behavior_prompt
 
 # ============================================================================
-# CORE AGENT PROMPTS (legacy defaults retained)
+# CORE AGENT PROMPTS
 # ============================================================================
 
 ENHANCED_AGENT_PROMPT = """You are Weaver, an autonomous AI research and execution agent.

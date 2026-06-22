@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ToolT = TypeVar("ToolT", bound="NamedTool")
-CORE_CONTROL_TOOLS = {"ThinkTool", "ResearchComplete", "read_skill_guide"}
+CORE_CONTROL_TOOLS = {"ThinkTool", "ResearchComplete", "read_skill_guide", "deep_read", "tool_search"}
 
 
 class NamedTool(Protocol):
@@ -21,10 +21,10 @@ class NamedTool(Protocol):
 def allowed_tool_names_for_skills(skills: list[Skill]) -> set[str] | None:
     """Return the union of explicit skill allowed-tools declarations.
 
-    None means legacy allow-all behavior. It is returned only when no loaded
-    skill declares allowed-tools. Once any skill declares the field, legacy
-    skills without the field contribute no tools instead of disabling the
-    explicit restrictions from other skills.
+    None means allow-all behavior. It is returned only when no loaded skill
+    declares allowed-tools. Once any skill declares the field, skills without
+    the field contribute no tools instead of disabling the explicit restrictions
+    from other skills.
     """
     if not skills:
         return None

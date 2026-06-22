@@ -259,7 +259,7 @@ def validate_tool_result(result: Any) -> ToolResult:
     """
     Validate and convert any result to ToolResult.
 
-    This is useful for adapting legacy tools that don't return ToolResult.
+    This is useful for adapting raw tool outputs that don't return ToolResult.
 
     Args:
         result: Any result value

@@ -36,6 +36,8 @@ def test_derive_todos_prefers_subtopics_section():
     ]
     assert all(todo["status"] == "pending" for todo in todos)
     assert all(todo["source"] == "plan" for todo in todos)
+    assert todos[0]["priority"] == 1
+    assert todos[0]["coverage_status"] == "planned"
 
 
 def test_derive_todos_uses_revised_plan_content_and_caps_tasks():
@@ -150,6 +152,22 @@ def test_dynamic_topic_append_and_gap_dedupe():
     assert titles.count("Customer adoption barriers") == 1
     assert titles.count("Evidence gap: pricing sensitivity by segment") == 1
     assert summarize_todos(todos)["pending"] == 3
+
+
+def test_todos_capture_priority_and_dependencies_from_marked_titles():
+    todos = derive_todos_from_plan(
+        """
+## Sub-topics
+- [p1] Core thesis
+- [p3] Supporting evidence (depends: Core thesis)
+""",
+        "",
+    )
+
+    assert todos[0]["priority"] == 1
+    assert todos[1]["priority"] == 3
+    assert "Core thesis" in todos[1]["dependencies"]
+    assert todos[1]["coverage_status"] == "planned"
 
 
 def test_evidence_store_response_patch_includes_todos():

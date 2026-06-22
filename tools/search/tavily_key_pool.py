@@ -10,7 +10,7 @@ Usage:
 
 Supports:
 - TAVILY_API_KEYS (comma-separated) for multiple keys
-- Falls back to TAVILY_API_KEY (single key) for backward compatibility
+- Falls back to TAVILY_API_KEY for single-key deployments
 - Thread-safe rotation
 - Logs rotation events for observability
 """

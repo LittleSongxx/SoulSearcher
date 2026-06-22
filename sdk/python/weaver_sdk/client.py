@@ -162,58 +162,8 @@ class WeaverClient:
                             yield {"type": event_name, "data": data}
 
     def research_stream(self, query: str) -> Iterator[StreamEvent]:
-        """
-        Stream research progress events (legacy `0:{...}\\n` protocol).
-        """
-        merged_headers = {"Accept": "text/event-stream", **self.headers}
-        with self._http.stream(
-            "POST",
-            self._url("/api/research"),
-            headers=merged_headers,
-            params={"query": str(query or "")},
-        ) as resp:
-            body_text = ""
-            if resp.status_code < 200 or resp.status_code >= 300:
-                try:
-                    body_text = resp.read().decode("utf-8", errors="ignore")
-                except Exception:
-                    body_text = ""
-                raise WeaverApiError(status=resp.status_code, path="/api/research", body_text=body_text)
-
-            self.last_thread_id = (
-                resp.headers.get("X-Thread-ID")
-                or resp.headers.get("x-thread-id")
-                or None
-            )
-
-            buffer = ""
-            for chunk in resp.iter_bytes():
-                try:
-                    buffer += chunk.decode("utf-8", errors="ignore")
-                except Exception:
-                    continue
-
-                lines = buffer.split("\n")
-                buffer = lines.pop() or ""
-                for raw_line in lines:
-                    line = raw_line.strip()
-                    if not line.startswith("0:"):
-                        continue
-                    try:
-                        parsed = json.loads(line[2:])
-                    except Exception:
-                        continue
-                    if isinstance(parsed, dict) and "type" in parsed and "data" in parsed:
-                        yield parsed  # type: ignore[misc]
-
-            tail = buffer.strip()
-            if tail.startswith("0:"):
-                try:
-                    parsed = json.loads(tail[2:])
-                except Exception:
-                    parsed = None
-                if isinstance(parsed, dict) and "type" in parsed and "data" in parsed:
-                    yield parsed  # type: ignore[misc]
+        """Stream research progress events through the standard SSE endpoint."""
+        yield from self.research_sse({"query": str(query or "")})
 
     def research_sse(self, payload: dict[str, Any]) -> Iterator[StreamEvent]:
         """

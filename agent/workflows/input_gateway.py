@@ -184,7 +184,7 @@ async def classify_complexity(
     """Classify the research task complexity and route accordingly.
 
     - simple → direct_answer (fast path, single LLM call, no supervisor)
-    - deep → research_supervisor (Orchestrator-Workers: supervisor + N researchers)
+    - standard/deep → plan_research (HITL plan gate before supervisor)
     """
     research_config = ResearchConfiguration.from_runnable_config(config)
 
@@ -221,18 +221,27 @@ async def classify_complexity(
                 "estimated_breadth": 1,
             },
         )
-    else:
-        # deep → Orchestrator-Workers pipeline
-        # Route through the plan gate (HITL: plan → approve → execute)
-        logger.info("[Complexity] Routing to plan_research (deep → Orchestrator-Workers)")
+    if response.complexity == "standard":
+        logger.info("[Complexity] Routing to plan_research (standard → plan gate)")
         return Command(
             goto="plan_research",
             update={
-                "complexity": "deep",
-                "estimated_depth": 2,
-                "estimated_breadth": 4,
+                "complexity": "standard",
+                "estimated_depth": max(1, int(response.estimated_depth or 2)),
+                "estimated_breadth": max(1, int(response.estimated_breadth or 3)),
             },
         )
+
+    # deep → Orchestrator-Workers pipeline with stronger budget defaults
+    logger.info("[Complexity] Routing to plan_research (deep → plan gate)")
+    return Command(
+        goto="plan_research",
+        update={
+            "complexity": "deep",
+            "estimated_depth": max(3, int(response.estimated_depth or 3)),
+            "estimated_breadth": max(4, int(response.estimated_breadth or 4)),
+        },
+    )
 
 
 # =============================================================================

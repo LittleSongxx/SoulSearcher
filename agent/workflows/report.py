@@ -28,7 +28,12 @@ from agent.core.prompts import (
     HTML_REPORT_CSS_TEMPLATE,
     resolve_prompt,
 )
-from agent.core.state import AgentState, EvidenceItem
+from agent.core.state import AgentState
+from agent.runtime.context import get_viewed_images
+from agent.workflows.evidence_ledger import (
+    build_evidence_ledger as build_structured_evidence_ledger,
+    evidence_passages as structured_evidence_passages,
+)
 from agent.workflows.research_todo import (
     append_gap_todos,
     emit_todo_updates,
@@ -397,6 +402,9 @@ def _build_claim_artifacts(claim_alignment: dict[str, Any]) -> tuple[list[dict[s
         citation_marker = str(claim.get("citation_marker", "")).strip()
         claim_summary = str(claim.get("claim_summary", "")).strip()
         support = str(claim.get("source_support", "")).strip()
+        source_id = str(claim.get("source_id", "")).strip()
+        canonical_url = str(claim.get("canonical_url", "")).strip()
+        snippet_hash = str(claim.get("snippet_hash", "")).strip()
         claims.append(
             {
                 "claim": claim_summary,
@@ -405,6 +413,9 @@ def _build_claim_artifacts(claim_alignment: dict[str, Any]) -> tuple[list[dict[s
                 "citation_marker": citation_marker,
                 "notes": support,
                 "evidence_passages": [support] if support else [],
+                "source_id": source_id,
+                "canonical_url": canonical_url,
+                "snippet_hash": snippet_hash,
             }
         )
         annotations.append(
@@ -413,6 +424,9 @@ def _build_claim_artifacts(claim_alignment: dict[str, Any]) -> tuple[list[dict[s
                 "claim_summary": claim_summary,
                 "status": status,
                 "score": round(score, 4),
+                "source_id": source_id,
+                "canonical_url": canonical_url,
+                "snippet_hash": snippet_hash,
             }
         )
     return claims, annotations
@@ -425,124 +439,18 @@ def _build_evidence_ledger(
     notes: list[str] | None = None,
     max_items: int = 24,
 ) -> list[dict[str, Any]]:
-    """Build a structured evidence ledger from sources and research notes."""
-    artifacts = state.get("deepsearch_artifacts", {}) or {}
-    if not isinstance(artifacts, dict):
-        artifacts = {}
-
-    now = datetime.now().isoformat(timespec="seconds")
-    items: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    def _add(item: dict[str, Any]) -> None:
-        if len(items) >= max_items:
-            return
-        url = str(item.get("url") or item.get("source") or "").strip()
-        content = str(
-            item.get("content")
-            or item.get("text")
-            or item.get("evidence")
-            or item.get("title")
-            or ""
-        ).strip()
-        if not url and not content:
-            return
-        key = f"{url}|{content[:240]}"
-        if key in seen:
-            return
-        seen.add(key)
-        score_value = item.get("score")
-        try:
-            score = float(score_value) if score_value is not None else None
-        except (TypeError, ValueError):
-            score = None
-        normalized = EvidenceItem(
-            id=str(item.get("id") or f"evidence_{len(items) + 1}"),
-            type=str(item.get("type") or ("source_text" if content else "source_url")),
-            source_id=str(item.get("source_id") or ""),
-            title=str(item.get("title") or "")[:240],
-            url=url,
-            source=str(item.get("source") or url or item.get("title") or ""),
-            content=content[:1600],
-            tool=str(item.get("tool") or ""),
-            query=str(item.get("query") or ""),
-            retrieved_at=str(item.get("retrieved_at") or now),
-            score=score,
-            metadata=dict(item.get("metadata") if isinstance(item.get("metadata"), dict) else {}),
-        )
-        items.append(normalized.to_artifact())
-
-    for item in state.get("evidence_items", []) or []:
-        if isinstance(item, dict):
-            _add(item)
-
-    for item in artifacts.get("evidence_items", []) or []:
-        if isinstance(item, dict):
-            _add(item)
-
-    sources = []
-    if curated_sources:
-        sources.extend(curated_sources)
-    state_sources = state.get("sources", []) or []
-    if isinstance(state_sources, list):
-        sources.extend(state_sources)
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        url = str(source.get("url") or source.get("source_url") or "").strip()
-        title = str(source.get("title") or source.get("name") or url).strip()
-        if not url and not title:
-            continue
-        _add({
-            "type": "source_url",
-            "source_id": source.get("id") or source.get("source_id") or "",
-            "title": title[:240],
-            "url": url,
-            "source": url or title,
-            "content": str(source.get("snippet") or source.get("summary") or title)[:1200],
-            "score": source.get("relevance_score") or source.get("score"),
-            "tool": source.get("tool") or "source_curation",
-        })
-
-    note_values = notes if notes is not None else (state.get("notes", []) or [])
-    for note in note_values:
-        text = str(note or "").strip()
-        if not text:
-            continue
-        for chunk in re.split(r"\n\s*\n", text):
-            chunk = re.sub(r"\s+", " ", chunk).strip()
-            if len(chunk) < 80:
-                continue
-            url_match = re.search(r"https?://[^\s\])>\"']+", chunk)
-            url = url_match.group(0) if url_match else ""
-            _add({
-                "type": "research_note",
-                "source": url,
-                "url": url,
-                "content": chunk[:1600],
-                "tool": "researcher",
-            })
-            if len(items) >= max_items:
-                break
-        if len(items) >= max_items:
-            break
-
-    return items
+    """Report-local API wrapper around the centralized evidence ledger."""
+    return build_structured_evidence_ledger(
+        state,
+        curated_sources=curated_sources,
+        notes=notes,
+        max_items=max_items,
+    )
 
 
 def _evidence_passages(evidence_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    passages: list[dict[str, Any]] = []
-    for item in evidence_items:
-        content = str(item.get("content") or item.get("text") or "").strip()
-        if not content:
-            continue
-        passages.append({
-            "url": str(item.get("url") or item.get("source") or ""),
-            "title": str(item.get("title") or item.get("source") or ""),
-            "text": content[:1600],
-            "evidence_id": str(item.get("id") or ""),
-        })
-    return passages
+    """Report-local API wrapper around centralized passage generation."""
+    return structured_evidence_passages(evidence_items)
 
 
 def _persist_workspace_artifacts(
@@ -575,6 +483,48 @@ def _persist_workspace_artifacts(
     except Exception as e:
         logger.warning("[Workspace] Failed to persist report artifacts: %s", e)
     return artifacts
+
+
+async def _ingest_memory_artifacts(
+    config: RunnableConfig,
+    *,
+    research_brief: str,
+    final_content: str,
+    artifacts: dict[str, Any],
+    notes: list[str],
+) -> None:
+    try:
+        from common.config import settings
+
+        if not getattr(settings, "memory_enabled", True):
+            return
+        from agent.memory import get_memory_service
+
+        configurable = config.get("configurable") or {}
+        runtime_context = configurable.get("runtime_context")
+        thread_id = str(
+            getattr(runtime_context, "thread_id", "")
+            or configurable.get("thread_id")
+            or "default"
+        )
+        run_id = str(
+            getattr(runtime_context, "run_id", "")
+            or configurable.get("run_id")
+            or thread_id
+        )
+        user_id = str(configurable.get("user_id") or "default")
+        await get_memory_service().ingest_research_run(
+            user_id=user_id,
+            thread_id=thread_id,
+            run_id=run_id,
+            research_brief=research_brief,
+            final_report=final_content,
+            artifacts=artifacts,
+            notes=notes,
+        )
+        logger.info("[Memory] Ingested research artifacts for thread %s", thread_id)
+    except Exception as e:
+        logger.warning("[Memory] Ingestion skipped: %s", e)
 
 
 def _build_quality_summary(
@@ -829,7 +779,7 @@ async def final_report_generation(
 
             # === Token Usage Tracking ===
             from agent.core.middleware import get_token_tracker
-            tracker = get_token_tracker()
+            tracker = get_token_tracker(config)
             usage = getattr(response, "usage_metadata", None) or {}
             input_tokens = usage.get("input_tokens", 0)
             output_tokens = usage.get("output_tokens", 0)
@@ -840,8 +790,7 @@ async def final_report_generation(
 
             # === HTML Post-processing: Inject images ===
             if report_format == "html" and embed_images:
-                configurable = config.get("configurable", {})
-                viewed_images = configurable.get("viewed_images", {})
+                viewed_images = get_viewed_images(config)
                 if viewed_images:
                     try:
                         final_content = _inject_images_into_html(
@@ -878,26 +827,6 @@ async def final_report_generation(
                     logger.debug("[Report] Quality check not available")
                 except Exception as e:
                     logger.warning(f"[Report] Quality check skipped: {e}")
-
-            # === Memory Update ===
-            from agent.core.middleware import get_memory_middleware
-            memory_mw = get_memory_middleware()
-            user_id = config.get("configurable", {}).get("user_id", "default")
-            memory_content = final_content
-            if report_format == "html":
-                memory_content = re.sub(
-                    r"<[^>]+>", "", final_content[:10000]
-                )
-            try:
-                await memory_mw.update_memory(
-                    user_id=user_id,
-                    query=research_brief[:500] if research_brief else "",
-                    findings=memory_content[:5000],
-                    facts=[n[:200] for n in notes[:10] if n],
-                )
-                logger.info("[Report] Memory updated for user '%s'", user_id)
-            except Exception as e:
-                logger.warning(f"[Report] Memory update failed: {e}")
 
             # === Level 3 Deep Evaluation (strategic_llm, for deep complexity only) ===
             if complexity == "deep":
@@ -1119,6 +1048,13 @@ async def final_report_generation(
                 report_content=final_content,
                 report_format=report_format,
             )
+            await _ingest_memory_artifacts(
+                config,
+                research_brief=research_brief,
+                final_content=final_content,
+                artifacts=deepsearch_artifacts,
+                notes=notes,
+            )
 
             return {
                 "final_report": final_content,
@@ -1202,19 +1138,22 @@ async def curate_sources(
         return []
 
     research_config = ResearchConfiguration.from_runnable_config(config)
+    ranked = _rank_sources_hybrid(research_topic, sources, max_sources=max_sources)
+    if not ranked:
+        return sources[:max_sources]
 
-    # Format sources for the prompt
-    sources_text = "\n".join([
-        f"{i+1}. {s.get('title', 'Unknown')}: {s.get('url', '')}"
-        for i, s in enumerate(sources[:50])  # Limit to 50 for prompt size
-    ])
-
-    prompt = resolve_prompt("source_curation",
+    sources_text = "\n".join(
+        [
+            f"{i+1}. {s.get('title', 'Unknown')}: {s.get('url', '')}"
+            for i, s in enumerate(ranked[:50])
+        ]
+    )
+    prompt = resolve_prompt(
+        "source_curation",
         research_topic=research_topic,
         sources=sources_text,
-        max_sources=min(max_sources, len(sources)),
+        max_sources=min(max_sources, len(ranked)),
     )
-
     model_config = build_model_config(
         model=research_config.smart_llm,
         max_tokens=2048,
@@ -1225,8 +1164,6 @@ async def curate_sources(
         response = await configurable_model.with_config(model_config).ainvoke([
             HumanMessage(content=prompt)
         ])
-
-        # Parse JSON array from response
         import json
         import re
 
@@ -1234,10 +1171,176 @@ async def curate_sources(
         json_match = re.search(r"\[[\s\S]*\]", content)
         if json_match:
             curated = json.loads(json_match.group(0))
-            return curated[:max_sources]
-
+            if isinstance(curated, list) and curated:
+                merged = _merge_ranked_sources(ranked, curated, max_sources=max_sources)
+                return merged[:max_sources]
     except Exception as e:
         logger.warning(f"[CurateSources] LLM curation failed: {e}")
 
-    # Fallback: return sources as-is
-    return sources[:max_sources]
+    return ranked[:max_sources]
+
+
+def _rank_sources_hybrid(
+    research_topic: str,
+    sources: list[dict],
+    *,
+    max_sources: int,
+) -> list[dict]:
+    from agent.workflows.source_registry import SourceRegistry
+    from agent.memory.retrieval import tokenize
+
+    registry = SourceRegistry()
+    topic_tokens = tokenize(research_topic)
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for index, source in enumerate(sources, 1):
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or source.get("source_url") or "").strip()
+        title = str(source.get("title") or source.get("name") or url or "").strip()
+        snippet = str(source.get("snippet") or source.get("summary") or source.get("content") or title)
+        record = registry.register(url=url, title=title) if url else None
+        canonical_url = record.canonical_url if record else url
+        domain = str(source.get("domain") or (record.domain if record else "") or "").lower()
+        source_tokens = tokenize(f"{title} {snippet} {canonical_url}")
+        relevance = 0.0
+        if topic_tokens and source_tokens:
+            overlap = len(topic_tokens & source_tokens)
+            relevance = overlap / max(1, min(len(topic_tokens), len(source_tokens)))
+        authority = _source_authority_score(domain, canonical_url)
+        recency = _source_recency_score(source)
+        coverage = _source_coverage_score(source)
+        quality = _source_quality_score(source)
+        hybrid = (
+            relevance * 0.34
+            + authority * 0.24
+            + recency * 0.18
+            + coverage * 0.14
+            + quality * 0.10
+        )
+        ranked.append(
+            (
+                hybrid,
+                {
+                    **source,
+                    "id": source.get("id") or source.get("source_id") or f"source_{index}",
+                    "source_id": source.get("source_id") or (record.source_id if record else ""),
+                    "url": canonical_url or url,
+                    "canonical_url": canonical_url or url,
+                    "title": title,
+                    "domain": domain,
+                    "relevance_score": round(relevance, 4),
+                    "authority_score": round(authority, 4),
+                    "recency_score": round(recency, 4),
+                    "coverage_score": round(coverage, 4),
+                    "quality_score": round(quality, 4),
+                },
+            )
+        )
+    ranked.sort(key=lambda item: (-item[0], str(item[1].get("title") or "").lower()))
+    return [item[1] for item in ranked[:max_sources]]
+
+
+def _merge_ranked_sources(
+    ranked: list[dict[str, Any]],
+    curated: list[dict[str, Any]],
+    *,
+    max_sources: int,
+) -> list[dict[str, Any]]:
+    if not curated:
+        return ranked[:max_sources]
+    by_key: dict[str, dict[str, Any]] = {}
+    for source in ranked:
+        key = _source_key(source)
+        if key:
+            by_key[key] = source
+    merged: list[dict[str, Any]] = []
+    for item in curated:
+        if not isinstance(item, dict):
+            continue
+        key = _source_key(item)
+        if key and key in by_key:
+            merged.append({**by_key[key], **item})
+        else:
+            merged.append(item)
+    if len(merged) < max_sources:
+        for source in ranked:
+            key = _source_key(source)
+            if key and any(_source_key(item) == key for item in merged):
+                continue
+            merged.append(source)
+            if len(merged) >= max_sources:
+                break
+    return merged
+
+
+def _source_key(source: dict[str, Any]) -> str:
+    return str(
+        source.get("source_id")
+        or source.get("id")
+        or source.get("canonical_url")
+        or source.get("url")
+        or ""
+    ).strip().lower()
+
+
+def _source_authority_score(domain: str, url: str) -> float:
+    text = f"{domain} {url}".lower()
+    if any(token in text for token in ("arxiv.org", "pubmed", "doi.org", "nature.com", "science.org", "acm.org", "ieee.org")):
+        return 1.0
+    if any(token in text for token in ("wikipedia.org", "medium.com", "substack.com")):
+        return 0.3
+    if any(token in text for token in (".gov", ".edu", ".ac.uk", ".org")):
+        return 0.85
+    return 0.55
+
+
+def _source_recency_score(source: dict[str, Any]) -> float:
+    from datetime import datetime, timezone
+
+    raw = str(
+        source.get("publishedDate")
+        or source.get("published_date")
+        or source.get("retrieved_at")
+        or ""
+    ).strip()
+    if not raw:
+        return 0.5
+    for candidate in (raw, raw.replace("Z", "+00:00")):
+        try:
+            dt = datetime.fromisoformat(candidate)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0)
+            return 1.0 / (1.0 + age_days / 30.0)
+        except Exception:
+            continue
+    return 0.5
+
+
+def _source_coverage_score(source: dict[str, Any]) -> float:
+    text = " ".join(
+        str(source.get(key) or "").strip()
+        for key in ("snippet", "summary", "content", "description", "title")
+    )
+    if len(text) >= 800:
+        return 1.0
+    if len(text) >= 300:
+        return 0.8
+    if len(text) >= 120:
+        return 0.6
+    if text:
+        return 0.4
+    return 0.0
+
+
+def _source_quality_score(source: dict[str, Any]) -> float:
+    scores = []
+    for key in ("relevance_score", "authority_score", "coverage_score", "quality_score"):
+        try:
+            value = float(source.get(key))
+            scores.append(max(0.0, min(1.0, value)))
+        except (TypeError, ValueError):
+            continue
+    if scores:
+        return sum(scores) / len(scores)
+    return 0.5

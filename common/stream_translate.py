@@ -7,12 +7,12 @@ from common.research_events import build_research_run_event
 from common.sse import format_sse_event
 
 
-def translate_legacy_line_to_sse(line: str, *, seq: int) -> str:
+def translate_data_stream_line_to_sse(line: str, *, seq: int) -> str:
     """
-    Translate a legacy Weaver chat stream line (`0:{json}\n`) into an SSE frame.
+    Translate Weaver's internal data-stream envelope (`0:{json}\\n`) into SSE.
 
-    Legacy format: `0:{"type": "...", "data": {...}}\n`
-    SSE format:    `id: <seq>\\nevent: <type>\\ndata: <json>\\n\\n`
+    Internal format: `0:{"type": "...", "data": {...}}\\n`
+    SSE format:      `id: <seq>\\nevent: <type>\\ndata: <json>\\n\\n`
     """
     if not isinstance(line, str) or not line.startswith("0:"):
         return ""

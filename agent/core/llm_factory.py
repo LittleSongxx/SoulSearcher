@@ -9,8 +9,6 @@ import json
 import logging
 from typing import Any, Optional
 
-from langchain_openai import ChatOpenAI
-
 from common.config import settings
 
 logger = logging.getLogger(__name__)
@@ -79,7 +77,7 @@ def create_chat_model(
     model: str,
     temperature: float,
     extra_body: Optional[dict[str, Any]] = None,
-) -> ChatOpenAI:
+) -> Any:
     """
     Create a ChatOpenAI instance with proper configuration.
 
@@ -97,12 +95,17 @@ def create_chat_model(
     Returns:
         Configured ChatOpenAI instance
     """
+    try:
+        from langchain_openai import ChatOpenAI
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("langchain_openai is required for LLM invocation") from exc
+
     return ChatOpenAI(
         **create_chat_model_params(model, temperature, extra_body=extra_body)
     )
 
 
-def create_summary_model() -> ChatOpenAI:
+def create_summary_model() -> Any:
     """
     Create a ChatOpenAI instance for message summarization.
 
@@ -111,7 +114,3 @@ def create_summary_model() -> ChatOpenAI:
     """
     model = settings.summary_messages_model or settings.primary_model
     return create_chat_model(model, temperature=0)
-
-
-# Aliases for backward compatibility
-build_chat_model = create_chat_model

@@ -190,12 +190,7 @@ class Settings(BaseSettings):
     google_search_engine_id: str = ""  # Google Custom Search Engine ID (cx)
     e2b_api_key: str = ""
     anthropic_api_key: str = ""
-    mem0_api_key: str = ""
-    enable_memory: bool = False
-    memory_namespace: str = "default"
     memory_user_id: str = "default_user"
-    memory_max_entries: int = 20
-    memory_top_k: int = 5
     enable_mcp: bool = False
     mcp_servers: str = ""  # JSON mapping for MultiServerMCPClient
     mcp_strategy: str = (
@@ -203,6 +198,9 @@ class Settings(BaseSettings):
     )
     mcp_tool_whitelist: str = ""  # comma-separated allowed MCP tool names
     mcp_max_tools: int = 0  # 0 = no explicit cap
+    mcp_deferred_tools_enabled: bool = Field(
+        default=False, validation_alias="MCP_DEFERRED_TOOLS_ENABLED"
+    )
     human_review: bool = False  # require manual approval before final report
     tool_approval: bool = False  # require approval before executing tools
     max_revisions: int = 2
@@ -225,6 +223,17 @@ class Settings(BaseSettings):
     evaluation_html_quality_check: bool = True
     evaluation_calibration_min_agreement: float = Field(default=0.7, ge=0.0, le=1.0)
     evaluation_calibration_min_samples: int = Field(default=5, ge=1)
+
+    # Evidence/source cache
+    source_cache_max_chars: int = Field(
+        default=120000, validation_alias="SOURCE_CACHE_MAX_CHARS", ge=0
+    )
+    deep_read_max_chars: int = Field(
+        default=30000, validation_alias="DEEP_READ_MAX_CHARS", ge=1000
+    )
+    slash_skill_activation_enabled: bool = Field(
+        default=True, validation_alias="SLASH_SKILL_ACTIVATION_ENABLED"
+    )
 
     # Environment
     app_env: str = "dev"  # dev | test | prod
@@ -355,10 +364,6 @@ class Settings(BaseSettings):
     prompt_pack: str = "deepsearch"  # default prompt pack
     prompt_variant: str = "full"  # full | lite
 
-    # LangGraph Store (long-term memory)
-    memory_store_backend: str = "memory"  # memory | postgres | redis
-    memory_store_url: str = ""  # connection string for store backend
-
     # Message trimming (short-term memory)
     trim_messages: bool = False
     trim_messages_keep_first: int = 2
@@ -484,7 +489,7 @@ class Settings(BaseSettings):
     daytona_vnc_password: str = ""  # Must be set via environment variable
 
     # Sandbox mode: e2b (remote E2B), daytona (remote Daytona), none (disabled).
-    # Legacy value "local" is still accepted as an alias for E2B.
+    # The value "local" is accepted as an alias for E2B remote execution.
     sandbox_mode: str = "e2b"
     sandbox_template_browser: str = (
         ""  # e2b sandbox browser template ID (e.g., chrome-stable)
@@ -512,16 +517,52 @@ class Settings(BaseSettings):
     skill_evolution_enabled: bool = False  # Allow agents to create/modify skills
     skill_evolution_moderation_model_name: str = ""  # Model for security scan (empty = default)
 
-    # ── DeerFlow-aligned: Memory ──
-    memory_enabled: bool = True
-    memory_injection_enabled: bool = True
-    memory_storage_path: str = ""
-    memory_debounce_seconds: int = 30
-    memory_max_facts: int = 100
-    memory_fact_confidence_threshold: float = 0.7
-    memory_max_injection_tokens: int = 2000
-    memory_model_name: str = ""
-
+    # ── Unified Memory ──
+    memory_enabled: bool = Field(default=True, validation_alias="MEMORY_ENABLED")
+    memory_backend: str = Field(default="postgres", validation_alias="MEMORY_BACKEND")
+    memory_database_url: str = Field(default="", validation_alias="MEMORY_DATABASE_URL")
+    memory_embedding_model: str = Field(
+        default="text-embedding-3-small",
+        validation_alias="MEMORY_EMBEDDING_MODEL",
+    )
+    memory_embedding_dim: int = Field(
+        default=1536,
+        ge=1,
+        validation_alias="MEMORY_EMBEDDING_DIM",
+    )
+    memory_retrieval_max_tokens: int = Field(
+        default=2500,
+        ge=256,
+        validation_alias="MEMORY_RETRIEVAL_MAX_TOKENS",
+    )
+    memory_retrieval_top_k: int = Field(
+        default=12,
+        ge=1,
+        validation_alias="MEMORY_RETRIEVAL_TOP_K",
+    )
+    memory_write_min_confidence: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        validation_alias="MEMORY_WRITE_MIN_CONFIDENCE",
+    )
+    memory_write_require_evidence: bool = Field(
+        default=True,
+        validation_alias="MEMORY_WRITE_REQUIRE_EVIDENCE",
+    )
+    memory_sensitive_write_policy: str = Field(
+        default="reject",
+        validation_alias="MEMORY_SENSITIVE_WRITE_POLICY",
+    )
+    memory_auto_skill_evolution: bool = Field(
+        default=True,
+        validation_alias="MEMORY_AUTO_SKILL_EVOLUTION",
+    )
+    memory_auto_skill_min_support: int = Field(
+        default=3,
+        ge=1,
+        validation_alias="MEMORY_AUTO_SKILL_MIN_SUPPORT",
+    )
     # ── DeerFlow-aligned: Summarization ──
     summarization_enabled: bool = True
     summarization_max_input_tokens: int = 64000

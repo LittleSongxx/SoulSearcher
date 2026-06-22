@@ -8,14 +8,11 @@ except ModuleNotFoundError as exc:
 
 
 try:
-    from tools.core.registry import get_registered_tools, set_registered_tools
+    from tools.core.registry import register_tools
 except ModuleNotFoundError as exc:
     _registry_import_error = exc
 
-    def get_registered_tools(*args, **kwargs):
-        raise _registry_import_error
-
-    def set_registered_tools(*args, **kwargs):
+    def register_tools(*args, **kwargs):
         raise _registry_import_error
 
 
@@ -49,7 +46,6 @@ __all__ = [
     "crawl_urls",
     "execute_python_code",
     "fallback_search",
-    "get_registered_tools",
-    "set_registered_tools",
+    "register_tools",
     "tavily_search",
 ]

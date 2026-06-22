@@ -25,6 +25,7 @@ from langchain_core.runnables import RunnableConfig
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import build_model_config, configurable_model
+from agent.workflows.evidence_ledger import evaluate_citation_gate
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +233,7 @@ async def run_level1_check(
 
     When use_rubric=True (default), uses the structured rubric scoring system
     (researchrubrics/DEER pattern) for more reliable, auditable results.
-    Falls back to legacy prompt-based scoring when use_rubric=False.
+    Falls back to prompt-based scoring when use_rubric=False.
     """
     research_config = ResearchConfiguration.from_runnable_config(config)
     report_text = _normalize_report_text(report)
@@ -260,6 +261,24 @@ async def run_level1_check(
             source_texts = extract_source_texts(state)
             evidence_items = extract_evidence_items(state)
             has_citations = bool(re.search(r"\[(\d+(?:,\s*\d+)*)\]", report_text))
+            artifacts = state.get("deepsearch_artifacts", {}) if isinstance(state, dict) else {}
+            artifacts = artifacts if isinstance(artifacts, dict) else {}
+            citation_gate = evaluate_citation_gate(
+                report_text,
+                sources=(
+                    artifacts.get("sources")
+                    if isinstance(artifacts.get("sources"), list)
+                    else (state.get("sources") if isinstance(state, dict) else [])
+                ),
+                evidence_items=evidence_items,
+                passages=(
+                    artifacts.get("passages")
+                    if isinstance(artifacts.get("passages"), list)
+                    else []
+                ),
+                require_evidence=research_config.evaluation_require_citation_evidence,
+            )
+            citation_bindings = citation_gate.get("citation_bindings", []) or []
             alignment_result: dict[str, Any]
             alignment_rate = 1.0
             alignment_passed = True
@@ -267,7 +286,40 @@ async def run_level1_check(
             alignment_issues: list[str] = []
             alignment_suggestions: list[str] = []
 
-            if has_citations and research_config.evaluation_require_citation_evidence and not source_texts.strip():
+            if has_citations and citation_bindings:
+                alignment_result = await run_full_claim_alignment(
+                    report_text,
+                    source_texts,
+                    config,
+                    citation_bindings=citation_bindings,
+                )
+                alignment_rate = _coerce_score(
+                    alignment_result.get("alignment_rate", 0.0)
+                )
+                alignment_passed = alignment_rate >= research_config.evaluation_claim_alignment_min_rate
+                if alignment_passed:
+                    alignment_verdict = "pass"
+                elif alignment_rate >= research_config.evaluation_revise_threshold:
+                    alignment_verdict = "revise"
+                else:
+                    alignment_verdict = "incomplete"
+                failed_claims = [
+                    claim
+                    for claim in alignment_result.get("claims", []) or []
+                    if isinstance(claim, dict)
+                    and _coerce_score(claim.get("score", 0.0)) < 0.5
+                ]
+                alignment_issues.extend(
+                    [
+                        f"Unsupported claim [{claim.get('citation_marker', '?')}]: {str(claim.get('claim_summary', ''))[:180]}"
+                        for claim in failed_claims[:5]
+                    ]
+                )
+                if failed_claims:
+                    alignment_suggestions.append(
+                        "Revise unsupported claims or replace them with evidence-backed citations."
+                    )
+            elif has_citations and research_config.evaluation_require_citation_evidence and not source_texts.strip():
                 alignment_result = {
                     "alignment_rate": 0.0,
                     "total_claims": 0,
@@ -333,6 +385,21 @@ async def run_level1_check(
                     {"dimensions": _rubric_to_dict(rubric_result).get("dimensions", [])},
                 ),
                 _build_gate(
+                    "citation_gate",
+                    2,
+                    bool(citation_gate.get("passed")),
+                    float(citation_gate.get("score", 0.0) or 0.0),
+                    str(citation_gate.get("verdict") or "incomplete"),
+                    1.0,
+                    {
+                        "markers": citation_gate.get("markers", []),
+                        "missing_markers": citation_gate.get("missing_markers", []),
+                        "source_count": citation_gate.get("source_count", 0),
+                        "evidence_count": citation_gate.get("evidence_count", 0),
+                        "passage_count": citation_gate.get("passage_count", 0),
+                    },
+                ),
+                _build_gate(
                     "claim_alignment",
                     2,
                     alignment_passed,
@@ -365,7 +432,7 @@ async def run_level1_check(
                 weight for _score, weight in score_terms
             )
 
-            passed = rubric_result.passed and alignment_passed
+            passed = rubric_result.passed and alignment_passed and bool(citation_gate.get("passed"))
             if research_config.evaluation_require_l2_pass:
                 passed = passed and l2_result.passed
 
@@ -382,11 +449,13 @@ async def run_level1_check(
                 list(rubric_result.issues)
                 + list(l2_result.issues)
                 + alignment_issues
+                + list(citation_gate.get("issues", []) or [])
             )
             suggestions = _unique_strings(
                 list(rubric_result.suggestions)
                 + list(l2_result.suggestions)
                 + alignment_suggestions
+                + list(citation_gate.get("suggestions", []) or [])
             )
 
             return QualityCheckResult(
@@ -406,18 +475,20 @@ async def run_level1_check(
                 metadata={
                     "level1_rubric": _rubric_to_dict(rubric_result),
                     "level2_rubric": _rubric_to_dict(l2_result),
+                    "citation_gate": citation_gate,
                     "claim_alignment": alignment_result,
+                    "citation_bindings": citation_bindings,
                     "evidence_items": evidence_items,
                     "source_texts": source_texts,
                 },
                 gates=gates,
             )
         except ImportError:
-            logger.debug("[QualityCheck] Rubric system not available, falling back to legacy")
+            logger.debug("[QualityCheck] Rubric system not available, using prompt fallback")
         except Exception as e:
-            logger.warning(f"[QualityCheck] Rubric eval failed: {e}, falling back to legacy")
+            logger.warning(f"[QualityCheck] Rubric eval failed: {e}, using prompt fallback")
 
-    # Legacy prompt-based evaluation (fallback)
+    # Prompt-based evaluation fallback
     model_config = build_model_config(
         model=research_config.fast_llm,
         max_tokens=1024,

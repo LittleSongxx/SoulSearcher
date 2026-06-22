@@ -63,6 +63,7 @@ def check_loop(messages: list, max_repetitions: int = 3) -> tuple[bool, str]:
 def record_token_usage(
     phase: str,
     response: Any,
+    config: Any | None = None,
 ) -> None:
     """Record token usage from an LLM response for cost attribution."""
     from agent.core.middleware import get_token_tracker
@@ -71,115 +72,100 @@ def record_token_usage(
     input_tokens = usage.get("input_tokens", 0)
     output_tokens = usage.get("output_tokens", 0)
     if input_tokens or output_tokens:
-        get_token_tracker().record(phase, input_tokens, output_tokens)
+        get_token_tracker(config).record(phase, input_tokens, output_tokens)
 
 
-def get_token_summary() -> dict[str, Any]:
+def get_token_summary(config: Any | None = None) -> dict[str, Any]:
     """Get current token usage summary across all phases."""
     from agent.core.middleware import get_token_tracker
 
-    return get_token_tracker().get_summary()
+    return get_token_tracker(config).get_summary()
 
 
 # ---------------------------------------------------------------------------
 # Context Budget — summarization-aware trimming
 # ---------------------------------------------------------------------------
 
+def _message_text(msg: Any) -> str:
+    if hasattr(msg, "content"):
+        content = getattr(msg, "content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("text"):
+                    parts.append(str(item["text"]))
+            return "\n".join(parts)
+    return str(msg or "")
+
+
+def _priority_for_message(msg: Any, *, tool_name_patterns: tuple[str, ...]) -> int:
+    name = str(getattr(msg, "name", "") or "")
+    content = _message_text(msg)
+    if getattr(msg, "type", "") in {"system", "human"}:
+        return 100
+    if name in tool_name_patterns:
+        text = content.lower()
+        if "<research-todo-list>" in text or "<memory_context>" in text:
+            return 95
+        if "thinktool" in name.lower():
+            return 90
+        return 80
+    if getattr(msg, "type", "") in {"tool"}:
+        return 75
+    if getattr(msg, "type", "") in {"ai"}:
+        return 70
+    return 50
+
+
+def _truncate_tool_message(msg: Any, max_chars: int):
+    from langchain_core.messages import ToolMessage
+
+    content = _message_text(msg)
+    if len(content) <= max_chars:
+        return msg
+    return ToolMessage(
+        content=content[:max_chars] + (
+            f"\n\n... [trimmed from {len(content)} to {max_chars} chars]"
+        ),
+        name=getattr(msg, "name", ""),
+        tool_call_id=getattr(msg, "tool_call_id", ""),
+    )
+
+
 def enforce_context_budget(
     messages: list,
     *,
     max_messages: int = 30,
     max_chars_per_tool_result: int = 8000,
-    tool_name_patterns: tuple[str, ...] = ("ConductResearch",),
+    tool_name_patterns: tuple[str, ...] = ("ConductResearch", "ThinkTool"),
 ) -> list:
     """Trim a message list to stay within context budget.
 
-    Similar to the Claude Code sub-agent principle: only the summary of
-    sub-agent work enters the main conversation.
+    Preserves high-signal messages first, then recent messages, and prefers
+    evidence / todo / memory / system context over raw tool dumps.
     """
-    result: list = []
-    for msg in messages:
-        name = getattr(msg, "name", "")
-        if name in tool_name_patterns:
-            content = getattr(msg, "content", "") or ""
-            if len(content) > max_chars_per_tool_result:
-                from langchain_core.messages import ToolMessage
+    if not messages:
+        return []
 
-                truncated = content[:max_chars_per_tool_result] + (
-                    f"\n\n... [trimmed from {len(content)} to "
-                    f"{max_chars_per_tool_result} chars]"
-                )
-                result.append(ToolMessage(
-                    content=truncated,
-                    name=name,
-                    tool_call_id=getattr(msg, "tool_call_id", ""),
-                ))
-                continue
-        result.append(msg)
+    trimmed = [_truncate_tool_message(msg, max_chars_per_tool_result) for msg in messages]
+    if len(trimmed) <= max_messages:
+        return trimmed
 
-    if len(result) > max_messages:
-        # Keep first (system/context) and most recent
-        result = [result[0]] + result[-(max_messages - 1):]
-        logger.info("[ContextBudget] Trimmed to %d messages", len(result))
+    first = trimmed[0]
+    scored = [
+        (_priority_for_message(msg, tool_name_patterns=tool_name_patterns), idx, msg)
+        for idx, msg in enumerate(trimmed[1:], start=1)
+    ]
+    scored.sort(key=lambda item: (item[0], item[1]))
 
+    keep_slots = max(0, max_messages - 1)
+    keep_recent = scored[-keep_slots:] if keep_slots else []
+    keep_indices = {idx for _score, idx, _msg in keep_recent}
+    result = [first] + [msg for idx, msg in enumerate(trimmed[1:], start=1) if idx in keep_indices]
+    logger.info("[ContextBudget] Trimmed to %d messages", len(result))
     return result
-
-
-# ---------------------------------------------------------------------------
-# Memory Update — fire-and-forget after research completes
-# ---------------------------------------------------------------------------
-
-async def record_research_to_memory(
-    user_id: str,
-    query: str,
-    findings: str,
-    facts: list[str] | None = None,
-) -> None:
-    """Record completed research to long-term memory (non-blocking)."""
-    try:
-        from agent.runtime.memory import get_memory_system
-
-        await get_memory_system().record_research(
-            user_id=user_id,
-            query=query,
-            findings=findings[:5000],
-            facts=facts or [],
-        )
-    except Exception as e:
-        logger.debug("[SharedMiddleware] Memory update skipped: %s", e)
-
-
-# ---------------------------------------------------------------------------
-# Dynamic Context Injection — date + memory as <system-reminder>
-# ---------------------------------------------------------------------------
-
-def build_dynamic_context_reminder(
-    agent_name: str | None = None,
-    user_id: str = "default",
-) -> str:
-    """Build a <system-reminder> block with current date and relevant memories.
-
-    Follows the Anthropic pattern of keeping the system prompt static for
-    prefix-cache reuse while injecting dynamic content as hidden messages.
-    """
-    from datetime import datetime
-
-    lines = ["<system-reminder>"]
-    current_date = datetime.now().strftime("%Y-%m-%d, %A")
-    lines.append(f"<current_date>{current_date}</current_date>")
-
-    try:
-        from agent.runtime.memory import format_memory_for_injection, get_memory_data
-        data = get_memory_data(agent_name, user_id=user_id)
-        memory_text = format_memory_for_injection(data, max_tokens=2000)
-        if memory_text:
-            lines.append("")
-            lines.append(memory_text.strip())
-    except Exception:
-        pass
-
-    lines.append("</system-reminder>")
-    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

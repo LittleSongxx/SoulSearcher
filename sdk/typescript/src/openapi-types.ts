@@ -233,10 +233,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Memory
-         * @description Get current memory data for the effective user.
+         * List Memory Records
+         * @description List unified memory records for the current user.
          */
-        get: operations["get_memory_api_memory_get"];
+        get: operations["list_memory_records_api_memory_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -245,7 +245,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/memory/reload": {
+    "/api/memory/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Memory Graph
+         * @description Return memory entity graph records and relations.
+         */
+        get: operations["get_memory_graph_api_memory_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/records": {
         parameters: {
             query?: never;
             header?: never;
@@ -255,10 +275,70 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reload Memory
-         * @description Force reload memory from disk.
+         * Create Memory Record
+         * @description Manually add or update a unified memory record.
          */
-        post: operations["reload_memory_api_memory_reload_post"];
+        post: operations["create_memory_record_api_memory_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Memory Record
+         * @description Soft-delete a unified memory record.
+         */
+        delete: operations["delete_memory_record_api_memory_records__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retrieve Memory
+         * @description Debug hybrid memory recall and score decomposition.
+         */
+        post: operations["retrieve_memory_api_memory_retrieve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/skill-evolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Memory Skill Evolution
+         * @description List auto skill-evolution proposals produced from procedural memory.
+         */
+        get: operations["list_memory_skill_evolution_api_memory_skill_evolution_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -274,7 +354,7 @@ export interface paths {
         };
         /**
          * Memory Status
-         * @description Return memory backend status and configuration.
+         * @description Return unified memory backend status and configuration.
          */
         get: operations["memory_status_api_memory_status_get"];
         put?: never;
@@ -1634,52 +1714,214 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** MemoryDataResponse */
-        MemoryDataResponse: {
-            /**
-             * Fact Count
-             * @default 0
-             */
-            fact_count: number;
-            /**
-             * Facts
-             * @default []
-             */
-            facts: {
+        /** MemoryDeleteResponse */
+        MemoryDeleteResponse: {
+            /** Deleted */
+            deleted: boolean;
+        };
+        /** MemoryGraphResponse */
+        MemoryGraphResponse: {
+            /** Entities */
+            entities?: {
                 [key: string]: unknown;
             }[];
+            /** Relations */
+            relations?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** MemoryListResponse */
+        MemoryListResponse: {
+            /** Count */
+            count: number;
             /**
-             * History
-             * @default {}
+             * Query
+             * @default
              */
-            history: {
+            query: string;
+            /** Records */
+            records: {
+                [key: string]: unknown;
+            }[];
+            /** User Id */
+            user_id: string;
+        };
+        /** MemoryRecordCreateRequest */
+        MemoryRecordCreateRequest: {
+            /**
+             * Confidence
+             * @default 0.75
+             */
+            confidence: number;
+            /** Content */
+            content: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /**
+             * Importance
+             * @default 0.5
+             */
+            importance: number;
+            /** Metadata */
+            metadata?: {
                 [key: string]: unknown;
             };
             /**
-             * Profile
-             * @default {}
+             * Quality Score
+             * @default 0
              */
-            profile: {
-                [key: string]: unknown;
-            };
+            quality_score: number;
             /**
-             * User
-             * @default {}
+             * Scope
+             * @default user
              */
-            user: {
+            scope: string;
+            /** Source Evidence Ids */
+            source_evidence_ids?: string[];
+            /**
+             * Source Run Id
+             * @default
+             */
+            source_run_id: string;
+            /**
+             * Source Thread Id
+             * @default
+             */
+            source_thread_id: string;
+            /** Source Urls */
+            source_urls?: string[];
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Type
+             * @default fact
+             */
+            type: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /** MemoryRecordResponse */
+        MemoryRecordResponse: {
+            /** Record */
+            record: {
                 [key: string]: unknown;
             };
         };
+        /** MemoryRetrieveRequest */
+        MemoryRetrieveRequest: {
+            /**
+             * Include Context
+             * @default true
+             */
+            include_context: boolean;
+            /**
+             * Limit
+             * @default 12
+             */
+            limit: number;
+            /** Query */
+            query: string;
+            /**
+             * Scope
+             * @default
+             */
+            scope: string;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /** MemoryRetrieveResponse */
+        MemoryRetrieveResponse: {
+            /**
+             * Context
+             * @default
+             */
+            context: string;
+            /** Entities */
+            entities: {
+                [key: string]: unknown;
+            }[];
+            /** Records */
+            records: {
+                [key: string]: unknown;
+            }[];
+            /** Relations */
+            relations: {
+                [key: string]: unknown;
+            }[];
+            /** Scoring */
+            scoring: {
+                [key: string]: unknown;
+            }[];
+            /** User Id */
+            user_id: string;
+        };
+        /** MemorySkillEvolutionResponse */
+        MemorySkillEvolutionResponse: {
+            /** Count */
+            count: number;
+            /** Proposals */
+            proposals: {
+                [key: string]: unknown;
+            }[];
+        };
         /** MemoryStatusResponse */
         MemoryStatusResponse: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
             /** Backend */
             backend: string;
-            /** Checkpointer */
-            checkpointer: boolean;
-            /** Mem0 Enabled */
-            mem0_enabled: boolean;
-            /** Url Configured */
-            url_configured: boolean;
+            /**
+             * Embedding Dim
+             * @default 0
+             */
+            embedding_dim: number;
+            /**
+             * Embedding Model
+             * @default
+             */
+            embedding_model: string;
+            /**
+             * Entity Count
+             * @default 0
+             */
+            entity_count: number;
+            /** Error */
+            error?: string | null;
+            /**
+             * Pgvector Available
+             * @default false
+             */
+            pgvector_available: boolean;
+            /**
+             * Record Count
+             * @default 0
+             */
+            record_count: number;
+            /**
+             * Relation Count
+             * @default 0
+             */
+            relation_count: number;
+            /**
+             * Skill Evolution Count
+             * @default 0
+             */
+            skill_evolution_count: number;
         };
         /** ProviderCircuitSnapshot */
         ProviderCircuitSnapshot: {
@@ -1846,6 +2088,10 @@ export interface components {
             nodes_started: {
                 [key: string]: number;
             };
+            /** Quality Summary */
+            quality_summary?: {
+                [key: string]: unknown;
+            };
             /**
              * Route
              * @default
@@ -1855,6 +2101,12 @@ export interface components {
             run_id: string;
             /** Started At */
             started_at: string;
+            /** Status */
+            status?: string | null;
+            /** Token Summary */
+            token_summary?: {
+                [key: string]: unknown;
+            };
         };
         /** SearchCacheClearResponse */
         SearchCacheClearResponse: {
@@ -2672,9 +2924,15 @@ export interface operations {
             };
         };
     };
-    get_memory_api_memory_get: {
+    list_memory_records_api_memory_get: {
         parameters: {
-            query?: never;
+            query?: {
+                query?: string;
+                type?: string;
+                scope?: string;
+                limit?: number;
+                user_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2687,14 +2945,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemoryDataResponse"];
+                    "application/json": components["schemas"]["MemoryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    reload_memory_api_memory_reload_post: {
+    get_memory_graph_api_memory_graph_get: {
         parameters: {
-            query?: never;
+            query?: {
+                entity?: string;
+                limit?: number;
+                user_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2707,7 +2978,147 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MemoryGraphResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_memory_record_api_memory_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryRecordCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_memory_record_api_memory_records__record_id__delete: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retrieve_memory_api_memory_retrieve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryRetrieveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryRetrieveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_memory_skill_evolution_api_memory_skill_evolution_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemorySkillEvolutionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

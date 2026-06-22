@@ -13,7 +13,7 @@ export function useChatHistory() {
     const loadHistory = () => {
       try {
         const savedHistory = StorageService.getHistory<ChatSession>()
-        // Migrate legacy data if necessary
+        // Normalize stored session records before sorting.
         const migratedHistory = savedHistory.map(session => ({
           ...session,
           createdAt: session.createdAt || Date.now(),
@@ -85,7 +85,7 @@ export function useChatHistory() {
         const newSession: ChatSession = {
           id: sessionId,
           title,
-          date: new Date(timestamp).toLocaleDateString(), // Keep legacy for display fallback
+          date: new Date(timestamp).toLocaleDateString(),
           createdAt: timestamp,
           updatedAt: timestamp,
           isPinned: false,

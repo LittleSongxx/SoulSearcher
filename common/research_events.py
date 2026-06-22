@@ -9,7 +9,7 @@ from typing import Any
 class ResearchRunEvent:
     type: str
     data: dict[str, Any] = field(default_factory=dict)
-    legacy_type: str = ""
+    source_event_type: str = ""
     sequence: int = 0
     event_id: str = ""
     schema_version: int = 1
@@ -32,7 +32,7 @@ _STATUS_STEP_TO_EVENT = {
     "agent": "research.running",
 }
 
-_LEGACY_TO_EVENT = {
+_STREAM_TO_EVENT = {
     "brief_created": "brief.created",
     "strategy_selected": "plan.created",
     "research_node_start": "research.node.started",
@@ -61,16 +61,19 @@ _LEGACY_TO_EVENT = {
 }
 
 
-def canonical_research_event_type(legacy_type: str, data: Any = None) -> str:
-    legacy = str(legacy_type or "").strip()
-    if legacy == "status" and isinstance(data, dict):
+def canonical_research_event_type(source_event_type: str, data: Any = None) -> str:
+    source_type = str(source_event_type or "").strip()
+    if source_type == "status" and isinstance(data, dict):
         step = str(data.get("step") or "").strip().lower()
         return _STATUS_STEP_TO_EVENT.get(step, "status.updated")
-    return _LEGACY_TO_EVENT.get(legacy, legacy.replace("_", ".") if legacy else "event")
+    return _STREAM_TO_EVENT.get(
+        source_type,
+        source_type.replace("_", ".") if source_type else "event",
+    )
 
 
 def build_research_run_event(
-    legacy_type: str,
+    source_event_type: str,
     data: Any = None,
     *,
     seq: int = 0,
@@ -78,9 +81,9 @@ def build_research_run_event(
 ) -> dict[str, Any]:
     event_data = data if isinstance(data, dict) else {"value": data}
     return ResearchRunEvent(
-        type=canonical_research_event_type(legacy_type, event_data),
+        type=canonical_research_event_type(source_event_type, event_data),
         data=event_data,
-        legacy_type=str(legacy_type or ""),
+        source_event_type=str(source_event_type or ""),
         sequence=int(seq or 0),
         event_id=event_id or "",
     ).to_dict()

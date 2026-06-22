@@ -80,7 +80,6 @@ from agent.runtime.request_builder import (
     build_research_runtime,
 )
 from common.cancellation import TaskStatus, cancellation_manager
-from common.chat_stream_translate import translate_legacy_line_to_sse
 from common.config import settings
 from common.evidence_store import build_evidence_store_snapshot
 from common.logger import get_logger, setup_logging
@@ -97,19 +96,23 @@ from common.sse import (
     iter_abort_on_disconnect,
     iter_with_sse_keepalive,
 )
+from common.stream_translate import translate_data_stream_line_to_sse
 from common.thread_ownership import get_thread_owner, set_thread_owner
-from agent.runtime.memory import get_memory_system
+from agent.memory import (
+    MemoryRecord,
+    MemoryScope,
+    MemoryType,
+    MemoryUnavailableError,
+    get_memory_service,
+)
+from agent.runtime.middleware.shared import get_token_summary
+from agent.runtime.runs import RunStatus, run_manager
 from tools.browser.browser_session import browser_sessions
 
-from tools.core.registry import set_registered_tools
+from tools.core.registry import register_tools
 from tools.mcp import close_mcp_tools, init_mcp_tools
 from tools.sandbox import sandbox_browser_sessions
 from tools.search.multi_search import get_search_orchestrator
-
-try:
-    import psycopg
-except ModuleNotFoundError:
-    psycopg = None
 
 # Initialize logging
 setup_logging()
@@ -405,6 +408,54 @@ def _require_thread_owner(request: Request, thread_id: str) -> None:
         return
 
 
+def _request_user_id(request: Request, explicit_user_id: str | None = None) -> str:
+    explicit = (explicit_user_id or "").strip()
+    internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
+    principal_id = (getattr(request.state, "principal_id", "") or "").strip()
+    if internal_key and principal_id:
+        if explicit and explicit != principal_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return principal_id
+    if explicit:
+        return explicit
+    return (getattr(settings, "memory_user_id", "") or "default").strip() or "default"
+
+
+def _memory_source_candidates(memory_result: Any) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in getattr(memory_result, "records", []) or []:
+        source_urls = [
+            str(url).strip()
+            for url in getattr(record, "source_urls", []) or []
+            if str(url).strip()
+        ]
+        if not source_urls:
+            continue
+        for url in source_urls[:3]:
+            if url in seen:
+                continue
+            seen.add(url)
+            candidates.append(
+                {
+                    "url": url,
+                    "title": str(getattr(record, "summary", "") or getattr(record, "content", ""))[:160],
+                    "summary": str(getattr(record, "summary", "") or getattr(record, "content", ""))[:500],
+                    "source": "memory",
+                    "tool": "memory_retrieval",
+                    "memory_record_id": str(getattr(record, "id", "")),
+                    "memory_record_type": str(getattr(record, "type", "")),
+                    "memory_source_evidence_ids": list(
+                        getattr(record, "source_evidence_ids", []) or []
+                    )[:8],
+                    "requires_current_run_verification": True,
+                }
+            )
+            if len(candidates) >= 12:
+                return candidates
+    return candidates
+
+
 
 # Initialize agent graphs with short-term memory (checkpointer)
 if settings.database_url:
@@ -422,48 +473,10 @@ else:
     )
 
 
-def _init_store():
-    backend = settings.memory_store_backend.lower().strip()
-    url = settings.memory_store_url.strip()
-    if backend == "postgres":
-        if not url:
-            raise ValueError(
-                "memory_store_url is required when memory_store_backend=postgres"
-            )
-        if psycopg is None:
-            raise RuntimeError("psycopg is required when memory_store_backend=postgres")
-        from langgraph.store.postgres import PostgresStore
-
-        conn = psycopg.connect(url, autocommit=True)
-        store_obj = PostgresStore(conn)
-        store_obj.setup()
-        logger.info("Initialized PostgresStore for long-term memory")
-        return store_obj
-    if backend == "redis":
-        if not url:
-            raise ValueError(
-                "memory_store_url is required when memory_store_backend=redis"
-            )
-        from langgraph.store.redis import RedisStore
-        from redis import Redis
-
-        conn = Redis.from_url(url)
-        store_obj = RedisStore(conn)
-        store_obj.setup()
-        logger.info("Initialized RedisStore for long-term memory")
-        return store_obj
-
-    logger.info("Using in-memory store (disabled persistent store)")
-    return None
-
-
-# Long-term memory store (configurable via .env)
-store = _init_store()
-
 research_graph = create_research_graph(
     checkpointer=checkpointer,
     interrupt_before=settings.interrupt_nodes_list,
-    store=store,
+    store=None,
 )
 mcp_thread_id = (
     "default"  # thread id for MCP event emission; per-request tools will override
@@ -529,6 +542,23 @@ async def startup_event():
         f"Database: {'Configured' if settings.database_url else 'Not configured'}"
     )
     logger.info(f"Checkpointer: {'Enabled' if checkpointer else 'Disabled'}")
+    if getattr(settings, "memory_enabled", True):
+        try:
+            memory_service = get_memory_service()
+            memory_service.setup()
+            status = memory_service.status()
+            logger.info(
+                "Unified memory: %s (%s records, pgvector=%s)",
+                status.get("backend", "unknown"),
+                status.get("record_count", 0),
+                status.get("pgvector_available", False),
+            )
+        except MemoryUnavailableError as e:
+            logger.warning("[Memory] Unified memory disabled: %s", e)
+        except Exception as e:
+            logger.warning("[Memory] Unified memory initialization failed: %s", e)
+    else:
+        logger.info("Unified memory disabled by MEMORY_ENABLED=false")
 
     # Initialize MCP tools
     global mcp_loaded_tools, mcp_servers_config
@@ -540,7 +570,7 @@ async def startup_event():
             servers_override=servers_cfg, enabled=mcp_enabled
         )
         if mcp_tools:
-            set_registered_tools(mcp_tools)
+            register_tools(mcp_tools)
             mcp_loaded_tools = len(mcp_tools)
             logger.info(f"Successfully registered {mcp_loaded_tools} MCP tools")
         else:
@@ -577,14 +607,6 @@ async def shutdown_event():
     logger.info("=" * 80)
     logger.info("Weaver Research Agent Shutting Down...")
     logger.info("=" * 80)
-
-    # Flush memory update queue
-    try:
-        from agent.runtime.memory.queue import get_memory_queue
-        get_memory_queue().flush()
-        logger.info("Memory queue flushed")
-    except Exception as e:
-        logger.debug(f"Memory queue flush skipped: {e}")
 
     # Stop channel service
     try:
@@ -632,7 +654,7 @@ class SearchMode(BaseModel):
 
 def _coerce_search_mode_input(value: Any) -> SearchMode | None:
     """
-    Coerce legacy search_mode inputs into the structured SearchMode contract.
+    Coerce compact search_mode inputs into the structured SearchMode contract.
 
     We keep the runtime tolerant (strings / dicts) while exposing a strict OpenAPI
     schema (SearchMode object) for frontend/backend alignment.
@@ -830,9 +852,77 @@ class SearchCacheClearResponse(BaseModel):
 
 class MemoryStatusResponse(BaseModel):
     backend: str
-    url_configured: bool
-    checkpointer: bool
-    mem0_enabled: bool
+    available: bool = False
+    pgvector_available: bool = False
+    embedding_model: str = ""
+    embedding_dim: int = 0
+    record_count: int = 0
+    entity_count: int = 0
+    relation_count: int = 0
+    skill_evolution_count: int = 0
+    error: Optional[str] = None
+
+
+class MemoryListResponse(BaseModel):
+    records: list[dict[str, Any]]
+    count: int
+    query: str = ""
+    user_id: str
+
+
+class MemoryRecordCreateRequest(BaseModel):
+    content: str
+    user_id: Optional[str] = None
+    scope: str = MemoryScope.user.value
+    type: str = MemoryType.fact.value
+    summary: str = ""
+    confidence: float = 0.75
+    importance: float = 0.5
+    quality_score: float = 0.0
+    source_thread_id: str = ""
+    source_run_id: str = ""
+    source_evidence_ids: list[str] = Field(default_factory=list)
+    source_urls: list[str] = Field(default_factory=list)
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    expires_at: Optional[str] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryRecordResponse(BaseModel):
+    record: dict[str, Any]
+
+
+class MemoryDeleteResponse(BaseModel):
+    deleted: bool
+
+
+class MemoryRetrieveRequest(BaseModel):
+    query: str
+    user_id: Optional[str] = None
+    type: str = ""
+    scope: str = ""
+    limit: int = 12
+    include_context: bool = True
+
+
+class MemoryRetrieveResponse(BaseModel):
+    records: list[dict[str, Any]]
+    entities: list[dict[str, Any]]
+    relations: list[dict[str, Any]]
+    scoring: list[dict[str, Any]]
+    context: str = ""
+    user_id: str
+
+
+class MemoryGraphResponse(BaseModel):
+    entities: list[dict[str, Any]] = Field(default_factory=list)
+    relations: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class MemorySkillEvolutionResponse(BaseModel):
+    proposals: list[dict[str, Any]]
+    count: int
 
 
 class ExportTemplateItem(BaseModel):
@@ -1013,7 +1103,6 @@ class CancelRequest(BaseModel):
 
 
 # Active streaming tasks managed via StreamRegistry (see common/stream_registry.py)
-# Legacy alias kept for any code that references active_streams directly.
 active_streams = _stream_registry._tasks
 
 
@@ -1035,14 +1124,14 @@ def _normalize_interrupt_resume_payload(payload: Any) -> Any:
     """
     Normalize /api/interrupt/resume payloads for LangGraph `interrupt()` resumes.
 
-    Weaver historically used a custom payload shape:
+    Weaver clients may send a shorthand payload shape:
         {"tool_approved": true/false, "tool_calls": [{name, args, ...}, ...]}
 
     LangChain's official HumanInTheLoopMiddleware expects a HITLResponse:
         {"decisions": [{"type": "approve"|"edit"|"reject", ...}, ...]}
 
-    This helper keeps backwards compatibility while allowing newer clients to
-    send the native HITLResponse shape directly.
+    This helper accepts that shorthand while also allowing clients to send the
+    native HITLResponse shape directly.
     """
     if not isinstance(payload, dict):
         return payload
@@ -1052,12 +1141,12 @@ def _normalize_interrupt_resume_payload(payload: Any) -> Any:
     if isinstance(decisions, list):
         return payload
 
-    # Legacy tool approval payload -> HITLResponse decisions
+    # Client shorthand approval payload -> HITLResponse decisions
     if "tool_approved" in payload:
         tool_calls = payload.get("tool_calls")
         if not isinstance(tool_calls, list) or not tool_calls:
             raise ValueError(
-                "Legacy resume payload requires non-empty 'tool_calls' when 'tool_approved' is present"
+                "Resume payload requires non-empty 'tool_calls' when 'tool_approved' is present"
             )
 
         approved = bool(payload.get("tool_approved"))
@@ -1460,7 +1549,7 @@ async def get_active_tasks(request: Request):
 
 async def format_stream_event(event_type: str, data: Any) -> str:
     """
-    Format events in Vercel AI SDK Data Stream Protocol format.
+    Format events in Weaver's internal data-stream envelope.
 
     Format: {type}:{json_data}\n
     """
@@ -1789,38 +1878,6 @@ def _normalize_images_payload(
     return normalized
 
 
-def _store_search(query: str, user_id: str, limit: int = 3) -> list[str]:
-    if not store:
-        return []
-    namespace = (user_id, "memories")
-    try:
-        results = store.search(namespace, query=query or "", limit=limit)
-        texts: list[str] = []
-        for item in results:
-            value = getattr(item, "value", {}) or {}
-            if isinstance(value, dict):
-                text = value.get("content") or value.get("text") or value.get("data")
-                if text:
-                    texts.append(str(text))
-            elif isinstance(value, str):
-                texts.append(value)
-        return texts[:limit]
-    except Exception as e:
-        logger.debug(f"Store search failed: {e}")
-        return []
-
-
-def _store_add(query: str, content: str, user_id: str):
-    if not store or not content:
-        return
-    namespace = (user_id, "memories")
-    try:
-        key = f"mem_{uuid.uuid4().hex}"
-        store.put(namespace, key, {"query": query, "content": content})
-    except Exception as e:
-        logger.debug(f"Store add failed: {e}")
-
-
 async def stream_agent_events(
     input_text: str,
     thread_id: str = "default",
@@ -1847,6 +1904,7 @@ async def stream_agent_events(
     images = images or []
     user_id = user_id or settings.memory_user_id
     model = (model or settings.primary_model).strip()
+    final_quality_summary: dict[str, Any] = {}
 
     # Optional per-thread log handler for easier debugging
     thread_handler = None
@@ -1905,18 +1963,44 @@ async def stream_agent_events(
             deepsearch_config or {}
         )
 
-        # Load long-term memories for request-scoped context.
+        # Load unified long-term memory as request-scoped hidden context.
         messages: list[Any] = []
-        store_memories = _store_search(input_text, user_id=user_id)
-        if store_memories:
-            store_text = "\n".join(f"- {m}" for m in store_memories)
-            messages.append(SystemMessage(content=f"Stored memories:\n{store_text}"))
-
-        mem_context = get_memory_system().get_relevant_context(user_id or "default", input_text)
-        if mem_context:
-            messages.append(
-                SystemMessage(content=f"Relevant past knowledge:\n{mem_context}")
-            )
+        memory_source_candidates: list[dict[str, Any]] = []
+        memory_retrieval_payload: dict[str, Any] = {}
+        if settings.memory_enabled:
+            try:
+                memory_result = get_memory_service().retrieve(
+                    user_id=user_id or "default",
+                    query=input_text,
+                    include_context=True,
+                )
+                memory_source_candidates = _memory_source_candidates(memory_result)
+                memory_retrieval_payload = {
+                    "record_ids": [
+                        str(getattr(record, "id", ""))
+                        for record in (getattr(memory_result, "records", []) or [])
+                        if str(getattr(record, "id", ""))
+                    ],
+                    "source_candidates": memory_source_candidates,
+                    "scoring": list(getattr(memory_result, "scoring", []) or []),
+                    "usage": (
+                        "Memory is research context only; memory-backed sources must be "
+                        "verified in the current run before citation."
+                    ),
+                }
+                if memory_result.context:
+                    messages.append(
+                        SystemMessage(
+                            content=memory_result.context,
+                            additional_kwargs={"hide_from_ui": True, "memory_context": True},
+                        )
+                    )
+            except Exception as e:
+                logger.warning("[Memory] Retrieval skipped: %s", e)
+        if memory_source_candidates:
+            safe_deepsearch_config["memory_source_candidates"] = memory_source_candidates
+        if memory_retrieval_payload:
+            safe_deepsearch_config["memory_retrieval"] = memory_retrieval_payload
 
         runtime_bundle = build_research_runtime(
             ResearchRuntimeRequest(
@@ -1946,6 +2030,17 @@ async def stream_agent_events(
         initial_state["is_cancelled"] = False
         config = runtime_bundle.config
         safe_deepsearch_config = runtime_bundle.deepsearch_config
+        runtime_context = config.get("configurable", {}).get("runtime_context")
+        run_id = getattr(runtime_context, "run_id", thread_id)
+        run_manager.start(
+            run_id=run_id,
+            thread_id=thread_id,
+            model=model,
+            route=mode_info.get("mode", ""),
+            user_id=user_id or "",
+            workspace=runtime_bundle.workspace,
+            metadata={"input_preview": input_text[:200]},
+        )
 
         async def _drain_pending_tool_events() -> None:
             while not event_queue.empty():
@@ -2211,6 +2306,15 @@ async def stream_agent_events(
                     )
                     final_report = output.get("final_report", "")
                     report_format = output.get("report_format", "markdown")
+                    quality_summary = output.get("quality_summary")
+                    if isinstance(quality_summary, dict) and quality_summary:
+                        final_quality_summary = quality_summary
+                    else:
+                        deepsearch_artifacts = output.get("deepsearch_artifacts", {})
+                        if isinstance(deepsearch_artifacts, dict):
+                            nested_quality = deepsearch_artifacts.get("quality_summary")
+                            if isinstance(nested_quality, dict) and nested_quality:
+                                final_quality_summary = nested_quality
 
                     if is_graph_complete and final_report:
                         if final_report:
@@ -2258,17 +2362,6 @@ async def stream_agent_events(
                                     "format": report_format,
                                 },
                             )
-                            # Store memory for future sessions
-                            _store_add(input_text, final_report, user_id=user_id)
-                            asyncio.create_task(
-                                get_memory_system().record_research(
-                                    user_id=user_id or "default",
-                                    query=input_text,
-                                    findings=final_report,
-                                    facts=[],
-                                )
-                            )
-
             elif event_type == "on_tool_start":
                 tool_name = name or str(data_dict.get("name", "") or "") or "unknown"
                 tool_input = data_dict.get("input", {})
@@ -2395,6 +2488,13 @@ async def stream_agent_events(
         duration = time.time() - start_time
         cancel_token.mark_completed()
         metrics_registry.finish(thread_id, cancelled=False)
+        run_manager.finish(
+            thread_id,
+            status=RunStatus.completed,
+            token_summary=get_token_summary(config),
+            quality_summary=final_quality_summary,
+            workspace=runtime_bundle.workspace,
+        )
         logger.info(
             f"вњ?Agent stream completed | Thread: {thread_id} | "
             f"Events: {event_count} | Duration: {duration:.2f}s"
@@ -2414,6 +2514,13 @@ async def stream_agent_events(
     except asyncio.CancelledError:
         duration = time.time() - start_time
         metrics_registry.finish(thread_id, cancelled=True)
+        run_manager.finish(
+            thread_id,
+            status=RunStatus.cancelled,
+            token_summary=get_token_summary(config) if "config" in locals() else {},
+            quality_summary=final_quality_summary,
+            workspace=runtime_bundle.workspace if "runtime_bundle" in locals() else {},
+        )
         logger.info(
             f"? Agent stream cancelled | Thread: {thread_id} | Duration: {duration:.2f}s"
         )
@@ -2430,6 +2537,14 @@ async def stream_agent_events(
         duration = time.time() - start_time
         cancel_token.mark_failed(str(e))
         metrics_registry.finish(thread_id, cancelled=False)
+        run_manager.finish(
+            thread_id,
+            status=RunStatus.failed,
+            error=str(e),
+            token_summary=get_token_summary(config) if "config" in locals() else {},
+            quality_summary=final_quality_summary,
+            workspace=runtime_bundle.workspace if "runtime_bundle" in locals() else {},
+        )
         logger.error(
             f"? Agent stream error | Thread: {thread_id} | "
             f"Duration: {duration:.2f}s | Error: {e!s}",
@@ -2682,14 +2797,25 @@ async def clear_search_cache_endpoint():
 @app.get("/api/runs")
 async def list_runs(request: Request):
     """List in-memory run metrics (per thread)."""
-    runs = metrics_registry.all()
+    runs_by_id = {str(run.get("run_id")): run for run in metrics_registry.all()}
+    for run in run_manager.all():
+        thread_key = str(run.get("thread_id") or run.get("run_id"))
+        merged = dict(runs_by_id.get(thread_key, {}))
+        merged.update(run)
+        if "run_id" not in merged:
+            merged["run_id"] = thread_key
+        runs_by_id[thread_key] = merged
+    runs = list(runs_by_id.values())
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     if internal_key:
         principal_id = (getattr(request.state, "principal_id", "") or "").strip()
         runs = [
             run
             for run in runs
-            if (get_thread_owner(str(run.get("run_id") or "")) or "").strip()
+            if (
+                get_thread_owner(str(run.get("thread_id") or run.get("run_id") or ""))
+                or ""
+            ).strip()
             == principal_id
         ]
     return {"runs": runs}
@@ -2721,6 +2847,9 @@ class RunMetricsResponse(BaseModel):
     errors: list[str]
     cancelled: bool
     evidence_summary: RunEvidenceSummary
+    status: Optional[str] = None
+    token_summary: dict[str, Any] = Field(default_factory=dict)
+    quality_summary: dict[str, Any] = Field(default_factory=dict)
 
 
 def _build_run_evidence_summary(thread_id: str) -> RunEvidenceSummary:
@@ -2864,8 +2993,29 @@ async def get_run_metrics(thread_id: str, request: Request):
 
     metrics = metrics_registry.get(thread_id)
     if not metrics:
-        raise HTTPException(status_code=404, detail="Run not found")
-    payload = metrics.to_dict()
+        record = run_manager.get(thread_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Run not found")
+        payload = {
+            "run_id": record.thread_id,
+            "model": record.model,
+            "route": record.route,
+            "started_at": record.created_at,
+            "ended_at": record.updated_at,
+            "duration_ms": 0.0,
+            "event_count": 0,
+            "nodes_started": {},
+            "nodes_completed": {},
+            "errors": [record.error] if record.error else [],
+            "cancelled": record.status == RunStatus.cancelled,
+        }
+    else:
+        payload = metrics.to_dict()
+    record = run_manager.get(thread_id)
+    if record:
+        payload["status"] = record.status.value
+        payload["token_summary"] = record.token_summary
+        payload["quality_summary"] = record.quality_summary
     return RunMetricsResponse(
         **payload,
         evidence_summary=_build_run_evidence_summary(thread_id),
@@ -2881,15 +3031,41 @@ async def metrics():
 
 @app.get("/api/memory/status", response_model=MemoryStatusResponse)
 async def memory_status():
-    """Return memory backend status and configuration."""
-    backend = settings.memory_store_backend
-    url = settings.memory_store_url
-    return {
-        "backend": backend,
-        "url_configured": bool(url),
-        "checkpointer": bool(checkpointer),
-        "mem0_enabled": settings.enable_memory,
-    }
+    """Return unified memory backend status and configuration."""
+    if not getattr(settings, "memory_enabled", True):
+        return {
+            "backend": getattr(settings, "memory_backend", "postgres"),
+            "available": False,
+            "pgvector_available": False,
+            "embedding_model": getattr(settings, "memory_embedding_model", ""),
+            "embedding_dim": int(getattr(settings, "memory_embedding_dim", 0) or 0),
+            "record_count": 0,
+            "entity_count": 0,
+            "relation_count": 0,
+            "skill_evolution_count": 0,
+            "error": "memory disabled",
+        }
+    try:
+        service = get_memory_service()
+        status = service.status()
+        return {
+            **status,
+            "embedding_model": service.embedding_model,
+            "embedding_dim": service.embedding_dim,
+        }
+    except Exception as exc:
+        return {
+            "backend": getattr(settings, "memory_backend", "postgres"),
+            "available": False,
+            "pgvector_available": False,
+            "embedding_model": getattr(settings, "memory_embedding_model", ""),
+            "embedding_dim": int(getattr(settings, "memory_embedding_dim", 0) or 0),
+            "record_count": 0,
+            "entity_count": 0,
+            "relation_count": 0,
+            "skill_evolution_count": 0,
+            "error": str(exc),
+        }
 
 
 # ── DeerFlow-aligned: Channels API ──
@@ -3182,42 +3358,177 @@ async def rollback_skill(name: str, version: int = 0):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# ── DeerFlow-aligned: Memory API ──
-
-class MemoryDataResponse(BaseModel):
-    profile: dict[str, Any] = {}
-    user: dict[str, Any] = {}
-    history: dict[str, Any] = {}
-    facts: list[dict[str, Any]] = []
-    fact_count: int = 0
+# Unified Memory API
 
 
-@app.get("/api/memory", response_model=MemoryDataResponse)
-async def get_memory():
-    """Get current memory data for the effective user."""
+@app.get("/api/memory", response_model=MemoryListResponse)
+async def list_memory_records(
+    request: Request,
+    query: str = "",
+    type: str = "",
+    scope: str = "",
+    limit: int = 50,
+    user_id: Optional[str] = None,
+):
+    """List unified memory records for the current user."""
+    if not getattr(settings, "memory_enabled", True):
+        raise HTTPException(status_code=503, detail="Memory is disabled")
+    resolved_user_id = _request_user_id(request, user_id)
     try:
-        from agent.runtime.memory.storage import get_memory_storage
-        from agent.runtime.user_context import get_effective_user_id
-        data = get_memory_storage().load(user_id=get_effective_user_id())
+        records = get_memory_service().list_records(
+            user_id=resolved_user_id,
+            query=query,
+            type=type,
+            scope=scope,
+            limit=max(1, min(int(limit or 50), 200)),
+        )
         return {
-            "profile": data.get("profile", {}),
-            "user": data.get("user", {}),
-            "history": data.get("history", {}),
-            "facts": data.get("facts", []),
-            "fact_count": len(data.get("facts", [])),
+            "records": [record.to_dict() for record in records],
+            "count": len(records),
+            "query": query,
+            "user_id": resolved_user_id,
         }
+    except MemoryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.post("/api/memory/reload")
-async def reload_memory():
-    """Force reload memory from disk."""
+@app.post("/api/memory/records", response_model=MemoryRecordResponse)
+async def create_memory_record(request: Request, payload: MemoryRecordCreateRequest):
+    """Manually add or update a unified memory record."""
+    if not getattr(settings, "memory_enabled", True):
+        raise HTTPException(status_code=503, detail="Memory is disabled")
+    content = (payload.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
+    resolved_user_id = _request_user_id(request, payload.user_id)
     try:
-        from agent.runtime.memory.storage import get_memory_storage, reset_memory_storage
-        reset_memory_storage()
-        data = get_memory_storage().load()
-        return {"fact_count": len(data.get("facts", [])), "status": "reloaded"}
+        record = MemoryRecord(
+            user_id=resolved_user_id,
+            scope=payload.scope,
+            type=payload.type,
+            content=content,
+            summary=payload.summary,
+            confidence=payload.confidence,
+            importance=payload.importance,
+            quality_score=payload.quality_score,
+            source_thread_id=payload.source_thread_id,
+            source_run_id=payload.source_run_id,
+            source_evidence_ids=payload.source_evidence_ids,
+            source_urls=payload.source_urls,
+            valid_from=payload.valid_from,
+            valid_to=payload.valid_to,
+            expires_at=payload.expires_at,
+            metadata={**payload.metadata, "manual": True},
+        )
+        saved = get_memory_service().upsert_record(record)
+        return {"record": saved.to_dict()}
+    except MemoryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/api/memory/records/{record_id}", response_model=MemoryDeleteResponse)
+async def delete_memory_record(
+    record_id: str,
+    request: Request,
+    user_id: Optional[str] = None,
+):
+    """Soft-delete a unified memory record."""
+    if not getattr(settings, "memory_enabled", True):
+        raise HTTPException(status_code=503, detail="Memory is disabled")
+    resolved_user_id = _request_user_id(request, user_id)
+    try:
+        deleted = get_memory_service().delete_record(
+            record_id,
+            user_id=resolved_user_id,
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Memory record not found")
+        return {"deleted": True}
+    except HTTPException:
+        raise
+    except MemoryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/memory/retrieve", response_model=MemoryRetrieveResponse)
+async def retrieve_memory(request: Request, payload: MemoryRetrieveRequest):
+    """Debug hybrid memory recall and score decomposition."""
+    if not getattr(settings, "memory_enabled", True):
+        raise HTTPException(status_code=503, detail="Memory is disabled")
+    query = (payload.query or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+    resolved_user_id = _request_user_id(request, payload.user_id)
+    try:
+        result = get_memory_service().retrieve(
+            user_id=resolved_user_id,
+            query=query,
+            type=payload.type,
+            scope=payload.scope,
+            limit=max(1, min(int(payload.limit or 12), 50)),
+            include_context=payload.include_context,
+        )
+        return {
+            "records": [record.to_dict() for record in result.records],
+            "entities": [entity.to_dict() for entity in result.entities],
+            "relations": [relation.to_dict() for relation in result.relations],
+            "scoring": result.scoring,
+            "context": result.context,
+            "user_id": resolved_user_id,
+        }
+    except MemoryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/memory/graph", response_model=MemoryGraphResponse)
+async def get_memory_graph(
+    request: Request,
+    entity: str = "",
+    limit: int = 50,
+    user_id: Optional[str] = None,
+):
+    """Return memory entity graph records and relations."""
+    if not getattr(settings, "memory_enabled", True):
+        raise HTTPException(status_code=503, detail="Memory is disabled")
+    resolved_user_id = _request_user_id(request, user_id)
+    try:
+        return get_memory_service().graph(
+            user_id=resolved_user_id,
+            entity=entity,
+            limit=max(1, min(int(limit or 50), 200)),
+        )
+    except MemoryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/memory/skill-evolution", response_model=MemorySkillEvolutionResponse)
+async def list_memory_skill_evolution(
+    request: Request,
+    limit: int = 50,
+    user_id: Optional[str] = None,
+):
+    """List auto skill-evolution proposals produced from procedural memory."""
+    if not getattr(settings, "memory_enabled", True):
+        raise HTTPException(status_code=503, detail="Memory is disabled")
+    resolved_user_id = _request_user_id(request, user_id)
+    try:
+        proposals = get_memory_service().list_skill_evolution(
+            user_id=resolved_user_id,
+            limit=max(1, min(int(limit or 50), 200)),
+        )
+        return {"proposals": proposals, "count": len(proposals)}
+    except MemoryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -5035,7 +5346,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
                     continue
 
                 seq += 1
-                sse = translate_legacy_line_to_sse(maybe_line, seq=seq)
+                sse = translate_data_stream_line_to_sse(maybe_line, seq=seq)
                 if sse:
                     yield sse
         finally:

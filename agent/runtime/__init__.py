@@ -9,7 +9,6 @@ __all__ = [
     "SubagentStatus",
     "task_tool",
     "tool_search",
-    "get_memory_system",
     "get_sandbox_provider",
     "get_deferred_registry",
     "set_deferred_registry",

@@ -153,11 +153,21 @@ async def plan_research(
         logger.info("[ResearchPlan] Plan revised by user")
 
     research_todos = derive_todos_from_plan(plan_content, research_brief)
+    research_todos = _annotate_plan_todos(research_todos, complexity=complexity)
     todo_summary = summarize_todos(research_todos)
     thread_id = str((config.get("configurable") or {}).get("thread_id") or "")
     await emit_todo_updates(thread_id, research_todos, previous=[])
 
     # Proceed to supervisor with the approved plan injected
+    effective_depth = max(1, int(depth or 1))
+    effective_breadth = max(1, int(breadth or 2))
+    if complexity == "deep":
+        effective_depth = max(effective_depth, 3)
+        effective_breadth = max(effective_breadth, 4)
+    elif complexity == "standard":
+        effective_depth = max(effective_depth, 2)
+        effective_breadth = max(effective_breadth, 3)
+
     return Command(
         goto="research_supervisor",
         update={
@@ -169,10 +179,46 @@ async def plan_research(
                 f"{research_brief}\n\n"
                 f"[Approved Research Plan]\n{plan_content}"
             ),
+            "complexity": complexity,
+            "estimated_depth": effective_depth,
+            "estimated_breadth": effective_breadth,
             "research_todos": {"type": "override", "value": research_todos},
             "todo_summary": todo_summary,
         },
     )
+
+
+def _annotate_plan_todos(
+    todos: list[dict[str, Any]],
+    *,
+    complexity: str,
+) -> list[dict[str, Any]]:
+    """Enrich parsed todos with stable priority/dependency metadata."""
+    annotated: list[dict[str, Any]] = []
+    total = len(todos) or 1
+    for index, todo in enumerate(todos, 1):
+        if not isinstance(todo, dict):
+            continue
+        updated = dict(todo)
+        updated.setdefault("priority", min(5, max(1, index)))
+        updated.setdefault("coverage_status", "planned")
+        updated.setdefault("dependencies", [])
+        if complexity == "deep" and index == 1:
+            updated["priority"] = 1
+        if complexity == "standard":
+            updated["priority"] = min(4, updated.get("priority", index))
+        if index > 1:
+            prev_id = str(todos[index - 2].get("id") or "")
+            if prev_id:
+                deps = list(updated.get("dependencies") or [])
+                if prev_id not in deps:
+                    deps.append(prev_id)
+                updated["dependencies"] = deps[:3]
+        updated["coverage_status"] = (
+            "in_progress" if index == 1 and total > 1 else updated["coverage_status"]
+        )
+        annotated.append(updated)
+    return annotated
 
 
 async def _revise_plan_with_feedback(

@@ -882,9 +882,6 @@ async def _sweep_all_routes(
                 json_body = {"text": "Hello", "voice": "longxiaochun"}
             elif method_u == "POST" and path == "/api/asr/upload":
                 files = {"file": ("smoke.wav", b"\x00\x00\x00\x00", "audio/wav")}
-            elif method_u == "POST" and path == "/api/research":
-                # Query param, streaming response.
-                params = {"query": "smoke test"}
             elif method_u == "POST" and path == "/api/research/sse":
                 json_body = {"query": "smoke test"}
             elif method_u == "GET" and path == "/api/screenshots":
@@ -895,7 +892,7 @@ async def _sweep_all_routes(
                 json_body = {"thread_id": pick_id("thread_id"), "payload": {}}
 
             # Streaming endpoints
-            if path in {"/api/research", "/api/events/{thread_id}", "/api/chat/sse", "/api/research/sse"}:
+            if path in {"/api/events/{thread_id}", "/api/chat/sse", "/api/research/sse"}:
                 first_byte_timeout_s = 1.5
                 if path in {"/api/chat/sse", "/api/research/sse"}:
                     # These hit a real model + graph; allow a little more time

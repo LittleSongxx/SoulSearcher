@@ -61,8 +61,9 @@ services:
       RATE_LIMIT_ENABLED: "false"
       PORT: "8000"
       DATABASE_URL: postgresql://${POSTGRES_USER:-manus}:${POSTGRES_PASSWORD:-manus_dev_password}@postgres:5432/${POSTGRES_DB:-manus_db}
-      MEMORY_STORE_BACKEND: redis
-      MEMORY_STORE_URL: redis://redis:6379/0
+      MEMORY_ENABLED: "true"
+      MEMORY_BACKEND: postgres
+      MEMORY_DATABASE_URL: postgresql://${POSTGRES_USER:-manus}:${POSTGRES_PASSWORD:-manus_dev_password}@postgres:5432/${POSTGRES_DB:-manus_db}
       WEAVER_DATA_DIR: /app/.docker-data/data
       WEAVER_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8001}
       CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3100},http://127.0.0.1:${FRONTEND_PORT:-3100}

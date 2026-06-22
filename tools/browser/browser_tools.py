@@ -395,7 +395,7 @@ class BrowserScreenshotTool(_BrowserTool):
             pass
 
         result: dict[str, Any] = {
-            "url": target,  # page URL (kept for backwards compatibility)
+            "url": target,
             "page_url": target,
             "screenshot_url": screenshot_url,
             "filename": screenshot_filename,

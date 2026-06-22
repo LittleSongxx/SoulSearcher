@@ -44,6 +44,9 @@ from agent.core.state import (
     ResearchComplete,
     ThinkTool,
 )
+from agent.workflows.evidence_ledger import normalize_evidence_item
+from agent.workflows.source_cache import cache_source_text
+from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,26 @@ async def researcher(
 
     # Get available tools
     tools = await _get_researcher_tools(config, research_config)
+    deferred_names: frozenset[str] = frozenset()
+    try:
+        from common.config import settings
+        from tools.core.deferred_tools import assemble_deferred_tools
+
+        deferred_enabled = bool(
+            (config.get("configurable") or {}).get(
+                "mcp_deferred_tools_enabled",
+                getattr(settings, "mcp_deferred_tools_enabled", False),
+            )
+        )
+        deferred_setup = assemble_deferred_tools(
+            tools,
+            enabled=deferred_enabled,
+            config=config,
+        )
+        tools = deferred_setup.final_tools
+        deferred_names = deferred_setup.deferred_names
+    except Exception as e:
+        logger.debug("[Researcher] Deferred MCP setup skipped: %s", e)
     if not tools:
         raise ValueError(
             "No research tools available. Please configure at least one search API "
@@ -131,6 +154,13 @@ async def researcher(
     source_guidance = _format_source_policy_guidance(source_policy)
     if source_guidance:
         system_prompt += "\n\n" + source_guidance
+    if deferred_names:
+        try:
+            from tools.core.deferred_tools import deferred_tools_prompt_section
+
+            system_prompt += "\n\n" + deferred_tools_prompt_section(deferred_names)
+        except Exception:
+            pass
 
     # === Skill Progressive Loading (deer-flow pattern) ===
     # Make active skills discoverable to the researcher so it can
@@ -168,8 +198,7 @@ async def researcher(
     messages = [SystemMessage(content=system_prompt)] + researcher_messages
 
     # === Image Injection (multimodal — deer-flow pattern) ===
-    configurable = config.get("configurable") or {}
-    viewed_images = configurable.get("viewed_images", {})
+    viewed_images = get_viewed_images(config)
     if viewed_images:
         try:
             from agent.workflows.multimodal import build_image_injection_message
@@ -181,8 +210,7 @@ async def researcher(
                     f"into LLM context"
                 )
                 # Clear from config so images are not re-injected on subsequent calls
-                configurable["viewed_images"] = {}
-                config["configurable"] = configurable
+                clear_viewed_images(config)
         except ImportError:
             pass
 
@@ -200,7 +228,7 @@ async def researcher(
 
     # === Token Usage Tracking ===
     from agent.core.middleware import get_token_tracker
-    tracker = get_token_tracker()
+    tracker = get_token_tracker(config)
     usage = getattr(response, "usage_metadata", None) or {}
     input_tokens = usage.get("input_tokens", 0)
     output_tokens = usage.get("output_tokens", 0)
@@ -351,14 +379,7 @@ async def researcher_tools(
 
     # Store captured images in config for injection in next researcher() call
     if captured_images:
-        configurable = config.get("configurable") or {}
-        existing = configurable.get("viewed_images", {})
-        if isinstance(existing, dict):
-            existing.update(captured_images)
-        else:
-            existing = captured_images
-        configurable["viewed_images"] = existing
-        config["configurable"] = configurable
+        merge_viewed_images(config, captured_images)
         logger.info(
             f"[ResearcherTools] Stored {len(captured_images)} image(s) "
             f"in config for next LLM call"
@@ -375,18 +396,31 @@ async def researcher_tools(
     tool_outputs = list(think_tool_messages) + list(image_tool_messages)
     evidence_items: list[dict[str, Any]] = []
     for tc, obs in zip(non_image_calls, observations):
+        obs_text, cache_info = _maybe_cache_observation(
+            observation=str(obs),
+            tool_name=tc.get("name", ""),
+            args=tc.get("args", {}),
+            config=config,
+        )
         tool_outputs.append(ToolMessage(
-            content=str(obs),
+            content=obs_text,
             name=tc["name"],
             tool_call_id=tc["id"],
         ))
+        extracted = _extract_evidence_from_observation(
+            tool_name=tc.get("name", ""),
+            args=tc.get("args", {}),
+            observation=obs_text,
+            research_topic=state.get("research_topic", ""),
+        )
+        if cache_info:
+            for item in extracted:
+                metadata = dict(item.get("metadata") if isinstance(item.get("metadata"), dict) else {})
+                metadata.update(cache_info)
+                item["metadata"] = metadata
+                item["cached_path"] = cache_info.get("cached_path")
         evidence_items.extend(
-            _extract_evidence_from_observation(
-                tool_name=tc.get("name", ""),
-                args=tc.get("args", {}),
-                observation=str(obs),
-                research_topic=state.get("research_topic", ""),
-            )
+            extracted
         )
 
     # Check iteration limits
@@ -543,10 +577,13 @@ async def _get_researcher_tools(
         from pathlib import Path as _Path
         import os as _os
 
-        _skills_base = _os.path.join(
-            _os.path.dirname(__file__), "..", "..", "skills", "public"
+        _skills_root = _os.path.abspath(
+            _os.path.join(_os.path.dirname(__file__), "..", "..", "skills")
         )
-        _skills_base = _os.path.abspath(_skills_base)
+        _skill_bases = {
+            "public": _os.path.join(_skills_root, "public"),
+            "custom": _os.path.join(_skills_root, "custom"),
+        }
 
         @lc_tool
         def read_skill_guide(file_path: str) -> str:
@@ -560,12 +597,40 @@ async def _get_researcher_tools(
                 The full content of the requested file.
             """
             _safe = _os.path.normpath(file_path).lstrip("/")
-            if ".." in _safe:
+            if ".." in _safe.split(_os.sep):
                 return "Error: path traversal not allowed"
-            full = _os.path.join(_skills_base, _safe)
-            if not _os.path.isfile(full):
+            _cfg = config.get("configurable") or {}
+            _active = (
+                _cfg.get("skill_ids")
+                or _cfg.get("deepsearch_skill_ids")
+                or []
+            )
+            if isinstance(_active, str):
+                _active = [p.strip() for p in _active.split(",") if p.strip()]
+            _active_set = {str(p).strip() for p in _active if str(p).strip()}
+            _parts = _safe.split("/", 2)
+            if _parts[0] in {"public", "custom"} and len(_parts) >= 2:
+                _category, _requested_root = _parts[0], _parts[1]
+                _relative = _parts[2] if len(_parts) > 2 else "SKILL.md"
+            else:
+                _category, _requested_root = "public", _parts[0]
+                _relative = _safe.split("/", 1)[1] if "/" in _safe else "SKILL.md"
+            if not _active_set or _requested_root not in _active_set:
+                return (
+                    "Error: read_skill_guide can only read files under active "
+                    f"skills for this run. Active skills: {sorted(_active_set)}"
+                )
+            _base = _skill_bases.get(_category, _skill_bases["public"])
+            full = _os.path.join(_base, _requested_root, _relative)
+            try:
+                _resolved_base = _Path(_base).resolve()
+                _resolved_full = _Path(full).resolve()
+                _resolved_full.relative_to(_resolved_base)
+            except Exception:
+                return "Error: path traversal not allowed"
+            if not _resolved_full.is_file():
                 return f"Error: file not found at '{_safe}'"
-            return _Path(full).read_text(encoding="utf-8")
+            return _resolved_full.read_text(encoding="utf-8")
 
         tools.append(read_skill_guide)
         logger.debug("[Researcher] Loaded read_skill_guide tool for progressive loading")
@@ -611,6 +676,7 @@ async def _get_researcher_tools(
 
     # === Sandbox Tools (code execution, shell, files) ===
     try:
+        from tools.crawl.deep_read_tool import deep_read
         from tools.sandbox.sandbox_shell_tool import (
             SandboxExecuteCommandTool,
             SandboxCheckOutputTool,
@@ -619,18 +685,18 @@ async def _get_researcher_tools(
             SandboxCreateFileTool,
             SandboxReadFileTool,
         )
-        from tools.code.code_executor_enhanced import CodeExecutorTool
+        from tools.code.code_executor import create_visualization, execute_python_code
 
         sandbox_shell = SandboxExecuteCommandTool()
         sandbox_check = SandboxCheckOutputTool()
         sandbox_files_read = SandboxReadFileTool()
         sandbox_files_create = SandboxCreateFileTool()
-        code_tool = CodeExecutorTool()
 
         tools.extend([
+            deep_read,
             sandbox_shell, sandbox_check,
             sandbox_files_read, sandbox_files_create,
-            code_tool,
+            execute_python_code, create_visualization,
         ])
         logger.debug("[Researcher] Loaded sandbox tools (shell, files, code)")
     except ImportError as e:
@@ -671,27 +737,30 @@ async def _get_researcher_tools(
             import os as _os
             from pathlib import Path as _Path
 
-            _skills_base = _os.path.join(
-                _os.path.dirname(__file__), "..", "..", "skills", "public"
-            )
-            _skills_base = _os.path.abspath(_skills_base)
             _loaded = []
-            if _os.path.isdir(_skills_base):
+            _skills_root = _os.path.abspath(
+                _os.path.join(_os.path.dirname(__file__), "..", "..", "skills")
+            )
+            for _category, _enum in (("public", SkillCategory.PUBLIC), ("custom", SkillCategory.CUSTOM)):
+                _skills_base = _os.path.join(_skills_root, _category)
+                if not _os.path.isdir(_skills_base):
+                    continue
                 for _entry in sorted(_os.listdir(_skills_base)):
                     if _entry not in active_skill_ids:
                         continue
                     _sf = _os.path.join(_skills_base, _entry, "SKILL.md")
-                    if _os.path.isfile(_sf):
-                        try:
-                            _sk = parse_skill_file(
-                                _Path(_sf),
-                                SkillCategory.PUBLIC,
-                                _Path(_os.path.join(_skills_base, _entry)),
-                            )
-                            if _sk:
-                                _loaded.append(_sk)
-                        except Exception:
-                            pass
+                    if not _os.path.isfile(_sf):
+                        continue
+                    try:
+                        _sk = parse_skill_file(
+                            _Path(_sf),
+                            _enum,
+                            _Path(_entry),
+                        )
+                        if _sk:
+                            _loaded.append(_sk)
+                    except Exception:
+                        pass
             if _loaded:
                 tools = filter_tools_by_skill_allowed_tools(tools, _loaded)
                 logger.debug(
@@ -843,8 +912,41 @@ def _extract_evidence_from_observation(
             query=query,
             retrieved_at=datetime.now().isoformat(timespec="seconds"),
         )
-        evidence.append(item.to_artifact())
+        normalized = normalize_evidence_item(item.to_artifact())
+        if normalized:
+            evidence.append(normalized)
     return evidence
+
+
+def _maybe_cache_observation(
+    *,
+    observation: str,
+    tool_name: str,
+    args: dict[str, Any],
+    config: RunnableConfig,
+) -> tuple[str, dict[str, Any] | None]:
+    metadata = {
+        "tool": tool_name,
+        "query": args.get("query") or args.get("url") or args.get("cached_path") or "",
+    }
+    cached = cache_source_text(
+        text=observation,
+        config=config,
+        source_hint=f"{tool_name}-{metadata['query']}",
+        metadata=metadata,
+    )
+    if not cached:
+        return observation, None
+    hint = (
+        "\n\n---\n"
+        "[Full tool output was cached for focused follow-up reads. "
+        f"Use deep_read(cached_path='{cached['cached_path']}', section_query='...') "
+        "or start_line/end_line if more detail is needed.]\n"
+        f"cached_path: {cached['cached_path']}\n"
+        f"line_count: {cached['line_count']}\n"
+        f"content_hash: {cached['content_hash']}"
+    )
+    return observation + hint, cached
 
 
 def _aggregate_research_content(messages: list) -> str:
@@ -871,11 +973,56 @@ async def _execute_tool_safely(tool, args: dict, config: RunnableConfig) -> str:
     if tool is None:
         return f"Error: Tool not found for args {list(args.keys())}"
 
+    tool_name = getattr(tool, "name", "unknown")
+    if tool_name == "tool_search":
+        try:
+            from tools.core.deferred_tools import promote_deferred_tools
+
+            metadata = getattr(tool, "metadata", None)
+            catalog = (
+                metadata.get("deferred_catalog")
+                if isinstance(metadata, dict)
+                else None
+            )
+            if catalog is None:
+                raise ValueError("tool_search is missing deferred catalog metadata")
+            update = promote_deferred_tools(catalog, str(args.get("query") or ""))
+            promoted = update.get("promoted_tools")
+            if isinstance(promoted, dict):
+                configurable = config.setdefault("configurable", {})
+                existing = configurable.get("promoted_tools")
+                if (
+                    isinstance(existing, dict)
+                    and existing.get("catalog_hash") == promoted.get("catalog_hash")
+                ):
+                    names = list(existing.get("names") or []) + list(promoted.get("names") or [])
+                    configurable["promoted_tools"] = {
+                        "catalog_hash": promoted.get("catalog_hash"),
+                        "names": list(dict.fromkeys(str(name) for name in names)),
+                    }
+                else:
+                    configurable["promoted_tools"] = {
+                        "catalog_hash": promoted.get("catalog_hash"),
+                        "names": list(dict.fromkeys(str(name) for name in (promoted.get("names") or []))),
+                    }
+                try:
+                    from agent.runtime.context import ensure_runtime_context
+
+                    ensure_runtime_context(config).promoted_tools = dict(
+                        configurable["promoted_tools"]
+                    )
+                except Exception:
+                    pass
+            return str(update.get("content") or "")
+        except Exception as e:
+            logger.warning("[Researcher] tool_search failed: %s", e)
+            return f"Tool 'tool_search' error: {e}. Try a different query."
+
     try:
         from agent.core.middleware import ToolErrorHandler
 
-        tool_call = {"name": getattr(tool, "name", "unknown"), "id": "researcher", "args": args}
-        tools_by_name = {getattr(tool, "name", ""): tool}
+        tool_call = {"name": tool_name, "id": "researcher", "args": args}
+        tools_by_name = {tool_name: tool}
         result = await ToolErrorHandler.execute_with_error_handling(
             tool_call, tools_by_name, config
         )

@@ -1,9 +1,8 @@
-"""Unified Middleware Layer — 4 essential cross-cutting concerns.
+"""Unified Middleware Layer — essential cross-cutting concerns.
 
 1. ToolErrorHandling  - Tool failures return error messages, never crash
 2. LoopDetection       - Prevent infinite LLM loops
 3. TokenUsage          - Track API costs + sub-agent usage attribution
-4. Memory              - Async per-user memory updates
 
 All other concerns are handled explicitly in graph nodes — not hidden in middleware.
 """
@@ -184,43 +183,7 @@ class TokenUsageTracker:
 
 
 # =============================================================================
-# 4. Memory Middleware (Phase 4 integration point)
-# =============================================================================
-
-class MemoryMiddleware:
-    """Asynchronous per-user memory updates.
-
-    Pattern from deer-flow (MemoryMiddleware), simplified for the unified design.
-    Runs memory extraction as a background task so it doesn't block research.
-
-    Phase 4 integrates with structured + embedding dual-mode memory.
-    """
-
-    async def update_memory(
-        self,
-        user_id: str,
-        query: str,
-        findings: str,
-        facts: list[str],
-    ) -> None:
-        """Update user memory after research completes (fire-and-forget)."""
-        try:
-            from agent.runtime.memory import get_memory_system
-            memory = get_memory_system()
-            await memory.record_research(
-                user_id=user_id,
-                query=query,
-                findings=findings[:5000],  # Store summarized findings
-                facts=facts,
-            )
-        except ImportError:
-            logger.debug("[Memory] Memory system not available (Phase 4)")
-        except Exception as e:
-            logger.warning(f"[Memory] Background memory update failed: {e}")
-
-
-# =============================================================================
-# 5. Error Recovery Statistics — independent tracking for A/B comparison
+# 4. Error Recovery Statistics — independent tracking for A/B comparison
 # =============================================================================
 
 class RecoveryTracker:
@@ -362,7 +325,6 @@ async def run_recovery_ab_test(
 
 _loop_detector: Optional[LoopDetector] = None
 _token_tracker: Optional[TokenUsageTracker] = None
-_memory_middleware: Optional[MemoryMiddleware] = None
 _recovery_tracker: Optional[RecoveryTracker] = None
 
 
@@ -373,18 +335,20 @@ def get_loop_detector() -> LoopDetector:
     return _loop_detector
 
 
-def get_token_tracker() -> TokenUsageTracker:
+def get_token_tracker(config: Any | None = None) -> TokenUsageTracker:
+    if config is not None:
+        try:
+            from agent.runtime.context import get_runtime_token_tracker
+
+            tracker = get_runtime_token_tracker(config)
+            if tracker is not None:
+                return tracker
+        except Exception:
+            pass
     global _token_tracker
     if _token_tracker is None:
         _token_tracker = TokenUsageTracker()
     return _token_tracker
-
-
-def get_memory_middleware() -> MemoryMiddleware:
-    global _memory_middleware
-    if _memory_middleware is None:
-        _memory_middleware = MemoryMiddleware()
-    return _memory_middleware
 
 
 def get_recovery_tracker() -> RecoveryTracker:
@@ -392,5 +356,3 @@ def get_recovery_tracker() -> RecoveryTracker:
     if _recovery_tracker is None:
         _recovery_tracker = RecoveryTracker()
     return _recovery_tracker
-
-

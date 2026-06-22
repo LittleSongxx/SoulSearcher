@@ -143,10 +143,10 @@ def _derive_expected_fields(query: str) -> list[str]:
 
 def _derive_complexity(query: str, expected_fields: list[str]) -> str:
     if len(expected_fields) >= 5 or _has_any(query, _COMPARISON_MARKERS):
-        return "broad"
+        return "deep"
     if _has_any(query, _RESEARCH_MARKERS):
         return "standard"
-    return "light"
+    return "simple"
 
 
 def _derive_freshness(query: str, constraints: dict[str, Any]) -> str:

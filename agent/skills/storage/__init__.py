@@ -32,7 +32,7 @@ def get_or_new_skill_storage(skills_path: str | None = None) -> SkillStorage:
 
 
 def get_skill_storage() -> SkillStorage:
-    """Legacy alias for get_or_new_skill_storage()."""
+    """Return the process singleton skill storage."""
     return get_or_new_skill_storage()
 
 

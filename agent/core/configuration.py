@@ -242,12 +242,6 @@ class ResearchConfiguration:
     )
 
     # =========================================================================
-    # Memory (Phase 4)
-    # =========================================================================
-    memory_enabled: bool = False
-    memory_namespace: str = "research_memory"
-
-    # =========================================================================
     # Vision / Multimodal Configuration (deer-flow pattern)
     # =========================================================================
     supports_vision: bool = field(
@@ -389,7 +383,7 @@ class ResearchConfiguration:
         return getattr(self, fallback_attr, self.smart_llm)
 
     # ------------------------------------------------------------------
-    # Legacy complexity-based routing (kept for minimal-diff transitions)
+    # Complexity-based model routing.
     # ------------------------------------------------------------------
 
     def get_model_for_complexity(self, complexity: str) -> str:
@@ -402,6 +396,8 @@ class ResearchConfiguration:
             return research_model
         if complexity == "simple":
             return self.fast_llm
+        elif complexity == "standard":
+            return self.smart_llm
         elif complexity == "deep":
             return self.strategic_llm
         else:
@@ -434,6 +430,8 @@ class ResearchConfiguration:
             return self.final_report_model
         if complexity == "simple":
             return self.fast_llm
+        elif complexity == "standard":
+            return self.smart_llm
         elif complexity == "deep":
             return self.strategic_llm
         return self.smart_llm

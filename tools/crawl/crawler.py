@@ -284,7 +284,7 @@ async def close_global_crawler() -> None:
 
 
 # ============================================================================
-# Legacy urllib-based Implementation (Fallback)
+# urllib-based fallback implementation
 # ============================================================================
 
 
@@ -302,9 +302,9 @@ def _strip_html(html: str) -> str:
     return text.strip()
 
 
-def _crawl_url_legacy(url: str, timeout: int = 10) -> dict[str, str]:
+def _crawl_url_urllib(url: str, timeout: int = 10) -> dict[str, str]:
     """
-    Fetch a single URL using urllib (legacy implementation).
+    Fetch a single URL using urllib.
 
     Returns dict with url, content; on error, content has the message.
     """
@@ -315,21 +315,17 @@ def _crawl_url_legacy(url: str, timeout: int = 10) -> dict[str, str]:
             raw = resp.read().decode(charset, errors="ignore")
         return {"url": url, "content": _strip_html(raw)}
     except (HTTPError, URLError, Exception) as e:
-        logger.warning(f"[crawler_legacy] {url} failed: {e}")
+        logger.warning(f"[crawler_urllib] {url} failed: {e}")
         return {"url": url, "content": f"Crawl failed: {e}"}
 
 
-def _crawl_urls_legacy(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
-    """
-    Fetch multiple URLs sequentially using urllib (legacy implementation).
-
-    This is the original simple implementation used as fallback.
-    """
+def _crawl_urls_urllib(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
+    """Fetch multiple URLs sequentially using urllib."""
     results: list[dict[str, str]] = []
     for u in urls:
         if not u:
             continue
-        results.append(_crawl_url_legacy(u, timeout=timeout))
+        results.append(_crawl_url_urllib(u, timeout=timeout))
     return results
 
 
@@ -369,11 +365,11 @@ def crawl_urls(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
 
     Priority:
     1. Optimized Playwright crawler (if enabled and available) - 4x faster, JS support
-    2. Legacy urllib crawler (fallback) - simple, no dependencies
+    2. urllib crawler fallback - simple, no browser dependency
 
     Args:
         urls: List of URLs to crawl
-        timeout: Timeout in seconds (used by legacy crawler)
+        timeout: Timeout in seconds for the urllib fallback
 
     Returns:
         List of dicts with 'url' and 'content' keys
@@ -382,7 +378,7 @@ def crawl_urls(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
         # Automatic selection
         results = crawl_urls(["https://example.com"])
 
-        # Force legacy (set in .env: USE_OPTIMIZED_CRAWLER=false)
+        # Force urllib fallback (set in .env: USE_OPTIMIZED_CRAWLER=false)
         results = crawl_urls(["https://example.com"])
     """
     if not urls:
@@ -397,11 +393,11 @@ def crawl_urls(urls: list[str], timeout: int = 10) -> list[dict[str, str]]:
             return _run_async_crawl(urls)
         except Exception as e:
             logger.warning(
-                f"[crawler] Optimized crawler failed ({e}), falling back to legacy urllib crawler"
+                f"[crawler] Optimized crawler failed ({e}), falling back to urllib crawler"
             )
 
-    logger.debug("[crawler] Using legacy urllib crawler")
-    return _crawl_urls_legacy(urls, timeout)
+    logger.debug("[crawler] Using urllib crawler fallback")
+    return _crawl_urls_urllib(urls, timeout)
 
 
 def _run_async_crawl(urls: list[str]) -> list[dict[str, str]]:
@@ -440,9 +436,9 @@ async def _async_crawl_urls(urls: list[str]) -> list[dict[str, Any]]:
         return await crawler.crawl_urls(urls)
 
 
-# ============================================================================
-# Backwards compatibility aliases
-# ============================================================================
-
-# Keep original function names for backwards compatibility
-crawl_url = _crawl_url_legacy  # Single URL crawling (legacy only)
+def crawl_url(url: str, timeout: int = 10) -> dict[str, str]:
+    """Fetch a single URL through the same smart crawler path as crawl_urls."""
+    results = crawl_urls([url], timeout=timeout)
+    if results:
+        return results[0]
+    return {"url": url, "content": ""}

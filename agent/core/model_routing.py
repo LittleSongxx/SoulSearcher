@@ -12,24 +12,43 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain.chat_models import init_chat_model
-
 from agent.core.llm_factory import create_chat_model_params
 
-configurable_model = init_chat_model(
-    configurable_fields=(
-        "model",
-        "max_tokens",
-        "api_key",
-        "base_url",
-        "timeout",
-        "temperature",
-        "extra_body",
-        "azure_endpoint",
-        "azure_deployment",
-        "api_version",
-    ),
-)
+try:
+    from langchain.chat_models import init_chat_model
+
+    configurable_model = init_chat_model(
+        configurable_fields=(
+            "model",
+            "max_tokens",
+            "api_key",
+            "base_url",
+            "timeout",
+            "temperature",
+            "extra_body",
+            "azure_endpoint",
+            "azure_deployment",
+            "api_version",
+        ),
+    )
+except ModuleNotFoundError:
+    class _MissingConfigurableModel:
+        def with_config(self, *_args, **_kwargs):
+            return self
+
+        def bind_tools(self, *_args, **_kwargs):
+            return self
+
+        def with_retry(self, *_args, **_kwargs):
+            return self
+
+        async def ainvoke(self, *_args, **_kwargs):
+            raise RuntimeError("langchain is required for LLM invocation")
+
+        def invoke(self, *_args, **_kwargs):
+            raise RuntimeError("langchain is required for LLM invocation")
+
+    configurable_model = _MissingConfigurableModel()
 
 
 def build_model_config(

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 TODO_STATUSES = {"pending", "running", "completed", "blocked", "cancelled"}
+TODO_COVERAGE_STATUSES = {"planned", "in_progress", "covered", "blocked", "cancelled"}
 MAX_TODOS = 8
 MAX_TITLE_CHARS = 160
 
@@ -21,22 +22,33 @@ def derive_todos_from_plan(plan: str, research_brief: str = "") -> list[dict[str
     todos: list[dict[str, Any]] = []
     seen: set[str] = set()
     for title in candidates:
-        normalized = _normalize_title(title)
+        normalized, priority, dependencies = _normalize_title(title, priority_hint=len(todos) + 1)
         if not normalized:
             continue
         key = _dedupe_key(normalized)
         if key in seen:
             continue
         seen.add(key)
-        todos.append(_new_todo(normalized, source="plan"))
+        todos.append(
+            _new_todo(
+                normalized,
+                source="plan",
+                priority=priority,
+                dependencies=dependencies,
+            )
+        )
         if len(todos) >= MAX_TODOS:
             break
 
     if todos:
         return todos
 
-    fallback_title = _normalize_title(research_brief) or "Complete the approved research brief"
-    return [_new_todo(fallback_title, source="plan")]
+    fallback_title, priority, dependencies = _normalize_title(
+        research_brief,
+        priority_hint=1,
+    )
+    fallback_title = fallback_title or "Complete the approved research brief"
+    return [_new_todo(fallback_title, source="plan", priority=priority, dependencies=dependencies)]
 
 
 def match_todo_for_topic(todos: list[dict[str, Any]], topic: str) -> str | None:
@@ -74,7 +86,7 @@ def ensure_todo_for_topic(
     if matched_id:
         return current, matched_id
 
-    title = _normalize_title(topic)
+    title, priority, dependencies = _normalize_title(topic, priority_hint=len(current) + 1)
     if not title:
         return current, None
 
@@ -87,12 +99,12 @@ def ensure_todo_for_topic(
     if len(current) >= MAX_TODOS:
         return current, None
 
-    new_todo = _new_todo(title, source=source)
+    new_todo = _new_todo(title, source=source, priority=priority, dependencies=dependencies)
     return [*current, new_todo], str(new_todo["id"])
 
 
 def mark_todo_running(todos: list[dict[str, Any]], todo_id: str | None) -> list[dict[str, Any]]:
-    return _update_todo(todos, todo_id, status="running", progress=40)
+    return _update_todo(todos, todo_id, status="running", progress=40, coverage_status="in_progress")
 
 
 def mark_todo_completed(
@@ -106,6 +118,7 @@ def mark_todo_completed(
         todo_id,
         status="completed",
         progress=100,
+        coverage_status="covered",
         result_preview=_preview(result_preview),
     )
 
@@ -121,6 +134,7 @@ def mark_todo_blocked(
         todo_id,
         status="blocked",
         progress=0,
+        coverage_status="blocked",
         result_preview=_preview(result_preview),
     )
 
@@ -133,7 +147,7 @@ def append_gap_todos(
     existing = {_dedupe_key(str(todo.get("title") or "")) for todo in current}
     output = list(current)
     for gap in gaps:
-        title = _normalize_title(gap)
+        title, _, _ = _normalize_title(gap)
         if not title:
             continue
         key = _dedupe_key(title)
@@ -190,8 +204,16 @@ def format_todo_context(todos: list[dict[str, Any]]) -> str:
     if open_todos:
         lines.append("Open tasks:")
         for todo in open_todos:
+            priority = int(todo.get("priority") or 0)
+            dependencies = todo.get("dependencies") or []
+            dependency_text = (
+                f" deps={', '.join(str(item) for item in dependencies[:3])}"
+                if isinstance(dependencies, list) and dependencies
+                else ""
+            )
             lines.append(
-                f"- [{todo.get('status', 'pending')}] {todo.get('title', '')}"
+                f"- [{todo.get('status', 'pending')}] p{priority or '?'} "
+                f"{todo.get('title', '')}{dependency_text}"
             )
     lines.append(
         "Use this as a soft checklist: prioritize open tasks, add needed angles, "
@@ -262,8 +284,16 @@ def _list_item_text(line: str) -> str:
     return match.group(1)
 
 
-def _new_todo(title: str, *, source: str) -> dict[str, Any]:
-    title = _normalize_title(title)
+def _new_todo(
+    title: str,
+    *,
+    source: str,
+    priority: int | None = None,
+    dependencies: list[str] | None = None,
+) -> dict[str, Any]:
+    title, derived_priority, derived_dependencies = _normalize_title(title)
+    priority = _safe_priority(priority, default=derived_priority)
+    dependencies = _clean_dependencies(dependencies) or derived_dependencies
     digest = hashlib.sha1(f"{source}:{title}".encode()).hexdigest()[:10]
     return {
         "id": f"todo_{digest}",
@@ -272,6 +302,9 @@ def _new_todo(title: str, *, source: str) -> dict[str, Any]:
         "progress": 0,
         "source": source,
         "result_preview": "",
+        "priority": priority,
+        "dependencies": dependencies,
+        "coverage_status": "planned",
         "updated_at": _now(),
     }
 
@@ -282,6 +315,7 @@ def _update_todo(
     *,
     status: str,
     progress: int,
+    coverage_status: str | None = None,
     result_preview: str | None = None,
 ) -> list[dict[str, Any]]:
     if not todo_id:
@@ -294,6 +328,16 @@ def _update_todo(
         updated = dict(todo)
         updated["status"] = status if status in TODO_STATUSES else "pending"
         updated["progress"] = max(0, min(100, int(progress)))
+        if coverage_status:
+            updated["coverage_status"] = (
+                coverage_status if coverage_status in TODO_COVERAGE_STATUSES else "planned"
+            )
+        elif status == "completed":
+            updated["coverage_status"] = "covered"
+        elif status == "running":
+            updated["coverage_status"] = "in_progress"
+        elif status == "blocked":
+            updated["coverage_status"] = "blocked"
         if result_preview is not None:
             updated["result_preview"] = result_preview
         updated["updated_at"] = _now()
@@ -308,7 +352,7 @@ def _valid_todos(todos: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     for todo in todos:
         if not isinstance(todo, dict):
             continue
-        title = _normalize_title(str(todo.get("title") or ""))
+        title, _, _ = _normalize_title(str(todo.get("title") or ""))
         if not title:
             continue
         status = str(todo.get("status") or "pending").lower()
@@ -322,18 +366,39 @@ def _valid_todos(todos: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
                 "progress": _safe_progress(todo.get("progress")),
                 "source": source,
                 "result_preview": _preview(str(todo.get("result_preview") or "")),
+                "priority": _safe_priority(todo.get("priority"), default=len(output) + 1),
+                "dependencies": _clean_dependencies(todo.get("dependencies")),
+                "coverage_status": _safe_coverage_status(
+                    todo.get("coverage_status"),
+                    status=status if status in TODO_STATUSES else "pending",
+                ),
                 "updated_at": str(todo.get("updated_at") or _now()),
             }
         )
     return output[:MAX_TODOS]
 
 
-def _normalize_title(value: str) -> str:
+def _normalize_title(value: str, *, priority_hint: int | None = None) -> tuple[str, int, list[str]]:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     text = re.sub(r"^\[[ xX]\]\s*", "", text)
     text = text.strip(" -*+\t")
     text = text.replace("**", "").replace("__", "").strip()
-    return text[:MAX_TITLE_CHARS].rstrip()
+    priority = _safe_priority(None, default=max(1, int(priority_hint or 1)))
+    dependencies: list[str] = []
+    dep_match = re.search(r"\((?:depends?|prereq(?:uisite)?)\s*:\s*([^)]+)\)", text, re.IGNORECASE)
+    if dep_match:
+        dependencies = _clean_dependencies(dep_match.group(1))
+        text = re.sub(r"\((?:depends?|prereq(?:uisite)?)\s*:\s*([^)]+)\)", "", text, flags=re.IGNORECASE).strip()
+    priority_match = re.match(r"^\[(?:p|P)?(\d)\]\s*(.+)$", text)
+    if priority_match:
+        priority = _safe_priority(priority_match.group(1), default=priority)
+        text = priority_match.group(2).strip()
+    elif re.match(r"^(?:p|P)\d+\s*[:.-]?\s*", text):
+        match = re.match(r"^(?:p|P)(\d+)\s*[:.-]?\s*(.+)$", text)
+        if match:
+            priority = _safe_priority(match.group(1), default=priority)
+            text = match.group(2).strip()
+    return text[:MAX_TITLE_CHARS].rstrip(), priority, dependencies
 
 
 def _safe_progress(value: Any) -> int:
@@ -360,6 +425,46 @@ def _preview(value: str, max_chars: int = 220) -> str:
     return text[:max_chars].rstrip()
 
 
+def _safe_priority(value: Any, *, default: int = 3) -> int:
+    try:
+        return max(1, min(5, int(value)))
+    except (TypeError, ValueError):
+        return max(1, min(5, int(default)))
+
+
+def _clean_dependencies(value: Any) -> list[str]:
+    if isinstance(value, str):
+        value = re.split(r"[,;/]+", value)
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = re.sub(r"\s+", " ", str(item or "")).strip()
+        text = text.strip(" -*+\t")
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text[:120])
+    return cleaned
+
+
+def _safe_coverage_status(value: Any, *, status: str = "pending") -> str:
+    text = str(value or "").strip().lower()
+    if text in TODO_COVERAGE_STATUSES:
+        return text
+    if status == "completed":
+        return "covered"
+    if status == "running":
+        return "in_progress"
+    if status == "blocked":
+        return "blocked"
+    return "planned"
+
+
 def _event_fields(todo: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": str(todo.get("id") or ""),
@@ -368,6 +473,9 @@ def _event_fields(todo: dict[str, Any]) -> dict[str, Any]:
         "progress": int(todo.get("progress") or 0),
         "source": str(todo.get("source") or "plan"),
         "result_preview": str(todo.get("result_preview") or ""),
+        "priority": int(todo.get("priority") or 0),
+        "dependencies": list(todo.get("dependencies") or []),
+        "coverage_status": str(todo.get("coverage_status") or "planned"),
     }
 
 

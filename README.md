@@ -44,7 +44,7 @@ flowchart LR
 | 三层模型路由 | fast / smart / strategic 三档模型，加 planner、researcher、writer、evaluator 等任务级覆盖 |
 | 证据与质量 | evidence extraction、source registry、citation gate、claim verifier、rubric evaluation、auto-revision |
 | 工具生态 | Web/academic/feed 搜索、browser/crawl、sandbox/code、MCP、image、export、automation |
-| 记忆系统 | 报告后记录用户级研究记忆，后续请求可按相关性注入上下文 |
+| 记忆系统 | 统一 `agent/memory` 服务，Postgres/pgvector 优先，按用户与研究范围召回偏好、研究发现、证据线索、实体关系和 procedural learning |
 | Skills | 20 个 public skills + custom skills，支持 allowlist、安装、编辑、历史与回滚 |
 | 前端工作台 | SSE 流式研究、计划审批、思考过程、证据、任务、产物、会话、评论、版本、导出与 traces |
 
@@ -64,7 +64,7 @@ flowchart TB
         State["state.py\nTyped State + Pydantic 工具"]
         Routing["model_routing.py\n模型路由"]
         Events["events.py\nSSE 事件转译"]
-        Middleware["middleware.py\nloop/token/error/memory"]
+        Middleware["middleware.py\nloop/token/error"]
     end
 
     subgraph Workflow["agent/workflows"]
@@ -79,8 +79,8 @@ flowchart TB
 
     subgraph Runtime["agent/runtime"]
         Context["RuntimeContext"]
+        Runs["RunManager"]
         Shared["shared middleware"]
-        Memory["memory system"]
     end
 
     subgraph Tools["tools"]
@@ -113,7 +113,7 @@ agent/core/
   model_routing.py      三层模型与任务级模型路由
   llm_factory.py        多 provider ChatOpenAI 构造
   events.py             SSE 事件归一化与发送
-  middleware.py         tool error / loop / token / memory middleware
+  middleware.py         tool error / loop / token middleware
   search_cache.py       搜索结果缓存
 
 agent/workflows/
@@ -131,8 +131,17 @@ agent/workflows/
 
 agent/runtime/
   context.py            RuntimeContext
+  runs.py               RunManager 与运行状态记录
   middleware/shared.py  图运行共享 middleware
-  memory/               用户级 memory 存储、队列、更新器与 prompt
+
+agent/memory/
+  models.py             统一 MemoryRecord / Entity / Relation / Episode
+  store.py              Postgres/pgvector 存储与内存测试后端
+  service.py            retrieve / ingest_research_run / upsert / delete 唯一入口
+  retrieval.py          向量、全文、时效、重要性、置信度与图扩展混合召回
+  ingestion.py          研究产物记忆抽取与写入门控
+  formatting.py         隐藏 <memory_context> 格式化
+  skill_evolution.py    procedural memory 驱动 custom skill 进化
 
 tools/
   search/               web、academic、feeds、provider reliability、cache
@@ -228,7 +237,7 @@ flowchart LR
 | Sessions | `GET /api/sessions`, `GET /api/sessions/{thread_id}`, `DELETE /api/sessions/{thread_id}`, `GET /api/sessions/{thread_id}/state`, `GET /api/sessions/{thread_id}/evidence`, `POST /api/sessions/{thread_id}/resume`, `POST /api/sessions/{thread_id}/continue-research` |
 | Collaboration | `POST /api/sessions/{thread_id}/share`, `GET /api/share/{share_id}`, `DELETE /api/share/{share_id}`, comments、versions、restore 相关路由 |
 | Skills | public/custom skills 的 list、read、update、install、history、rollback |
-| Memory | `GET /api/memory`, `POST /api/memory/reload`, `GET /api/memory/status` |
+| Memory | `GET /api/memory`, `POST /api/memory/records`, `DELETE /api/memory/records/{record_id}`, `POST /api/memory/retrieve`, `GET /api/memory/graph`, `GET /api/memory/status`, `GET /api/memory/skill-evolution` |
 | Tools/Search | `GET /api/tasks/active`, `GET /api/tools/registry`, search providers/cache stats/reset/clear |
 | Export/Traces | `GET /api/export/templates`, `GET /api/export/{thread_id}`, `GET /api/traces/{thread_id}`, `GET /api/traces/{thread_id}/all`, `GET /api/traces/{thread_id}/summary` |
 | Health/Runs | `GET /`, `GET /health`, `GET /api/health/agent`, `GET /api/config/public`, `GET /api/runs`, `GET /api/runs/{thread_id}`, `GET /metrics` |
@@ -283,7 +292,15 @@ GOOGLE_SEARCH_API_KEY=...
 GOOGLE_SEARCH_ENGINE_ID=...
 
 # Runtime behavior
-ENABLE_MEMORY=true
+MEMORY_ENABLED=true
+MEMORY_BACKEND=postgres
+MEMORY_DATABASE_URL=
+MEMORY_EMBEDDING_MODEL=text-embedding-3-small
+MEMORY_RETRIEVAL_TOP_K=12
+MEMORY_RETRIEVAL_MAX_TOKENS=2500
+MEMORY_WRITE_MIN_CONFIDENCE=0.75
+MEMORY_WRITE_REQUIRE_EVIDENCE=true
+MEMORY_AUTO_SKILL_EVOLUTION=true
 ENABLE_MCP=false
 HUMAN_REVIEW=true
 TOOL_APPROVAL=false
@@ -344,7 +361,7 @@ make verify
 
 ## 数据与运行时文件
 
-本地默认运行时文件位于 `data/`，包括 session 状态、memory 文件、traces、协作元数据和生成的 artifacts。密钥、凭证和真实 API key 应放在环境变量或被忽略的本地配置文件中。
+本地默认运行时文件位于 `data/`，包括 session 状态、traces、协作元数据和生成的 artifacts。长期记忆由统一 memory backend 管理，生产推荐 Postgres + pgvector。密钥、凭证和真实 API key 应放在环境变量或被忽略的本地配置文件中。
 
 ## English Version
 
@@ -393,7 +410,7 @@ flowchart LR
 - Interrupts: `/api/interrupt/{thread_id}/status`, resume endpoints
 - Sessions: session state, evidence, resume, continue-research, share, comments, versions, restore
 - Skills: public/custom skill list, read, update, install, history, rollback
-- Memory: memory read, reload, status
+- Memory: list records, create/delete records, retrieve, graph, status, skill evolution
 - Tools and search: task activity, tool registry, search providers, cache stats/reset/clear
 - Export and traces: export templates, export by thread, trace summary and detail
 - Health and runs: `/`, `/health`, `/api/health/agent`, `/api/config/public`, `/api/runs`, `/metrics`

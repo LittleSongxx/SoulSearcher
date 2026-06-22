@@ -48,6 +48,8 @@ from agent.workflows.research_todo import (
     mark_todo_running,
     summarize_todos,
 )
+from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
+from agent.runtime.middleware.shared import enforce_context_budget
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +132,7 @@ async def supervisor(
         context_messages.append(SystemMessage(content=todo_context))
 
     # === Image Injection (multimodal — deer-flow pattern) ===
-    configurable = config.get("configurable") or {}
-    viewed_images = configurable.get("viewed_images", {})
+    viewed_images = get_viewed_images(config)
     if viewed_images:
         try:
             from agent.workflows.multimodal import build_image_injection_message
@@ -142,8 +143,7 @@ async def supervisor(
                     f"[Supervisor] Injected {len(viewed_images)} image(s) "
                     f"into LLM context"
                 )
-                configurable["viewed_images"] = {}
-                config["configurable"] = configurable
+                clear_viewed_images(config)
         except ImportError:
             logger.debug("[Supervisor] Multimodal support not available")
 
@@ -169,7 +169,7 @@ async def supervisor(
 
     # === Token Usage Tracking ===
     from agent.core.middleware import get_token_tracker
-    tracker = get_token_tracker()
+    tracker = get_token_tracker(config)
     usage = getattr(response, "usage_metadata", None) or {}
     input_tokens = usage.get("input_tokens", 0)
     output_tokens = usage.get("output_tokens", 0)
@@ -499,12 +499,10 @@ async def supervisor_tools(
     update_payload["todo_summary"] = summarize_todos(current_todos)
 
     # === Return to supervisor loop (with context budget enforcement) ===
-    # Follows Claude Code's sub-agent principle: "the subagent does that work
-    # in its own context and returns only the summary."  Old supervisor_messages
-    # are trimmed to keep the LLM context focused on recent, high-signal results.
-    update_payload["supervisor_messages"] = _enforce_context_budget(
+    update_payload["supervisor_messages"] = enforce_context_budget(
         supervisor_messages + all_tool_messages,
-        max_tool_message_chars=research_config.compression_small_threshold,
+        max_messages=_SUPERVISOR_MAX_MESSAGES,
+        max_chars_per_tool_result=research_config.compression_small_threshold,
     )
     return Command(
         goto="supervisor",
@@ -607,6 +605,7 @@ def _merge_researcher_viewed_images(
             merged.update(viewed_images)
     if not merged:
         return
+    merge_viewed_images(parent_config, merged)
     parent_configurable = dict(parent_config.get("configurable") or {})
     existing = parent_configurable.get("viewed_images")
     if isinstance(existing, dict):
@@ -617,73 +616,5 @@ def _merge_researcher_viewed_images(
     parent_config["configurable"] = parent_configurable
 
 
-# ---------------------------------------------------------------------------
-# Context Budget Enforcement (Claude Code sub-agent isolation model)
-# ---------------------------------------------------------------------------
-# Principle from Claude Code: "the subagent does that work in its own
-# context and returns only the summary."  We enforce a per-ToolMessage
-# character cap and an overall message count budget so the supervisor's
-# LLM context stays focused on high-signal recent results rather than
-# accumulating raw research dumps across iterations.
-# ---------------------------------------------------------------------------
-
 _SUPERVISOR_MAX_MESSAGES = 40
 """Drop oldest messages beyond this count to keep the supervisor context lean."""
-
-
-def _enforce_context_budget(
-    messages: list,
-    max_tool_message_chars: int = 8000,
-) -> list:
-    """Trim and compress supervisor messages to stay within context budget.
-
-    1. Cap each ConductResearch ToolMessage at max_tool_message_chars characters
-       (the Researcher already returns compressed output; this is a safety net).
-    2. Drop oldest messages if total exceeds SUPERVISOR_MAX_MESSAGES, preserving
-       the most recent ThinkTool reflections and the system prefix.
-
-    Returns a new list — the caller should use this as the updated
-    supervisor_messages.
-    """
-    capped: list = []
-    for msg in messages:
-        if isinstance(msg, ToolMessage) and msg.name == "ConductResearch":
-            content = msg.content or ""
-            if len(content) > max_tool_message_chars:
-                truncated = content[:max_tool_message_chars] + (
-                    f"\n\n... [truncated from {len(content)} to "
-                    f"{max_tool_message_chars} chars for context budget]"
-                )
-                capped.append(ToolMessage(
-                    content=truncated,
-                    name=msg.name,
-                    tool_call_id=msg.tool_call_id,
-                ))
-            else:
-                capped.append(msg)
-        else:
-            capped.append(msg)
-
-    if len(capped) <= _SUPERVISOR_MAX_MESSAGES:
-        return capped
-
-    # Keep the first message (system prompt / research brief) and the
-    # most recent messages.  ThinkTool reflections are preferentially kept
-    # because they carry high-signal structural information.
-    keep_recent = _SUPERVISOR_MAX_MESSAGES - 1
-    think_msgs = [m for m in capped[1:] if isinstance(m, ToolMessage) and m.name == "ThinkTool"]
-    other_msgs = [m for m in capped[1:] if not (isinstance(m, ToolMessage) and m.name == "ThinkTool")]
-
-    # Always keep the last few think reflections
-    kept_think = think_msgs[-3:] if len(think_msgs) > 3 else think_msgs
-    # Fill the rest from the most recent other messages
-    remaining_slots = keep_recent - len(kept_think)
-    kept_other = other_msgs[-remaining_slots:] if remaining_slots > 0 else []
-
-    result = [capped[0]] + kept_other + kept_think
-    logger.info(
-        "[ContextBudget] Trimmed %d supervisor messages → %d "
-        "(kept %d think reflections, %d other)",
-        len(capped), len(result), len(kept_think), len(kept_other),
-    )
-    return result

@@ -11,7 +11,7 @@ Features:
 - Tool metadata management
 - Usage statistics tracking
 - Version management
-- LangChain compatibility (backward compatible)
+- LangChain tool compatibility
 
 Design Philosophy:
 Centralize all tool management in a single registry that provides discovery,
@@ -715,23 +715,16 @@ def reset_global_registry():
     _global_registry = None
 
 
-# ==================== Backward Compatibility ====================
-
-# For backward compatibility with existing code
-_REGISTERED_TOOLS: list = []
+# ==================== Registration Helpers ====================
 
 
-def set_registered_tools(tools: list) -> None:
+def register_tools(tools: list) -> None:
     """
-    Set registered tools (backward compatible).
+    Register a batch of tools in the global registry.
 
     Args:
         tools: List of tools (BaseTool or callable)
     """
-    global _REGISTERED_TOOLS
-    _REGISTERED_TOOLS = tools
-
-    # Also register in new registry if available
     registry = get_global_registry()
     for tool in tools:
         try:
@@ -740,21 +733,10 @@ def set_registered_tools(tools: list) -> None:
                     name=tool.name, tool=tool._run, description=tool.description, tags=["langchain"]
                 )
             else:
-                # Assume callable
                 name = getattr(tool, "name", tool.__name__)
                 registry.register(name=name, tool=tool)
         except Exception as e:
-            logger.warning(f"Failed to register tool in new registry: {e}")
-
-
-def get_registered_tools() -> list:
-    """
-    Get registered tools (backward compatible).
-
-    Returns:
-        List of registered tools
-    """
-    return list(_REGISTERED_TOOLS)
+            logger.warning(f"Failed to register tool: {e}")
 
 
 # ==================== Example Usage ====================

@@ -7,7 +7,7 @@ export interface ResearchStreamEvent {
 export interface ResearchRunEvent {
   type: string
   data: any
-  legacy_type?: string
+  source_event_type?: string
   sequence?: number
   event_id?: string
   schema_version?: number

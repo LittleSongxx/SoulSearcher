@@ -296,11 +296,14 @@ class ChannelManager:
             reply = f"默认模型: {settings.primary_model}"
         elif command == "memory":
             try:
-                from agent.runtime.memory.storage import get_memory_storage
-                from agent.runtime.user_context import get_effective_user_id
-                data = get_memory_storage().load(user_id=get_effective_user_id())
-                count = len(data.get("facts", []))
-                reply = f"当前记忆包含 {count} 条事实。"
+                from agent.memory import get_memory_service
+
+                status = get_memory_service().status()
+                count = int(status.get("record_count") or 0)
+                backend = str(status.get("backend") or "unknown")
+                available = bool(status.get("available"))
+                state = "可用" if available else "不可用"
+                reply = f"统一记忆系统: {state}，后端 {backend}，记录 {count} 条。"
             except Exception:
                 reply = "无法获取记忆状态。"
         elif command == "help":
