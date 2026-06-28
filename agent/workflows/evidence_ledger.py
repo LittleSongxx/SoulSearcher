@@ -90,7 +90,7 @@ def normalize_evidence_item(
     evidence_id = str(
         item.get("id")
         or (
-            f"{fallback_id_prefix}_{hashlib.sha1(f'{canonical_url}|{digest}|{index}'.encode('utf-8')).hexdigest()[:12]}"
+            f"{fallback_id_prefix}_{hashlib.sha1(f'{canonical_url}|{digest}|{index}'.encode()).hexdigest()[:12]}"
         )
     )
 
@@ -359,9 +359,7 @@ def build_citation_bindings(
                 matches.append(candidate)
                 continue
             if binding.get("canonical_url") and candidate.get("canonical_url") == binding.get("canonical_url"):
-                if binding.get("snippet_hash") and candidate.get("snippet_hash") == binding.get("snippet_hash"):
-                    matches.append(candidate)
-                elif not binding.get("snippet_hash"):
+                if binding.get("snippet_hash") and candidate.get("snippet_hash") == binding.get("snippet_hash") or not binding.get("snippet_hash"):
                     matches.append(candidate)
         return matches
 

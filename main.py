@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import hmac
 import inspect
 import json
@@ -7,7 +6,6 @@ import logging
 import re
 import time
 import uuid
-
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from enum import Enum
@@ -72,23 +70,40 @@ from agent import (
     get_emitter,
     remove_emitter,
 )
-from agent.workflows.evidence_extractor import extract_message_sources
-from agent.workflows.research_brief import build_research_brief
-from agent.workflows.source_routing import build_source_routing_policy
+
+# Router modules extracted from main.py for maintainability
+from agent.api.tracing import router as tracing_router
+from agent.memory import (
+    MemoryRecord,
+    MemoryScope,
+    MemoryType,
+    MemoryUnavailableError,
+    get_memory_service,
+)
+from agent.retrieval.documents import (
+    DocumentLibraryUnavailable,
+    get_document_library,
+)
+from agent.retrieval.gateway import retrieve_sources
+from agent.retrieval.policy import (
+    LegacySourceRoutingError,
+    build_retrieval_policy,
+    reject_legacy_source_routing,
+)
+from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
+from agent.runtime.middleware.shared import get_token_summary
 from agent.runtime.request_builder import (
     ResearchRuntimeRequest,
     build_research_runtime,
 )
-from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
+from agent.runtime.runs import RunStatus, run_manager
+from agent.workflows.evidence_extractor import extract_message_sources
+from agent.workflows.research_brief import build_research_brief
 from common.cancellation import TaskStatus, cancellation_manager
 from common.config import settings
 from common.evidence_store import build_evidence_store_snapshot
 from common.logger import get_logger, setup_logging
 from common.metrics import metrics_registry
-from common.tracing import SpanKind, SpanStatus, record_span, trace_request
-
-# Router modules extracted from main.py for maintainability
-from agent.api.tracing import router as tracing_router
 from common.proxy_env import normalize_socks_proxy_env
 from common.research_events import build_research_run_event
 from common.sse import (
@@ -99,17 +114,8 @@ from common.sse import (
 )
 from common.stream_translate import translate_data_stream_line_to_sse
 from common.thread_ownership import get_thread_owner, set_thread_owner
-from agent.memory import (
-    MemoryRecord,
-    MemoryScope,
-    MemoryType,
-    MemoryUnavailableError,
-    get_memory_service,
-)
-from agent.runtime.middleware.shared import get_token_summary
-from agent.runtime.runs import RunStatus, run_manager
+from common.tracing import SpanKind, record_span, trace_request
 from tools.browser.browser_session import browser_sessions
-
 from tools.core.registry import register_tools
 from tools.mcp import close_mcp_tools, init_mcp_tools
 from tools.sandbox import sandbox_browser_sessions
@@ -949,6 +955,7 @@ class ResearchRequest(BaseModel):
     user_id: Optional[str] = None
     skill_ids: Optional[list[str]] = None
     images: Optional[list[ImagePayload]] = None
+    retrieval_policy: dict[str, Any] = Field(default_factory=dict)
     deepsearch_config: dict[str, Any] = Field(default_factory=dict)
     research_brief: dict[str, Any] = Field(default_factory=dict)
 
@@ -988,7 +995,6 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "deepsearch_summary_trigger_messages",
     "deepsearch_summary_keep_recent",
     "deep_research_strict_citations",
-    "source_routing_strict",
     "tool_policy_strict",
     "legacy_citation_mode",
     "allow_sandbox_tools",
@@ -1013,10 +1019,11 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "evaluation_model",
     "reasoning_model",
     # Source/MCP configuration
-    "source_policy",
-    "source_routing",
-    "source_providers",
-    "source_connectors",
+    "retrieval_policy",
+    "retrieval_allowed_origins",
+    "retrieval_channels",
+    "retrieval_methods",
+    "retrieval_profiles",
     "allowed_domains",
     "denied_domains",
     "mcp_preset_ids",
@@ -1033,7 +1040,7 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
 
 
 _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
-    "source_routing",
+    "retrieval_policy",
     "mcp_results",
     "research_brief_review",
 }
@@ -1056,6 +1063,7 @@ def _normalize_research_deepsearch_strategy(value: Any) -> str:
 def _safe_research_deepsearch_config(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
+    reject_legacy_source_routing(value.get("source_routing"))
     cleaned: dict[str, Any] = {}
     for key, item in value.items():
         key_text = str(key or "").strip()
@@ -1076,6 +1084,8 @@ def _safe_research_deepsearch_config(value: Any) -> dict[str, Any]:
         elif key_text in _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS and isinstance(
             item, dict
         ):
+            if key_text == "retrieval_policy":
+                reject_legacy_source_routing(item.get("source_routing"))
             cleaned[key_text] = item
     for strategy_key in ("deepsearch_strategy", "strategy", "deepsearch_mode"):
         if strategy_key in cleaned:
@@ -1515,7 +1525,7 @@ async def fork_research_session(
         logger.error("[Fork] Unexpected error: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Fork failed: {str(e)}",
+            detail=f"Fork failed: {e!s}",
         )
 
 
@@ -1980,6 +1990,11 @@ async def stream_agent_events(
         safe_deepsearch_config = _safe_research_deepsearch_config(
             deepsearch_config or {}
         )
+        if "retrieval_policy" not in safe_deepsearch_config:
+            safe_deepsearch_config["retrieval_policy"] = build_retrieval_policy(
+                user_id=user_id or "",
+                config={"configurable": {"user_id": user_id or ""}},
+            )
 
         # Load unified long-term memory as request-scoped hidden context.
         messages: list[Any] = []
@@ -2858,6 +2873,20 @@ async def submit_background_run(request: Request, payload: BackgroundRunSubmitRe
     safe_deepsearch_config = _safe_research_deepsearch_config(
         payload.deepsearch_config or {}
     )
+    try:
+        reject_legacy_source_routing((payload.deepsearch_config or {}).get("source_routing"))
+        safe_deepsearch_config["retrieval_policy"] = build_retrieval_policy(
+            payload.retrieval_policy or safe_deepsearch_config.get("retrieval_policy"),
+            user_id=payload.user_id or owner_id,
+            config={
+                "configurable": {
+                    **safe_deepsearch_config,
+                    "user_id": payload.user_id or owner_id,
+                }
+            },
+        )
+    except LegacySourceRoutingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if payload.skill_ids:
         safe_deepsearch_config["skill_ids"] = payload.skill_ids
     if payload.webhook_url:
@@ -3101,6 +3130,147 @@ async def get_background_run(thread_id: str, request: Request):
     return {"run": status}
 
 
+def _request_user_id(request: Request, explicit_user_id: str | None = None) -> str:
+    internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
+    principal_id = (getattr(request.state, "principal_id", "") or "").strip()
+    if internal_key and principal_id:
+        return principal_id
+    return (explicit_user_id or settings.memory_user_id or "default_user").strip()
+
+
+@app.get("/api/library/status")
+async def document_library_status():
+    return get_document_library().status()
+
+
+@app.post("/api/library/documents")
+async def upload_library_document(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: Optional[str] = None,
+):
+    owner_id = _request_user_id(request, user_id)
+    try:
+        data = await file.read()
+        result = get_document_library().upload_document(
+            user_id=owner_id,
+            filename=file.filename or "document.txt",
+            content_type=file.content_type or "",
+            data=data,
+        )
+        return {"document": result}
+    except DocumentLibraryUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Document upload failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/library/documents")
+async def list_library_documents(request: Request, user_id: Optional[str] = None):
+    owner_id = _request_user_id(request, user_id)
+    try:
+        return {"documents": get_document_library().list_documents(user_id=owner_id)}
+    except DocumentLibraryUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Document list failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.delete("/api/library/documents/{document_id}")
+async def delete_library_document(
+    document_id: str,
+    request: Request,
+    user_id: Optional[str] = None,
+):
+    owner_id = _request_user_id(request, user_id)
+    try:
+        deleted = get_document_library().delete_document(
+            user_id=owner_id,
+            document_id=document_id,
+        )
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return {"deleted": True, "document_id": document_id}
+    except HTTPException:
+        raise
+    except DocumentLibraryUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Document delete failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/library/documents/{document_id}/reindex")
+async def reindex_library_document(
+    document_id: str,
+    request: Request,
+    user_id: Optional[str] = None,
+):
+    owner_id = _request_user_id(request, user_id)
+    try:
+        return {
+            "document": get_document_library().reindex_document(
+                user_id=owner_id,
+                document_id=document_id,
+            )
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
+    except DocumentLibraryUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Document reindex failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/library/search")
+async def search_library(
+    request: Request,
+    q: str,
+    limit: int = 5,
+    user_id: Optional[str] = None,
+):
+    owner_id = _request_user_id(request, user_id)
+    try:
+        results = get_document_library().search(
+            user_id=owner_id,
+            query=q,
+            limit=limit,
+        )
+        return {"query": q, "results": results}
+    except DocumentLibraryUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Document search failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class RetrievalSearchRequest(BaseModel):
+    query: str
+    user_id: Optional[str] = None
+    retrieval_policy: dict[str, Any] = Field(default_factory=dict)
+    max_results: int = 8
+
+
+@app.post("/api/retrieval/search")
+async def retrieval_search_debug(request: Request, payload: RetrievalSearchRequest):
+    owner_id = _request_user_id(request, payload.user_id)
+    try:
+        policy = build_retrieval_policy(payload.retrieval_policy, user_id=owner_id)
+        result = await retrieve_sources(
+            payload.query,
+            max_results=payload.max_results,
+            config={"configurable": {"user_id": owner_id, "retrieval_policy": policy}},
+        )
+        return result
+    except LegacySourceRoutingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/api/runs/{thread_id}/background/cancel")
 async def cancel_background_run(
     thread_id: str, request: Request, payload: CancelRequest | None = None
@@ -3114,6 +3284,18 @@ async def cancel_background_run(
 @app.post("/api/runs/{thread_id}/resume")
 async def mark_run_resumed(thread_id: str, request: Request):
     _require_thread_owner(request, thread_id)
+    record = run_manager.get(thread_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if settings.background_runs_enabled and (record.metadata or {}).get("background"):
+        try:
+            run = await background_run_manager.resume(
+                thread_id,
+                stream_factory=stream_agent_events,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"status": "resumed", "run": run}
     record = run_manager.update(thread_id, status=RunStatus.resumed)
     if not record:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -3352,6 +3534,7 @@ async def install_skill(file: UploadFile = None):
     try:
         import tempfile
         from pathlib import Path
+
         from agent.skills.storage import get_or_new_skill_storage
         storage = get_or_new_skill_storage()
         with tempfile.NamedTemporaryFile(suffix=".skill", delete=False) as tmp:
@@ -4271,7 +4454,7 @@ class EvidenceResponse(BaseModel):
     research_brief: dict[str, Any] = {}
     research_todos: list[dict[str, Any]] = []
     todo_summary: dict[str, Any] = {}
-    source_routing: dict[str, Any] = {}
+    retrieval_policy: dict[str, Any] = {}
     evidence_store: dict[str, Any] = {}
     access_policy: dict[str, Any] = {}
     quality_gates: list[dict[str, Any]] = []
@@ -4485,9 +4668,9 @@ async def get_session_evidence(thread_id: str, request: Request):
             state=session_state.state if isinstance(session_state.state, dict) else {},
         )
         evidence_patch = evidence_store.to_response_patch()
-        source_routing = (
-            artifacts.get("source_routing")
-            or evidence_patch.get("source_routing")
+        retrieval_policy = (
+            artifacts.get("retrieval_policy")
+            or evidence_patch.get("retrieval_policy")
             or {}
         )
         access_policy = (
@@ -4522,8 +4705,8 @@ async def get_session_evidence(thread_id: str, request: Request):
                 if isinstance(todo_summary, dict)
                 else evidence_patch.get("todo_summary", {})
             ),
-            "source_routing": (
-                source_routing if isinstance(source_routing, dict) else {}
+            "retrieval_policy": (
+                retrieval_policy if isinstance(retrieval_policy, dict) else {}
             ),
             "evidence_store": evidence_store.to_dict(),
             "access_policy": access_policy if isinstance(access_policy, dict) else {},
@@ -5341,6 +5524,22 @@ async def research_sse(request: Request, payload: ResearchRequest):
     safe_deepsearch_config = _safe_research_deepsearch_config(
         payload.deepsearch_config or {}
     )
+    try:
+        reject_legacy_source_routing((payload.deepsearch_config or {}).get("source_routing"))
+        reject_legacy_source_routing((payload.research_brief or {}).get("source_routing"))
+        normalized_retrieval_policy = build_retrieval_policy(
+            payload.retrieval_policy or safe_deepsearch_config.get("retrieval_policy"),
+            user_id=user_id,
+            config={
+                "configurable": {
+                    **safe_deepsearch_config,
+                    "user_id": user_id,
+                }
+            },
+        )
+    except LegacySourceRoutingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    safe_deepsearch_config["retrieval_policy"] = normalized_retrieval_policy
     if payload.skill_ids:
         safe_deepsearch_config["skill_ids"] = [
             str(skill_id).strip()
@@ -5348,7 +5547,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
             if str(skill_id).strip()
         ]
     should_prepare_research_brief = bool(mode_info.get("use_deep"))
-    preview_source_routing: dict[str, Any] = {}
+    preview_retrieval_policy: dict[str, Any] = normalized_retrieval_policy
     normalized_research_brief: dict[str, Any] = {}
     if should_prepare_research_brief:
         preview_state: dict[str, Any] = {"input": query, "user_id": user_id}
@@ -5365,13 +5564,9 @@ async def research_sse(request: Request, payload: ResearchRequest):
         }
         try:
             preview_brief = build_research_brief(preview_state, preview_config)
-            preview_source_routing = build_source_routing_policy(
-                brief=preview_brief,
-                config=preview_config,
-                state=preview_state,
-            )
-            preview_brief.source_routing = preview_source_routing
+            preview_brief.retrieval_policy = preview_retrieval_policy
             normalized_research_brief = preview_brief.to_dict()
+            normalized_research_brief["retrieval_policy"] = preview_retrieval_policy
         except Exception as e:
             logger.debug(f"Failed to prepare preview research brief: {e}")
             normalized_research_brief = (
@@ -5402,7 +5597,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
                 brief_payload = {
                     "thread_id": thread_id,
                     "research_brief": normalized_research_brief,
-                    "source_routing": preview_source_routing,
+                    "retrieval_policy": preview_retrieval_policy,
                 }
                 yield format_sse_event(
                     event="brief_created",

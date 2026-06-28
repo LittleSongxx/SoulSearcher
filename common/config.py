@@ -226,9 +226,6 @@ class Settings(BaseSettings):
     deep_research_strict_citations: bool = Field(
         default=True, validation_alias="DEEP_RESEARCH_STRICT_CITATIONS"
     )
-    source_routing_strict: bool = Field(
-        default=True, validation_alias="SOURCE_ROUTING_STRICT"
-    )
     tool_policy_strict: bool = Field(
         default=True, validation_alias="TOOL_POLICY_STRICT"
     )
@@ -423,6 +420,27 @@ class Settings(BaseSettings):
     deepsearch_guardrail_denied_tools: str = ""
     deepsearch_guardrail_allowed_domains: str = ""
     deepsearch_guardrail_denied_domains: str = ""
+    retrieval_policy_strict: bool = Field(
+        default=True, validation_alias="RETRIEVAL_POLICY_STRICT"
+    )
+    document_library_path: str = Field(
+        default="data/document_library", validation_alias="DOCUMENT_LIBRARY_PATH"
+    )
+    document_library_database_url: str = Field(
+        default="", validation_alias="DOCUMENT_LIBRARY_DATABASE_URL"
+    )
+    document_library_embedding_model: str = Field(
+        default="", validation_alias="DOCUMENT_LIBRARY_EMBEDDING_MODEL"
+    )
+    document_library_embedding_dim: int = Field(
+        default=0, ge=0, validation_alias="DOCUMENT_LIBRARY_EMBEDDING_DIM"
+    )
+    document_library_chunk_chars: int = Field(
+        default=1500, ge=300, validation_alias="DOCUMENT_LIBRARY_CHUNK_CHARS"
+    )
+    document_library_chunk_overlap: int = Field(
+        default=200, ge=0, validation_alias="DOCUMENT_LIBRARY_CHUNK_OVERLAP"
+    )
     # Research Fetcher / Reader Settings
     reader_fallback_mode: str = "both"
     reader_public_base: str = "https://r.jina.ai"
@@ -767,8 +785,6 @@ class Settings(BaseSettings):
         if mode in {
             "reflection",
             "reflection_loop",
-            "hybrid",
-            "hybrid_private_web",
             "auto",
         }:
             mode = "supervisor_workers"

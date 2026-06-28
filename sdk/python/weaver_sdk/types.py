@@ -13,3 +13,14 @@ class SseEvent(TypedDict, total=False):
     event: str
     data: Any
 
+
+class RetrievalPolicy(TypedDict, total=False):
+    schema_version: int
+    allowed_origins: list[str]
+    channels: list[str]
+    methods: list[str]
+    profiles: list[str]
+    domain_policy: dict[str, Any]
+    corpus_policy: dict[str, Any]
+    connector_policy: dict[str, Any]
+    budget: dict[str, Any]

@@ -77,6 +77,12 @@ flowchart TB
         Eval["quality_check.py / evaluation.py"]
     end
 
+    subgraph Retrieval["agent/retrieval"]
+        Policy["RetrievalPolicy v3"]
+        GatewayTool["retrieve_sources / read_source"]
+        Library["document library"]
+    end
+
     subgraph Runtime["agent/runtime"]
         Context["RuntimeContext"]
         Runs["RunManager"]
@@ -99,6 +105,8 @@ flowchart TB
     API --> Core
     Core --> Workflow
     Workflow --> Runtime
+    Workflow --> Retrieval
+    Retrieval --> Tools
     Workflow --> Tools
     Workflow --> Core
 ```
@@ -125,9 +133,14 @@ agent/workflows/
   report.py             最终报告、artifacts、HTML/Markdown、图片注入
   quality_check.py      快速质量检查与自动修订
   evaluation.py         更深层 rubric / degradation evaluation
-  source_routing.py     web / academic / MCP source policy
   evidence_extractor.py 证据与来源抽取
   source_registry.py    来源注册、评分与整理
+
+agent/retrieval/
+  policy.py             RetrievalPolicy v3：origin / channel / method / profile
+  gateway.py            统一检索网关：retrieve_sources / read_source
+  documents.py          用户资料库、文档解析、chunk、hybrid ranking
+  types.py              RetrievedSource / RetrievedPassage / RetrievalResult
 
 agent/runtime/
   context.py            RuntimeContext
@@ -144,8 +157,8 @@ agent/memory/
   skill_evolution.py    procedural memory 驱动 custom skill 进化
 
 tools/
-  search/               web、academic、feeds、provider reliability、cache
-  browser/, crawl/      浏览器与网页抽取
+  search/               web、academic、feeds、provider reliability、cache（经 retrieval gateway 调用）
+  browser/, crawl/      浏览器与网页抽取（经 retrieval gateway 深读）
   sandbox/, code/       受控命令与代码执行
   planning/             planning 工具
   automation/           独立自动化工具

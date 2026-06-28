@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 from typing import Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, get_buffer_string
+from langchain_core.messages import AIMessage, HumanMessage, get_buffer_string
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 

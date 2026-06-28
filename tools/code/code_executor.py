@@ -17,8 +17,9 @@ import json
 import logging
 from typing import Any, Optional
 
-from common.config import settings
 from langchain_core.tools import tool
+
+from common.config import settings
 from tools.core.base import ToolResult, WeaverTool, tool_schema
 
 try:

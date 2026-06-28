@@ -129,6 +129,8 @@ y/
 # Runtime data
 .memory_store.json
 data/memory_store.json
+data/collaboration/*
+!data/collaboration/.gitkeep
 data/research_workspaces/
 third_party/research_refs/
 

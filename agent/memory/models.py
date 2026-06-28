@@ -111,7 +111,7 @@ class MemoryRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MemoryRecord":
+    def from_dict(cls, data: dict[str, Any]) -> MemoryRecord:
         return cls(
             id=str(data.get("id") or f"mem_{uuid.uuid4().hex}"),
             user_id=str(data.get("user_id") or "default"),

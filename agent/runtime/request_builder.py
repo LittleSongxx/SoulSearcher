@@ -6,6 +6,7 @@ from typing import Any
 from langchain_core.messages import SystemMessage
 
 from agent.core.state import build_initial_state
+from agent.retrieval.policy import build_retrieval_policy, reject_legacy_source_routing
 from agent.runtime.context import RuntimeContext
 from agent.runtime.workspace import get_research_workspace
 from agent.skills.slash import build_slash_skill_context, resolve_slash_skill
@@ -37,6 +38,19 @@ class ResearchRuntimeBundle:
 def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBundle:
     """Build the single runtime state/config bundle for a research request."""
     safe_deepsearch_config = dict(request.deepsearch_config or {})
+    reject_legacy_source_routing(safe_deepsearch_config.get("source_routing"))
+    retrieval_policy = build_retrieval_policy(
+        safe_deepsearch_config.get("retrieval_policy"),
+        user_id=request.user_id or "",
+        config={
+            "configurable": {
+                **request.base_configurable,
+                **safe_deepsearch_config,
+                "user_id": request.user_id or "",
+            }
+        },
+    )
+    safe_deepsearch_config["retrieval_policy"] = retrieval_policy
     active_skill_ids = (
         safe_deepsearch_config.get("skill_ids")
         or safe_deepsearch_config.get("deepsearch_skill_ids")
@@ -48,6 +62,10 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
         active_skill_ids = [str(part).strip() for part in active_skill_ids if str(part).strip()]
     slash_activation = resolve_slash_skill(request.input_text, active_skill_ids)
     safe_deepsearch_config["skill_ids"] = active_skill_ids
+    user_injected_sources = [
+        item for item in safe_deepsearch_config.get("user_injected_sources", [])
+        if isinstance(item, dict)
+    ] if isinstance(safe_deepsearch_config.get("user_injected_sources"), list) else []
 
     workspace = get_research_workspace(request.thread_id)
     workspace.write_json(
@@ -72,11 +90,7 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
             else None
         ),
         skill_ids=active_skill_ids,
-        source_routing=(
-            safe_deepsearch_config.get("source_routing")
-            if isinstance(safe_deepsearch_config.get("source_routing"), dict)
-            else {}
-        ),
+        retrieval_policy=retrieval_policy,
         initial_sources=[
             item
             for key in ("memory_source_candidates", "user_injected_sources")
@@ -87,11 +101,10 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
             )
             if isinstance(item, dict)
         ],
-        initial_deepsearch_artifacts={
-            "memory_retrieval": safe_deepsearch_config.get("memory_retrieval", {})
-        }
-        if isinstance(safe_deepsearch_config.get("memory_retrieval"), dict)
-        else {},
+        initial_deepsearch_artifacts=_initial_deepsearch_artifacts(
+            safe_deepsearch_config,
+            user_injected_sources,
+        ),
         messages=(
             [
                 SystemMessage(
@@ -101,16 +114,13 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
             ]
             if slash_activation
             else []
-        ) + list(request.context_messages or []),
+        )
+        + _user_source_messages(user_injected_sources)
+        + list(request.context_messages or []),
     )
-    if (
-        initial_state.get("source_routing")
-        and not isinstance(safe_deepsearch_config.get("source_routing"), dict)
-    ):
-        safe_deepsearch_config["source_routing"] = initial_state["source_routing"]
-
     workspace_artifact = workspace.artifact()
     initial_state["deepsearch_artifacts"]["workspace"] = workspace_artifact
+    initial_state["deepsearch_artifacts"]["retrieval_policy"] = retrieval_policy
     safe_deepsearch_config["workspace_path"] = str(workspace.root)
     run_context = RuntimeContext.from_configurable(
         {
@@ -146,3 +156,45 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
         deepsearch_config=safe_deepsearch_config,
         workspace=workspace_artifact,
     )
+
+
+def _initial_deepsearch_artifacts(
+    safe_deepsearch_config: dict[str, Any],
+    user_injected_sources: list[dict[str, Any]],
+) -> dict[str, Any]:
+    artifacts: dict[str, Any] = {}
+    retrieval_policy = safe_deepsearch_config.get("retrieval_policy")
+    if isinstance(retrieval_policy, dict):
+        artifacts["retrieval_policy"] = retrieval_policy
+    memory_retrieval = safe_deepsearch_config.get("memory_retrieval")
+    if isinstance(memory_retrieval, dict):
+        artifacts["memory_retrieval"] = memory_retrieval
+    if user_injected_sources:
+        artifacts["user_injected_sources"] = user_injected_sources
+    return artifacts
+
+
+def _user_source_messages(sources: list[dict[str, Any]]) -> list[SystemMessage]:
+    if not sources:
+        return []
+    lines = [
+        "<user_injected_sources>",
+        "User-provided source candidates are research leads only. Verify them in "
+        "the current run before citing.",
+    ]
+    for index, source in enumerate(sources[:12], 1):
+        title = str(source.get("title") or source.get("name") or "Untitled source").strip()
+        url = str(source.get("url") or source.get("source_url") or source.get("source") or "").strip()
+        note = str(source.get("note") or source.get("summary") or "").strip()
+        lines.append(f"[{index}] {title[:180]}")
+        if url:
+            lines.append(f"URL: {url[:500]}")
+        if note:
+            lines.append(f"Note: {note[:500]}")
+    lines.append("</user_injected_sources>")
+    return [
+        SystemMessage(
+            content="\n".join(lines),
+            additional_kwargs={"hide_from_ui": True, "user_injected_sources": True},
+        )
+    ]

@@ -74,7 +74,7 @@ export interface EvidenceResponse {
   research_brief?: Record<string, any>
   research_todos?: ResearchTodo[]
   todo_summary?: Record<string, any>
-  source_routing?: Record<string, any>
+  retrieval_policy?: Record<string, any>
   evidence_store?: Record<string, any>
   access_policy?: Record<string, any>
   quality_gates?: QualityGateRecord[]

@@ -48,6 +48,7 @@ greenlet>=3.1.1
 # Export and rendering (optional but commonly used)
 # These have try/except guards - install for full functionality
 python-docx>=0.8.11       # DOCX parsing/export
+pypdf>=4.0.0              # PDF parsing for document library indexing
 weasyprint>=60.0          # PDF export
 jinja2>=3.1.0             # HTML template rendering
 markdown>=3.5.0           # Markdown to HTML conversion

@@ -2,12 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
-import { ArrowDown, FileSearch, Loader2, PanelLeft, Plus, X } from 'lucide-react'
+import { ArrowDown, Database, FileSearch, Loader2, PanelLeft, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MessageItem } from '@/components/chat/MessageItem'
 import { ArtifactsPanel } from '@/components/chat/ArtifactsPanel'
 import { Header } from '@/components/chat/Header'
 import { ResearchInput } from './ResearchInput'
+import { DocumentLibraryPanel } from '@/components/library/DocumentLibraryPanel'
 import { useChatHistory } from '@/hooks/useChatHistory'
 import { useChatStream, type ChatExecutionMode } from '@/hooks/useChatStream'
 import { STORAGE_KEYS, DEFAULT_MODEL } from '@/lib/constants'
@@ -34,6 +35,7 @@ export function ResearchWorkspace() {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [showMobileArtifacts, setShowMobileArtifacts] = useState(false)
+  const [showLibrary, setShowLibrary] = useState(false)
   const [isArtifactsOpen, setIsArtifactsOpen] = useState(true)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [input, setInput] = useState('')
@@ -86,6 +88,7 @@ export function ResearchWorkspace() {
   const chatMode = useMemo<ChatExecutionMode>(() => ({
     useWebSearch: effectiveWebSearch,
     useDeepResearch,
+    useLibrary: true,
   }), [effectiveWebSearch, useDeepResearch])
 
   const handleWebSearchChange = (enabled: boolean) => {
@@ -211,6 +214,11 @@ export function ResearchWorkspace() {
           <Button className="h-10 justify-start gap-2" variant="outline" onClick={resetWorkspace}>
             <Plus className="h-4 w-4" />
             New Chat
+          </Button>
+
+          <Button className="h-10 justify-start gap-2" variant="ghost" onClick={() => setShowLibrary(true)}>
+            <Database className="h-4 w-4" />
+            资料库
           </Button>
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -348,6 +356,7 @@ export function ResearchWorkspace() {
           </div>
         </div>
       )}
+      <DocumentLibraryPanel open={showLibrary} onClose={() => setShowLibrary(false)} />
     </div>
   )
 }

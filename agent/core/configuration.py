@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Annotated, Any, ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
 from langchain_core.runnables import RunnableConfig
-from pydantic import Field
 
 from common.config import settings as app_settings
 
@@ -245,9 +244,6 @@ class ResearchConfiguration:
             getattr(app_settings, "deep_research_strict_citations", True)
         )
     )
-    source_routing_strict: bool = field(
-        default_factory=lambda: bool(getattr(app_settings, "source_routing_strict", True))
-    )
     tool_policy_strict: bool = field(
         default_factory=lambda: bool(getattr(app_settings, "tool_policy_strict", True))
     )
@@ -413,14 +409,11 @@ class ResearchConfiguration:
         research_model = self.research_model
         if research_model:
             return research_model
-        if complexity == "simple":
-            return self.fast_llm
-        elif complexity == "standard":
-            return self.smart_llm
-        elif complexity == "deep":
-            return self.strategic_llm
-        else:
-            return self.smart_llm
+        return {
+            "simple": self.fast_llm,
+            "standard": self.smart_llm,
+            "deep": self.strategic_llm,
+        }.get(complexity, self.smart_llm)
 
     def get_supervisor_model(self, complexity: str) -> str:
         """Get the appropriate supervisor model.
@@ -447,13 +440,11 @@ class ResearchConfiguration:
         """
         if self.final_report_model:
             return self.final_report_model
-        if complexity == "simple":
-            return self.fast_llm
-        elif complexity == "standard":
-            return self.smart_llm
-        elif complexity == "deep":
-            return self.strategic_llm
-        return self.smart_llm
+        return {
+            "simple": self.fast_llm,
+            "standard": self.smart_llm,
+            "deep": self.strategic_llm,
+        }.get(complexity, self.smart_llm)
 
     def get_model_max_tokens(self, model_name: str) -> int:
         """Get max tokens for a model, consulting the model token limit map."""

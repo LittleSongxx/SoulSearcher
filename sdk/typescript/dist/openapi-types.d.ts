@@ -224,6 +224,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/library/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Library Documents */
+        get: operations["list_library_documents_api_library_documents_get"];
+        put?: never;
+        /** Upload Library Document */
+        post: operations["upload_library_document_api_library_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Library Document */
+        delete: operations["delete_library_document_api_library_documents__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/documents/{document_id}/reindex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reindex Library Document */
+        post: operations["reindex_library_document_api_library_documents__document_id__reindex_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Library */
+        get: operations["search_library_api_library_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/library/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Document Library Status */
+        get: operations["document_library_status_api_library_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory": {
         parameters: {
             query?: never;
@@ -457,6 +543,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/retrieval/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retrieval Search Debug */
+        post: operations["retrieval_search_debug_api_retrieval_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -477,6 +580,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Background Run
+         * @description Submit a long-running research job without holding an SSE connection.
+         */
+        post: operations["submit_background_run_api_runs_background_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{thread_id}": {
         parameters: {
             query?: never;
@@ -491,6 +614,74 @@ export interface paths {
         get: operations["get_run_metrics_api_runs__thread_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{thread_id}/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Background Run */
+        get: operations["get_background_run_api_runs__thread_id__background_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{thread_id}/background/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Background Run */
+        post: operations["cancel_background_run_api_runs__thread_id__background_cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{thread_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Run Resumed */
+        post: operations["mark_run_resumed_api_runs__thread_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{thread_id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inject User Sources */
+        post: operations["inject_user_sources_api_runs__thread_id__sources_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1127,10 +1318,45 @@ export interface components {
             /** Tool Registry Total Tools */
             tool_registry_total_tools: number;
         };
+        /** BackgroundRunSubmitRequest */
+        BackgroundRunSubmitRequest: {
+            /** Deepsearch Config */
+            deepsearch_config?: {
+                [key: string]: unknown;
+            };
+            /** Images */
+            images?: components["schemas"]["ImagePayload"][] | null;
+            /** Model */
+            model?: string | null;
+            /** Query */
+            query: string;
+            /** Research Brief */
+            research_brief?: {
+                [key: string]: unknown;
+            };
+            /** Retrieval Policy */
+            retrieval_policy?: {
+                [key: string]: unknown;
+            };
+            search_mode?: components["schemas"]["SearchMode"] | null;
+            /** Skill Ids */
+            skill_ids?: string[] | null;
+            /** Thread Id */
+            thread_id?: string | null;
+            /** User Id */
+            user_id?: string | null;
+            /** Webhook Url */
+            webhook_url?: string | null;
+        };
         /** Body_install_skill_api_skills_install_post */
         Body_install_skill_api_skills_install_post: {
             /** File */
             file?: string;
+        };
+        /** Body_upload_library_document_api_library_documents_post */
+        Body_upload_library_document_api_library_documents_post: {
+            /** File */
+            file: string;
         };
         /**
          * CancelRequest
@@ -1499,17 +1725,17 @@ export interface components {
                 [key: string]: unknown;
             }[];
             /**
+             * Retrieval Policy
+             * @default {}
+             */
+            retrieval_policy: {
+                [key: string]: unknown;
+            };
+            /**
              * Source Quality
              * @default {}
              */
             source_quality: {
-                [key: string]: unknown;
-            };
-            /**
-             * Source Routing
-             * @default {}
-             */
-            source_routing: {
                 [key: string]: unknown;
             };
             /**
@@ -2035,9 +2261,29 @@ export interface components {
             research_brief?: {
                 [key: string]: unknown;
             };
+            /** Retrieval Policy */
+            retrieval_policy?: {
+                [key: string]: unknown;
+            };
             search_mode?: components["schemas"]["SearchMode"] | null;
             /** Skill Ids */
             skill_ids?: string[] | null;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /** RetrievalSearchRequest */
+        RetrievalSearchRequest: {
+            /**
+             * Max Results
+             * @default 8
+             */
+            max_results: number;
+            /** Query */
+            query: string;
+            /** Retrieval Policy */
+            retrieval_policy?: {
+                [key: string]: unknown;
+            };
             /** User Id */
             user_id?: string | null;
         };
@@ -2569,6 +2815,18 @@ export interface components {
              */
             version: string;
         };
+        /** UserSourceInjectionRequest */
+        UserSourceInjectionRequest: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Sources */
+            sources?: {
+                [key: string]: unknown;
+            }[];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -2923,6 +3181,191 @@ export interface operations {
             };
         };
     };
+    list_library_documents_api_library_documents_get: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_library_document_api_library_documents_post: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_library_document_api_library_documents_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_library_document_api_library_documents__document_id__delete: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reindex_library_document_api_library_documents__document_id__reindex_post: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_library_api_library_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+                user_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_library_status_api_library_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_memory_records_api_memory_get: {
         parameters: {
             query?: {
@@ -3263,6 +3706,39 @@ export interface operations {
             };
         };
     };
+    retrieval_search_debug_api_retrieval_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetrievalSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_runs_api_runs_get: {
         parameters: {
             query?: never;
@@ -3279,6 +3755,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    submit_background_run_api_runs_background_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackgroundRunSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3301,6 +3810,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunMetricsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_background_run_api_runs__thread_id__background_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_background_run_api_runs__thread_id__background_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CancelRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_run_resumed_api_runs__thread_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inject_user_sources_api_runs__thread_id__sources_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserSourceInjectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

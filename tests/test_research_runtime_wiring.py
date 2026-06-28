@@ -17,6 +17,38 @@ def test_build_initial_state_preserves_user_query_with_system_messages():
     assert isinstance(state["messages"][0], SystemMessage)
     assert isinstance(state["messages"][-1], HumanMessage)
     assert state["messages"][-1].content == "Explain Weaver architecture"
+    assert "source_routing" not in state
+
+
+def test_research_brief_and_evidence_store_do_not_emit_legacy_source_routing():
+    from agent.workflows.research_brief import build_research_brief
+    from common.evidence_store import build_evidence_store_snapshot
+
+    policy = {
+        "schema_version": 3,
+        "allowed_origins": ["public_web"],
+        "channels": ["search_api"],
+        "methods": ["web_search"],
+    }
+    brief = build_research_brief(
+        {"input": "latest AI research", "retrieval_policy": policy},
+        {"configurable": {"retrieval_policy": policy}},
+    )
+    brief_payload = brief.to_dict()
+    snapshot = build_evidence_store_snapshot(
+        thread_id="t1",
+        artifacts={
+            "retrieval_policy": policy,
+            "source_routing": {"mode": "web_only"},
+            "evidence_items": [{"id": "ev1", "content": "evidence"}],
+        },
+    )
+    patch = snapshot.to_response_patch()
+
+    assert "source_routing" not in brief_payload
+    assert "source_routing" not in snapshot.to_dict()
+    assert "source_routing" not in patch
+    assert patch["retrieval_policy"]["schema_version"] == 3
 
 
 def test_researcher_tool_name_map_accepts_pydantic_tool_classes():
@@ -29,74 +61,88 @@ def test_researcher_tool_name_map_accepts_pydantic_tool_classes():
     assert tools_by_name["ResearchComplete"] is ResearchComplete
 
 
-def test_researcher_source_policy_drops_unknown_provider():
+def test_retrieval_policy_v3_defaults_and_rejects_legacy():
+    import pytest
+
+    from agent.retrieval.policy import (
+        LegacySourceRoutingError,
+        build_retrieval_policy,
+        reject_legacy_source_routing,
+    )
+
+    policy = build_retrieval_policy(user_id="u1")
+
+    assert policy["schema_version"] == 3
+    assert policy["allowed_origins"] == ["public_web"]
+    assert "search_api" in policy["channels"]
+    assert "web_search" in policy["methods"]
+    assert policy["corpus_policy"]["user_id"] == "u1"
+    with pytest.raises(LegacySourceRoutingError):
+        reject_legacy_source_routing({"mode": "web_only"})
+    with pytest.raises(LegacySourceRoutingError):
+        build_retrieval_policy({"mode": "web_only"})
+    with pytest.raises(LegacySourceRoutingError):
+        build_retrieval_policy({"schema_version": 2})
+
+
+def test_retrieval_policy_private_and_external_expands_channels():
+    from agent.retrieval.policy import build_retrieval_policy
+
+    policy = build_retrieval_policy(
+        {
+            "schema_version": 3,
+            "allowed_origins": ["public_web", "private_corpus", "external_system"],
+            "channels": ["search_api"],
+            "methods": ["web_search"],
+            "profiles": ["academic"],
+        },
+        user_id="u1",
+    )
+
+    assert "private_corpus" in policy["allowed_origins"]
+    assert "file_upload" in policy["channels"]
+    assert "mcp" in policy["channels"]
+    assert "academic_search" in policy["methods"]
+    assert "vector_search" in policy["methods"]
+    assert "mcp_search" in policy["methods"]
+
+
+def test_researcher_source_policy_uses_retrieval_policy():
     from agent.workflows.researcher import _researcher_source_policy
 
     policy = _researcher_source_policy({
         "configurable": {
-            "source_routing": {
-                "mode": "web_only",
-                "providers": ["removed_provider"],
+            "retrieval_policy": {
+                "schema_version": 3,
+                "allowed_origins": ["private_corpus"],
+                "channels": ["file_upload"],
+                "methods": ["vector_search"],
             }
         }
     })
 
-    assert policy["include_web"] is True
-    assert policy["mode"] == "web_only"
-    assert policy["providers"] == ["web"]
-
-
-def test_source_routing_supports_academic_rag_and_hybrid_modes():
-    from agent.workflows.source_routing import (
-        build_source_routing_policy,
-        source_policy_from_routing,
-    )
-
-    academic = build_source_routing_policy(
-        config={"configurable": {"source_routing": {"mode": "academic_only"}}}
-    )
-    rag = build_source_routing_policy(
-        config={"configurable": {"source_routing": {"mode": "rag_only"}}}
-    )
-    hybrid = build_source_routing_policy(
-        config={"configurable": {"source_routing": {"mode": "hybrid_private_web"}}}
-    )
-
-    assert academic["schema_version"] == 2
-    assert academic["providers"] == ["academic"]
-    assert source_policy_from_routing(academic) == "academic"
-    assert rag["providers"] == ["rag"]
-    assert source_policy_from_routing(rag) == "rag"
-    assert set(hybrid["providers"]) == {"web", "academic", "rag", "mcp"}
-
-
-def test_researcher_source_policy_hard_excludes_web_for_academic_only():
-    from agent.workflows.researcher import _researcher_source_policy
-
-    policy = _researcher_source_policy({
-        "configurable": {
-            "source_routing": {
-                "mode": "academic_only",
-            }
-        }
-    })
-
-    assert policy["mode"] == "academic_only"
+    assert policy["mode"] == "retrieval_v3"
     assert policy["include_web"] is False
-    assert policy["include_academic"] is True
+    assert policy["include_rag"] is True
 
 
-def test_strict_tool_policy_filters_disallowed_provider_tools():
+def test_strict_tool_policy_allows_only_retrieval_gateway_tools():
     from agent.workflows.researcher import _filter_tools_for_policy
 
     class Tool:
         def __init__(self, name):
             self.name = name
 
-    tools = [Tool("tavily_search"), Tool("arxiv_search"), Tool("sandbox_execute_command")]
+    tools = [
+        Tool("retrieve_sources"),
+        Tool("read_source"),
+        Tool("tavily_search"),
+        Tool("arxiv_search"),
+        Tool("sandbox_execute_command"),
+    ]
     filtered = _filter_tools_for_policy(
         tools,
-        {"configurable": {"tool_policy_strict": True}},
+        {"configurable": {"tool_policy_strict": True, "retrieval_policy_strict": True}},
         {
             "include_web": False,
             "include_academic": True,
@@ -106,10 +152,10 @@ def test_strict_tool_policy_filters_disallowed_provider_tools():
         },
     )
 
-    assert [tool.name for tool in filtered] == ["arxiv_search"]
+    assert [tool.name for tool in filtered] == ["retrieve_sources", "read_source"]
 
 
-def test_source_routing_strict_false_keeps_tools_available():
+def test_retrieval_policy_strict_false_keeps_raw_tools_available():
     from agent.workflows.researcher import _filter_tools_for_policy
 
     class Tool:
@@ -119,7 +165,7 @@ def test_source_routing_strict_false_keeps_tools_available():
     tools = [Tool("tavily_search"), Tool("arxiv_search")]
     filtered = _filter_tools_for_policy(
         tools,
-        {"configurable": {"tool_policy_strict": True, "source_routing_strict": False}},
+        {"configurable": {"tool_policy_strict": True, "retrieval_policy_strict": False}},
         {
             "include_web": False,
             "include_academic": True,
@@ -130,6 +176,100 @@ def test_source_routing_strict_false_keeps_tools_available():
     )
 
     assert [tool.name for tool in filtered] == ["tavily_search", "arxiv_search"]
+
+
+def test_domain_policy_blocks_disallowed_tool_url_and_filters_results():
+    from agent.workflows.researcher import (
+        _apply_domain_policy_to_observation,
+        _domain_policy_violation,
+    )
+
+    policy = {
+        "allowed_domains": ["allowed.example"],
+        "denied_domains": ["blocked.example"],
+    }
+
+    assert "Blocked by retrieval domain policy" in _domain_policy_violation(
+        {"url": "https://blocked.example/report"},
+        policy,
+    )
+    filtered = _apply_domain_policy_to_observation(
+        (
+            "Allowed result https://allowed.example/a has useful evidence.\n\n"
+            "Blocked result https://blocked.example/b should disappear."
+        ),
+        policy,
+    )
+
+    assert "allowed.example" in filtered
+    assert "blocked.example" not in filtered
+    assert "filtered 1 result" in filtered
+
+
+def test_document_library_parses_and_chunks_text():
+    from agent.retrieval.documents import chunk_text, parse_document_bytes
+
+    text = parse_document_bytes(b"# Title\n\nUseful private corpus evidence.", filename="note.md")
+    chunks = chunk_text(text * 80, chunk_chars=500, overlap=50)
+
+    assert "Useful private corpus evidence" in text
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 500 for chunk in chunks)
+
+
+def test_document_library_fallback_embedding_matches_configured_dimension():
+    from agent.retrieval.documents import DocumentLibrary
+
+    library = DocumentLibrary()
+    vector = library.embed_text("fallback embedding dimension check")
+
+    assert len(vector) == library.embedding_dim
+
+
+def test_retrieval_gateway_binds_origin_channel_method(monkeypatch):
+    from agent.retrieval import gateway
+
+    class Result:
+        title = "Result"
+        url = "https://allowed.example/report"
+        snippet = "Useful source snippet"
+        content = "Useful source content"
+        provider = "test"
+        score = 0.9
+        published_date = "2026-01-01"
+
+    class Orchestrator:
+        def search(self, **kwargs):
+            return [Result()]
+
+    monkeypatch.setattr(gateway, "get_search_orchestrator", lambda: Orchestrator(), raising=False)
+    monkeypatch.setattr(
+        "tools.search.multi_search.get_search_orchestrator",
+        lambda: Orchestrator(),
+    )
+
+    result = asyncio.run(
+        gateway.retrieve_sources(
+            "test query",
+            config={
+                "configurable": {
+                    "user_id": "u1",
+                    "retrieval_policy": {
+                        "schema_version": 3,
+                        "allowed_origins": ["public_web"],
+                        "channels": ["search_api"],
+                        "methods": ["web_search"],
+                        "domain_policy": {"allowed_domains": ["allowed.example"]},
+                    },
+                }
+            },
+        )
+    )
+
+    assert result["sources"][0]["source_origin"] == "public_web"
+    assert result["sources"][0]["access_channel"] == "search_api"
+    assert result["sources"][0]["retrieval_method"] == "web_search"
+    assert result["evidence_items"][0]["metadata"]["source_origin"] == "public_web"
 
 
 def test_conduct_research_budget_uses_deep_complexity():
@@ -314,6 +454,30 @@ def test_report_evidence_ledger_builds_passages_from_notes_and_sources():
     assert any(item.get("url") == "https://example.com/a" for item in evidence)
     assert passages
     assert any("Detailed finding" in passage["text"] for passage in passages)
+
+
+def test_claim_citation_matrix_flags_missing_and_traceable_claims():
+    from agent.workflows.citation_agent import build_claim_citation_matrix
+
+    matrix = build_claim_citation_matrix(
+        (
+            "Revenue increased 20% in 2025 without a citation. "
+            "The audited filing confirms operating margin improved [1]."
+        ),
+        [
+            {
+                "citation_index": 1,
+                "traceable": True,
+                "source_id": "src_1",
+                "canonical_url": "https://example.com/filing",
+                "matched_passages": [{"evidence_id": "ev_1"}],
+            }
+        ],
+    )
+
+    assert matrix["summary"]["claim_citation_total"] == 2
+    assert matrix["summary"]["claim_citation_traceable"] == 1
+    assert any(claim["status"] == "missing_citation" for claim in matrix["claims"])
 
 
 def test_evidence_ledger_normalizes_canonical_source_ids():
@@ -693,6 +857,42 @@ def test_research_runtime_builder_promotes_memory_source_candidates(tmp_path, mo
     assert bundle.config["configurable"]["memory_source_candidates"] == [candidate]
 
 
+def test_research_runtime_builder_injects_user_sources_into_hidden_context(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
+
+    from agent.runtime.request_builder import (
+        ResearchRuntimeRequest,
+        build_research_runtime,
+    )
+
+    source = {
+        "url": "https://example.com/user-source",
+        "title": "User source",
+        "source": "user",
+    }
+    bundle = build_research_runtime(
+        ResearchRuntimeRequest(
+            input_text="query",
+            thread_id="thread_user_source",
+            model="test-model",
+            mode_info={"mode": "deep"},
+            user_id="u1",
+            images=[],
+            research_brief=None,
+            context_messages=[],
+            deepsearch_config={"user_injected_sources": [source]},
+            base_configurable={"thread_id": "thread_user_source"},
+        )
+    )
+
+    assert bundle.initial_state["sources"] == [source]
+    assert bundle.initial_state["deepsearch_artifacts"]["user_injected_sources"] == [source]
+    assert any(
+        getattr(message, "additional_kwargs", {}).get("user_injected_sources")
+        for message in bundle.initial_state["messages"]
+    )
+
+
 def test_runtime_token_tracker_is_run_scoped():
     from agent.core.middleware import get_token_tracker
     from agent.runtime.context import RuntimeContext
@@ -719,6 +919,24 @@ def test_run_status_accepts_background_states():
 
     assert record.status is RunStatus.queued
     assert record.to_dict()["status"] == "queued"
+
+
+def test_background_run_request_roundtrip_and_webhook_url_validation():
+    from agent.runtime.background_runs import BackgroundRunRequest, _safe_webhook_url
+
+    request = BackgroundRunRequest(
+        input_text="query",
+        thread_id="thread_bg",
+        model="model",
+        search_mode={"mode": "deep"},
+        deepsearch_config={"webhook_url": "https://example.com/hook"},
+    )
+    restored = BackgroundRunRequest.from_dict(request.to_dict())
+
+    assert restored.input_text == "query"
+    assert restored.search_mode == {"mode": "deep"}
+    assert _safe_webhook_url("https://example.com/hook") is True
+    assert _safe_webhook_url("file:///tmp/hook") is False
 
 
 def test_deferred_mcp_default_off_and_enabled_filters():

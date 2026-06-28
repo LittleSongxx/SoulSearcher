@@ -32,7 +32,7 @@ class RuntimeContext:
     workspace_path: str = ""
 
     @classmethod
-    def from_configurable(cls, configurable: dict[str, Any] | None) -> "RuntimeContext":
+    def from_configurable(cls, configurable: dict[str, Any] | None) -> RuntimeContext:
         cfg = configurable or {}
         search_mode = cfg.get("search_mode") if isinstance(cfg.get("search_mode"), dict) else {}
         return cls(

@@ -16,7 +16,7 @@ class EvidenceStoreSnapshot:
     quality_results: list[dict[str, Any]] = field(default_factory=list)
     research_todos: list[dict[str, Any]] = field(default_factory=list)
     todo_summary: dict[str, Any] = field(default_factory=dict)
-    source_routing: dict[str, Any] = field(default_factory=dict)
+    retrieval_policy: dict[str, Any] = field(default_factory=dict)
     access_policy: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     schema_version: int = 1
@@ -38,7 +38,7 @@ class EvidenceStoreSnapshot:
             "fetched_pages": _list_from(self.metadata.get("fetched_pages")),
             "passages": self.passages,
             "evidence_store": self.to_dict(),
-            "source_routing": self.source_routing,
+            "retrieval_policy": self.retrieval_policy,
             "access_policy": self.access_policy,
         }
 
@@ -71,7 +71,7 @@ def build_evidence_store_snapshot(
         quality_results=_list_from(artifacts.get("quality_gates")),
         research_todos=_list_from(artifacts.get("research_todos")),
         todo_summary=_dict_from(artifacts.get("todo_summary")),
-        source_routing=_dict_from(artifacts.get("source_routing")),
+        retrieval_policy=_dict_from(artifacts.get("retrieval_policy")),
         access_policy=access_policy,
         metadata={
             "quality_summary": _dict_from(artifacts.get("quality_summary")),

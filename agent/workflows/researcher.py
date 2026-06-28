@@ -19,9 +19,9 @@ import logging
 import re
 from datetime import datetime
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from langchain_core.messages import (
-    AIMessage,
     HumanMessage,
     SystemMessage,
     ToolMessage,
@@ -39,14 +39,14 @@ from agent.core.prompts import (
 )
 from agent.core.state import (
     EvidenceItem,
+    ResearchComplete,
     ResearcherOutputState,
     ResearcherState,
-    ResearchComplete,
     ThinkTool,
 )
+from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
 from agent.workflows.evidence_ledger import normalize_evidence_item
 from agent.workflows.source_cache import cache_source_text
-from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
 
 logger = logging.getLogger(__name__)
 
@@ -342,7 +342,7 @@ async def researcher_tools(
             except Exception as e:
                 logger.error(f"[ResearcherTools] view_image failed: {e}")
                 image_tool_messages.append(ToolMessage(
-                    content=f"Error viewing image: {str(e)}",
+                    content=f"Error viewing image: {e!s}",
                     name="view_image",
                     tool_call_id=tc["id"],
                 ))
@@ -372,7 +372,7 @@ async def researcher_tools(
             except Exception as e:
                 logger.error(f"[ResearcherTools] extract_web_images failed: {e}")
                 image_tool_messages.append(ToolMessage(
-                    content=f"Error extracting web images: {str(e)}",
+                    content=f"Error extracting web images: {e!s}",
                     name="extract_web_images",
                     tool_call_id=tc["id"],
                 ))
@@ -386,8 +386,14 @@ async def researcher_tools(
         )
 
     # Execute non-image tool calls in parallel
+    source_policy = _researcher_source_policy(config)
     tasks = [
-        _execute_tool_safely(tools_by_name.get(tc["name"]), tc["args"], config)
+        _execute_policy_checked_tool(
+            tools_by_name.get(tc["name"]),
+            tc["args"],
+            config,
+            source_policy,
+        )
         for tc in non_image_calls
     ]
     observations = await asyncio.gather(*tasks)
@@ -553,30 +559,26 @@ async def _get_researcher_tools(
 ) -> list:
     """Get available tools for the researcher.
 
-    Integrates:
-    - Tavily search (from Weaver's existing tool ecosystem)
-    - fallback_search (DuckDuckGo/web search)
-    - Academic providers: ArXiv, PubMed, Semantic Scholar
-    - Sandbox tools: shell, files, code execution
-    - think_tool (enhanced, from unified design)
-    - ResearchComplete (from open_deep_research)
-    - MCP tools (from Weaver's MCP infrastructure)
+    Deep Research retrieval is intentionally forced through the unified
+    retrieve_sources/read_source gateway. Raw web, academic, RAG, crawl,
+    browser, and MCP tools stay hidden so policy and evidence binding are
+    enforced in one place.
     """
+    from agent.retrieval.gateway import build_retrieval_tools
+
     tools = [ThinkTool, ResearchComplete]
+    tools.extend(build_retrieval_tools(config))
     source_policy = _researcher_source_policy(config)
-    include_web = source_policy["include_web"]
-    include_academic = source_policy["include_academic"]
-    include_rag = source_policy["include_rag"]
-    include_mcp = source_policy["include_mcp"]
 
     # === Skill Guide Reader (Progressive Loading Layer 3) ===
     # Allows the researcher to load full SKILL.md content and supporting
     # resources (scripts, templates, references) on demand, following the
     # SKILL.md open standard progressive disclosure pattern.
     try:
-        from langchain_core.tools import tool as lc_tool
-        from pathlib import Path as _Path
         import os as _os
+        from pathlib import Path as _Path
+
+        from langchain_core.tools import tool as lc_tool
 
         _skills_root = _os.path.abspath(
             _os.path.join(_os.path.dirname(__file__), "..", "..", "skills")
@@ -656,86 +658,7 @@ async def _get_researcher_tools(
         except ImportError:
             logger.debug("[Researcher] Extract web images tool not available")
 
-    # Load search tools from Weaver's existing ecosystem, honoring source routing.
-    if include_web:
-        try:
-            from tools import tavily_search, fallback_search
-            tools.append(tavily_search)
-            tools.append(fallback_search)
-            logger.debug("[Researcher] Loaded Tavily + fallback search")
-        except ImportError:
-            logger.warning("[Researcher] Could not import search tools from Weaver")
-
-    # === Academic Retrievers (ArXiv, PubMed, Semantic Scholar) ===
-    if include_academic:
-        try:
-            from tools.search.academic import arxiv_search, pubmed_search, semantic_scholar_search
-            tools.extend([arxiv_search, pubmed_search, semantic_scholar_search])
-            logger.debug("[Researcher] Loaded academic search tools (ArXiv, PubMed, Semantic Scholar)")
-        except ImportError:
-            logger.debug("[Researcher] Academic search tools not available")
-
-    if include_rag:
-        try:
-            from tools.rag import rag_search  # type: ignore
-
-            tools.append(rag_search)
-            logger.debug("[Researcher] Loaded RAG search tool")
-        except Exception:
-            logger.debug("[Researcher] RAG search tool not available")
-
-    # === Sandbox Tools (code execution, shell, files) ===
-    if _allow_sandbox_tools(config, source_policy):
-        try:
-            from tools.crawl.deep_read_tool import deep_read
-            from tools.sandbox.sandbox_shell_tool import (
-                SandboxExecuteCommandTool,
-                SandboxCheckOutputTool,
-            )
-            from tools.sandbox.sandbox_files_tool import (
-                SandboxCreateFileTool,
-                SandboxReadFileTool,
-            )
-            from tools.code.code_executor import create_visualization, execute_python_code
-
-            sandbox_shell = SandboxExecuteCommandTool()
-            sandbox_check = SandboxCheckOutputTool()
-            sandbox_files_read = SandboxReadFileTool()
-            sandbox_files_create = SandboxCreateFileTool()
-
-            tools.extend([
-                deep_read,
-                sandbox_shell, sandbox_check,
-                sandbox_files_read, sandbox_files_create,
-                execute_python_code, create_visualization,
-            ])
-            logger.debug("[Researcher] Loaded sandbox tools (shell, files, code)")
-        except ImportError as e:
-            logger.debug(f"[Researcher] Sandbox tools not available: {e}")
-        except Exception as e:
-            logger.warning(f"[Researcher] Failed to load sandbox tools: {e}")
-    else:
-        try:
-            from tools.crawl.deep_read_tool import deep_read
-
-            tools.append(deep_read)
-        except Exception:
-            pass
-
-    # Load MCP tools if enabled by config or selected source routing.
-    if research_config.mcp_enabled or include_mcp:
-        try:
-            from tools.mcp import init_mcp_tools as _init_mcp_tools
-            configurable = config.get("configurable") or {}
-            mcp_tools = await _init_mcp_tools(
-                enabled=True,
-                policy_config=configurable,
-            )
-            if mcp_tools:
-                tools.extend(mcp_tools)
-                logger.debug(f"[Researcher] Loaded {len(mcp_tools)} MCP tools")
-        except Exception as e:
-            logger.warning(f"[Researcher] Failed to load MCP tools: {e}")
+    logger.debug("[Researcher] Raw retrieval tools hidden; using unified retrieval gateway")
 
     # === Skill Tool Whitelist ===
     # Filter tools based on active skills' allowed-tools declarations.
@@ -749,11 +672,12 @@ async def _get_researcher_tools(
     )
     if active_skill_ids:
         try:
-            from agent.skills.tool_policy import filter_tools_by_skill_allowed_tools
-            from agent.skills.parser import parse_skill_file
-            from agent.skills.types import SkillCategory
             import os as _os
             from pathlib import Path as _Path
+
+            from agent.skills.parser import parse_skill_file
+            from agent.skills.tool_policy import filter_tools_by_skill_allowed_tools
+            from agent.skills.types import SkillCategory
 
             _loaded = []
             _skills_root = _os.path.abspath(
@@ -818,9 +742,13 @@ _CONTROL_TOOL_NAMES = {
     "ThinkTool",
     "ResearchComplete",
     "read_skill_guide",
-    "deep_read",
-    "deep_read_cached_source",
+    "retrieve_sources",
+    "read_source",
     "tool_search",
+}
+_VISION_TOOL_NAMES = {
+    "view_image",
+    "extract_web_images",
 }
 _WEB_TOOL_NAMES = {
     "tavily_search",
@@ -873,7 +801,7 @@ def _filter_tools_for_policy(
     cfg = cfg if isinstance(cfg, dict) else {}
     if not bool(cfg.get("tool_policy_strict", True)):
         return tools
-    if not bool(cfg.get("source_routing_strict", True)):
+    if not bool(cfg.get("retrieval_policy_strict", True)):
         return tools
 
     include_web = bool(source_policy.get("include_web"))
@@ -892,9 +820,12 @@ def _filter_tools_for_policy(
         key = name.lower()
         if not name or key in denied:
             continue
-        if name in _CONTROL_TOOL_NAMES:
+        if name in _CONTROL_TOOL_NAMES or name in _VISION_TOOL_NAMES:
             output.append(tool)
             continue
+        # Retrieval v3 enforces a single gateway tool surface for researcher
+        # agents. Raw provider/crawler/browser/MCP/sandbox tools stay hidden.
+        continue
         if getattr(tool, "is_mcp_tool", False) and not include_mcp:
             continue
         if any(key.startswith(prefix) for prefix in _SANDBOX_TOOL_PREFIXES) and not allow_sandbox:
@@ -914,81 +845,62 @@ def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
     if not isinstance(cfg, dict):
         cfg = {}
     try:
-        from agent.workflows.source_routing import build_source_routing_policy
-        routing = build_source_routing_policy(config={"configurable": cfg})
-    except Exception:
-        routing = cfg.get("source_routing") if isinstance(cfg.get("source_routing"), dict) else {}
+        from agent.retrieval.policy import build_retrieval_policy
 
-    mode = str(routing.get("mode") or cfg.get("source_policy") or "").strip().lower()
-    providers = routing.get("providers") if isinstance(routing.get("providers"), list) else []
-    budget_policy = (
-        routing.get("budget_policy")
-        if isinstance(routing.get("budget_policy"), dict)
+        routing = build_retrieval_policy(
+            cfg.get("retrieval_policy"),
+            user_id=str(cfg.get("user_id") or ""),
+            config={"configurable": cfg},
+        )
+    except Exception:
+        routing = {}
+
+    origins = set(routing.get("allowed_origins") or ["public_web"])
+    channels = set(routing.get("channels") or ["search_api", "crawler"])
+    methods = set(routing.get("methods") or ["web_search", "crawl", "deep_read"])
+    profiles = set(routing.get("profiles") or ["general"])
+    budget_policy = routing.get("budget") if isinstance(routing.get("budget"), dict) else {}
+    domain_policy = (
+        routing.get("domain_policy")
+        if isinstance(routing.get("domain_policy"), dict)
         else {}
     )
-    allowed_providers = {"web", "academic", "mcp", "rag"}
-    provider_set = {
-        provider
-        for provider in (
-            str(item).strip().lower() for item in providers if str(item).strip()
-        )
-        if provider in allowed_providers
-    }
-    if not provider_set:
-        if mode == "academic_only":
-            provider_set = {"academic"}
-        elif mode == "mcp_only":
-            provider_set = {"mcp"}
-        elif mode == "rag_only":
-            provider_set = {"rag"}
-        elif mode in {"hybrid", "hybrid_private_web"}:
-            provider_set = {"web", "academic", "rag", "mcp"}
-        else:
-            provider_set = {"web"}
-
-    if mode not in {
-        "web_only",
-        "academic_only",
-        "mcp_only",
-        "rag_only",
-        "hybrid",
-        "hybrid_private_web",
-    }:
-        mode = "web_only"
 
     return {
-        "mode": mode or "web_only",
-        "providers": sorted(provider_set),
-        "include_web": "web" in provider_set,
-        "include_academic": "academic" in provider_set,
-        "include_rag": "rag" in provider_set,
-        "include_mcp": "mcp" in provider_set,
+        "mode": "retrieval_v3",
+        "providers": sorted(origins),
+        "allowed_origins": sorted(origins),
+        "channels": sorted(channels),
+        "methods": sorted(methods),
+        "profiles": sorted(profiles),
+        "include_web": "public_web" in origins,
+        "include_academic": "academic" in profiles or "academic_search" in methods,
+        "include_rag": "private_corpus" in origins,
+        "include_mcp": "external_system" in origins or "mcp" in channels,
         "budget_policy": budget_policy,
-        "allowed_domains": list(
-            ((routing.get("access_policy") or {}).get("allowed_domains") or [])
-            if isinstance(routing.get("access_policy"), dict)
-            else []
-        ),
-        "denied_domains": list(
-            ((routing.get("access_policy") or {}).get("denied_domains") or [])
-            if isinstance(routing.get("access_policy"), dict)
-            else []
-        ),
+        "allowed_domains": list(domain_policy.get("allowed_domains") or []),
+        "denied_domains": list(domain_policy.get("denied_domains") or []),
     }
 
 
 def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
-    providers = ", ".join(source_policy.get("providers", []) or []) or "web"
+    origins = ", ".join(source_policy.get("allowed_origins", []) or []) or "public_web"
+    channels = ", ".join(source_policy.get("channels", []) or []) or "search_api"
+    methods = ", ".join(source_policy.get("methods", []) or []) or "web_search"
+    profiles = ", ".join(source_policy.get("profiles", []) or []) or "general"
     budget = source_policy.get("budget_policy") or {}
     budget_lines = []
     if isinstance(budget, dict):
-        for key in ("web", "academic", "mcp", "rag", "max_sources", "min_sources"):
+        for key in ("max_results", "max_public_results", "max_private_results", "max_external_results"):
             if key in budget:
                 budget_lines.append(f"- {key}: {budget[key]}")
     lines = [
         "<Source Policy>",
-        f"- mode: {source_policy.get('mode', 'web_only')}",
-        f"- providers: {providers}",
+        f"- mode: {source_policy.get('mode', 'retrieval_v3')}",
+        f"- allowed origins: {origins}",
+        f"- access channels: {channels}",
+        f"- retrieval methods: {methods}",
+        f"- profiles: {profiles}",
     ]
     if budget_lines:
         lines.append("- budgets:")
@@ -1002,12 +914,103 @@ def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
             "- denied domains: " + ", ".join(source_policy.get("denied_domains") or [])
         )
     lines.append(
-        "- Use only the available provider tools implied by this policy; if a "
-        "provider returns no results, state the gap and continue with the next "
-        "allowed provider."
+        "- Use retrieve_sources for all discovery and read_source for deeper "
+        "reading. Do not request raw Tavily, arXiv, crawler, RAG, browser, or "
+        "MCP tools directly."
     )
     lines.append("</Source Policy>")
     return "\n".join(lines)
+
+
+def _normalize_domain(value: str) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    if "://" not in text:
+        text = f"https://{text}"
+    parsed = urlparse(text)
+    host = parsed.netloc or parsed.path
+    if "@" in host:
+        host = host.rsplit("@", 1)[-1]
+    if ":" in host:
+        host = host.split(":", 1)[0]
+    return host.removeprefix("www.")
+
+
+def _domain_matches(domain: str, pattern: str) -> bool:
+    domain = _normalize_domain(domain)
+    pattern = _normalize_domain(pattern).lstrip(".")
+    return bool(domain and pattern and (domain == pattern or domain.endswith(f".{pattern}")))
+
+
+def _url_allowed_by_source_policy(url: str, source_policy: dict[str, Any]) -> bool:
+    domain = _normalize_domain(url)
+    if not domain:
+        return True
+    denied = [
+        str(item).strip()
+        for item in (source_policy.get("denied_domains") or [])
+        if str(item).strip()
+    ]
+    if any(_domain_matches(domain, pattern) for pattern in denied):
+        return False
+    allowed = [
+        str(item).strip()
+        for item in (source_policy.get("allowed_domains") or [])
+        if str(item).strip()
+    ]
+    if allowed and not any(_domain_matches(domain, pattern) for pattern in allowed):
+        return False
+    return True
+
+
+def _urls_from_value(value: Any) -> list[str]:
+    urls: list[str] = []
+    if isinstance(value, str):
+        urls.extend(re.findall(r"https?://[^\s\])>\"']+", value))
+    elif isinstance(value, dict):
+        for item in value.values():
+            urls.extend(_urls_from_value(item))
+    elif isinstance(value, list):
+        for item in value:
+            urls.extend(_urls_from_value(item))
+    return [url.rstrip(".,;") for url in urls]
+
+
+def _domain_policy_violation(args: dict[str, Any], source_policy: dict[str, Any]) -> str:
+    for url in _urls_from_value(args):
+        if not _url_allowed_by_source_policy(url, source_policy):
+            return (
+                "Blocked by retrieval domain policy: "
+                f"{url} is outside allowed domains or matches a denied domain."
+            )
+    return ""
+
+
+def _apply_domain_policy_to_observation(
+    observation: str,
+    source_policy: dict[str, Any],
+) -> str:
+    text = str(observation or "")
+    if not (source_policy.get("allowed_domains") or source_policy.get("denied_domains")):
+        return text
+    chunks = [chunk for chunk in re.split(r"(\n\s*\n)", text) if chunk]
+    kept: list[str] = []
+    filtered_count = 0
+    for chunk in chunks:
+        urls = _urls_from_value(chunk)
+        if urls and any(not _url_allowed_by_source_policy(url, source_policy) for url in urls):
+            filtered_count += 1
+            continue
+        kept.append(chunk)
+    filtered = "".join(kept).strip()
+    if filtered_count:
+        prefix = (
+            f"[Source policy filtered {filtered_count} result block(s) by domain "
+            "allow/deny rules.]\n"
+        )
+        return prefix + (filtered or "No allowed source results remained after filtering.")
+    return text
 
 
 def _extract_evidence_from_observation(
@@ -1045,7 +1048,7 @@ def _extract_evidence_from_observation(
         if len(content) < 40:
             continue
         evidence_hash = hashlib.sha1(
-            f"{tool_name}|{query}|{idx}|{content[:160]}".encode("utf-8")
+            f"{tool_name}|{query}|{idx}|{content[:160]}".encode()
         ).hexdigest()[:16]
         item = EvidenceItem(
             id=f"{tool_name or 'tool'}_{evidence_hash}",
@@ -1178,7 +1181,20 @@ async def _execute_tool_safely(tool, args: dict, config: RunnableConfig) -> str:
             return str(result)
         except Exception as e:
             logger.error(f"[Researcher] Tool execution error: {e}")
-            return f"Error executing tool: {str(e)}"
+            return f"Error executing tool: {e!s}"
+
+
+async def _execute_policy_checked_tool(
+    tool,
+    args: dict,
+    config: RunnableConfig,
+    source_policy: dict[str, Any],
+) -> str:
+    violation = _domain_policy_violation(args, source_policy)
+    if violation:
+        return f"Error: {violation}"
+    observation = await _execute_tool_safely(tool, args, config)
+    return _apply_domain_policy_to_observation(observation, source_policy)
 
 
 async def _embedding_compress(
@@ -1190,8 +1206,8 @@ async def _embedding_compress(
     Splits content into chunks, filters by similarity to research topic.
     """
     try:
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
         from langchain_core.documents import Document
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
 
         # Chunk the content
         splitter = RecursiveCharacterTextSplitter(

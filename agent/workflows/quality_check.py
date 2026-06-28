@@ -517,7 +517,7 @@ async def run_level1_check(
         return QualityCheckResult(
             passed=False,
             score=0.0,
-            issues=[f"Quality check error: {str(e)}"],
+            issues=[f"Quality check error: {e!s}"],
             suggestions=["Retry the quality evaluation run."],
             verdict="incomplete",
             metadata={"error": str(e)},

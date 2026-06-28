@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from agent.runtime.runs import RunStatus, run_manager
 from common.cancellation import cancellation_manager
@@ -26,6 +28,46 @@ class BackgroundRunRequest:
     user_id: str | None = None
     deepsearch_config: dict[str, Any] = field(default_factory=dict)
     research_brief: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "input_text": self.input_text,
+            "thread_id": self.thread_id,
+            "model": self.model,
+            "search_mode": self.search_mode or {},
+            "images": self.images,
+            "user_id": self.user_id,
+            "deepsearch_config": self.deepsearch_config or {},
+            "research_brief": self.research_brief,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> BackgroundRunRequest:
+        return cls(
+            input_text=str(payload.get("input_text") or ""),
+            thread_id=str(payload.get("thread_id") or ""),
+            model=str(payload.get("model") or "") or None,
+            search_mode=(
+                dict(payload.get("search_mode"))
+                if isinstance(payload.get("search_mode"), dict)
+                else None
+            ),
+            images=[
+                item for item in (payload.get("images") or [])
+                if isinstance(item, dict)
+            ],
+            user_id=str(payload.get("user_id") or "") or None,
+            deepsearch_config=(
+                dict(payload.get("deepsearch_config"))
+                if isinstance(payload.get("deepsearch_config"), dict)
+                else {}
+            ),
+            research_brief=(
+                dict(payload.get("research_brief"))
+                if isinstance(payload.get("research_brief"), dict)
+                else None
+            ),
+        )
 
 
 class BackgroundRunManager:
@@ -60,6 +102,7 @@ class BackgroundRunManager:
                     "background": True,
                     "queued_at": datetime.now(UTC).isoformat(),
                     "input_preview": request.input_text[:200],
+                    "background_request": request.to_dict(),
                 },
             )
             run_manager.update(request.thread_id, status=RunStatus.queued)
@@ -84,7 +127,40 @@ class BackgroundRunManager:
         if task and not task.done():
             task.cancel()
         run_manager.update(thread_id, status=RunStatus.cancelled, error=reason)
+        await self._deliver_webhook(thread_id, status=RunStatus.cancelled, error=reason)
         return bool(task)
+
+    async def resume(
+        self,
+        thread_id: str,
+        *,
+        stream_factory: StreamFactory,
+    ) -> dict[str, Any]:
+        async with self._lock:
+            existing = self._tasks.get(thread_id)
+            if existing and not existing.done():
+                raise ValueError(f"Run already active for thread_id={thread_id}")
+            record = run_manager.get(thread_id)
+            if not record:
+                raise ValueError(f"Run not found for thread_id={thread_id}")
+            metadata = dict(record.metadata or {})
+            snapshot = metadata.get("background_request")
+            if not isinstance(snapshot, dict):
+                raise ValueError("Run does not contain a resumable background request")
+            request = BackgroundRunRequest.from_dict(snapshot)
+            if not request.thread_id:
+                request.thread_id = thread_id
+            run_manager.update(
+                thread_id,
+                status=RunStatus.resumed,
+                metadata={"resumed_background_at": datetime.now(UTC).isoformat()},
+            )
+            task = asyncio.create_task(
+                self._run(request, stream_factory=stream_factory),
+                name=f"weaver-background-run:{thread_id}:resume",
+            )
+            self._tasks[thread_id] = task
+            return self.status(thread_id)
 
     async def _run(
         self,
@@ -117,12 +193,19 @@ class BackgroundRunManager:
                 RunStatus.resumed,
             }:
                 run_manager.update(request.thread_id, status=RunStatus.completed)
+                await self._deliver_webhook(request.thread_id, status=RunStatus.completed)
         except asyncio.CancelledError:
             run_manager.update(
                 request.thread_id,
                 status=RunStatus.cancelled,
                 error="Background run cancelled",
             )
+            with suppress(Exception):
+                await self._deliver_webhook(
+                    request.thread_id,
+                    status=RunStatus.cancelled,
+                    error="Background run cancelled",
+                )
             raise
         except Exception as exc:
             logger.exception("[BackgroundRun] failed for %s", request.thread_id)
@@ -131,10 +214,81 @@ class BackgroundRunManager:
                 status=RunStatus.failed,
                 error=str(exc),
             )
+            await self._deliver_webhook(
+                request.thread_id,
+                status=RunStatus.failed,
+                error=str(exc),
+            )
         finally:
             task = self._tasks.get(request.thread_id)
             if task and task.done():
                 self._tasks.pop(request.thread_id, None)
+
+    async def _deliver_webhook(
+        self,
+        thread_id: str,
+        *,
+        status: RunStatus,
+        error: str = "",
+    ) -> None:
+        record = run_manager.get(thread_id)
+        if not record:
+            return
+        metadata = dict(record.metadata or {})
+        request_snapshot = metadata.get("background_request")
+        deepsearch_config = (
+            request_snapshot.get("deepsearch_config")
+            if isinstance(request_snapshot, dict)
+            else {}
+        )
+        webhook_url = str(
+            metadata.get("webhook_url")
+            or (
+                deepsearch_config.get("webhook_url")
+                if isinstance(deepsearch_config, dict)
+                else ""
+            )
+            or ""
+        ).strip()
+        if not _safe_webhook_url(webhook_url):
+            return
+        payload = {
+            "event": f"run.{status.value}",
+            "thread_id": record.thread_id,
+            "run_id": record.run_id,
+            "status": status.value,
+            "error": error or record.error,
+            "updated_at": datetime.now(UTC).isoformat(),
+            "quality_summary": record.quality_summary,
+            "token_summary": record.token_summary,
+        }
+        delivery = {
+            "webhook_url": webhook_url,
+            "webhook_status": "pending",
+            "webhook_attempted_at": datetime.now(UTC).isoformat(),
+        }
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
+                response = await client.post(webhook_url, json=payload)
+            delivery.update(
+                {
+                    "webhook_status": "delivered"
+                    if 200 <= response.status_code < 300
+                    else "failed",
+                    "webhook_http_status": response.status_code,
+                }
+            )
+        except Exception as exc:
+            logger.warning("[BackgroundRun] webhook delivery failed for %s: %s", thread_id, exc)
+            delivery.update({"webhook_status": "failed", "webhook_error": str(exc)})
+        run_manager.update(thread_id, metadata=delivery)
+
+
+def _safe_webhook_url(url: str) -> bool:
+    parsed = urlparse(str(url or "").strip())
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 background_run_manager = BackgroundRunManager()

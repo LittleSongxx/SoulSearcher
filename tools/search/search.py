@@ -2,8 +2,8 @@ import logging
 import textwrap
 from typing import Any, Optional
 
-from langchain_core.tools import tool
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import tool
 
 from agent.core.llm_factory import create_chat_model
 from common.config import settings

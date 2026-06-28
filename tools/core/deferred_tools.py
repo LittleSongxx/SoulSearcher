@@ -109,8 +109,6 @@ def _promoted_names(config: dict[str, Any] | None, catalog_hash: str | None) -> 
 
 
 def build_tool_search_tool(catalog: DeferredToolCatalog):
-    catalog_hash = catalog.hash
-
     @tool("tool_search")
     def tool_search(query: str, tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
         """Fetch full schemas for deferred MCP tools and make them callable."""

@@ -13,10 +13,7 @@ This follows Anthropic's Agent SDK hooks model:
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
-
-from agent.core.configuration import ResearchConfiguration
 
 logger = logging.getLogger(__name__)
 

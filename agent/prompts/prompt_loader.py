@@ -200,13 +200,10 @@ class PromptLoader:
                 COMPRESSION_SYSTEM_PROMPT,
                 DIRECT_ANSWER_PROMPT,
                 FINAL_REPORT_PROMPT,
+                HTML_REPORT_PROMPT,
                 LEAD_RESEARCHER_PROMPT,
                 RESEARCH_BRIEF_PROMPT,
                 RESEARCHER_SYSTEM_PROMPT,
-            )
-
-            from agent.core.prompts import (
-                HTML_REPORT_PROMPT,
                 SOURCE_CURATION_PROMPT,
                 SUMMARIZE_WEBPAGE_PROMPT,
             )

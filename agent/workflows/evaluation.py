@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -319,7 +318,6 @@ async def run_level3_evaluation(
         dimensions = []
         for d in data.get("dimensions", []):
             name = d.get("name", "unknown")
-            score_5 = float(d.get("score", 3)) / 5.0  # Normalize to 0-1
             dimensions.append(EvalDimension(
                 name=name,
                 score=float(d.get("score", 3)),
@@ -374,7 +372,6 @@ def format_eval_result(result: EvalResult, level: int = 2) -> str:
     Pattern from open_deep_research: rich console output.
     """
     status = "PASSED" if result.overall_passed else "FAILED"
-    color = "green" if result.overall_passed else "red"
 
     lines = [
         f"\n{'='*60}",

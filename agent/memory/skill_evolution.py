@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from agent.memory.models import MemoryRecord, MemoryType, SkillEvolutionProposal, SkillEvolutionStatus
+from agent.memory.models import (
+    MemoryRecord,
+    SkillEvolutionProposal,
+    SkillEvolutionStatus,
+)
 
 
 def _safe_skill_name(text: str) -> str:

@@ -207,7 +207,7 @@ class AgentState(MessagesState):
     input: str
     skill_ids: list[str]
     images: list[dict[str, Any]]  # Base64-encoded images from user input (multimodal)
-    source_routing: dict[str, Any]
+    retrieval_policy: dict[str, Any]
 
     # === Input Gateway outputs ===
     research_brief: Optional[str]
@@ -261,7 +261,7 @@ class SupervisorState(TypedDict):
     todo_summary: dict[str, Any]
     research_iterations: int
     curated_sources: list[dict[str, Any]]
-    source_routing: dict[str, Any]
+    retrieval_policy: dict[str, Any]
 
 
 class ResearcherState(TypedDict):
@@ -287,6 +287,7 @@ class ResearcherState(TypedDict):
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer]
     evidence_items: Annotated[list[dict[str, Any]], override_reducer]
+    retrieval_policy: dict[str, Any]
 
 
 class ResearcherOutputState(BaseModel):
@@ -341,7 +342,7 @@ def build_initial_state(
         **kwargs: Additional caller fields (ignored).
 
     Returns:
-        dict ready to be used as initial_state for the v2 graph.
+        dict ready to be used as initial_state for the research graph.
     """
     raw_skill_ids = kwargs.get("skill_ids", [])
     if isinstance(raw_skill_ids, str):
@@ -351,9 +352,9 @@ def build_initial_state(
     else:
         skill_ids = []
 
-    source_routing = kwargs.get("source_routing")
-    if not isinstance(source_routing, dict):
-        source_routing = {}
+    retrieval_policy = kwargs.get("retrieval_policy")
+    if not isinstance(retrieval_policy, dict):
+        retrieval_policy = {}
 
     initial_sources = kwargs.get("initial_sources")
     if not isinstance(initial_sources, list):
@@ -368,7 +369,7 @@ def build_initial_state(
         "input": input_text,
         "images": images or [],
         "skill_ids": skill_ids,
-        "source_routing": source_routing,
+        "retrieval_policy": retrieval_policy,
         "research_brief": None,
         "complexity": "standard",
         "estimated_depth": 1,
@@ -398,9 +399,9 @@ def build_initial_state(
         brief_text = research_brief.get("research_brief", "")
         if brief_text:
             initial_state["research_brief"] = brief_text
-        brief_source_routing = research_brief.get("source_routing")
-        if isinstance(brief_source_routing, dict) and not initial_state["source_routing"]:
-            initial_state["source_routing"] = brief_source_routing
+        brief_retrieval_policy = research_brief.get("retrieval_policy")
+        if isinstance(brief_retrieval_policy, dict) and not initial_state["retrieval_policy"]:
+            initial_state["retrieval_policy"] = brief_retrieval_policy
 
     # Inject user_id into configurable metadata (not state directly)
     if user_id:

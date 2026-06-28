@@ -11,7 +11,8 @@ from common.config import settings
 
 logger = logging.getLogger(__name__)
 
-from agent.workflows.constants import DANGEROUS_COMMANDS as _DANGEROUS_COMMANDS, NETCAT_ALIASES as _NETCAT_ALIASES
+from agent.workflows.constants import DANGEROUS_COMMANDS as _DANGEROUS_COMMANDS
+from agent.workflows.constants import NETCAT_ALIASES as _NETCAT_ALIASES
 
 _E2B_MODES = {"e2b", "local", "remote", "e2b_remote"}
 _PIPE_TO_SHELL_RE = re.compile(r"(curl|wget)\b.*\|\s*(bash|sh|python|zsh)", re.I)

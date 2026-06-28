@@ -14,7 +14,6 @@ import logging
 import time
 from typing import Any, Optional
 
-from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import ToolMessage
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,7 @@ class ToolErrorHandler:
         except Exception as e:
             logger.warning(f"[ToolError] {tool_name} failed: {e}")
             return ToolMessage(
-                content=f"Tool '{tool_name}' encountered an error: {str(e)}. Please try a different approach.",
+                content=f"Tool '{tool_name}' encountered an error: {e!s}. Please try a different approach.",
                 name=tool_name,
                 tool_call_id=tool_call_id,
             )

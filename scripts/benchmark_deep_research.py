@@ -15,11 +15,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import asyncio
 import ast
+import asyncio
 import json
 import logging
-import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -466,19 +465,42 @@ def validate_strict_research_guards() -> dict[str, Any]:
         errors.append(f"citation guard preflight failed: {exc}")
 
     try:
-        from agent.workflows.source_routing import build_source_routing_policy
-        academic = build_source_routing_policy(
-            config={"configurable": {"source_routing": {"mode": "academic_only"}}}
+        from agent.retrieval.policy import (
+            LegacySourceRoutingError,
+            build_retrieval_policy,
+            reject_legacy_source_routing,
         )
-        hybrid = build_source_routing_policy(
-            config={"configurable": {"source_routing": {"mode": "hybrid_private_web"}}}
+        academic = build_retrieval_policy(
+            {
+                "schema_version": 3,
+                "allowed_origins": ["public_web"],
+                "channels": ["search_api"],
+                "methods": ["web_search"],
+                "profiles": ["academic"],
+            }
         )
-        if academic.get("schema_version") != 2 or academic.get("providers") != ["academic"]:
-            errors.append("source routing academic_only did not normalize to v2 academic provider")
-        if set(hybrid.get("providers") or []) != {"web", "academic", "rag", "mcp"}:
-            errors.append("source routing hybrid_private_web did not include all expected providers")
+        private_external = build_retrieval_policy(
+            {
+                "schema_version": 3,
+                "allowed_origins": ["public_web", "private_corpus", "external_system"],
+                "channels": ["search_api"],
+                "methods": ["web_search"],
+            },
+            user_id="benchmark",
+        )
+        if academic.get("schema_version") != 3 or "academic_search" not in academic.get("methods", []):
+            errors.append("retrieval policy academic profile did not enable academic_search")
+        if "file_upload" not in private_external.get("channels", []):
+            errors.append("retrieval policy private corpus did not enable file_upload")
+        if "mcp_search" not in private_external.get("methods", []):
+            errors.append("retrieval policy external system did not enable mcp_search")
+        try:
+            reject_legacy_source_routing({"mode": "web_only"})
+            errors.append("retrieval policy accepted legacy source_routing mode")
+        except LegacySourceRoutingError:
+            pass
     except Exception as exc:
-        errors.append(f"source routing preflight failed: {exc}")
+        errors.append(f"retrieval policy preflight failed: {exc}")
 
     try:
         from agent.workflows.researcher import _filter_tools_for_policy
@@ -487,10 +509,15 @@ def validate_strict_research_guards() -> dict[str, Any]:
             def __init__(self, name: str) -> None:
                 self.name = name
 
-        tools = [Tool("tavily_search"), Tool("arxiv_search")]
+        tools = [
+            Tool("retrieve_sources"),
+            Tool("read_source"),
+            Tool("tavily_search"),
+            Tool("arxiv_search"),
+        ]
         filtered = _filter_tools_for_policy(
             tools,
-            {"configurable": {"tool_policy_strict": True}},
+            {"configurable": {"tool_policy_strict": True, "retrieval_policy_strict": True}},
             {
                 "include_web": False,
                 "include_academic": True,
@@ -499,8 +526,8 @@ def validate_strict_research_guards() -> dict[str, Any]:
                 "budget_policy": {},
             },
         )
-        if [tool.name for tool in filtered] != ["arxiv_search"]:
-            errors.append("strict tool policy did not remove disallowed web tool")
+        if [tool.name for tool in filtered] != ["retrieve_sources", "read_source"]:
+            errors.append("strict tool policy did not enforce retrieval gateway only")
     except Exception as exc:
         errors.append(f"tool policy preflight failed: {exc}")
 
@@ -773,7 +800,7 @@ async def run_benchmark(
 def _run_calibration(report: BenchmarkReport, human_reference_path: str) -> dict[str, Any]:
     from agent.workflows.rubric import get_calibration
 
-    with open(human_reference_path, "r", encoding="utf-8") as handle:
+    with open(human_reference_path, encoding="utf-8") as handle:
         payload = json.load(handle)
 
     if isinstance(payload, list):

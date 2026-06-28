@@ -289,123 +289,122 @@ class PostgresMemoryStore:
     def setup(self) -> None:
         if self._setup_done:
             return
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                try:
-                    cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-                    self.pgvector_available = True
-                except Exception as exc:
-                    self.pgvector_available = False
-                    logger.warning("[Memory] pgvector unavailable, using JSON embeddings: %s", exc)
-                vector_type = (
-                    f"vector({self.embedding_dim})" if self.pgvector_available else "jsonb"
+        with self._connect() as conn, conn.cursor() as cur:
+            try:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                self.pgvector_available = True
+            except Exception as exc:
+                self.pgvector_available = False
+                logger.warning("[Memory] pgvector unavailable, using JSON embeddings: %s", exc)
+            vector_type = (
+                f"vector({self.embedding_dim})" if self.pgvector_available else "jsonb"
+            )
+            cur.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS weaver_memory_records (
+                    id text PRIMARY KEY,
+                    user_id text NOT NULL,
+                    scope text NOT NULL,
+                    type text NOT NULL,
+                    content text NOT NULL,
+                    summary text NOT NULL DEFAULT '',
+                    embedding {vector_type},
+                    confidence double precision NOT NULL DEFAULT 0.75,
+                    importance double precision NOT NULL DEFAULT 0.5,
+                    quality_score double precision NOT NULL DEFAULT 0,
+                    source_thread_id text NOT NULL DEFAULT '',
+                    source_run_id text NOT NULL DEFAULT '',
+                    source_evidence_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+                    source_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
+                    valid_from timestamptz,
+                    valid_to timestamptz,
+                    expires_at timestamptz,
+                    status text NOT NULL DEFAULT 'active',
+                    metadata jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                    dedupe_key text NOT NULL,
+                    created_at timestamptz NOT NULL DEFAULT now(),
+                    updated_at timestamptz NOT NULL DEFAULT now()
                 )
-                cur.execute(
-                    f"""
-                    CREATE TABLE IF NOT EXISTS weaver_memory_records (
-                        id text PRIMARY KEY,
-                        user_id text NOT NULL,
-                        scope text NOT NULL,
-                        type text NOT NULL,
-                        content text NOT NULL,
-                        summary text NOT NULL DEFAULT '',
-                        embedding {vector_type},
-                        confidence double precision NOT NULL DEFAULT 0.75,
-                        importance double precision NOT NULL DEFAULT 0.5,
-                        quality_score double precision NOT NULL DEFAULT 0,
-                        source_thread_id text NOT NULL DEFAULT '',
-                        source_run_id text NOT NULL DEFAULT '',
-                        source_evidence_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
-                        source_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
-                        valid_from timestamptz,
-                        valid_to timestamptz,
-                        expires_at timestamptz,
-                        status text NOT NULL DEFAULT 'active',
-                        metadata jsonb NOT NULL DEFAULT '{{}}'::jsonb,
-                        dedupe_key text NOT NULL,
-                        created_at timestamptz NOT NULL DEFAULT now(),
-                        updated_at timestamptz NOT NULL DEFAULT now()
-                    )
-                    """
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS weaver_memory_entities (
+                    id text PRIMARY KEY,
+                    user_id text NOT NULL,
+                    name text NOT NULL,
+                    type text NOT NULL DEFAULT 'entity',
+                    aliases jsonb NOT NULL DEFAULT '[]'::jsonb,
+                    embedding jsonb NOT NULL DEFAULT '[]'::jsonb,
+                    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+                    created_at timestamptz NOT NULL DEFAULT now(),
+                    updated_at timestamptz NOT NULL DEFAULT now()
                 )
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS weaver_memory_entities (
-                        id text PRIMARY KEY,
-                        user_id text NOT NULL,
-                        name text NOT NULL,
-                        type text NOT NULL DEFAULT 'entity',
-                        aliases jsonb NOT NULL DEFAULT '[]'::jsonb,
-                        embedding jsonb NOT NULL DEFAULT '[]'::jsonb,
-                        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-                        created_at timestamptz NOT NULL DEFAULT now(),
-                        updated_at timestamptz NOT NULL DEFAULT now()
-                    )
-                    """
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS weaver_memory_relations (
+                    id text PRIMARY KEY,
+                    user_id text NOT NULL,
+                    source_entity_id text NOT NULL,
+                    target_entity_id text NOT NULL,
+                    relation text NOT NULL,
+                    source_record_id text NOT NULL DEFAULT '',
+                    confidence double precision NOT NULL DEFAULT 0.75,
+                    valid_from timestamptz,
+                    valid_to timestamptz,
+                    status text NOT NULL DEFAULT 'active',
+                    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+                    created_at timestamptz NOT NULL DEFAULT now(),
+                    updated_at timestamptz NOT NULL DEFAULT now()
                 )
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS weaver_memory_relations (
-                        id text PRIMARY KEY,
-                        user_id text NOT NULL,
-                        source_entity_id text NOT NULL,
-                        target_entity_id text NOT NULL,
-                        relation text NOT NULL,
-                        source_record_id text NOT NULL DEFAULT '',
-                        confidence double precision NOT NULL DEFAULT 0.75,
-                        valid_from timestamptz,
-                        valid_to timestamptz,
-                        status text NOT NULL DEFAULT 'active',
-                        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-                        created_at timestamptz NOT NULL DEFAULT now(),
-                        updated_at timestamptz NOT NULL DEFAULT now()
-                    )
-                    """
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS weaver_memory_audit_log (
+                    id bigserial PRIMARY KEY,
+                    action text NOT NULL,
+                    payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+                    created_at timestamptz NOT NULL DEFAULT now()
                 )
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS weaver_memory_audit_log (
-                        id bigserial PRIMARY KEY,
-                        action text NOT NULL,
-                        payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-                        created_at timestamptz NOT NULL DEFAULT now()
-                    )
-                    """
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS weaver_skill_evolution (
+                    id text PRIMARY KEY,
+                    user_id text NOT NULL,
+                    skill_name text NOT NULL,
+                    content text NOT NULL,
+                    rationale text NOT NULL DEFAULT '',
+                    support_count integer NOT NULL DEFAULT 1,
+                    confidence double precision NOT NULL DEFAULT 0.75,
+                    status text NOT NULL DEFAULT 'proposed',
+                    validation_status text NOT NULL DEFAULT 'pending',
+                    applied_path text NOT NULL DEFAULT '',
+                    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+                    created_at timestamptz NOT NULL DEFAULT now(),
+                    updated_at timestamptz NOT NULL DEFAULT now()
                 )
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS weaver_skill_evolution (
-                        id text PRIMARY KEY,
-                        user_id text NOT NULL,
-                        skill_name text NOT NULL,
-                        content text NOT NULL,
-                        rationale text NOT NULL DEFAULT '',
-                        support_count integer NOT NULL DEFAULT 1,
-                        confidence double precision NOT NULL DEFAULT 0.75,
-                        status text NOT NULL DEFAULT 'proposed',
-                        validation_status text NOT NULL DEFAULT 'pending',
-                        applied_path text NOT NULL DEFAULT '',
-                        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-                        created_at timestamptz NOT NULL DEFAULT now(),
-                        updated_at timestamptz NOT NULL DEFAULT now()
-                    )
-                    """
-                )
-                cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_weaver_memory_user_status ON weaver_memory_records(user_id, status)"
-                )
-                cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_weaver_memory_type_scope ON weaver_memory_records(type, scope)"
-                )
-                cur.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_dedupe ON weaver_memory_records(user_id, dedupe_key) WHERE status = 'active'"
-                )
-                cur.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_entity_name ON weaver_memory_entities(user_id, lower(name))"
-                )
-                cur.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_relation_unique ON weaver_memory_relations(user_id, source_entity_id, target_entity_id, relation)"
-                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_weaver_memory_user_status ON weaver_memory_records(user_id, status)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_weaver_memory_type_scope ON weaver_memory_records(type, scope)"
+            )
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_dedupe ON weaver_memory_records(user_id, dedupe_key) WHERE status = 'active'"
+            )
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_entity_name ON weaver_memory_entities(user_id, lower(name))"
+            )
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_relation_unique ON weaver_memory_relations(user_id, source_entity_id, target_entity_id, relation)"
+            )
         self._setup_done = True
 
     def _dict_row(self):
@@ -435,23 +434,22 @@ class PostgresMemoryStore:
 
     def upsert_record(self, record: MemoryRecord) -> MemoryRecord:
         self.setup()
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                cur.execute(
-                    """
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            cur.execute(
+                """
                     UPDATE weaver_memory_records
                     SET status='superseded', updated_at=now()
                     WHERE user_id=%s AND dedupe_key=%s AND status='active' AND id<>%s
                     RETURNING id
                     """,
-                    (record.user_id, record.dedupe_key, record.id),
-                )
-                superseded = [row["id"] for row in cur.fetchall()]
-                if superseded:
-                    record.metadata.setdefault("supersedes", superseded[0])
-                embedding = record.embedding if self.pgvector_available else _json(record.embedding)
-                cur.execute(
-                    """
+                (record.user_id, record.dedupe_key, record.id),
+            )
+            superseded = [row["id"] for row in cur.fetchall()]
+            if superseded:
+                record.metadata.setdefault("supersedes", superseded[0])
+            embedding = record.embedding if self.pgvector_available else _json(record.embedding)
+            cur.execute(
+                """
                     INSERT INTO weaver_memory_records (
                         id, user_id, scope, type, content, summary, embedding,
                         confidence, importance, quality_score, source_thread_id,
@@ -481,15 +479,15 @@ class PostgresMemoryStore:
                         updated_at=now()
                     RETURNING *
                     """,
-                    {
-                        **record.to_dict(),
-                        "embedding": embedding,
-                        "source_evidence_ids": _json(record.source_evidence_ids),
-                        "source_urls": _json(record.source_urls),
-                        "metadata": _json(record.metadata),
-                    },
-                )
-                saved = self._record_from_row(cur.fetchone())
+                {
+                    **record.to_dict(),
+                    "embedding": embedding,
+                    "source_evidence_ids": _json(record.source_evidence_ids),
+                    "source_urls": _json(record.source_urls),
+                    "metadata": _json(record.metadata),
+                },
+            )
+            saved = self._record_from_row(cur.fetchone())
         self.record_audit("upsert_record", {"record_id": saved.id})
         return saved
 
@@ -522,10 +520,9 @@ class PostgresMemoryStore:
             + " AND ".join(where)
             + " ORDER BY updated_at DESC LIMIT %(limit)s"
         )
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                cur.execute(sql, params)
-                return [self._record_from_row(row) for row in cur.fetchall()]
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            cur.execute(sql, params)
+            return [self._record_from_row(row) for row in cur.fetchall()]
 
     def soft_delete_record(self, record_id: str, *, user_id: str = "") -> bool:
         self.setup()
@@ -534,39 +531,37 @@ class PostgresMemoryStore:
         if user_id:
             where += " AND user_id=%s"
             params.append(user_id)
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"UPDATE weaver_memory_records SET status='deleted', updated_at=now() WHERE {where}",
-                    params,
-                )
-                deleted = cur.rowcount > 0
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE weaver_memory_records SET status='deleted', updated_at=now() WHERE {where}",
+                params,
+            )
+            deleted = cur.rowcount > 0
         if deleted:
             self.record_audit("delete_record", {"record_id": record_id})
         return deleted
 
     def upsert_entity(self, entity: MemoryEntity) -> MemoryEntity:
         self.setup()
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                payload = {
-                    **entity.to_dict(),
-                    "aliases": _json(entity.aliases),
-                    "embedding": _json(entity.embedding),
-                    "metadata": _json(entity.metadata),
-                }
-                cur.execute(
-                    """
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            payload = {
+                **entity.to_dict(),
+                "aliases": _json(entity.aliases),
+                "embedding": _json(entity.embedding),
+                "metadata": _json(entity.metadata),
+            }
+            cur.execute(
+                """
                     SELECT id FROM weaver_memory_entities
                     WHERE user_id=%(user_id)s AND lower(name)=lower(%(name)s)
                     """,
-                    payload,
-                )
-                existing = cur.fetchone()
-                if existing:
-                    payload["id"] = existing["id"]
-                    cur.execute(
-                        """
+                payload,
+            )
+            existing = cur.fetchone()
+            if existing:
+                payload["id"] = existing["id"]
+                cur.execute(
+                    """
                         UPDATE weaver_memory_entities
                         SET aliases=%(aliases)s::jsonb,
                             metadata=metadata || %(metadata)s::jsonb,
@@ -574,11 +569,11 @@ class PostgresMemoryStore:
                         WHERE id=%(id)s
                         RETURNING *
                         """,
-                        payload,
-                    )
-                else:
-                    cur.execute(
-                        """
+                    payload,
+                )
+            else:
+                cur.execute(
+                    """
                         INSERT INTO weaver_memory_entities (
                             id, user_id, name, type, aliases, embedding, metadata,
                             created_at, updated_at
@@ -589,9 +584,9 @@ class PostgresMemoryStore:
                         )
                         RETURNING *
                         """,
-                        payload,
-                    )
-                row = cur.fetchone()
+                    payload,
+                )
+            row = cur.fetchone()
         return MemoryEntity(
             id=str(row["id"]),
             user_id=str(row["user_id"]),
@@ -606,24 +601,23 @@ class PostgresMemoryStore:
 
     def upsert_relation(self, relation: MemoryRelation) -> MemoryRelation:
         self.setup()
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                payload = {**relation.to_dict(), "metadata": _json(relation.metadata)}
-                cur.execute(
-                    """
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            payload = {**relation.to_dict(), "metadata": _json(relation.metadata)}
+            cur.execute(
+                """
                     SELECT id FROM weaver_memory_relations
                     WHERE user_id=%(user_id)s
                     AND source_entity_id=%(source_entity_id)s
                     AND target_entity_id=%(target_entity_id)s
                     AND relation=%(relation)s
                     """,
-                    payload,
-                )
-                existing = cur.fetchone()
-                if existing:
-                    payload["id"] = existing["id"]
-                    cur.execute(
-                        """
+                payload,
+            )
+            existing = cur.fetchone()
+            if existing:
+                payload["id"] = existing["id"]
+                cur.execute(
+                    """
                         UPDATE weaver_memory_relations
                         SET confidence=GREATEST(confidence, %(confidence)s),
                             metadata=metadata || %(metadata)s::jsonb,
@@ -631,11 +625,11 @@ class PostgresMemoryStore:
                         WHERE id=%(id)s
                         RETURNING *
                         """,
-                        payload,
-                    )
-                else:
-                    cur.execute(
-                        """
+                    payload,
+                )
+            else:
+                cur.execute(
+                    """
                         INSERT INTO weaver_memory_relations (
                             id, user_id, source_entity_id, target_entity_id, relation,
                             source_record_id, confidence, valid_from, valid_to, status,
@@ -648,9 +642,9 @@ class PostgresMemoryStore:
                         )
                         RETURNING *
                         """,
-                        payload,
-                    )
-                row = cur.fetchone()
+                    payload,
+                )
+            row = cur.fetchone()
         return MemoryRelation(
             id=str(row["id"]),
             user_id=str(row["user_id"]),
@@ -674,21 +668,20 @@ class PostgresMemoryStore:
         if entity:
             entity_filter = "AND (name ILIKE %(entity)s OR aliases::text ILIKE %(entity)s)"
             params["entity"] = f"%{entity}%"
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                cur.execute(
-                    f"""
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            cur.execute(
+                f"""
                     SELECT * FROM weaver_memory_entities
                     WHERE user_id=%(user_id)s {entity_filter}
                     ORDER BY updated_at DESC LIMIT %(limit)s
                     """,
-                    params,
-                )
-                entities = [dict(row) for row in cur.fetchall()]
-                ids = [row["id"] for row in entities]
-                if ids:
-                    cur.execute(
-                        """
+                params,
+            )
+            entities = [dict(row) for row in cur.fetchall()]
+            ids = [row["id"] for row in entities]
+            if ids:
+                cur.execute(
+                    """
                         SELECT * FROM weaver_memory_relations
                         WHERE user_id=%(user_id)s
                         AND (
@@ -697,18 +690,18 @@ class PostgresMemoryStore:
                         )
                         LIMIT %(limit)s
                         """,
-                        {"user_id": user_id, "ids": ids, "limit": params["limit"]},
-                    )
-                else:
-                    cur.execute(
-                        """
+                    {"user_id": user_id, "ids": ids, "limit": params["limit"]},
+                )
+            else:
+                cur.execute(
+                    """
                         SELECT * FROM weaver_memory_relations
                         WHERE user_id=%(user_id)s
                         ORDER BY updated_at DESC LIMIT %(limit)s
                         """,
-                        params,
-                    )
-                relations = [dict(row) for row in cur.fetchall()]
+                    params,
+                )
+            relations = [dict(row) for row in cur.fetchall()]
         return {
             "entities": [
                 {
@@ -734,21 +727,19 @@ class PostgresMemoryStore:
 
     def record_audit(self, action: str, payload: dict[str, Any]) -> None:
         try:
-            with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO weaver_memory_audit_log(action, payload) VALUES (%s, %s::jsonb)",
-                        (action, _json(payload)),
-                    )
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO weaver_memory_audit_log(action, payload) VALUES (%s, %s::jsonb)",
+                    (action, _json(payload)),
+                )
         except Exception as exc:
             logger.debug("[Memory] audit write skipped: %s", exc)
 
     def add_skill_evolution(self, proposal: SkillEvolutionProposal) -> SkillEvolutionProposal:
         self.setup()
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                cur.execute(
-                    """
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            cur.execute(
+                """
                     INSERT INTO weaver_skill_evolution (
                         id, user_id, skill_name, content, rationale, support_count,
                         confidence, status, validation_status, applied_path,
@@ -767,9 +758,9 @@ class PostgresMemoryStore:
                         updated_at=now()
                     RETURNING *
                     """,
-                    {**proposal.to_dict(), "metadata": _json(proposal.metadata)},
-                )
-                row = cur.fetchone()
+                {**proposal.to_dict(), "metadata": _json(proposal.metadata)},
+            )
+            row = cur.fetchone()
         return SkillEvolutionProposal(
             id=str(row["id"]),
             user_id=str(row["user_id"]),
@@ -799,10 +790,9 @@ class PostgresMemoryStore:
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY updated_at DESC LIMIT %(limit)s"
-        with self._connect() as conn:
-            with conn.cursor(row_factory=self._dict_row()) as cur:
-                cur.execute(sql, params)
-                rows = cur.fetchall()
+        with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
         return [
             SkillEvolutionProposal(
                 id=str(row["id"]),
@@ -824,17 +814,16 @@ class PostgresMemoryStore:
 
     def status(self) -> dict[str, Any]:
         self.setup()
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                counts = {}
-                for key, table in (
-                    ("record_count", "weaver_memory_records"),
-                    ("entity_count", "weaver_memory_entities"),
-                    ("relation_count", "weaver_memory_relations"),
-                    ("skill_evolution_count", "weaver_skill_evolution"),
-                ):
-                    cur.execute(f"SELECT count(*) FROM {table}")
-                    counts[key] = int(cur.fetchone()[0])
+        with self._connect() as conn, conn.cursor() as cur:
+            counts = {}
+            for key, table in (
+                ("record_count", "weaver_memory_records"),
+                ("entity_count", "weaver_memory_entities"),
+                ("relation_count", "weaver_memory_relations"),
+                ("skill_evolution_count", "weaver_skill_evolution"),
+            ):
+                cur.execute(f"SELECT count(*) FROM {table}")
+                counts[key] = int(cur.fetchone()[0])
         return {
             "backend": "postgres",
             "available": True,

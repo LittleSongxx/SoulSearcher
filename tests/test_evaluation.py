@@ -113,8 +113,6 @@ class TestRubric:
     def test_rubric_models_import(self):
         from agent.workflows.rubric import (
             RubricItem,
-            RubricDimension,
-            RubricResult,
         )
         item = RubricItem(id="test_1", criterion="Test criterion", weight=1.0, score=0.5, evidence="ok")
         assert item.score == 0.5

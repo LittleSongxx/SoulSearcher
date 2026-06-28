@@ -45,7 +45,7 @@ class RunRecord:
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RunRecord":
+    def from_dict(cls, data: dict[str, Any]) -> RunRecord:
         status = str(data.get("status") or RunStatus.pending.value)
         return cls(
             run_id=str(data.get("run_id") or data.get("thread_id") or ""),
@@ -98,10 +98,9 @@ class RunManager:
                 database_url,
                 autocommit=True,
                 connect_timeout=3,
-            ) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            ) as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         CREATE TABLE IF NOT EXISTS weaver_run_records (
                             run_id text PRIMARY KEY,
                             thread_id text NOT NULL,
@@ -118,14 +117,14 @@ class RunManager:
                             workspace jsonb NOT NULL DEFAULT '{}'::jsonb,
                             metadata jsonb NOT NULL DEFAULT '{}'::jsonb
                         )
-                        """
-                    )
-                    cur.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_weaver_run_thread_id ON weaver_run_records(thread_id)"
-                    )
-                    cur.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_weaver_run_status ON weaver_run_records(status)"
-                    )
+                """
+            )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_weaver_run_thread_id ON weaver_run_records(thread_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_weaver_run_status ON weaver_run_records(status)"
+                )
             self._backend = "postgres"
             self._db_ready = True
         except Exception as exc:
@@ -159,10 +158,9 @@ class RunManager:
             return
         import json
 
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
                     INSERT INTO weaver_run_records (
                         run_id, thread_id, model, route, user_id, status,
                         created_at, updated_at, ended_at, error, token_summary,
@@ -200,24 +198,23 @@ class RunManager:
         if self._backend != "postgres":
             return None
         try:
-            with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
                         SELECT *
                         FROM weaver_run_records
                         WHERE run_id = %s OR thread_id = %s
                         ORDER BY updated_at DESC
                         LIMIT 1
                         """,
-                        (run_id_or_thread_id, run_id_or_thread_id),
-                    )
-                    row = cur.fetchone()
-                    if not row:
-                        return None
-                    columns = [desc[0] for desc in cur.description or []]
-                    payload = dict(zip(columns, row, strict=False))
-                    return self._record_from_row(payload)
+                    (run_id_or_thread_id, run_id_or_thread_id),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                columns = [desc[0] for desc in cur.description or []]
+                payload = dict(zip(columns, row, strict=False))
+                return self._record_from_row(payload)
         except Exception as exc:
             self._db_error = str(exc)
             self._backend = "memory"
@@ -332,17 +329,16 @@ class RunManager:
         self._init_db()
         if self._backend == "postgres":
             try:
-                with self._connect() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "SELECT * FROM weaver_run_records ORDER BY updated_at DESC LIMIT 500"
-                        )
-                        columns = [desc[0] for desc in cur.description or []]
-                        rows = cur.fetchall()
-                        return [
-                            self._record_from_row(dict(zip(columns, row, strict=False))).to_dict()
-                            for row in rows
-                        ]
+                with self._connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT * FROM weaver_run_records ORDER BY updated_at DESC LIMIT 500"
+                    )
+                    columns = [desc[0] for desc in cur.description or []]
+                    rows = cur.fetchall()
+                    return [
+                        self._record_from_row(dict(zip(columns, row, strict=False))).to_dict()
+                        for row in rows
+                    ]
             except Exception as exc:
                 self._db_error = str(exc)
                 self._backend = "memory"

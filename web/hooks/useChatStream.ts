@@ -10,6 +10,7 @@ interface UseChatStreamProps {
 export interface ChatExecutionMode {
   useWebSearch?: boolean
   useDeepResearch?: boolean
+  useLibrary?: boolean
   images?: ImageAttachment[]
 }
 
@@ -29,7 +30,32 @@ function buildDeepsearchConfig(mode: ChatExecutionMode = {}) {
   return {
     deepsearch_strategy: strategy,
     deepsearch_mode: strategy,
-    source_policy: 'web',
+  }
+}
+
+function buildRetrievalPolicy(mode: ChatExecutionMode = {}) {
+  const origins = ['public_web']
+  const channels = ['search_api', 'crawler']
+  const methods = ['web_search', 'crawl', 'deep_read']
+  if (mode.useLibrary !== false) {
+    origins.push('private_corpus')
+    channels.push('file_upload')
+    methods.push('vector_search', 'keyword_search')
+  }
+  return {
+    schema_version: 3,
+    allowed_origins: origins,
+    channels,
+    methods,
+    profiles: ['general'],
+    corpus_policy: {
+      include_user_library: mode.useLibrary !== false,
+    },
+    budget: {
+      max_results: mode.useDeepResearch ? 10 : 6,
+      max_public_results: mode.useDeepResearch ? 8 : 5,
+      max_private_results: 5,
+    },
   }
 }
 
@@ -75,6 +101,7 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
     const query = String(latestUserMessage?.content || '').trim()
     const searchMode = buildSearchMode(mode)
     const deepsearchConfig = buildDeepsearchConfig(mode)
+    const retrievalPolicy = buildRetrievalPolicy(mode)
     lastSearchModeRef.current = searchMode
 
     try {
@@ -90,6 +117,7 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
             query,
             model: selectedModel,
             search_mode: searchMode,
+            retrieval_policy: retrievalPolicy,
             ...(deepsearchConfig ? { deepsearch_config: deepsearchConfig } : {}),
             images: (mode.images || []).map(img => ({
               name: img.name,

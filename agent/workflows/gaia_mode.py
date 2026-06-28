@@ -12,14 +12,12 @@ run the supervisor+researcher pipeline, then output a short answer.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
 from agent.core.configuration import ResearchConfiguration
 from agent.core.model_routing import build_model_config, configurable_model
-from agent.core.prompts import resolve_prompt
 
 logger = logging.getLogger(__name__)
 

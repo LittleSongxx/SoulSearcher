@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, get_buffer_string
@@ -30,12 +30,17 @@ from agent.core.prompts import (
 )
 from agent.core.state import AgentState
 from agent.runtime.context import get_viewed_images
+from agent.workflows.citation_agent import build_claim_citation_matrix
 from agent.workflows.evidence_ledger import (
     build_citation_table,
-    build_evidence_ledger as build_structured_evidence_ledger,
-    evidence_passages as structured_evidence_passages,
     evaluate_citation_gate,
     format_citation_table_for_prompt,
+)
+from agent.workflows.evidence_ledger import (
+    build_evidence_ledger as build_structured_evidence_ledger,
+)
+from agent.workflows.evidence_ledger import (
+    evidence_passages as structured_evidence_passages,
 )
 from agent.workflows.research_todo import (
     append_gap_todos,
@@ -739,8 +744,8 @@ async def final_report_generation(
         pre_quality_artifacts["passages"] = _evidence_passages(preliminary_evidence)
     if citation_table:
         pre_quality_artifacts["citation_table"] = citation_table
-    if isinstance(state.get("source_routing"), dict) and state.get("source_routing"):
-        pre_quality_artifacts["source_routing"] = dict(state.get("source_routing") or {})
+    if isinstance(state.get("retrieval_policy"), dict) and state.get("retrieval_policy"):
+        pre_quality_artifacts["retrieval_policy"] = dict(state.get("retrieval_policy") or {})
     quality_state = dict(state)
     quality_state["deepsearch_artifacts"] = pre_quality_artifacts
 
@@ -947,11 +952,17 @@ async def final_report_generation(
                 if key not in seen_evidence:
                     evidence_items.append(item)
                     seen_evidence.add(key)
+            final_citation_table = build_citation_table(evidence_items)
+            claim_citation_matrix = build_claim_citation_matrix(
+                _strip_markup_for_evaluation(final_content),
+                final_citation_table,
+            )
             quality_summary = _build_quality_summary(
                 report_format=report_format,
                 quality_result=quality_result,
                 l3_result=l3_result,
             )
+            quality_summary.update(claim_citation_matrix.get("summary", {}))
             evaluation_available = quality_result is not None or l3_result is not None
             delivery_ready = (
                 bool(quality_summary.get("publish_ready"))
@@ -995,11 +1006,13 @@ async def final_report_generation(
             quality_summary["quality_gate_count"] = len(quality_gates)
 
             deepsearch_artifacts = dict(quality_state.get("deepsearch_artifacts", {}) or {})
-            if isinstance(state.get("source_routing"), dict) and state.get("source_routing"):
-                deepsearch_artifacts["source_routing"] = dict(state.get("source_routing") or {})
+            if isinstance(state.get("retrieval_policy"), dict) and state.get("retrieval_policy"):
+                deepsearch_artifacts["retrieval_policy"] = dict(state.get("retrieval_policy") or {})
             if not isinstance(deepsearch_artifacts.get("sources"), list) or not deepsearch_artifacts.get("sources"):
                 deepsearch_artifacts["sources"] = list(curated_sources or state.get("sources", []))
             deepsearch_artifacts["passages"] = _evidence_passages(evidence_items)
+            deepsearch_artifacts["citation_table"] = final_citation_table
+            deepsearch_artifacts["claim_citation_matrix"] = claim_citation_matrix
             deepsearch_artifacts["quality_summary"] = quality_summary
             deepsearch_artifacts["quality_gates"] = quality_gates
             deepsearch_artifacts["delivery_status"] = quality_summary["delivery_status"]
@@ -1044,6 +1057,8 @@ async def final_report_generation(
                 deepsearch_artifacts["claims"] = claim_artifacts
                 deepsearch_artifacts["citation_annotations"] = citation_annotations
                 deepsearch_artifacts["evidence_items"] = evidence_items
+                deepsearch_artifacts["citation_table"] = final_citation_table
+                deepsearch_artifacts["claim_citation_matrix"] = claim_citation_matrix
                 deepsearch_artifacts["research_brief"] = {
                     "research_brief": research_brief,
                     "complexity": complexity,
@@ -1090,6 +1105,8 @@ async def final_report_generation(
             deepsearch_artifacts["claims"] = claim_artifacts
             deepsearch_artifacts["citation_annotations"] = citation_annotations
             deepsearch_artifacts["evidence_items"] = evidence_items
+            deepsearch_artifacts["citation_table"] = final_citation_table
+            deepsearch_artifacts["claim_citation_matrix"] = claim_citation_matrix
             deepsearch_artifacts["research_todos"] = research_todos
             deepsearch_artifacts["todo_summary"] = todo_summary
             deepsearch_artifacts["research_brief"] = {
@@ -1241,8 +1258,8 @@ def _rank_sources_hybrid(
     *,
     max_sources: int,
 ) -> list[dict]:
-    from agent.workflows.source_registry import SourceRegistry
     from agent.memory.retrieval import tokenize
+    from agent.workflows.source_registry import SourceRegistry
 
     registry = SourceRegistry()
     topic_tokens = tokenize(research_topic)
@@ -1350,8 +1367,6 @@ def _source_authority_score(domain: str, url: str) -> float:
 
 
 def _source_recency_score(source: dict[str, Any]) -> float:
-    from datetime import datetime, timezone
-
     raw = str(
         source.get("publishedDate")
         or source.get("published_date")
@@ -1364,8 +1379,8 @@ def _source_recency_score(source: dict[str, Any]) -> float:
         try:
             dt = datetime.fromisoformat(candidate)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            age_days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400.0)
+                dt = dt.replace(tzinfo=UTC)
+            age_days = max(0.0, (datetime.now(UTC) - dt).total_seconds() / 86400.0)
             return 1.0 / (1.0 + age_days / 30.0)
         except Exception:
             continue

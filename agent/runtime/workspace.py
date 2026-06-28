@@ -29,7 +29,7 @@ class ResearchWorkspace:
     root: Path
 
     @classmethod
-    def for_thread(cls, thread_id: str) -> "ResearchWorkspace":
+    def for_thread(cls, thread_id: str) -> ResearchWorkspace:
         root = _workspace_root() / _safe_thread_id(thread_id)
         root.mkdir(parents=True, exist_ok=True)
         return cls(thread_id=thread_id, root=root)

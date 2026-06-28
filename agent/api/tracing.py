@@ -12,8 +12,8 @@ async def get_traces(thread_id: str, request: Request):
 
     Returns the latest trace with full span tree.
     """
-    from common.thread_ownership import _require_thread_owner
     from common.config import settings
+    from common.thread_ownership import _require_thread_owner
     from common.tracing import get_trace
 
     if not settings.enable_tracing:
@@ -37,8 +37,8 @@ async def get_trace_summary(thread_id: str, request: Request):
 
     Returns high-level statistics: token counts, durations, node breakdown.
     """
-    from common.thread_ownership import _require_thread_owner
     from common.config import settings
+    from common.thread_ownership import _require_thread_owner
     from common.tracing import get_trace_summary as _get_summary
 
     if not settings.enable_tracing:
@@ -62,8 +62,8 @@ async def get_all_traces(thread_id: str, request: Request):
 
     Returns list of all stored traces (up to buffer limit).
     """
-    from common.thread_ownership import _require_thread_owner
     from common.config import settings
+    from common.thread_ownership import _require_thread_owner
     from common.tracing import get_all_traces as _get_all
 
     if not settings.enable_tracing:

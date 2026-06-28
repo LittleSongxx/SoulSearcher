@@ -31,7 +31,6 @@ agent/workflows/        # Deep research pipeline nodes
   quality_check.py      # Level 1 instant validation + auto-revise
   evaluation.py         # Level 2 (9-dim) and Level 3 (4-dim deep) evaluation
   multimodal.py         # Image injection into LLM context
-  source_routing.py     # ResearchSourceRoutingPolicy (web/rag/hybrid/mcp modes)
   continuation.py       # Auto-continuation handler for multi-turn tool calls
   agent_factory.py      # build_writer_agent(), build_tool_agent() with middleware
   agent_tools.py        # Agent-specific tool definitions
@@ -46,6 +45,12 @@ agent/workflows/        # Deep research pipeline nodes
     planner.py          # Research strategy and sub-task planning
     researcher.py       # Deep-dive investigation agent
     reporter.py         # Synthesis and report generation agent
+
+agent/retrieval/        # RetrievalPolicy v3 + unified retrieval gateway
+  policy.py             # source_origin / access_channel / retrieval_method / profile
+  gateway.py            # retrieve_sources/read_source tools
+  documents.py          # user document library parsing, chunking, hybrid ranking
+  types.py              # normalized retrieval result DTOs
 
 agent/runtime/          # Lightweight runtime harness
   context.py            # RuntimeContext dataclass

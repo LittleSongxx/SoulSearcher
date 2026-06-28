@@ -4,10 +4,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
-from agent.workflows.source_routing import (
-    build_source_routing_policy,
-    source_policy_from_routing,
-)
+from agent.retrieval.policy import build_retrieval_policy, reject_legacy_source_routing
 
 _TIME_MARKERS = (
     "latest",
@@ -77,7 +74,7 @@ class ResearchBrief:
     budget_policy: dict[str, Any] = field(default_factory=dict)
     success_criteria: list[str] = field(default_factory=list)
     source_policy: str = "web"
-    source_routing: dict[str, Any] = field(default_factory=dict)
+    retrieval_policy: dict[str, Any] = field(default_factory=dict)
     complexity: str = "standard"
 
     def to_dict(self) -> dict[str, Any]:
@@ -163,23 +160,14 @@ def _derive_freshness(query: str, constraints: dict[str, Any]) -> str:
 def _derive_source_policy(state: dict[str, Any], config: dict[str, Any]) -> str:
     cfg = config.get("configurable") if isinstance(config, dict) else {}
     cfg = cfg if isinstance(cfg, dict) else {}
-    routing = cfg.get("source_routing") or state.get("source_routing")
-    if isinstance(routing, dict) and routing:
-        routed = source_policy_from_routing(routing)
-        if routed:
-            return routed
-    configured = (
-        str(cfg.get("source_policy") or state.get("source_policy") or "")
-        .strip()
-        .lower()
-    )
-    if configured in {
-        "web",
-        "web-only",
-        "mcp",
-    }:
-        return "web" if configured == "web-only" else configured
-    return "web"
+    policy = cfg.get("retrieval_policy") or state.get("retrieval_policy") or {}
+    if isinstance(policy, dict):
+        origins = policy.get("allowed_origins") if isinstance(policy.get("allowed_origins"), list) else []
+        if "private_corpus" in origins and "public_web" in origins:
+            return "public_web+private_corpus"
+        if origins:
+            return ",".join(str(item) for item in origins)
+    return "retrieval_v3"
 
 
 def _derive_open_dimensions(query: str, expected_fields: list[str]) -> list[str]:
@@ -234,6 +222,15 @@ def build_research_brief(
     state: dict[str, Any], config: Optional[dict[str, Any]] = None
 ) -> ResearchBrief:
     config = config or {}
+    cfg = config.get("configurable") if isinstance(config, dict) else {}
+    cfg = cfg if isinstance(cfg, dict) else {}
+    reject_legacy_source_routing(cfg.get("source_routing"))
+    retrieval_policy = build_retrieval_policy(
+        cfg.get("retrieval_policy") or state.get("retrieval_policy"),
+        user_id=str(state.get("user_id") or state.get("_user_id") or cfg.get("user_id") or ""),
+        config=config,
+        state=state,
+    )
     existing = state.get("research_brief") or state.get("deepsearch_research_brief")
     if isinstance(existing, ResearchBrief):
         return existing
@@ -277,18 +274,15 @@ def build_research_brief(
             ),
             success_criteria=_clean_list(existing.get("success_criteria")),
             source_policy=str(existing.get("source_policy") or "web"),
-            source_routing=(
-                existing.get("source_routing")
-                if isinstance(existing.get("source_routing"), dict)
-                else {}
+            retrieval_policy=(
+                existing.get("retrieval_policy")
+                if isinstance(existing.get("retrieval_policy"), dict)
+                else retrieval_policy
             ),
             complexity=str(existing.get("complexity") or "standard"),
         )
-        if not brief.source_routing:
-            brief.source_routing = build_source_routing_policy(
-                brief=brief, config=config, state=state
-            )
-        brief.source_policy = source_policy_from_routing(brief.source_routing)
+        brief.retrieval_policy = brief.retrieval_policy or retrieval_policy
+        brief.source_policy = _derive_source_policy(state, config)
         return brief
 
     query = str(state.get("input") or state.get("topic") or "").strip()
@@ -328,12 +322,9 @@ def build_research_brief(
         ),
         success_criteria=success_criteria,
         source_policy=_derive_source_policy(state, config),
+        retrieval_policy=retrieval_policy,
         complexity=_derive_complexity(query, expected_fields),
     )
-    brief.source_routing = build_source_routing_policy(
-        brief=brief, config=config, state=state
-    )
-    brief.source_policy = source_policy_from_routing(brief.source_routing)
     return brief
 
 

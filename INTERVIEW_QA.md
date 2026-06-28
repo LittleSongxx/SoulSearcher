@@ -465,27 +465,26 @@ Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt
 
 ---
 
-### Q35：RAG 在 Weaver 里怎么接入？
+### Q35：资料库 / RAG 在 Weaver 里怎么接入？
 
-**A**：RAG 是本地文档检索能力：用户通过文档 API 上传 PDF、DOCX、TXT、MD、CSV 等文件，系统切分、embedding、写入向量库；研究阶段用 `rag_search` 检索相关片段。
+**A**：RAG 已收敛为统一检索网关里的 `private_corpus` 来源：用户通过文档资料库 API 上传 PDF、DOCX、TXT、MD、CSV 等文件，系统保存原文、切分 chunk、计算 hash，并在数据库可用时写入 pgvector；数据库或 pgvector 不可用时，资料库 API 会返回清晰的不可用状态，但公开 Web 研究仍可启动。
 
-内部鉴权开启时，RAG collection 会按用户身份生成隔离后缀，避免不同用户文档混在同一个 collection 里。
+研究阶段不再把 `rag_search` 直接暴露给研究员，而是统一通过 `retrieve_sources` / `read_source` 进入检索网关。这样 private corpus、公开 Web、用户注入来源和 MCP 外部连接器都会被统一转换成 evidence ledger 可追踪的来源和片段。
 
 ---
 
-### Q36：来源路由有哪些模式？
+### Q36：RetrievalPolicy v3 怎么表达检索策略？
 
-**A**：来源路由把研究来源抽象成策略：
+**A**：旧 `web_only / rag_only / mcp_only / hybrid` 来源路由模式已经移除，收到旧字段会返回 422。当前使用 `retrieval_policy.schema_version = 3`，把检索策略拆成四个维度：
 
-| 模式 | provider |
-|---|---|
-| `web_only` | web |
-| `local_docs_only` | rag |
-| `private_first` | rag + web |
-| `hybrid` | web + rag |
-| `mcp_only` | mcp |
+| 维度 | 示例 | 含义 |
+|---|---|---|
+| `allowed_origins` | `public_web`、`private_corpus`、`user_provided`、`external_system` | 信息来自哪里 |
+| `channels` | `search_api`、`browser`、`crawler`、`file_upload`、`mcp`、`native_connector` | 通过什么通道访问 |
+| `methods` | `web_search`、`academic_search`、`vector_search`、`keyword_search`、`crawl`、`deep_read`、`mcp_search`、`mcp_fetch` | 如何检索或读取 |
+| `profiles` | `general`、`academic`、`news`、`code`、`finance`、`legal` | 研究用途和偏好 |
 
-它还携带 owner、group、visibility、允许/拒绝域名、MCP preset、freshness、citation policy 等元信息。当前更像一个 **策略描述和治理载体**，实际工具使用仍由研究员可用工具和配置共同决定。
+研究员只看到统一网关工具，具体 provider、MCP search/fetch、资料库 hybrid ranking、网页深读都在网关内部执行，最终必须产出可绑定到 evidence ledger 的来源和片段。
 
 ---
 
@@ -838,7 +837,7 @@ Weaver 当前已有 evidence extractor、claim alignment、quality artifacts 的
 **A**：优先补这些生产治理能力：
 
 - SSO/企业身份和细粒度权限。
-- RAG collection 按租户/团队/用户隔离。
+- 文档资料库按租户/团队/用户隔离。
 - MCP 工具按租户授权。
 - 数据留存和删除策略。
 - 审计日志和合规导出。
@@ -846,7 +845,7 @@ Weaver 当前已有 evidence extractor、claim alignment、quality artifacts 的
 - 私有模型和私有搜索源。
 - 报告分享、协作评论、版本管理。
 
-项目已有 channels、RAG 隔离、thread ownership、source routing 等雏形，但企业级还需要系统化补齐。
+项目已有 channels、文档资料库隔离、thread ownership、RetrievalPolicy v3 和统一检索网关等雏形，但企业级还需要系统化补齐。
 
 ---
 

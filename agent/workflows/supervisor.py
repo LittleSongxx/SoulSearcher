@@ -38,6 +38,8 @@ from agent.core.state import (
     SupervisorState,
     ThinkTool,
 )
+from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
+from agent.runtime.middleware.shared import enforce_context_budget
 from agent.workflows.research_todo import (
     append_gap_todos,
     emit_todo_updates,
@@ -48,8 +50,6 @@ from agent.workflows.research_todo import (
     mark_todo_running,
     summarize_todos,
 )
-from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
-from agent.runtime.middleware.shared import enforce_context_budget
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +142,9 @@ async def supervisor(
     todo_context = format_todo_context(state.get("research_todos", []))
     if todo_context:
         context_messages.append(SystemMessage(content=todo_context))
+    source_candidate_context = _format_source_candidate_context(state.get("sources", []))
+    if source_candidate_context:
+        context_messages.append(SystemMessage(content=source_candidate_context))
 
     # === Image Injection (multimodal — deer-flow pattern) ===
     viewed_images = get_viewed_images(config)
@@ -422,6 +425,7 @@ async def supervisor_tools(
                     "research_breadth": budget["breadth"],
                     "research_effort": budget["research_effort"],
                     "thoroughness": budget["thoroughness"],
+                    "retrieval_policy": state.get("retrieval_policy", {}),
                 }
             )
             research_inputs_and_configs.append(
@@ -442,6 +446,7 @@ async def supervisor_tools(
                         "research_breadth": budget["breadth"],
                         "tool_call_iterations": 0,
                         "evidence_items": [],
+                        "retrieval_policy": state.get("retrieval_policy", {}),
                     },
                     task_config,
                 )
@@ -730,6 +735,30 @@ def _collect_source_urls(state: SupervisorState) -> list[dict]:
                 unique_urls.append({"url": url, "title": url.split("/")[-1] or url})
 
     return unique_urls
+
+
+def _format_source_candidate_context(sources: list[dict]) -> str:
+    candidates = [item for item in (sources or []) if isinstance(item, dict)]
+    if not candidates:
+        return ""
+    lines = [
+        "<source-candidates>",
+        "These user, memory, or private source candidates are research leads. "
+        "Use ConductResearch to verify them in the current run before final citation.",
+    ]
+    for index, source in enumerate(candidates[:10], 1):
+        kind = str(source.get("source") or source.get("source_kind") or "source").strip()
+        title = str(source.get("title") or source.get("name") or "Untitled source").strip()
+        url = str(source.get("url") or source.get("source_url") or "").strip()
+        requires_verification = bool(source.get("requires_current_run_verification"))
+        lines.append(
+            f"[{index}] kind={kind or 'source'} "
+            f"verify={str(requires_verification).lower()} title={title[:180]}"
+        )
+        if url:
+            lines.append(f"URL: {url[:500]}")
+    lines.append("</source-candidates>")
+    return "\n".join(lines)
 
 
 def _conduct_topic(tool_call: dict, default: str = "") -> str:
