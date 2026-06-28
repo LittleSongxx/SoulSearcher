@@ -11,8 +11,12 @@ from common.config import settings
 
 
 class RunStatus(str, Enum):
+    queued = "queued"
     pending = "pending"
     running = "running"
+    paused = "paused"
+    waiting_for_input = "waiting_for_input"
+    resumed = "resumed"
     completed = "completed"
     failed = "failed"
     cancelled = "cancelled"
@@ -283,6 +287,41 @@ class RunManager:
             record.quality_summary = quality_summary
         if workspace is not None:
             record.workspace = workspace
+        self._runs[record.run_id] = record
+        self._by_thread[record.thread_id] = record.run_id
+        self._init_db()
+        self._upsert_db(record)
+        return record
+
+    def update(
+        self,
+        run_id_or_thread_id: str,
+        *,
+        status: RunStatus | None = None,
+        error: str | None = None,
+        token_summary: dict[str, Any] | None = None,
+        quality_summary: dict[str, Any] | None = None,
+        workspace: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> RunRecord | None:
+        record = self.get(run_id_or_thread_id)
+        if record is None:
+            return None
+        if status is not None:
+            record.status = status
+        if error is not None:
+            record.error = error
+        if token_summary is not None:
+            record.token_summary = token_summary
+        if quality_summary is not None:
+            record.quality_summary = quality_summary
+        if workspace is not None:
+            record.workspace = workspace
+        if metadata is not None:
+            merged = dict(record.metadata or {})
+            merged.update(metadata)
+            record.metadata = merged
+        record.updated_at = datetime.now(UTC).isoformat()
         self._runs[record.run_id] = record
         self._by_thread[record.thread_id] = record.run_id
         self._init_db()

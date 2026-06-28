@@ -31,8 +31,11 @@ from agent.core.prompts import (
 from agent.core.state import AgentState
 from agent.runtime.context import get_viewed_images
 from agent.workflows.evidence_ledger import (
+    build_citation_table,
     build_evidence_ledger as build_structured_evidence_ledger,
     evidence_passages as structured_evidence_passages,
+    evaluate_citation_gate,
+    format_citation_table_for_prompt,
 )
 from agent.workflows.research_todo import (
     append_gap_todos,
@@ -729,9 +732,13 @@ async def final_report_generation(
         curated_sources=curated_sources,
         notes=notes,
     )
+    citation_table = build_citation_table(preliminary_evidence)
+    citation_table_prompt = format_citation_table_for_prompt(citation_table)
     if preliminary_evidence:
         pre_quality_artifacts["evidence_items"] = preliminary_evidence
         pre_quality_artifacts["passages"] = _evidence_passages(preliminary_evidence)
+    if citation_table:
+        pre_quality_artifacts["citation_table"] = citation_table
     if isinstance(state.get("source_routing"), dict) and state.get("source_routing"):
         pre_quality_artifacts["source_routing"] = dict(state.get("source_routing") or {})
     quality_state = dict(state)
@@ -750,6 +757,7 @@ async def final_report_generation(
                     research_brief=research_brief,
                     messages=message_text,
                     findings=findings_truncated,
+                    citation_table=citation_table_prompt,
                     date=current_date,
                     skill_writing_context=skill_writing_context,
                 )
@@ -758,6 +766,7 @@ async def final_report_generation(
                     research_brief=research_brief,
                     messages=message_text,
                     findings=findings_truncated,
+                    citation_table=citation_table_prompt,
                     date=current_date,
                     skill_writing_context=skill_writing_context,
                 )
@@ -854,6 +863,52 @@ async def final_report_generation(
                     logger.warning(f"[Report] Level 3 deep evaluation failed: {e}")
 
             quality_gates = list(getattr(quality_result, "gates", []) or []) if quality_result else []
+            strict_citations = (
+                research_config.deep_research_strict_citations
+                and not research_config.legacy_citation_mode
+            )
+            if strict_citations:
+                citation_gate = evaluate_citation_gate(
+                    _strip_markup_for_evaluation(final_content),
+                    sources=citation_table or preliminary_evidence,
+                    evidence_items=preliminary_evidence,
+                    passages=_evidence_passages(preliminary_evidence),
+                    require_evidence=True,
+                    require_citations=True,
+                )
+                quality_gates.append(
+                    {
+                        "name": "strict_current_run_citation_gate",
+                        "level": 1,
+                        "passed": bool(citation_gate.get("passed")),
+                        "score": float(citation_gate.get("score", 0.0) or 0.0),
+                        "verdict": citation_gate.get("verdict", "incomplete"),
+                        "threshold": 1.0,
+                        "details": citation_gate,
+                    }
+                )
+                if not citation_gate.get("passed"):
+                    if quality_result is not None:
+                        quality_result.passed = False
+                        quality_result.verdict = "incomplete"
+                        quality_result.score = min(
+                            float(getattr(quality_result, "score", 0.0) or 0.0),
+                            0.49,
+                        )
+                        quality_result.issues.extend(citation_gate.get("issues", []) or [])
+                        quality_result.suggestions.extend(citation_gate.get("suggestions", []) or [])
+                    else:
+                        from agent.workflows.quality_check import QualityCheckResult
+
+                        quality_result = QualityCheckResult(
+                            passed=False,
+                            score=0.0,
+                            verdict="incomplete",
+                            issues=list(citation_gate.get("issues", []) or []),
+                            suggestions=list(citation_gate.get("suggestions", []) or []),
+                            gates=[],
+                            metadata={},
+                        )
             if l3_result is not None:
                 quality_gates.append(
                     _eval_result_to_gate("level3_deep_evaluation", 3, l3_result)

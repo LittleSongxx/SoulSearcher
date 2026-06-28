@@ -12,7 +12,7 @@ Key integrations from the unified design:
 - gpt-researcher: structured reflection with actionable data
 - Unified design: SourceCurate integration + enhanced think_tool
 
-Phase 2: ConductResearch.very_thorough for breadth×depth recursion (integrated).
+Phase 2: ConductResearch exhaustive effort for breadth×depth recursion (integrated).
 """
 
 from __future__ import annotations
@@ -122,6 +122,18 @@ async def supervisor(
         max_concurrent_research_units=research_config.max_concurrent_research_units,
         max_researcher_iterations=research_config.max_researcher_iterations,
     )
+    system_prompt += (
+        "\n\n<Research Effort Guidance>\n"
+        "- quick: narrow fact-check or one source family.\n"
+        "- normal: default multi-source synthesis.\n"
+        "- thorough: complex comparison or multiple evidence families.\n"
+        "- exhaustive: rare, high-stakes, broad, or deeply multi-dimensional work.\n"
+        "Prefer the ConductResearch research_effort field. Legacy thoroughness "
+        "values are accepted but should not be used for new calls. Use exhaustive "
+        "only when the overall task is deep and the classifier estimated high "
+        "depth/breadth.\n"
+        "</Research Effort Guidance>"
+    )
     research_brief = state.get("research_brief", "")
     context_messages: list = [
         SystemMessage(content=system_prompt),
@@ -197,7 +209,7 @@ async def supervisor_tools(
     Handles five types of supervisor tool calls:
     1. ThinkTool → Record structured reflection, continue loop
     2. ConductResearch → Spawn parallel researcher subgraphs
-    3. ConductResearch (very_thorough) → Breadth × depth recursive research
+    3. ConductResearch (exhaustive effort) → Breadth × depth recursive research
     4. SourceCurate → Rank and filter collected sources
     5. ResearchComplete → End supervisor loop, proceed to report
 
@@ -217,37 +229,15 @@ async def supervisor_tools(
         for tc in (most_recent_message.tool_calls or [])
     )
 
-    if exceeded_iterations or no_tool_calls or research_complete_called:
+    if exceeded_iterations or no_tool_calls:
         reason = (
             "max_iterations" if exceeded_iterations else
-            "research_complete" if research_complete_called else
             "no_tool_calls"
         )
         logger.info(f"[SupervisorTools] Ending supervisor loop ({reason})")
         update = {
             "notes": _extract_notes_from_messages(supervisor_messages),
         }
-        if research_complete_called:
-            current_todos = list(state.get("research_todos", []) or [])
-            previous_todos = list(current_todos)
-            for tc in most_recent_message.tool_calls or []:
-                if tc["name"] != "ThinkTool":
-                    continue
-                gaps = tc.get("args", {}).get("gaps_identified", [])
-                current_todos = append_gap_todos(
-                    current_todos,
-                    gaps if isinstance(gaps, list) else [],
-                )
-            if current_todos:
-                thread_id = str(
-                    config.get("configurable", {}).get("thread_id", "default")
-                )
-                await emit_todo_updates(thread_id, current_todos, previous_todos)
-                update["research_todos"] = {
-                    "type": "override",
-                    "value": current_todos,
-                }
-                update["todo_summary"] = summarize_todos(current_todos)
         return Command(
             goto="__end__",
             update=update,
@@ -260,6 +250,58 @@ async def supervisor_tools(
     current_todos = list(state.get("research_todos", []) or [])
     previous_todos = list(current_todos)
     thread_id = str(config.get("configurable", {}).get("thread_id", "default"))
+
+    if research_complete_called:
+        guard = _research_completion_guard(state, supervisor_messages)
+        for tc in tool_calls or []:
+            if tc["name"] != "ThinkTool":
+                continue
+            gaps = tc.get("args", {}).get("gaps_identified", [])
+            current_todos = append_gap_todos(
+                current_todos,
+                gaps if isinstance(gaps, list) else [],
+            )
+
+        if guard["allowed"]:
+            logger.info("[SupervisorTools] Ending supervisor loop (research_complete)")
+            update = {
+                "notes": _extract_notes_from_messages(supervisor_messages),
+            }
+            if current_todos:
+                await emit_todo_updates(thread_id, current_todos, previous_todos)
+                update["research_todos"] = {
+                    "type": "override",
+                    "value": current_todos,
+                }
+                update["todo_summary"] = summarize_todos(current_todos)
+            return Command(
+                goto="__end__",
+                update=update,
+            )
+
+        current_todos = append_gap_todos(current_todos, guard["gaps"])
+        await emit_todo_updates(thread_id, current_todos, previous_todos)
+        all_tool_messages.extend(
+            _completion_guard_messages(tool_calls, guard)
+        )
+        update_payload["research_todos"] = {
+            "type": "override",
+            "value": current_todos,
+        }
+        update_payload["todo_summary"] = summarize_todos(current_todos)
+        update_payload["supervisor_messages"] = enforce_context_budget(
+            supervisor_messages + all_tool_messages,
+            max_messages=_SUPERVISOR_MAX_MESSAGES,
+            max_chars_per_tool_result=research_config.compression_small_threshold,
+        )
+        logger.info(
+            "[SupervisorTools] ResearchComplete blocked by deterministic guard: %s",
+            "; ".join(guard["reasons"]),
+        )
+        return Command(
+            goto="supervisor",
+            update=update_payload,
+        )
 
     # --- ThinkTool calls ---
     think_calls = [tc for tc in tool_calls if tc["name"] == "ThinkTool"]
@@ -318,20 +360,21 @@ async def supervisor_tools(
 
     # --- ConductResearch calls (parallel subgraph invocation) ---
     # Follows Anthropic's Orchestrator-Workers pattern and Claude Code's
-    # sub-agent thoroughness levels (quick / medium / very_thorough).
+    # sub-agent effort levels (quick / normal / thorough / exhaustive).
     # Each call spawns an independent Researcher subgraph with configurable
-    # depth×breadth derived from the thoroughness parameter.
+    # depth×breadth derived from the research_effort parameter.
     conduct_calls = [tc for tc in tool_calls if tc["name"] == "ConductResearch"]
     if conduct_calls:
-        max_concurrent = research_config.max_concurrent_research_units
+        requested_breadth = _safe_int(state.get("estimated_breadth"), default=2)
+        max_concurrent = max(
+            1,
+            min(
+                research_config.max_concurrent_research_units,
+                max(requested_breadth, 1),
+            ),
+        )
         allowed_calls = conduct_calls[:max_concurrent]
         overflow_calls = conduct_calls[max_concurrent:]
-
-        # Map thoroughness levels → depth × breadth
-        _THOROUGHNESS_MAP = {
-            "quick":          (1, 2),
-            "medium":         (1, 4),
-        }
 
         todo_ids_by_call: list[str | None] = []
         for tc in allowed_calls:
@@ -358,12 +401,7 @@ async def supervisor_tools(
                 "name": research_topic or "Research",
                 "status": "running",
                 "children": [
-                    {
-                        "id": f"task_{i}",
-                        "name": _conduct_topic(tc, f"Task {i + 1}"),
-                        "status": "running",
-                        "thoroughness": tc["args"].get("thoroughness", "medium"),
-                    }
+                    _research_tree_child(i, tc, state, research_config, status="running")
                     for i, tc in enumerate(allowed_calls)
                 ],
             }
@@ -372,26 +410,42 @@ async def supervisor_tools(
             pass
 
         # Execute researcher subgraphs in parallel (open_deep_research pattern)
-        research_inputs_and_configs = [
-            (
+        research_inputs_and_configs = []
+        for tc in allowed_calls:
+            budget = _research_budget_for_call(tc, state, research_config)
+            task_config = _isolated_researcher_config(config)
+            task_config.setdefault("configurable", {})
+            task_config["configurable"].update(
                 {
-                    "researcher_messages": [
-                        HumanMessage(
-                            content=(
-                                f"Research topic: {_conduct_topic(tc)}\n"
-                                f"Context: {tc['args'].get('context', '')}"
-                            )
-                        )
-                    ],
-                    "research_topic": _conduct_topic(tc),
-                    "thoroughness": tc["args"].get("thoroughness", "medium"),
-                    "tool_call_iterations": 0,
-                    "evidence_items": [],
-                },
-                _isolated_researcher_config(config),
+                    "max_react_tool_calls": budget["max_tool_calls"],
+                    "research_depth": budget["depth"],
+                    "research_breadth": budget["breadth"],
+                    "research_effort": budget["research_effort"],
+                    "thoroughness": budget["thoroughness"],
+                }
             )
-            for tc in allowed_calls
-        ]
+            research_inputs_and_configs.append(
+                (
+                    {
+                        "researcher_messages": [
+                            HumanMessage(
+                                content=(
+                                    f"Research topic: {_conduct_topic(tc)}\n"
+                                    f"Context: {tc['args'].get('context', '')}"
+                                )
+                            )
+                        ],
+                        "research_topic": _conduct_topic(tc),
+                        "research_effort": budget["research_effort"],
+                        "thoroughness": budget["thoroughness"],
+                        "research_depth": budget["depth"],
+                        "research_breadth": budget["breadth"],
+                        "tool_call_iterations": 0,
+                        "evidence_items": [],
+                    },
+                    task_config,
+                )
+            )
         research_tasks = [
             _get_researcher_subgraph().ainvoke(research_input, task_config)
             for research_input, task_config in research_inputs_and_configs
@@ -439,10 +493,14 @@ async def supervisor_tools(
                     "status": "completed",
                     "children": [
                         {
-                            "id": f"task_{i}",
-                            "name": _conduct_topic(tc, f"Task {i + 1}"),
+                            **_research_tree_child(
+                                i,
+                                tc,
+                                state,
+                                research_config,
+                                status="completed",
+                            ),
                             "status": "completed",
-                            "thoroughness": tc["args"].get("thoroughness", "medium"),
                             "result_preview": obs.get("compressed_research", "")[:200],
                         }
                         for i, (tc, obs) in enumerate(zip(allowed_calls, tool_results))
@@ -551,6 +609,106 @@ def _extract_notes_from_messages(messages: list) -> list[str]:
     return notes
 
 
+def _research_completion_guard(
+    state: SupervisorState,
+    supervisor_messages: list,
+) -> dict[str, object]:
+    """Deterministically decide whether ResearchComplete may end the loop.
+
+    The LLM still chooses when it thinks research is complete, but this guard
+    prevents the common early-exit failure mode where a completion signal arrives
+    before the current checklist has been covered or any current-run research
+    artifact exists.
+    """
+    todos = list(state.get("research_todos", []) or [])
+    summary = summarize_todos(todos)
+    reasons: list[str] = []
+    gaps: list[str] = []
+
+    pending_or_running = int(summary.get("pending", 0)) + int(summary.get("running", 0))
+    if pending_or_running:
+        open_titles = [
+            title for title in (summary.get("open_titles", []) or [])
+            if str(title).strip()
+        ]
+        reasons.append(
+            f"{pending_or_running} research task(s) are still pending or running"
+        )
+        gaps.extend(open_titles or ["Complete the remaining research tasks"])
+
+    message_notes = _extract_notes_from_messages(supervisor_messages)
+    state_notes = [
+        str(note).strip()
+        for note in (state.get("notes", []) or [])
+        if str(note).strip()
+    ]
+    raw_notes = [
+        str(note).strip()
+        for note in (state.get("raw_notes", []) or [])
+        if str(note).strip()
+    ]
+    evidence_items = [
+        item for item in (state.get("evidence_items", []) or [])
+        if isinstance(item, dict)
+    ]
+    has_research_artifact = bool(message_notes or state_notes or raw_notes or evidence_items)
+    if not has_research_artifact and str(state.get("complexity") or "standard") != "simple":
+        reasons.append("no current-run notes or evidence have been collected")
+        gaps.append("Collect source-backed evidence before completion")
+
+    if summary.get("total") and not int(summary.get("completed", 0)) and not has_research_artifact:
+        reasons.append("the research checklist has not produced any completed work")
+
+    deduped_gaps = list(dict.fromkeys(gaps))
+    return {
+        "allowed": not reasons,
+        "reasons": reasons,
+        "gaps": deduped_gaps[:5],
+        "todo_summary": summary,
+        "evidence_count": len(evidence_items),
+        "note_count": len(message_notes) + len(state_notes) + len(raw_notes),
+    }
+
+
+def _completion_guard_messages(
+    tool_calls: list[dict],
+    guard: dict[str, object],
+) -> list[ToolMessage]:
+    """Return protocol-complete ToolMessages when completion is blocked."""
+    reasons = guard.get("reasons", [])
+    gaps = guard.get("gaps", [])
+    reason_text = "; ".join(str(reason) for reason in reasons) or "not ready"
+    gap_text = "; ".join(str(gap) for gap in gaps) or "continue the next best research step"
+    messages: list[ToolMessage] = []
+    for tc in tool_calls or []:
+        name = str(tc.get("name") or "tool")
+        if name == "ResearchComplete":
+            content = (
+                "ResearchComplete blocked by deterministic completion guard.\n"
+                f"Reasons: {reason_text}\n"
+                f"Next gaps: {gap_text}\n"
+                "Continue research, resolve the open checklist items, then call "
+                "ResearchComplete again."
+            )
+        elif name == "ThinkTool":
+            content = (
+                "Reflection recorded, but completion is not yet allowed.\n"
+                f"Reasons: {reason_text}"
+            )
+        else:
+            content = (
+                f"{name} was not executed because the same supervisor turn also "
+                "requested ResearchComplete, and completion was blocked. "
+                "Call the needed research or curation tool again in the next turn."
+            )
+        messages.append(ToolMessage(
+            content=content,
+            name=name,
+            tool_call_id=str(tc.get("id") or name),
+        ))
+    return messages
+
+
 def _collect_source_urls(state: SupervisorState) -> list[dict]:
     """Collect source URLs from research notes for downstream curation.
 
@@ -579,6 +737,127 @@ def _conduct_topic(tool_call: dict, default: str = "") -> str:
     if not isinstance(args, dict):
         return default
     return str(args.get("topic") or args.get("research_topic") or default)
+
+
+def _research_tree_child(
+    index: int,
+    tool_call: dict,
+    state: SupervisorState,
+    research_config: ResearchConfiguration,
+    *,
+    status: str,
+) -> dict[str, object]:
+    budget = _research_budget_for_call(tool_call, state, research_config)
+    return {
+        "id": f"task_{index}",
+        "name": _conduct_topic(tool_call, f"Task {index + 1}"),
+        "status": status,
+        "research_effort": budget["research_effort"],
+        "thoroughness": budget["thoroughness"],
+        "budget": budget,
+    }
+
+
+def _safe_int(value: object, *, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+_EFFORT_ALIASES = {
+    "quick": "quick",
+    "medium": "normal",
+    "normal": "normal",
+    "deep": "thorough",
+    "thorough": "thorough",
+    "very_thorough": "exhaustive",
+    "very-thorough": "exhaustive",
+    "exhaustive": "exhaustive",
+}
+_EFFORT_ORDER = {
+    "quick": 0,
+    "normal": 1,
+    "thorough": 2,
+    "exhaustive": 3,
+}
+
+
+def _effort_to_legacy(effort: str) -> str:
+    return {
+        "quick": "quick",
+        "normal": "medium",
+        "thorough": "deep",
+        "exhaustive": "very_thorough",
+    }.get(effort, "medium")
+
+
+def _max_effort_for_state(state: SupervisorState) -> str:
+    complexity = str(state.get("complexity") or "standard").lower()
+    depth = _safe_int(state.get("estimated_depth"), default=1)
+    breadth = _safe_int(state.get("estimated_breadth"), default=2)
+    if complexity == "simple":
+        return "quick"
+    if complexity == "standard":
+        return "thorough" if depth >= 2 or breadth >= 4 else "normal"
+    if complexity == "deep":
+        return "exhaustive" if depth >= 3 or breadth >= 5 else "thorough"
+    return "normal"
+
+
+def _cap_effort(effort: str, state: SupervisorState) -> str:
+    max_effort = _max_effort_for_state(state)
+    if _EFFORT_ORDER.get(effort, 1) > _EFFORT_ORDER.get(max_effort, 1):
+        return max_effort
+    return effort
+
+
+def _conduct_effort(tool_call: dict, state: SupervisorState) -> str:
+    args = tool_call.get("args", {}) if isinstance(tool_call, dict) else {}
+    raw = ""
+    if isinstance(args, dict):
+        raw = args.get("research_effort") or args.get("effort") or args.get("thoroughness") or ""
+    value = str(raw or "").strip().lower()
+    if value in _EFFORT_ALIASES:
+        return _cap_effort(_EFFORT_ALIASES[value], state)
+    if str(state.get("complexity") or "").lower() == "deep":
+        depth = _safe_int(state.get("estimated_depth"), default=2)
+        breadth = _safe_int(state.get("estimated_breadth"), default=4)
+        if depth >= 3 or breadth >= 5:
+            return "exhaustive"
+        return "thorough"
+    if str(state.get("complexity") or "").lower() == "simple":
+        return "quick"
+    return "normal"
+
+
+def _conduct_thoroughness(tool_call: dict, state: SupervisorState) -> str:
+    """Deprecated compatibility wrapper returning legacy labels."""
+    return _effort_to_legacy(_conduct_effort(tool_call, state))
+
+
+def _research_budget_for_call(
+    tool_call: dict,
+    state: SupervisorState,
+    research_config: ResearchConfiguration,
+) -> dict[str, int | str]:
+    research_effort = _conduct_effort(tool_call, state)
+    estimated_depth = max(1, _safe_int(state.get("estimated_depth"), default=1))
+    estimated_breadth = max(1, _safe_int(state.get("estimated_breadth"), default=2))
+    effort_map = {
+        "quick": (1, 2, 4),
+        "normal": (1, 4, 8),
+        "thorough": (max(2, estimated_depth), max(4, estimated_breadth), 12),
+        "exhaustive": (max(3, estimated_depth), max(6, estimated_breadth), 16),
+    }
+    depth, breadth, max_tool_calls = effort_map.get(research_effort, effort_map["normal"])
+    return {
+        "research_effort": research_effort,
+        "thoroughness": _effort_to_legacy(research_effort),
+        "depth": min(depth, 4),
+        "breadth": min(breadth, research_config.max_concurrent_research_units),
+        "max_tool_calls": min(max_tool_calls, max(research_config.max_react_tool_calls, max_tool_calls)),
+    }
 
 
 def _isolated_researcher_config(config: RunnableConfig) -> RunnableConfig:

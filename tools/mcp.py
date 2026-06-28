@@ -2,7 +2,10 @@ import json
 import logging
 from typing import Any, Optional
 
-from langchain.tools import BaseTool
+try:
+    from langchain_core.tools import BaseTool
+except Exception:  # pragma: no cover
+    from langchain.tools import BaseTool  # type: ignore
 
 from common.config import settings
 from tools.core.mcp_clients import MCPClients

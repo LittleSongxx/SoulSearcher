@@ -1,6 +1,10 @@
-"""Unified Deep Research Graph — the "Strongest Version" integrating all three projects.
+"""Unified Deep Research StateGraph — bounded cyclic research workflow.
 
-Architecture (from unified design):
+This is not a pure DAG. Weaver uses a mostly linear top-level workflow with
+bounded supervisor/researcher loops and quality follow-up edges, all controlled
+by typed state, iteration budgets, and deterministic exit guards.
+
+Architecture:
 ┌─────────────────────────────────────────────────────────────────┐
 │ INPUT GATEWAY                                                   │
 │  clarify_with_user → write_research_brief → classify_complexity │
@@ -34,7 +38,7 @@ Key design principles:
 3. Adaptive routing by complexity (unified design innovation)
 4. Three-tier model routing (fast/smart/strategic)
 
-Graph nodes:
+Workflow nodes:
     clarify_with_user ──→ write_research_brief ──→ classify_complexity
                                 │                          │
                     [always next]              simple → direct_answer → END
@@ -86,7 +90,7 @@ def _route_after_report(state: dict, config: RunnableConfig) -> str:
 
 
 # =============================================================================
-# Graph Construction
+# StateGraph Construction
 # =============================================================================
 
 def create_research_graph(
@@ -94,10 +98,11 @@ def create_research_graph(
     interrupt_before: Optional[list[str]] = None,
     store=None,
 ):
-    """Create the unified deep research graph.
+    """Create the unified deep research StateGraph.
 
     This is the main entry point for the Weaver Deep Research Agent.
-    It compiles the full graph with subgraph nesting for clean boundaries.
+    It compiles the full bounded workflow with subgraph nesting for clean
+    boundaries. Cyclic edges are intentional and budgeted.
 
     Args:
         checkpointer: Optional LangGraph checkpointer for state persistence.
@@ -270,4 +275,3 @@ def create_checkpointer(database_url: str):
 
     logger.info("[Graph] PostgreSQL checkpointer initialized")
     return checkpointer
-

@@ -79,6 +79,7 @@ from agent.runtime.request_builder import (
     ResearchRuntimeRequest,
     build_research_runtime,
 )
+from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
 from common.cancellation import TaskStatus, cancellation_manager
 from common.config import settings
 from common.evidence_store import build_evidence_store_snapshot
@@ -982,9 +983,15 @@ _RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
     "deepsearch_claim_verifier_max_claims",
     "deepsearch_guardrail_denied_tools",
     "deepsearch_guardrail_allowed_domains",
+    "deepsearch_guardrail_denied_domains",
     "deepsearch_summary_trigger_tokens",
     "deepsearch_summary_trigger_messages",
     "deepsearch_summary_keep_recent",
+    "deep_research_strict_citations",
+    "source_routing_strict",
+    "tool_policy_strict",
+    "legacy_citation_mode",
+    "allow_sandbox_tools",
     # Per-task model overrides
     "supervisor_model",
     "planner_model",
@@ -1034,6 +1041,7 @@ _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
 
 _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
     "source_connectors",
+    "user_injected_sources",
     "mcp_results",
 }
 
@@ -1100,6 +1108,16 @@ class CancelRequest(BaseModel):
     """Request body for cancelling a running task."""
 
     reason: Optional[str] = "User requested cancellation"
+
+
+class BackgroundRunSubmitRequest(ResearchRequest):
+    thread_id: Optional[str] = None
+    webhook_url: Optional[str] = None
+
+
+class UserSourceInjectionRequest(BaseModel):
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    note: str = ""
 
 
 # Active streaming tasks managed via StreamRegistry (see common/stream_registry.py)
@@ -2821,6 +2839,58 @@ async def list_runs(request: Request):
     return {"runs": runs}
 
 
+@app.post("/api/runs/background")
+async def submit_background_run(request: Request, payload: BackgroundRunSubmitRequest):
+    """Submit a long-running research job without holding an SSE connection."""
+    if not settings.background_runs_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Background runs are disabled. Set BACKGROUND_RUNS_ENABLED=true.",
+        )
+    thread_id = (
+        (payload.thread_id or "").strip()
+        or f"bg_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    )
+    owner_id = (getattr(request.state, "principal_id", "") or payload.user_id or "").strip()
+    if owner_id:
+        set_thread_owner(thread_id, owner_id)
+    mode_info = _normalize_search_mode(payload.search_mode)
+    safe_deepsearch_config = _safe_research_deepsearch_config(
+        payload.deepsearch_config or {}
+    )
+    if payload.skill_ids:
+        safe_deepsearch_config["skill_ids"] = payload.skill_ids
+    if payload.webhook_url:
+        safe_deepsearch_config["webhook_url"] = payload.webhook_url
+    existing_record = run_manager.get(thread_id)
+    if existing_record and isinstance(existing_record.metadata, dict):
+        injected_sources = existing_record.metadata.get("user_injected_sources")
+        if isinstance(injected_sources, list) and injected_sources:
+            safe_deepsearch_config["user_injected_sources"] = injected_sources
+    images = [
+        image.model_dump()
+        for image in (payload.images or [])
+        if isinstance(image, ImagePayload)
+    ]
+    try:
+        status = await background_run_manager.submit(
+            BackgroundRunRequest(
+                input_text=payload.query,
+                thread_id=thread_id,
+                model=(payload.model or settings.primary_model).strip(),
+                search_mode=mode_info,
+                images=images,
+                user_id=payload.user_id,
+                deepsearch_config=safe_deepsearch_config,
+                research_brief=payload.research_brief or None,
+            ),
+            stream_factory=stream_agent_events,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"status": "queued", "run": status}
+
+
 class RunEvidenceSummary(BaseModel):
     sources_count: int
     unsupported_claims_count: int
@@ -3020,6 +3090,69 @@ async def get_run_metrics(thread_id: str, request: Request):
         **payload,
         evidence_summary=_build_run_evidence_summary(thread_id),
     )
+
+
+@app.get("/api/runs/{thread_id}/background")
+async def get_background_run(thread_id: str, request: Request):
+    _require_thread_owner(request, thread_id)
+    status = background_run_manager.status(thread_id)
+    if not run_manager.get(thread_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"run": status}
+
+
+@app.post("/api/runs/{thread_id}/background/cancel")
+async def cancel_background_run(
+    thread_id: str, request: Request, payload: CancelRequest | None = None
+):
+    _require_thread_owner(request, thread_id)
+    reason = payload.reason if payload else "User requested cancellation"
+    await background_run_manager.cancel(thread_id, reason or "User requested cancellation")
+    return {"status": "cancelled", "thread_id": thread_id}
+
+
+@app.post("/api/runs/{thread_id}/resume")
+async def mark_run_resumed(thread_id: str, request: Request):
+    _require_thread_owner(request, thread_id)
+    record = run_manager.update(thread_id, status=RunStatus.resumed)
+    if not record:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"status": "resumed", "run": record.to_dict()}
+
+
+@app.post("/api/runs/{thread_id}/sources")
+async def inject_user_sources(
+    thread_id: str,
+    request: Request,
+    payload: UserSourceInjectionRequest,
+):
+    _require_thread_owner(request, thread_id)
+    sources = [source for source in payload.sources if isinstance(source, dict)]
+    if not sources:
+        raise HTTPException(status_code=400, detail="sources must contain at least one item")
+    record = run_manager.get(thread_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Run not found")
+    metadata = dict(record.metadata or {})
+    injected = list(metadata.get("user_injected_sources") or [])
+    injected.extend(
+        {
+            **source,
+            "source": source.get("source") or "user",
+            "injected_at": datetime.now().isoformat(),
+            "note": payload.note,
+            "requires_current_run_verification": True,
+        }
+        for source in sources
+    )
+    run_manager.update(
+        thread_id,
+        metadata={
+            "user_injected_sources": injected,
+            "last_user_source_injection_at": datetime.now().isoformat(),
+        },
+    )
+    return {"status": "accepted", "thread_id": thread_id, "source_count": len(injected)}
 
 
 @app.get("/metrics")

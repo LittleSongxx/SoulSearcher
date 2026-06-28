@@ -46,6 +46,209 @@ def test_researcher_source_policy_drops_unknown_provider():
     assert policy["providers"] == ["web"]
 
 
+def test_source_routing_supports_academic_rag_and_hybrid_modes():
+    from agent.workflows.source_routing import (
+        build_source_routing_policy,
+        source_policy_from_routing,
+    )
+
+    academic = build_source_routing_policy(
+        config={"configurable": {"source_routing": {"mode": "academic_only"}}}
+    )
+    rag = build_source_routing_policy(
+        config={"configurable": {"source_routing": {"mode": "rag_only"}}}
+    )
+    hybrid = build_source_routing_policy(
+        config={"configurable": {"source_routing": {"mode": "hybrid_private_web"}}}
+    )
+
+    assert academic["schema_version"] == 2
+    assert academic["providers"] == ["academic"]
+    assert source_policy_from_routing(academic) == "academic"
+    assert rag["providers"] == ["rag"]
+    assert source_policy_from_routing(rag) == "rag"
+    assert set(hybrid["providers"]) == {"web", "academic", "rag", "mcp"}
+
+
+def test_researcher_source_policy_hard_excludes_web_for_academic_only():
+    from agent.workflows.researcher import _researcher_source_policy
+
+    policy = _researcher_source_policy({
+        "configurable": {
+            "source_routing": {
+                "mode": "academic_only",
+            }
+        }
+    })
+
+    assert policy["mode"] == "academic_only"
+    assert policy["include_web"] is False
+    assert policy["include_academic"] is True
+
+
+def test_strict_tool_policy_filters_disallowed_provider_tools():
+    from agent.workflows.researcher import _filter_tools_for_policy
+
+    class Tool:
+        def __init__(self, name):
+            self.name = name
+
+    tools = [Tool("tavily_search"), Tool("arxiv_search"), Tool("sandbox_execute_command")]
+    filtered = _filter_tools_for_policy(
+        tools,
+        {"configurable": {"tool_policy_strict": True}},
+        {
+            "include_web": False,
+            "include_academic": True,
+            "include_rag": False,
+            "include_mcp": False,
+            "budget_policy": {},
+        },
+    )
+
+    assert [tool.name for tool in filtered] == ["arxiv_search"]
+
+
+def test_source_routing_strict_false_keeps_tools_available():
+    from agent.workflows.researcher import _filter_tools_for_policy
+
+    class Tool:
+        def __init__(self, name):
+            self.name = name
+
+    tools = [Tool("tavily_search"), Tool("arxiv_search")]
+    filtered = _filter_tools_for_policy(
+        tools,
+        {"configurable": {"tool_policy_strict": True, "source_routing_strict": False}},
+        {
+            "include_web": False,
+            "include_academic": True,
+            "include_rag": False,
+            "include_mcp": False,
+            "budget_policy": {},
+        },
+    )
+
+    assert [tool.name for tool in filtered] == ["tavily_search", "arxiv_search"]
+
+
+def test_conduct_research_budget_uses_deep_complexity():
+    from agent.core.configuration import ResearchConfiguration
+    from agent.workflows.supervisor import _research_budget_for_call
+
+    budget = _research_budget_for_call(
+        {"args": {}},
+        {"complexity": "deep", "estimated_depth": 3, "estimated_breadth": 6},
+        ResearchConfiguration(max_concurrent_research_units=8, max_react_tool_calls=8),
+    )
+
+    assert budget["research_effort"] == "exhaustive"
+    assert budget["thoroughness"] == "very_thorough"
+    assert budget["depth"] >= 3
+    assert budget["breadth"] >= 6
+    assert budget["max_tool_calls"] >= 16
+
+
+def test_conduct_research_effort_maps_legacy_values():
+    from agent.core.configuration import ResearchConfiguration
+    from agent.workflows.supervisor import _research_budget_for_call
+
+    budget = _research_budget_for_call(
+        {"args": {"thoroughness": "deep"}},
+        {"complexity": "deep", "estimated_depth": 2, "estimated_breadth": 4},
+        ResearchConfiguration(max_concurrent_research_units=8, max_react_tool_calls=8),
+    )
+
+    assert budget["research_effort"] == "thorough"
+    assert budget["thoroughness"] == "deep"
+
+
+def test_conduct_research_effort_caps_overbudget_standard_task():
+    from agent.core.configuration import ResearchConfiguration
+    from agent.workflows.supervisor import _research_budget_for_call
+
+    budget = _research_budget_for_call(
+        {"args": {"research_effort": "exhaustive"}},
+        {"complexity": "standard", "estimated_depth": 1, "estimated_breadth": 2},
+        ResearchConfiguration(max_concurrent_research_units=8, max_react_tool_calls=8),
+    )
+
+    assert budget["research_effort"] == "normal"
+    assert budget["thoroughness"] == "medium"
+    assert budget["max_tool_calls"] == 8
+
+
+def test_conduct_research_effort_caps_simple_task_to_quick():
+    from agent.core.configuration import ResearchConfiguration
+    from agent.workflows.supervisor import _research_budget_for_call
+
+    budget = _research_budget_for_call(
+        {"args": {"research_effort": "exhaustive"}},
+        {"complexity": "simple", "estimated_depth": 3, "estimated_breadth": 6},
+        ResearchConfiguration(max_concurrent_research_units=8, max_react_tool_calls=8),
+    )
+
+    assert budget["research_effort"] == "quick"
+    assert budget["max_tool_calls"] == 4
+
+
+def test_supervisor_completion_guard_blocks_open_todos_without_evidence():
+    from agent.workflows.supervisor import _research_completion_guard
+
+    guard = _research_completion_guard(
+        {
+            "complexity": "standard",
+            "research_todos": [
+                {
+                    "id": "todo_1",
+                    "title": "Check primary sources",
+                    "status": "pending",
+                }
+            ],
+            "notes": [],
+            "raw_notes": [],
+            "evidence_items": [],
+        },
+        [],
+    )
+
+    assert guard["allowed"] is False
+    assert "Check primary sources" in guard["gaps"]
+    assert any("pending or running" in reason for reason in guard["reasons"])
+
+
+def test_supervisor_completion_guard_allows_completed_todos_with_evidence():
+    from agent.workflows.supervisor import _research_completion_guard
+
+    guard = _research_completion_guard(
+        {
+            "complexity": "deep",
+            "research_todos": [
+                {
+                    "id": "todo_1",
+                    "title": "Check primary sources",
+                    "status": "completed",
+                }
+            ],
+            "notes": [
+                "The primary source confirms the important finding."
+            ],
+            "raw_notes": [],
+            "evidence_items": [
+                {
+                    "url": "https://example.com/source",
+                    "content": "Primary source evidence.",
+                }
+            ],
+        },
+        [],
+    )
+
+    assert guard["allowed"] is True
+    assert guard["reasons"] == []
+    assert guard["evidence_count"] == 1
+
+
 def test_parallel_researcher_configs_isolate_viewed_images():
     from agent.workflows.supervisor import (
         _isolated_researcher_config,
@@ -180,6 +383,69 @@ def test_citation_gate_requires_traceable_binding():
 
     assert result["passed"] is True
     assert result["citation_bindings"][0]["traceable"] is True
+
+
+def test_citation_gate_strict_requires_current_run_citations():
+    from agent.workflows.evidence_ledger import evaluate_citation_gate
+
+    result = evaluate_citation_gate(
+        "Claim without citation.",
+        sources=[{
+            "url": "https://example.com/traceable",
+            "title": "Traceable",
+            "source_id": "src_traceable",
+            "snippet_hash": "abc123",
+        }],
+        evidence_items=[{
+            "url": "https://example.com/traceable",
+            "content": "traceable evidence passage",
+            "source_id": "src_traceable",
+            "snippet_hash": "abc123",
+        }],
+        passages=[{
+            "url": "https://example.com/traceable",
+            "text": "traceable evidence passage",
+            "source_id": "src_traceable",
+            "snippet_hash": "abc123",
+        }],
+        require_citations=True,
+    )
+
+    assert result["passed"] is False
+    assert "no numbered citations" in result["issues"][0]
+
+
+def test_citation_gate_rejects_memory_only_binding():
+    from agent.workflows.evidence_ledger import evaluate_citation_gate
+
+    result = evaluate_citation_gate(
+        "Claim with remembered source [1].",
+        sources=[{
+            "url": "https://example.com/memory",
+            "title": "Memory",
+            "source_id": "src_memory",
+            "snippet_hash": "abc123",
+            "source": "memory",
+            "requires_current_run_verification": True,
+        }],
+        evidence_items=[{
+            "url": "https://example.com/memory",
+            "content": "memory evidence passage",
+            "source_id": "src_memory",
+            "snippet_hash": "abc123",
+            "source": "memory",
+            "requires_current_run_verification": True,
+        }],
+        passages=[{
+            "url": "https://example.com/memory",
+            "text": "memory evidence passage",
+            "source_id": "src_memory",
+            "snippet_hash": "abc123",
+        }],
+    )
+
+    assert result["passed"] is False
+    assert any("memory-only" in issue for issue in result["issues"])
 
 
 def test_deep_read_rejects_path_traversal(tmp_path, monkeypatch):
@@ -438,6 +704,21 @@ def test_runtime_token_tracker_is_run_scoped():
 
     assert get_token_tracker(first).get_summary()["total_tokens"] == 3
     assert get_token_tracker(second).get_summary()["total_tokens"] == 0
+
+
+def test_run_status_accepts_background_states():
+    from agent.runtime.runs import RunRecord, RunStatus
+
+    record = RunRecord.from_dict(
+        {
+            "run_id": "r1",
+            "thread_id": "t1",
+            "status": "queued",
+        }
+    )
+
+    assert record.status is RunStatus.queued
+    assert record.to_dict()["status"] == "queued"
 
 
 def test_deferred_mcp_default_off_and_enabled_filters():

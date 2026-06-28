@@ -218,6 +218,28 @@ class TestBenchmarkPreflight:
     """Pure checks for benchmark input/rubric sanity helpers."""
 
     def test_deep_research_benchmark_preflight_accepts_curated_cases(self):
+        from scripts.benchmark_deep_research import validate_benchmark_cases
+
+        result = validate_benchmark_cases([
+            {
+                "id": "case_1",
+                "query": "Explain current citation guardrails in deep research systems.",
+                "level": 1,
+                "min_chars": 100,
+                "min_citations": 1,
+            }
+        ])
+
+        assert result["errors"] == []
+
+    def test_strict_deep_research_guard_preflight_passes(self):
+        from scripts.benchmark_deep_research import validate_strict_research_guards
+
+        result = validate_strict_research_guards()
+
+        assert result["errors"] == []
+
+    def test_deep_research_benchmark_preflight_accepts_full_suite(self):
         from scripts.benchmark_deep_research import (
             BENCHMARK_CASES,
             validate_benchmark_cases,

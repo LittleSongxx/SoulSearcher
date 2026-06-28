@@ -566,6 +566,7 @@ async def _get_researcher_tools(
     source_policy = _researcher_source_policy(config)
     include_web = source_policy["include_web"]
     include_academic = source_policy["include_academic"]
+    include_rag = source_policy["include_rag"]
     include_mcp = source_policy["include_mcp"]
 
     # === Skill Guide Reader (Progressive Loading Layer 3) ===
@@ -674,35 +675,52 @@ async def _get_researcher_tools(
         except ImportError:
             logger.debug("[Researcher] Academic search tools not available")
 
+    if include_rag:
+        try:
+            from tools.rag import rag_search  # type: ignore
+
+            tools.append(rag_search)
+            logger.debug("[Researcher] Loaded RAG search tool")
+        except Exception:
+            logger.debug("[Researcher] RAG search tool not available")
+
     # === Sandbox Tools (code execution, shell, files) ===
-    try:
-        from tools.crawl.deep_read_tool import deep_read
-        from tools.sandbox.sandbox_shell_tool import (
-            SandboxExecuteCommandTool,
-            SandboxCheckOutputTool,
-        )
-        from tools.sandbox.sandbox_files_tool import (
-            SandboxCreateFileTool,
-            SandboxReadFileTool,
-        )
-        from tools.code.code_executor import create_visualization, execute_python_code
+    if _allow_sandbox_tools(config, source_policy):
+        try:
+            from tools.crawl.deep_read_tool import deep_read
+            from tools.sandbox.sandbox_shell_tool import (
+                SandboxExecuteCommandTool,
+                SandboxCheckOutputTool,
+            )
+            from tools.sandbox.sandbox_files_tool import (
+                SandboxCreateFileTool,
+                SandboxReadFileTool,
+            )
+            from tools.code.code_executor import create_visualization, execute_python_code
 
-        sandbox_shell = SandboxExecuteCommandTool()
-        sandbox_check = SandboxCheckOutputTool()
-        sandbox_files_read = SandboxReadFileTool()
-        sandbox_files_create = SandboxCreateFileTool()
+            sandbox_shell = SandboxExecuteCommandTool()
+            sandbox_check = SandboxCheckOutputTool()
+            sandbox_files_read = SandboxReadFileTool()
+            sandbox_files_create = SandboxCreateFileTool()
 
-        tools.extend([
-            deep_read,
-            sandbox_shell, sandbox_check,
-            sandbox_files_read, sandbox_files_create,
-            execute_python_code, create_visualization,
-        ])
-        logger.debug("[Researcher] Loaded sandbox tools (shell, files, code)")
-    except ImportError as e:
-        logger.debug(f"[Researcher] Sandbox tools not available: {e}")
-    except Exception as e:
-        logger.warning(f"[Researcher] Failed to load sandbox tools: {e}")
+            tools.extend([
+                deep_read,
+                sandbox_shell, sandbox_check,
+                sandbox_files_read, sandbox_files_create,
+                execute_python_code, create_visualization,
+            ])
+            logger.debug("[Researcher] Loaded sandbox tools (shell, files, code)")
+        except ImportError as e:
+            logger.debug(f"[Researcher] Sandbox tools not available: {e}")
+        except Exception as e:
+            logger.warning(f"[Researcher] Failed to load sandbox tools: {e}")
+    else:
+        try:
+            from tools.crawl.deep_read_tool import deep_read
+
+            tools.append(deep_read)
+        except Exception:
+            pass
 
     # Load MCP tools if enabled by config or selected source routing.
     if research_config.mcp_enabled or include_mcp:
@@ -770,7 +788,7 @@ async def _get_researcher_tools(
         except Exception as e:
             logger.debug("[Researcher] Skill tool whitelist skipped: %s", e)
 
-    return _dedupe_tools(tools)
+    return _filter_tools_for_policy(_dedupe_tools(tools), config, source_policy)
 
 
 def _tool_name(tool: Any) -> str:
@@ -796,6 +814,101 @@ def _dedupe_tools(tools: list) -> list:
     return list(deduped.values())
 
 
+_CONTROL_TOOL_NAMES = {
+    "ThinkTool",
+    "ResearchComplete",
+    "read_skill_guide",
+    "deep_read",
+    "deep_read_cached_source",
+    "tool_search",
+}
+_WEB_TOOL_NAMES = {
+    "tavily_search",
+    "fallback_search",
+    "web_search",
+    "search",
+}
+_ACADEMIC_TOOL_NAMES = {
+    "arxiv_search",
+    "pubmed_search",
+    "semantic_scholar_search",
+}
+_RAG_TOOL_NAMES = {
+    "rag_search",
+    "retrieve_documents",
+    "document_search",
+}
+_SANDBOX_TOOL_PREFIXES = (
+    "sandbox_",
+    "execute_python_code",
+    "create_visualization",
+)
+
+
+def _allow_sandbox_tools(config: RunnableConfig, source_policy: dict[str, Any]) -> bool:
+    cfg = config.get("configurable") if isinstance(config, dict) else {}
+    cfg = cfg if isinstance(cfg, dict) else {}
+    strict = bool(cfg.get("tool_policy_strict", True))
+    if not strict:
+        return True
+    if cfg.get("allow_sandbox_tools") is not None:
+        return bool(cfg.get("allow_sandbox_tools"))
+    budget = source_policy.get("budget_policy") or {}
+    if isinstance(budget, dict) and budget.get("sandbox") is not None:
+        return bool(budget.get("sandbox"))
+    return bool(cfg.get("tool_approval") or cfg.get("human_review"))
+
+
+def _tool_matches_any(name: str, values: set[str]) -> bool:
+    key = name.strip().lower()
+    return key in {item.lower() for item in values}
+
+
+def _filter_tools_for_policy(
+    tools: list,
+    config: RunnableConfig,
+    source_policy: dict[str, Any],
+) -> list:
+    cfg = config.get("configurable") if isinstance(config, dict) else {}
+    cfg = cfg if isinstance(cfg, dict) else {}
+    if not bool(cfg.get("tool_policy_strict", True)):
+        return tools
+    if not bool(cfg.get("source_routing_strict", True)):
+        return tools
+
+    include_web = bool(source_policy.get("include_web"))
+    include_academic = bool(source_policy.get("include_academic"))
+    include_rag = bool(source_policy.get("include_rag"))
+    include_mcp = bool(source_policy.get("include_mcp"))
+    allow_sandbox = _allow_sandbox_tools(config, source_policy)
+    denied = {
+        item.strip().lower()
+        for item in str(cfg.get("deepsearch_guardrail_denied_tools") or "").split(",")
+        if item.strip()
+    }
+    output = []
+    for tool in tools:
+        name = _tool_name(tool)
+        key = name.lower()
+        if not name or key in denied:
+            continue
+        if name in _CONTROL_TOOL_NAMES:
+            output.append(tool)
+            continue
+        if getattr(tool, "is_mcp_tool", False) and not include_mcp:
+            continue
+        if any(key.startswith(prefix) for prefix in _SANDBOX_TOOL_PREFIXES) and not allow_sandbox:
+            continue
+        if _tool_matches_any(name, _WEB_TOOL_NAMES) and not include_web:
+            continue
+        if _tool_matches_any(name, _ACADEMIC_TOOL_NAMES) and not include_academic:
+            continue
+        if _tool_matches_any(name, _RAG_TOOL_NAMES) and not include_rag:
+            continue
+        output.append(tool)
+    return output
+
+
 def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
     cfg = config.get("configurable") or {}
     if not isinstance(cfg, dict):
@@ -813,7 +926,7 @@ def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
         if isinstance(routing.get("budget_policy"), dict)
         else {}
     )
-    allowed_providers = {"web", "academic", "mcp"}
+    allowed_providers = {"web", "academic", "mcp", "rag"}
     provider_set = {
         provider
         for provider in (
@@ -822,21 +935,45 @@ def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
         if provider in allowed_providers
     }
     if not provider_set:
-        if mode == "mcp_only":
+        if mode == "academic_only":
+            provider_set = {"academic"}
+        elif mode == "mcp_only":
             provider_set = {"mcp"}
+        elif mode == "rag_only":
+            provider_set = {"rag"}
+        elif mode in {"hybrid", "hybrid_private_web"}:
+            provider_set = {"web", "academic", "rag", "mcp"}
         else:
             provider_set = {"web"}
 
-    if mode not in {"web_only", "mcp_only"}:
+    if mode not in {
+        "web_only",
+        "academic_only",
+        "mcp_only",
+        "rag_only",
+        "hybrid",
+        "hybrid_private_web",
+    }:
         mode = "web_only"
 
     return {
         "mode": mode or "web_only",
         "providers": sorted(provider_set),
         "include_web": "web" in provider_set,
-        "include_academic": "academic" in provider_set or "web" in provider_set,
+        "include_academic": "academic" in provider_set,
+        "include_rag": "rag" in provider_set,
         "include_mcp": "mcp" in provider_set,
         "budget_policy": budget_policy,
+        "allowed_domains": list(
+            ((routing.get("access_policy") or {}).get("allowed_domains") or [])
+            if isinstance(routing.get("access_policy"), dict)
+            else []
+        ),
+        "denied_domains": list(
+            ((routing.get("access_policy") or {}).get("denied_domains") or [])
+            if isinstance(routing.get("access_policy"), dict)
+            else []
+        ),
     }
 
 
@@ -845,7 +982,7 @@ def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
     budget = source_policy.get("budget_policy") or {}
     budget_lines = []
     if isinstance(budget, dict):
-        for key in ("web", "academic", "mcp", "max_sources", "min_sources"):
+        for key in ("web", "academic", "mcp", "rag", "max_sources", "min_sources"):
             if key in budget:
                 budget_lines.append(f"- {key}: {budget[key]}")
     lines = [
@@ -856,6 +993,14 @@ def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
     if budget_lines:
         lines.append("- budgets:")
         lines.extend(f"  {line}" for line in budget_lines)
+    if source_policy.get("allowed_domains"):
+        lines.append(
+            "- allowed domains: " + ", ".join(source_policy.get("allowed_domains") or [])
+        )
+    if source_policy.get("denied_domains"):
+        lines.append(
+            "- denied domains: " + ", ".join(source_policy.get("denied_domains") or [])
+        )
     lines.append(
         "- Use only the available provider tools implied by this policy; if a "
         "provider returns no results, state the gap and continue with the next "

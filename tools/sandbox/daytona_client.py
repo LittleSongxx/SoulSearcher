@@ -12,7 +12,7 @@ import os
 import uuid
 
 import requests
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from agent.core.events import ToolEventType, get_emitter_sync
 from common.config import settings

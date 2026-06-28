@@ -21,6 +21,9 @@ Here are the findings from the research:
 {findings}
 </Findings>
 
+Use only this current-run evidence table for numbered citations:
+{citation_table}
+
 <Output Format>
 Generate a COMPLETE, STANDALONE HTML document fragment. The output will be
 wrapped in a proper HTML page by the platform — you ONLY need to output the
@@ -112,10 +115,13 @@ For each section, use <section> tags with proper <h2> headings.
 </Report Structure>
 
 <Citation Rules>
+- Use only citation numbers that appear in the Evidence Citation Table
+- Do not cite memory context, prior runs, uncached notes, or URLs that are not in the table
 - Assign each unique URL a citation number
 - Inline: <sup><a href="#src-N">[N]</a></sup>
 - Sources section: <li id="src-N"><a href="URL">Title</a></li>
 - Number sequentially: [1], [2], [3]...
+- If a claim is not supported by the table, omit it or mark it as a limitation
 - Citations are extremely important — users rely on them for verification
 </Citation Rules>
 

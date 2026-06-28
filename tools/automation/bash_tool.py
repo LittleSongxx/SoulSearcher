@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from agent.runtime.sandbox_policy import _DANGEROUS_COMMANDS, _PIPE_TO_SHELL_RE, assess_shell_command
 

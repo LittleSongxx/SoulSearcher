@@ -1,5 +1,5 @@
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from agent.core.llm_factory import create_chat_model
 from common.config import settings

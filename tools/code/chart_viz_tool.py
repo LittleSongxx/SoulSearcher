@@ -3,7 +3,7 @@ import io
 from typing import Any, Optional
 
 import matplotlib.pyplot as plt
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 
 @tool

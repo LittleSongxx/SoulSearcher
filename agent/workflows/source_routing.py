@@ -3,7 +3,15 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-_ALLOWED_SOURCE_PROVIDERS = {"web", "academic", "mcp"}
+_ALLOWED_SOURCE_PROVIDERS = {"web", "academic", "mcp", "rag"}
+_MODE_PROVIDERS = {
+    "web_only": ["web"],
+    "academic_only": ["academic"],
+    "mcp_only": ["mcp"],
+    "rag_only": ["rag"],
+    "hybrid": ["web", "academic", "rag", "mcp"],
+    "hybrid_private_web": ["web", "academic", "rag", "mcp"],
+}
 
 
 @dataclass
@@ -44,7 +52,7 @@ class ResearchSourceRoutingPolicy:
     citation_policy: str = "required"
     budget_policy: dict[str, Any] = field(default_factory=dict)
     mcp_governance: dict[str, Any] = field(default_factory=dict)
-    schema_version: int = 1
+    schema_version: int = 2
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -118,11 +126,7 @@ def build_source_routing_policy(
             or getattr(brief, "citation_policy", "required")
             or "required"
         ),
-        budget_policy=dict(
-            raw.get("budget_policy")
-            if isinstance(raw.get("budget_policy"), dict)
-            else {}
-        ),
+        budget_policy=_budget_policy(raw.get("budget_policy"), cfg, mode),
         mcp_governance=_mcp_governance(_configurable(config or {}), providers, access),
     ).to_dict()
 
@@ -131,24 +135,41 @@ def source_policy_from_routing(source_routing: dict[str, Any]) -> str:
     mode = str((source_routing or {}).get("mode") or "web_only").strip().lower()
     if mode == "web_only":
         return "web"
+    if mode == "academic_only":
+        return "academic"
     if mode == "mcp_only":
         return "mcp"
+    if mode == "rag_only":
+        return "rag"
+    if mode in {"hybrid", "hybrid_private_web"}:
+        return "hybrid"
     return "web"
 
 
 def _normalize_mode(value: Any) -> str:
     normalized = str(value or "").strip().lower().replace("-", "_")
-    if normalized in {"web", "web_only", "webonly"}:
+    if normalized in {"web", "web_only", "webonly", "public_web"}:
         return "web_only"
-    if normalized in {"mcp", "mcp_only"}:
+    if normalized in {"academic", "academic_only", "academiconly", "scholar"}:
+        return "academic_only"
+    if normalized in {"mcp", "mcp_only", "mcponly"}:
         return "mcp_only"
+    if normalized in {"rag", "rag_only", "ragonly", "private", "private_only"}:
+        return "rag_only"
+    if normalized in {"hybrid", "all", "mixed", "auto"}:
+        return "hybrid"
+    if normalized in {
+        "hybrid_private_web",
+        "hybrid_private",
+        "private_web",
+        "web_private",
+    }:
+        return "hybrid_private_web"
     return "web_only"
 
 
 def _providers_for_mode(mode: str) -> list[str]:
-    if mode == "mcp_only":
-        return ["mcp"]
-    return ["web"]
+    return list(_MODE_PROVIDERS.get(mode, ["web"]))
 
 
 def _configurable(config: dict[str, Any]) -> dict[str, Any]:
@@ -181,6 +202,25 @@ def _allowed_providers(providers: list[str]) -> list[str]:
             seen.add(key)
             output.append(key)
     return output
+
+
+def _budget_policy(value: Any, cfg: dict[str, Any], mode: str) -> dict[str, Any]:
+    policy = dict(value) if isinstance(value, dict) else {}
+    for key in (
+        "web",
+        "academic",
+        "mcp",
+        "rag",
+        "max_sources",
+        "min_sources",
+        "max_tool_calls",
+        "max_searches",
+    ):
+        cfg_key = f"source_budget_{key}"
+        if key not in policy and cfg.get(cfg_key) is not None:
+            policy[key] = cfg.get(cfg_key)
+    policy.setdefault("mode", mode)
+    return policy
 
 
 def _connectors_from(value: Any) -> list[ResearchConnector]:

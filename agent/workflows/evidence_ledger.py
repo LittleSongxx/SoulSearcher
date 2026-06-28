@@ -79,6 +79,13 @@ def normalize_evidence_item(
         metadata.setdefault("source_id", source_id)
     if item.get("source_index") is not None:
         metadata.setdefault("source_index", item.get("source_index"))
+    if item.get("requires_current_run_verification") is not None:
+        metadata.setdefault(
+            "requires_current_run_verification",
+            bool(item.get("requires_current_run_verification")),
+        )
+    if item.get("source"):
+        metadata.setdefault("source_kind", str(item.get("source") or ""))
 
     evidence_id = str(
         item.get("id")
@@ -289,6 +296,16 @@ def _normalize_source_candidate(
         "authority_score": item.get("authority_score"),
         "coverage_score": item.get("coverage_score"),
         "recency_score": item.get("recency_score"),
+        "requires_current_run_verification": bool(
+            item.get("requires_current_run_verification")
+            or metadata.get("requires_current_run_verification")
+        ),
+        "source_kind": str(
+            item.get("source_kind")
+            or metadata.get("source_kind")
+            or item.get("source")
+            or ""
+        ),
     }
 
 
@@ -370,9 +387,66 @@ def build_citation_bindings(
                     and binding.get("snippet_hash")
                     and matches
                 ),
+                "requires_current_run_verification": bool(
+                    binding.get("requires_current_run_verification")
+                ),
+                "source_kind": str(binding.get("source_kind") or ""),
             }
         )
     return candidates
+
+
+def build_citation_table(
+    evidence_items: list[dict[str, Any]] | None,
+    *,
+    max_items: int = 24,
+) -> list[dict[str, Any]]:
+    """Return stable evidence-first citation rows for report prompts."""
+    rows: list[dict[str, Any]] = []
+    bindings = build_citation_bindings(
+        sources=evidence_items,
+        evidence_items=evidence_items,
+        passages=evidence_passages(evidence_items or []),
+        max_items=max_items,
+    )
+    for index, binding in enumerate(bindings[:max_items], 1):
+        row = dict(binding)
+        row["citation_index"] = index
+        row["marker"] = index
+        row["verification_status"] = "traceable" if row.get("traceable") else "unverified"
+        if not row.get("traceable"):
+            row["traceability_reason"] = (
+                "missing source_id, canonical_url, snippet_hash, or matched passage"
+            )
+        else:
+            row["traceability_reason"] = "source binding matches current-run evidence"
+        rows.append(row)
+    return rows
+
+
+def format_citation_table_for_prompt(citation_table: list[dict[str, Any]]) -> str:
+    """Render citation rows compactly for the writer model."""
+    if not citation_table:
+        return (
+            "<Evidence Citation Table>\n"
+            "No current-run evidence is available. Do not invent citations.\n"
+            "</Evidence Citation Table>"
+        )
+    lines = ["<Evidence Citation Table>"]
+    for row in citation_table:
+        idx = row.get("citation_index") or row.get("marker") or row.get("source_index")
+        title = str(row.get("title") or row.get("url") or "Untitled source").strip()
+        url = str(row.get("canonical_url") or row.get("url") or "").strip()
+        text = re.sub(r"\s+", " ", str(row.get("text") or "")).strip()
+        status = str(row.get("verification_status") or "unverified")
+        lines.append(
+            f"[{idx}] {title}\n"
+            f"URL: {url}\n"
+            f"Status: {status}\n"
+            f"Evidence: {text[:700]}"
+        )
+    lines.append("</Evidence Citation Table>")
+    return "\n".join(lines)
 
 
 def citation_markers(report_text: str) -> set[int]:
@@ -393,6 +467,7 @@ def evaluate_citation_gate(
     evidence_items: list[dict[str, Any]] | None = None,
     passages: list[dict[str, Any]] | None = None,
     require_evidence: bool = True,
+    require_citations: bool = False,
 ) -> dict[str, Any]:
     """Return deterministic citation-gate status before/alongside LLM judges."""
     markers = sorted(citation_markers(report_text))
@@ -419,6 +494,11 @@ def evaluate_citation_gate(
         verdict = "incomplete"
         issues.append("Citations are present, but no source evidence passages were available.")
         suggestions.append("Persist source passages or evidence items before final evaluation.")
+    if require_citations and has_evidence and not markers:
+        passed = False
+        verdict = "incomplete"
+        issues.append("The report has current-run evidence but no numbered citations.")
+        suggestions.append("Add citations using only the current-run evidence table.")
     if missing_markers:
         passed = False
         verdict = "incomplete"
@@ -444,6 +524,18 @@ def evaluate_citation_gate(
             )
             suggestions.append(
                 "Ensure the cited source is normalized into the evidence ledger before finalizing the report."
+            )
+        if binding.get("requires_current_run_verification") or str(
+            binding.get("source_kind") or ""
+        ).lower() == "memory":
+            unresolved_markers.append(marker)
+            passed = False
+            verdict = "incomplete"
+            issues.append(
+                f"Citation marker [{marker}] points to memory-only source context that was not verified in this run."
+            )
+            suggestions.append(
+                "Re-fetch or verify the remembered source in the current run before citing it."
             )
         elif require_evidence and not binding.get("matched_passage_count"):
             unresolved_markers.append(marker)

@@ -24,7 +24,6 @@ from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from agent.core.llm_factory import create_chat_model
@@ -166,7 +165,7 @@ class _PresentationOutlineBaseTool(BaseTool):
             },
         )
 
-    def _get_llm(self) -> ChatOpenAI:
+    def _get_llm(self) -> Any:
         """Get LLM for outline generation."""
         model = settings.reasoning_model or settings.primary_model
         return create_chat_model(model, temperature=0.7)

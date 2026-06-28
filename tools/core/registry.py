@@ -30,12 +30,15 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Optional
 
-from langchain.tools import BaseTool
-
 try:  # LangChain 1.x canonical location
     from langchain_core.tools import BaseTool as CoreBaseTool  # type: ignore
 except Exception:  # pragma: no cover
     CoreBaseTool = None  # type: ignore[assignment]
+
+try:  # Older LangChain compatibility location
+    from langchain.tools import BaseTool  # type: ignore
+except Exception:  # pragma: no cover
+    BaseTool = CoreBaseTool  # type: ignore[assignment]
 
 from tools.core.base import WeaverTool
 

@@ -240,6 +240,25 @@ class ResearchConfiguration:
             getattr(app_settings, "evaluation_calibration_min_samples", 5)
         )
     )
+    deep_research_strict_citations: bool = field(
+        default_factory=lambda: bool(
+            getattr(app_settings, "deep_research_strict_citations", True)
+        )
+    )
+    source_routing_strict: bool = field(
+        default_factory=lambda: bool(getattr(app_settings, "source_routing_strict", True))
+    )
+    tool_policy_strict: bool = field(
+        default_factory=lambda: bool(getattr(app_settings, "tool_policy_strict", True))
+    )
+    background_runs_enabled: bool = field(
+        default_factory=lambda: bool(
+            getattr(app_settings, "background_runs_enabled", False)
+        )
+    )
+    legacy_citation_mode: bool = field(
+        default_factory=lambda: bool(getattr(app_settings, "legacy_citation_mode", False))
+    )
 
     # =========================================================================
     # Vision / Multimodal Configuration (deer-flow pattern)

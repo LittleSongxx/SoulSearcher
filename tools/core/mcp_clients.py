@@ -12,7 +12,10 @@ import asyncio
 import logging
 from typing import Any
 
-from langchain.tools import BaseTool
+try:
+    from langchain_core.tools import BaseTool
+except Exception:  # pragma: no cover
+    from langchain.tools import BaseTool  # type: ignore
 
 from agent.core.events import ToolEventType, get_emitter_sync
 

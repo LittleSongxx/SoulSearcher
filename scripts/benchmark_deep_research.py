@@ -404,6 +404,109 @@ def validate_rubric_definitions() -> dict[str, Any]:
     return {"errors": errors, "warnings": warnings}
 
 
+def validate_strict_research_guards() -> dict[str, Any]:
+    """Pure local checks for strict DeepResearch guardrails."""
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    try:
+        from agent.workflows.evidence_ledger import evaluate_citation_gate
+        citation_gate = evaluate_citation_gate(
+            "Unsupported but uncited claim.",
+            sources=[{
+                "url": "https://example.com/current",
+                "source_id": "src_current",
+                "snippet_hash": "abc123",
+                "title": "Current source",
+            }],
+            evidence_items=[{
+                "url": "https://example.com/current",
+                "source_id": "src_current",
+                "snippet_hash": "abc123",
+                "content": "Current-run evidence passage.",
+            }],
+            passages=[{
+                "url": "https://example.com/current",
+                "source_id": "src_current",
+                "snippet_hash": "abc123",
+                "text": "Current-run evidence passage.",
+            }],
+            require_citations=True,
+        )
+        if citation_gate.get("passed"):
+            errors.append("strict citation gate accepted an uncited evidence-backed report")
+
+        memory_gate = evaluate_citation_gate(
+            "Remembered claim [1].",
+            sources=[{
+                "url": "https://example.com/memory",
+                "source_id": "src_memory",
+                "snippet_hash": "abc123",
+                "source": "memory",
+                "requires_current_run_verification": True,
+            }],
+            evidence_items=[{
+                "url": "https://example.com/memory",
+                "source_id": "src_memory",
+                "snippet_hash": "abc123",
+                "source": "memory",
+                "content": "Remembered evidence.",
+                "requires_current_run_verification": True,
+            }],
+            passages=[{
+                "url": "https://example.com/memory",
+                "source_id": "src_memory",
+                "snippet_hash": "abc123",
+                "text": "Remembered evidence.",
+            }],
+        )
+        if memory_gate.get("passed"):
+            errors.append("strict citation gate accepted memory-only citation")
+    except Exception as exc:
+        errors.append(f"citation guard preflight failed: {exc}")
+
+    try:
+        from agent.workflows.source_routing import build_source_routing_policy
+        academic = build_source_routing_policy(
+            config={"configurable": {"source_routing": {"mode": "academic_only"}}}
+        )
+        hybrid = build_source_routing_policy(
+            config={"configurable": {"source_routing": {"mode": "hybrid_private_web"}}}
+        )
+        if academic.get("schema_version") != 2 or academic.get("providers") != ["academic"]:
+            errors.append("source routing academic_only did not normalize to v2 academic provider")
+        if set(hybrid.get("providers") or []) != {"web", "academic", "rag", "mcp"}:
+            errors.append("source routing hybrid_private_web did not include all expected providers")
+    except Exception as exc:
+        errors.append(f"source routing preflight failed: {exc}")
+
+    try:
+        from agent.workflows.researcher import _filter_tools_for_policy
+
+        class Tool:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        tools = [Tool("tavily_search"), Tool("arxiv_search")]
+        filtered = _filter_tools_for_policy(
+            tools,
+            {"configurable": {"tool_policy_strict": True}},
+            {
+                "include_web": False,
+                "include_academic": True,
+                "include_rag": False,
+                "include_mcp": False,
+                "budget_policy": {},
+            },
+        )
+        if [tool.name for tool in filtered] != ["arxiv_search"]:
+            errors.append("strict tool policy did not remove disallowed web tool")
+    except Exception as exc:
+        errors.append(f"tool policy preflight failed: {exc}")
+
+    return {"errors": errors, "warnings": warnings}
+
+
 def _load_rubric_definitions() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Load static rubric constants without requiring LLM runtime dependencies."""
     try:
@@ -776,9 +879,21 @@ def main():
     parser.add_argument("--output", default="", help="Output JSON path")
     parser.add_argument("--human-reference", default="", help="Optional JSON file containing human reference scores for calibration")
     parser.add_argument("--concurrent", type=int, default=2)
+    parser.add_argument(
+        "--preflight-strict",
+        action="store_true",
+        help="Run local strict citation/source/tool guardrail checks and exit",
+    )
     parser.add_argument("--url", default="http://localhost:8002",
                         help="Server URL for remote mode")
     args = parser.parse_args()
+
+    if args.preflight_strict:
+        result = validate_strict_research_guards()
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if result["errors"]:
+            raise SystemExit(1)
+        return
 
     cases = BENCHMARK_CASES[:args.max_cases] if args.max_cases else BENCHMARK_CASES
     logger.info(f"Running {len(cases)} benchmark cases in {args.mode} mode")

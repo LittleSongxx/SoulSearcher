@@ -77,11 +77,16 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
             if isinstance(safe_deepsearch_config.get("source_routing"), dict)
             else {}
         ),
-        initial_sources=(
-            safe_deepsearch_config.get("memory_source_candidates")
-            if isinstance(safe_deepsearch_config.get("memory_source_candidates"), list)
-            else []
-        ),
+        initial_sources=[
+            item
+            for key in ("memory_source_candidates", "user_injected_sources")
+            for item in (
+                safe_deepsearch_config.get(key)
+                if isinstance(safe_deepsearch_config.get(key), list)
+                else []
+            )
+            if isinstance(item, dict)
+        ],
         initial_deepsearch_artifacts={
             "memory_retrieval": safe_deepsearch_config.get("memory_retrieval", {})
         }

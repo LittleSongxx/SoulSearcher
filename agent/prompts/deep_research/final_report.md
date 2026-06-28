@@ -21,6 +21,9 @@ Here are the findings from the research:
 {findings}
 </Findings>
 
+Use only this current-run evidence table for numbered citations:
+{citation_table}
+
 Create a detailed answer that:
 1. Is well-organized with proper headings (# for title, ## for sections, ### for subsections)
 2. Includes specific facts and insights from the research
@@ -43,9 +46,12 @@ For each section:
 - Use bullet points when appropriate, but default to paragraph form
 
 <Citation Rules>
+- Use only citation numbers that appear in the Evidence Citation Table
+- Do not cite memory context, prior runs, uncached notes, or URLs that are not in the table
 - Assign each unique URL a single citation number in your text
 - End with ### Sources listing each source with corresponding numbers
 - Number sources sequentially: [1], [2], [3]...
 - Format: [1] Source Title: URL
+- If a claim is not supported by the table, either omit it or mark it as a limitation
 - Citations are extremely important - users rely on them for verification
 </Citation Rules>

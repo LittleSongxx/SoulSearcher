@@ -14,7 +14,7 @@ Why this exists:
 import logging
 from typing import Any, Optional
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 from common.config import settings
 from tools.search.providers import (

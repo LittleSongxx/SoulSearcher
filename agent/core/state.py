@@ -79,12 +79,15 @@ class ConductResearch(BaseModel):
     Each call spawns an independent researcher that searches, reads, and
     synthesises findings via the ReAct loop with mixed compression.
 
-    Thoroughness levels:
-      - "quick"  — surface scan, fewer search iterations
-      - "medium" — balanced investigation (default)
+    Research effort levels:
+      - "quick"       — fast verification for narrow facts
+      - "normal"      — default multi-source synthesis
+      - "thorough"    — deeper comparison or evidence-heavy investigation
+      - "exhaustive"  — rare, highest-budget coverage for deep tasks
 
-    Choose "quick" for simple fact-checks and "medium" for typical
-    research questions requiring multi-source synthesis.
+    Legacy values are still accepted by the runtime:
+    "medium" → "normal", "deep" → "thorough",
+    "very_thorough" → "exhaustive".
     """
     topic: str = Field(
         description="The specific topic to research. Be precise — one well-scoped "
@@ -96,9 +99,24 @@ class ConductResearch(BaseModel):
         description="Brief context to help the researcher: what is already known, "
                     "what specific angles matter, or what type of sources to prefer."
     )
-    thoroughness: Literal["quick", "medium"] = Field(
-        default="medium",
-        description="How deeply to research. See the tool description for details."
+    research_effort: Literal["quick", "normal", "thorough", "exhaustive"] = Field(
+        default="normal",
+        description="How much budget to spend on this sub-research task."
+    )
+    thoroughness: Literal[
+        "quick",
+        "medium",
+        "deep",
+        "very_thorough",
+        "normal",
+        "thorough",
+        "exhaustive",
+    ] | None = Field(
+        default=None,
+        description=(
+            "Deprecated alias for research_effort. Prefer research_effort. "
+            "Accepted for backward compatibility."
+        )
     )
 
 
@@ -253,15 +271,19 @@ class ResearcherState(TypedDict):
     It uses search tools to gather information, reflects via think_tool,
     and produces compressed research output.
 
-    ``thoroughness`` follows Claude Code's sub-agent model:
-    - "quick" → surface scan
-    - "medium" → balanced investigation (default)
-    - "very_thorough" → recursive depth×breadth research
+    ``research_effort`` controls the sub-agent budget:
+    - "quick" → fast verification
+    - "normal" → balanced investigation (default)
+    - "thorough" → broader multi-source investigation
+    - "exhaustive" → highest-budget research for deep tasks
     """
     researcher_messages: Annotated[list[MessageLikeRepresentation], operator.add]
     tool_call_iterations: int
     research_topic: str
-    thoroughness: str  # "quick" | "medium" | "very_thorough"
+    research_effort: str  # "quick" | "normal" | "thorough" | "exhaustive"
+    thoroughness: str  # Deprecated alias retained for state compatibility.
+    research_depth: int
+    research_breadth: int
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer]
     evidence_items: Annotated[list[dict[str, Any]], override_reducer]

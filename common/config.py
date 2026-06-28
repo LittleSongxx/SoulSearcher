@@ -223,6 +223,21 @@ class Settings(BaseSettings):
     evaluation_html_quality_check: bool = True
     evaluation_calibration_min_agreement: float = Field(default=0.7, ge=0.0, le=1.0)
     evaluation_calibration_min_samples: int = Field(default=5, ge=1)
+    deep_research_strict_citations: bool = Field(
+        default=True, validation_alias="DEEP_RESEARCH_STRICT_CITATIONS"
+    )
+    source_routing_strict: bool = Field(
+        default=True, validation_alias="SOURCE_ROUTING_STRICT"
+    )
+    tool_policy_strict: bool = Field(
+        default=True, validation_alias="TOOL_POLICY_STRICT"
+    )
+    background_runs_enabled: bool = Field(
+        default=False, validation_alias="BACKGROUND_RUNS_ENABLED"
+    )
+    legacy_citation_mode: bool = Field(
+        default=False, validation_alias="LEGACY_CITATION_MODE"
+    )
 
     # Evidence/source cache
     source_cache_max_chars: int = Field(
@@ -407,6 +422,7 @@ class Settings(BaseSettings):
     deepsearch_summary_keep_recent: int = 3
     deepsearch_guardrail_denied_tools: str = ""
     deepsearch_guardrail_allowed_domains: str = ""
+    deepsearch_guardrail_denied_domains: str = ""
     # Research Fetcher / Reader Settings
     reader_fallback_mode: str = "both"
     reader_public_base: str = "https://r.jina.ai"
