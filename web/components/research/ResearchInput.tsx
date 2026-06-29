@@ -53,7 +53,7 @@ export function ResearchInput({
     <div className="mx-auto w-full max-w-5xl px-4 pb-6">
       <div className="mb-3 flex flex-col gap-3 px-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Weaver Chat</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">SoulSearcher Chat</div>
           <div className="mt-1 text-xs text-muted-foreground">
             默认普通对话；按需开启联网搜索或深度研究。
           </div>

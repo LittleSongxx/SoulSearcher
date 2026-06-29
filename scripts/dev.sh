@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-echo "🚀 Starting Weaver App in development mode..."
+echo "🚀 Starting SoulSearcher App in development mode..."
 
 # Check if .env exists
 if [ ! -f .env ]; then
@@ -55,7 +55,7 @@ fi
 
 # Hot reload is opt-in to avoid watchfiles hitting OS file limits due to
 # `web/node_modules` (a very common crash in this repo).
-RELOAD_RAW="${WEAVER_RELOAD:-}"
+RELOAD_RAW="${SOULSEARCHER_RELOAD:-}"
 RELOAD_ENABLED="0"
 case "$(echo "${RELOAD_RAW}" | tr '[:upper:]' '[:lower:]')" in
   1|true|yes|y|on) RELOAD_ENABLED="1" ;;

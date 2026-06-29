@@ -296,9 +296,9 @@ export function MetricsDashboard() {
         return match ? parseFloat(match[1]) : 0
       }
       setGauges({
-        sse_connections: parseLine('weaver_sse_active_connections'),
-        ws_connections: parseLine('weaver_ws_active_connections'),
-        http_inprogress: parseLine('weaver_http_inprogress'),
+        sse_connections: parseLine('soulsearcher_sse_active_connections'),
+        ws_connections: parseLine('soulsearcher_ws_active_connections'),
+        http_inprogress: parseLine('soulsearcher_http_inprogress'),
       })
     } catch {
       // Prometheus may be disabled

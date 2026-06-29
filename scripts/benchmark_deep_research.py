@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deep Research Benchmark Runner — Curated internal test suite.
 
-Evaluates Weaver's deep research pipeline against a set of curated test questions
+Evaluates SoulSearcher's deep research pipeline against a set of curated test questions
 spanning three complexity levels.  Runs via the SSE endpoint (remote) or
 in-process (asgi).  Produces a JSON report with quality metrics.
 
@@ -570,7 +570,7 @@ async def run_remote(
     model: str = "",
     timeout: float = 600.0,
 ) -> CaseResult:
-    """Run a benchmark case against a remote Weaver server."""
+    """Run a benchmark case against a remote SoulSearcher server."""
     import httpx
 
     r = CaseResult(case_id=case["id"], query=case["query"], level=case["level"])

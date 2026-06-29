@@ -1,8 +1,8 @@
-# AGENTS.md — AI Agent Guidance for Weaver
+# AGENTS.md — AI Agent Guidance for SoulSearcher
 
 ## Project Overview
 
-Weaver is a LangGraph-based AI deep research agent platform. It decomposes complex research
+SoulSearcher is a LangGraph-based AI deep research agent platform. It decomposes complex research
 tasks into a multi-stage graph pipeline: clarify → plan → supervisor → N parallel researchers
 → report. Every stage uses typed State for explicit data flow and structured Pydantic outputs
 for reliable LLM reasoning.
@@ -190,13 +190,13 @@ common/config.py    (zero internal imports — foundation layer)
 ## Development Commands
 
 ```bash
-# Start Weaver
-./start_weaver.sh
+# Start SoulSearcher
+./start_soulsearcher.sh
 
 # Backend only
 python main.py
 # or with hot reload
-DEBUG=true WEAVER_RELOAD=1 python main.py
+DEBUG=true SOULSEARCHER_RELOAD=1 python main.py
 
 # Run tests
 PYTHONPATH=. python -m pytest tests/ -v

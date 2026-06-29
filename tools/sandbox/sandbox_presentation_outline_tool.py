@@ -7,7 +7,7 @@ This module uses LLM to generate structured presentation outlines:
 - Support multiple presentation styles (business, educational, technical)
 - Export outline to JSON or directly create presentation
 
-Similar to Manus's sb_presentation_outline_tool.py but adapted for Weaver.
+Similar to Manus's sb_presentation_outline_tool.py but adapted for SoulSearcher.
 
 Usage:
     from tools.sandbox.sandbox_presentation_outline_tool import build_presentation_outline_tools

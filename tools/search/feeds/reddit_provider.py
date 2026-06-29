@@ -36,7 +36,7 @@ class RedditProvider(SearchProvider):
 
                 client_id = getattr(settings, "reddit_client_id", "")
                 client_secret = getattr(settings, "reddit_client_secret", "")
-                user_agent = getattr(settings, "reddit_user_agent", "Weaver/1.0")
+                user_agent = getattr(settings, "reddit_user_agent", "SoulSearcher/1.0")
 
                 if client_id and client_secret:
                     self._reddit = praw.Reddit(

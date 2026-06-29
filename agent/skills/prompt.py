@@ -206,7 +206,7 @@ def build_skill_context(
     )
 
     skills_base = os.environ.get(
-        "WEAVER_SKILLS_PATH",
+        "SOULSEARCHER_SKILLS_PATH",
         os.path.join(os.path.dirname(__file__), "..", "..", "skills", "public"),
     )
     skills_base = os.path.abspath(skills_base)

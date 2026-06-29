@@ -2,7 +2,7 @@
 """Structured claim extraction for academic-paper-review.
 
 Parses a paper's text content (from uploaded PDF or fetched HTML) and extracts
-structured, verifiable claims. Outputs JSON that can be fed into Weaver's
+structured, verifiable claims. Outputs JSON that can be fed into SoulSearcher's
 claim_verifier and fact_cards workflows for evidence-backed verification.
 
 Each extracted claim includes:

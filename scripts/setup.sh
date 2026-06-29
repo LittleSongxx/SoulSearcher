@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# Weaver App Setup Script
+# SoulSearcher App Setup Script
 
 set -euo pipefail
 
-echo "🚀 Setting up Weaver App..."
+echo "🚀 Setting up SoulSearcher App..."
 
 # Check prerequisites
 echo "📋 Checking prerequisites..."

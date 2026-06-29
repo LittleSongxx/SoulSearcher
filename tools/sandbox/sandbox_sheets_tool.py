@@ -9,7 +9,7 @@ This module provides spreadsheet generation capabilities in an E2B sandbox:
 - Add formulas
 - Multiple sheet support
 
-Similar to Manus's sb_sheets_tool.py but adapted for Weaver's E2B integration.
+Similar to Manus's sb_sheets_tool.py but adapted for SoulSearcher's E2B integration.
 
 Usage:
     from tools.sandbox.sandbox_sheets_tool import build_sandbox_sheets_tools

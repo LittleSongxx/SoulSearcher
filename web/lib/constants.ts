@@ -1,7 +1,7 @@
 export const STORAGE_KEYS = {
-  HISTORY: 'weaver-history',
-  ARTIFACTS: 'weaver-artifacts',
-  MODEL: 'weaver-model',
+  HISTORY: 'soulsearcher-history',
+  ARTIFACTS: 'soulsearcher-artifacts',
+  MODEL: 'soulsearcher-model',
 }
 
 export const SEARCH_MODES = {

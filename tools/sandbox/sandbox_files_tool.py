@@ -7,7 +7,7 @@ This module provides file system operations in an E2B sandbox:
 - Upload and download files
 - String replacement and file editing
 
-Similar to Manus's sb_files_tool.py but adapted for Weaver's E2B integration.
+Similar to Manus's sb_files_tool.py but adapted for SoulSearcher's E2B integration.
 
 Usage:
     from tools.sandbox.sandbox_files_tool import build_sandbox_files_tools

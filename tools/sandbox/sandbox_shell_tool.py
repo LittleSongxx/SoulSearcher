@@ -7,7 +7,7 @@ This module provides shell command execution in an E2B sandbox:
 - Process monitoring and control
 - Command output retrieval
 
-Similar to Manus's sb_shell_tool.py but adapted for Weaver's E2B integration.
+Similar to Manus's sb_shell_tool.py but adapted for SoulSearcher's E2B integration.
 
 Usage:
     from tools.sandbox.sandbox_shell_tool import build_sandbox_shell_tools

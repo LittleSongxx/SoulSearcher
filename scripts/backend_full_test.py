@@ -10,7 +10,7 @@ This is intended for local/dev verification with a filled `.env`.
 Usage:
     python scripts/backend_full_test.py
     python scripts/backend_full_test.py --no-ws
-    python scripts/backend_full_test.py --timeout 90 --out /tmp/weaver-backend-report.json
+    python scripts/backend_full_test.py --timeout 90 --out /tmp/soulsearcher-backend-report.json
 """
 
 from __future__ import annotations

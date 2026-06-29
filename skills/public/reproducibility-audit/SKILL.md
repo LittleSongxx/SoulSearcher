@@ -9,9 +9,9 @@ tags: [academic, verification, sandbox]
 
 ## Overview
 
-This skill performs a structured, automated reproducibility assessment of academic papers. It leverages Weaver's E2B sandbox to actually execute paper code, compares outputs against reported claims, and generates a detailed reproducibility report with an overall rating.
+This skill performs a structured, automated reproducibility assessment of academic papers. It leverages SoulSearcher's E2B sandbox to actually execute paper code, compares outputs against reported claims, and generates a detailed reproducibility report with an overall rating.
 
-**This is Weaver's unique differentiator** — no other open-source deep research tool can execute paper code in an isolated sandbox for automated reproducibility verification.
+**This is SoulSearcher's unique differentiator** — no other open-source deep research tool can execute paper code in an isolated sandbox for automated reproducibility verification.
 
 ## When to Use This Skill
 

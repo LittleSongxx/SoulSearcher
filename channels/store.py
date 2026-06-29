@@ -8,7 +8,7 @@ from typing import Any
 
 
 def _default_store_path() -> Path:
-    override = (os.getenv("WEAVER_DATA_DIR") or "").strip()
+    override = (os.getenv("SOULSEARCHER_DATA_DIR") or "").strip()
     if override:
         root = Path(override).expanduser()
         if not root.is_absolute():
@@ -18,7 +18,7 @@ def _default_store_path() -> Path:
 
 
 class ChannelStore:
-    """Small persistent mapping from IM conversations to Weaver thread IDs."""
+    """Small persistent mapping from IM conversations to SoulSearcher thread IDs."""
 
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or _default_store_path()

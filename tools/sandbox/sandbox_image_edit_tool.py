@@ -9,7 +9,7 @@ This module provides advanced image editing in an E2B sandbox:
 - Effects (grayscale, sepia, invert, posterize)
 - Composition (merge, overlay images)
 
-Similar to Manus's sb_image_edit_tool.py but adapted for Weaver.
+Similar to Manus's sb_image_edit_tool.py but adapted for SoulSearcher.
 
 Usage:
     from tools.sandbox.sandbox_image_edit_tool import build_image_edit_tools

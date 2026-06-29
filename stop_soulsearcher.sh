@@ -14,7 +14,7 @@ APP_SERVICES=(backend frontend)
 
 usage() {
   cat <<'EOF'
-Usage: ./stop_weaver.sh [--all|--docker] [--silent] [--help]
+Usage: ./stop_soulsearcher.sh [--all|--docker] [--silent] [--help]
 
 Options:
   --all      stop all Docker services with docker compose down
@@ -103,17 +103,17 @@ fi
 if command -v docker >/dev/null 2>&1; then
   prepare_docker_config
   if (( STOP_ALL )); then
-    log "stopping all Weaver Docker services..."
+    log "stopping all SoulSearcher Docker services..."
     compose down >/dev/null 2>&1 || true
-    log "weaver containers stopped"
+    log "soulsearcher containers stopped"
   else
-    log "stopping Weaver app containers..."
+    log "stopping SoulSearcher app containers..."
     if ! compose stop "${APP_SERVICES[@]}" >/dev/null 2>&1; then
-      docker stop weaver_backend weaver_frontend >/dev/null 2>&1 || true
+      docker stop soulsearcher_backend soulsearcher_frontend >/dev/null 2>&1 || true
     fi
-    log "weaver app containers stopped (backend/frontend)"
+    log "soulsearcher app containers stopped (backend/frontend)"
     log "data containers left running (postgres/redis)"
-    log "use ./stop_weaver.sh --all to stop everything"
+    log "use ./stop_soulsearcher.sh --all to stop everything"
   fi
 else
   log "[warn] docker command not found; skipped container stop"
@@ -123,4 +123,4 @@ log ""
 log "ports:"
 log "- frontend : http://127.0.0.1:${FRONTEND_PORT:-3100}"
 log "- backend  : http://127.0.0.1:${BACKEND_PORT:-8001}"
-log "weaver stop completed"
+log "soulsearcher stop completed"

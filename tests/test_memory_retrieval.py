@@ -16,8 +16,8 @@ def test_hybrid_retrieval_ranks_keyword_confidence_and_evidence():
             user_id="u1",
             scope=MemoryScope.research.value,
             type=MemoryType.research_finding.value,
-            content="Weaver memory retrieval combines pgvector, full-text search, recency, and evidence-backed confidence.",
-            summary="Weaver hybrid memory retrieval",
+            content="SoulSearcher memory retrieval combines pgvector, full-text search, recency, and evidence-backed confidence.",
+            summary="SoulSearcher hybrid memory retrieval",
             confidence=0.95,
             importance=0.9,
             quality_score=0.9,
@@ -38,7 +38,7 @@ def test_hybrid_retrieval_ranks_keyword_confidence_and_evidence():
 
     result = service.retrieve(
         user_id="u1",
-        query="Weaver hybrid memory retrieval evidence",
+        query="SoulSearcher hybrid memory retrieval evidence",
         include_context=True,
     )
 
@@ -90,8 +90,8 @@ def test_entity_graph_is_indexed_and_recalled():
     service.upsert_record(
         MemoryRecord(
             user_id="u1",
-            content="OpenAI Agents and LangGraph both influence Weaver memory orchestration.",
-            summary="OpenAI Agents LangGraph Weaver",
+            content="OpenAI Agents and LangGraph both influence SoulSearcher memory orchestration.",
+            summary="OpenAI Agents LangGraph SoulSearcher",
             confidence=0.9,
         )
     )
@@ -99,7 +99,7 @@ def test_entity_graph_is_indexed_and_recalled():
     graph = service.graph(user_id="u1", entity="OpenAI")
     result = service.retrieve(
         user_id="u1",
-        query="OpenAI LangGraph Weaver",
+        query="OpenAI LangGraph SoulSearcher",
         include_context=True,
     )
 

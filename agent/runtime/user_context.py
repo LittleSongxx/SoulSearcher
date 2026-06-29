@@ -20,7 +20,7 @@ def get_effective_user_id() -> str:
     ctx_val = _effective_user_id.get()
     if ctx_val:
         return ctx_val
-    return os.getenv("WEAVER_USER_ID", DEFAULT_USER_ID)
+    return os.getenv("SOULSEARCHER_USER_ID", DEFAULT_USER_ID)
 
 
 def set_effective_user_id(user_id: str) -> None:

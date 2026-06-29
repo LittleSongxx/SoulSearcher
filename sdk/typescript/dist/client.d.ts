@@ -1,6 +1,6 @@
 import type { StreamEvent } from './types.js';
 import type { components } from './openapi-types.js';
-export declare class WeaverApiError extends Error {
+export declare class SoulSearcherApiError extends Error {
     status: number;
     path: string;
     bodyText: string;
@@ -16,7 +16,7 @@ type ResearchRequest = components['schemas']['ResearchRequest'];
 type SessionsListResponse = components['schemas']['SessionsListResponse'];
 type EvidenceResponse = components['schemas']['EvidenceResponse'];
 type RunEventsResponse = components['schemas']['RunEventsResponse'];
-export declare class WeaverClient {
+export declare class SoulSearcherClient {
     private baseUrl;
     private headers;
     private fetchImpl;

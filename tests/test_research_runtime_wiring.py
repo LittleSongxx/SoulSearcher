@@ -9,14 +9,14 @@ def test_build_initial_state_preserves_user_query_with_system_messages():
     from agent.core.state import build_initial_state
 
     state = build_initial_state(
-        input_text="Explain Weaver architecture",
+        input_text="Explain SoulSearcher architecture",
         messages=[SystemMessage(content="memory context")],
     )
 
-    assert state["input"] == "Explain Weaver architecture"
+    assert state["input"] == "Explain SoulSearcher architecture"
     assert isinstance(state["messages"][0], SystemMessage)
     assert isinstance(state["messages"][-1], HumanMessage)
-    assert state["messages"][-1].content == "Explain Weaver architecture"
+    assert state["messages"][-1].content == "Explain SoulSearcher architecture"
     assert state["plan_graph"] == {}
     assert state["plan_events"] == []
     assert state["plan_version"] == 1
@@ -703,7 +703,7 @@ def test_citation_gate_rejects_memory_only_binding():
 
 
 def test_deep_read_rejects_path_traversal(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
 
     from agent.workflows.source_cache import cache_source_text
     from tools.crawl.deep_read_tool import deep_read_cached_source
@@ -769,12 +769,12 @@ def test_researcher_extracts_evidence_from_tool_observation():
 
     kwargs = dict(
         tool_name="tavily_search",
-        args={"query": "weaver"},
+        args={"query": "soulsearcher"},
         observation=(
-            "[1] Source: https://example.com/weaver\n"
-            "Weaver is a LangGraph-based research system with citations."
+            "[1] Source: https://example.com/soulsearcher\n"
+            "SoulSearcher is a LangGraph-based research system with citations."
         ),
-        research_topic="weaver architecture",
+        research_topic="soulsearcher architecture",
     )
     evidence = _extract_evidence_from_observation(**kwargs)
     evidence_again = _extract_evidence_from_observation(**kwargs)
@@ -782,8 +782,8 @@ def test_researcher_extracts_evidence_from_tool_observation():
     assert evidence
     assert evidence[0]["id"] == evidence_again[0]["id"]
     assert evidence[0]["tool"] == "tavily_search"
-    assert evidence[0]["query"] == "weaver"
-    assert evidence[0]["url"] == "https://example.com/weaver"
+    assert evidence[0]["query"] == "soulsearcher"
+    assert evidence[0]["url"] == "https://example.com/soulsearcher"
 
 
 def test_quality_summary_uses_l3_when_l1_is_unavailable():
@@ -863,7 +863,7 @@ def test_report_generation_error_clears_quality_followup(monkeypatch):
 
 
 def test_research_workspace_writes_artifacts(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
 
     from agent.runtime.workspace import get_research_workspace
 
@@ -876,7 +876,7 @@ def test_research_workspace_writes_artifacts(tmp_path, monkeypatch):
 
 
 def test_research_runtime_builder_creates_state_config_and_workspace(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
 
     from agent.runtime.request_builder import (
         ResearchRuntimeRequest,
@@ -907,7 +907,7 @@ def test_research_runtime_builder_creates_state_config_and_workspace(tmp_path, m
 
 
 def test_research_runtime_builder_promotes_memory_source_candidates(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
 
     from agent.runtime.request_builder import (
         ResearchRuntimeRequest,
@@ -948,7 +948,7 @@ def test_research_runtime_builder_promotes_memory_source_candidates(tmp_path, mo
 
 
 def test_research_runtime_builder_injects_user_sources_into_hidden_context(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path))
 
     from agent.runtime.request_builder import (
         ResearchRuntimeRequest,
@@ -1139,8 +1139,8 @@ def test_search_cache_stats_include_policy_and_evictions():
     from agent.core.search_cache import SearchCache
 
     cache = SearchCache(max_size=1, ttl_seconds=60, similarity_threshold=0.8)
-    cache.set("weaver search", [{"title": "a"}])
-    assert cache.get("weaver search") == [{"title": "a"}]
+    cache.set("soulsearcher search", [{"title": "a"}])
+    assert cache.get("soulsearcher search") == [{"title": "a"}]
     cache.set("other query", [{"title": "b"}])
 
     stats = cache.stats()

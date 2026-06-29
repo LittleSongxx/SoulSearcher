@@ -129,7 +129,7 @@ For each strength or weakness, provide:
 
 ### Phase 3: Evidence Verification
 
-**This phase leverages Weaver's unique claim verification infrastructure to fact-check the paper's claims against independent sources.**
+**This phase leverages SoulSearcher's unique claim verification infrastructure to fact-check the paper's claims against independent sources.**
 
 #### Step 3.1: Extract Structured Claims
 
@@ -189,7 +189,7 @@ Add this section to the review output:
 
 ### Phase 4: Reproducibility Assessment
 
-**Leverages Weaver's E2B sandbox for automated code execution and result comparison.**
+**Leverages SoulSearcher's E2B sandbox for automated code execution and result comparison.**
 
 #### Step 4.1: Check for Code Availability
 
@@ -518,4 +518,4 @@ Activate when the user asks to simulate a review for a specific venue ("review t
 - Always disclose limitations of your review (e.g., "I could not verify the proofs in Appendix B in detail")
 - In Meta-Review mode, load all papers before starting the comparison
 - In Reviewer Simulator mode, state the venue's review criteria in your preamble
-- Evidence verification (Phase 3) uses Weaver's `claim_verifier` engine — numerical claims are automatically cross-checked
+- Evidence verification (Phase 3) uses SoulSearcher's `claim_verifier` engine — numerical claims are automatically cross-checked

@@ -1,27 +1,44 @@
-# Weaver Internal SDKs
+# SoulSearcher Internal SDKs
 
-Internal SDKs for calling Weaver from scripts and services. They are kept in this repository for internal consumption and are not published to npm or PyPI.
+This directory contains repository-local SDKs for calling SoulSearcher from scripts and services. The SDKs are private to this repository and are not published to external package registries.
 
-## Coverage
+## Supported API Surface
 
-- Research streaming through `POST /api/research/sse`
-- Research cancellation through `/api/research/cancel/*`
-- Sessions and evidence through `/api/sessions/*`
-- Run events through `/api/runs/{thread_id}/events` and `/api/runs/{thread_id}/events/sse`
-- Report export through `/api/export/*`
+| Area | Methods / Endpoints |
+| --- | --- |
+| Research stream | `POST /api/research/sse` |
+| Research cancellation | `/api/research/cancel/{thread_id}`, `/api/research/cancel-all` |
+| Sessions | `/api/sessions`, `/api/sessions/{thread_id}` |
+| Evidence | `/api/sessions/{thread_id}/evidence` |
+| Run events | `/api/runs/{thread_id}/events`, `/api/runs/{thread_id}/events/sse` |
+| Export | `/api/export/templates`, `/api/export/{thread_id}` |
 
-There is no separate chat API in the current backend; SDK examples use the research endpoint.
+There is no separate chat endpoint in the current backend. SDK examples use the research endpoint.
 
 ## Environment
 
-SDK examples read `WEAVER_BASE_URL`, defaulting to `http://127.0.0.1:8001`.
+SDK examples read `SOULSEARCHER_BASE_URL`, defaulting to `http://127.0.0.1:8001`.
 
 ## TypeScript SDK
 
 Path: `sdk/typescript/`
 
+```ts
+import { SoulSearcherClient } from './sdk/typescript/dist/index.js'
+
+const client = new SoulSearcherClient({
+  baseUrl: process.env.SOULSEARCHER_BASE_URL || 'http://127.0.0.1:8001',
+})
+
+for await (const event of client.researchSse({ query: 'Summarize the current research plan.' })) {
+  console.log(event.type, event.data)
+}
+```
+
+Run the example:
+
 ```bash
-WEAVER_BASE_URL=http://127.0.0.1:8001 node sdk/typescript/examples/research.mjs
+SOULSEARCHER_BASE_URL=http://127.0.0.1:8001 node sdk/typescript/examples/research.mjs
 ```
 
 Build the committed `dist/` output:
@@ -34,19 +51,30 @@ bash sdk/typescript/scripts/build.sh
 
 Path: `sdk/python/`
 
-```bash
-pip install -e ./sdk/python
-WEAVER_BASE_URL=http://127.0.0.1:8001 python sdk/python/examples/research.py
+```python
+from soulsearcher_sdk import SoulSearcherClient
+
+client = SoulSearcherClient(base_url="http://127.0.0.1:8001")
+
+for event in client.research_sse({"query": "Summarize the current research plan."}):
+    print(event["type"], event.get("data"))
 ```
 
-## When Backend APIs Change
+Install and run the example:
 
-Regenerate the OpenAPI TypeScript outputs and rebuild the TypeScript SDK:
+```bash
+pip install -e ./sdk/python
+SOULSEARCHER_BASE_URL=http://127.0.0.1:8001 python sdk/python/examples/research.py
+```
+
+## Regenerating Types
+
+When backend schemas change, regenerate OpenAPI outputs and rebuild the TypeScript SDK:
 
 ```bash
 DEBUG=false APP_ENV=prod ENABLE_FILE_LOGGING=false \
-  /home/song/anaconda3/bin/conda run -n weaver python scripts/export_openapi.py --output /tmp/weaver-openapi.json
-npx --yes -p node@24 -p openapi-typescript openapi-typescript /tmp/weaver-openapi.json -o web/lib/api-types.ts
-npx --yes -p node@24 -p openapi-typescript openapi-typescript /tmp/weaver-openapi.json -o sdk/typescript/src/openapi-types.ts
+  python scripts/export_openapi.py --output /tmp/soulsearcher-openapi.json
+npx --yes -p node@24 -p openapi-typescript openapi-typescript /tmp/soulsearcher-openapi.json -o web/lib/api-types.ts
+npx --yes -p node@24 -p openapi-typescript openapi-typescript /tmp/soulsearcher-openapi.json -o sdk/typescript/src/openapi-types.ts
 bash sdk/typescript/scripts/build.sh
 ```

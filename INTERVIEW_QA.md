@@ -1,4 +1,4 @@
-# Weaver 项目深度面试 Q&A 集
+# SoulSearcher 项目深度面试 Q&A 集
 
 > 本文按源码实现反推，不依赖 README、项目宣传语或注释口号。
 > 面试目标不是背 API，而是能解释：**为什么这么设计、真实链路怎么跑、边界在哪里、指标怎么自洽**。
@@ -32,9 +32,9 @@
 
 ## 1. 项目定位与一句话介绍
 
-### Q1：一句话介绍 Weaver 项目。
+### Q1：一句话介绍 SoulSearcher 项目。
 
-**A**：Weaver 是一个基于 **LangGraph 状态机**的 **Orchestrator-Workers 型 Deep Research Agent**。它把复杂调研任务拆成“需求澄清 → 研究简报 → 复杂度路由 → 计划审批 → 监督者并行调度研究员 → 证据压缩 → 报告生成 → 质量门检查”的可控流水线，并通过 SSE 把中间状态、工具调用、研究树和最终报告实时推给前端或飞书通道。
+**A**：SoulSearcher 是一个基于 **LangGraph 状态机**的 **Orchestrator-Workers 型 Deep Research Agent**。它把复杂调研任务拆成“需求澄清 → 研究简报 → 复杂度路由 → 计划审批 → 监督者并行调度研究员 → 证据压缩 → 报告生成 → 质量门检查”的可控流水线，并通过 SSE 把中间状态、工具调用、研究树和最终报告实时推给前端或飞书通道。
 
 更短版本：
 
@@ -44,14 +44,14 @@
 
 ### Q2：它和普通 ChatBot / 简单 RAG 的本质区别是什么？
 
-**A**：普通 ChatBot 主要回答问题，RAG 主要是“检索 → 增强 → 生成”。Weaver 的核心是 **长流程任务执行**。
+**A**：普通 ChatBot 主要回答问题，RAG 主要是“检索 → 增强 → 生成”。SoulSearcher 的核心是 **长流程任务执行**。
 
 - 它先判断是否需要澄清、是否值得进入深度研究。
 - 它由监督者集中分派多个研究员并行调查，而不是单 Agent 自由乱跑。
 - 它不会把搜索结果直接堆给模型，而是通过**压缩、来源策展、质量门**控制可靠性。
 - 它产出的不只是文本，还包括**事件流、研究树、来源、质量摘要和可恢复会话**。
 
-一句话：**RAG 是 Weaver 的一个能力，Weaver 是围绕研究任务执行的 Agent Workflow。**
+一句话：**RAG 是 SoulSearcher 的一个能力，SoulSearcher 是围绕研究任务执行的 Agent Workflow。**
 
 ---
 
@@ -126,7 +126,7 @@ END
 
 **A**：这是 **成本和体验**取舍。简单问题如果走完整链路，会经历澄清、计划、监督者、多研究员、报告和评估，延迟和成本都不合理。
 
-Weaver 对 simple 任务直接用 fast 模型回答，跳过多智能体编排。生产 Agent 的原则是：**不是所有问题都值得 Agent 化，简单任务用 Workflow 快路径更稳定。**
+SoulSearcher 对 simple 任务直接用 fast 模型回答，跳过多智能体编排。生产 Agent 的原则是：**不是所有问题都值得 Agent 化，简单任务用 Workflow 快路径更稳定。**
 
 ---
 
@@ -180,7 +180,7 @@ LangGraph 默认 reducer 常见是追加式，适合消息累积，但不适合�
 
 ---
 
-### Q12：为什么说 Weaver 是 Workflow + Agent 的混合架构？
+### Q12：为什么说 SoulSearcher 是 Workflow + Agent 的混合架构？
 
 **A**：因为不同阶段的控制权不同。
 
@@ -197,13 +197,13 @@ LangGraph 默认 reducer 常见是追加式，适合消息累积，但不适合�
 
 **A**：检查点主要解决 **长任务恢复和 HITL**。Deep Research 可能跑几分钟甚至更久，如果中间需要用户审批、服务重启或任务中断，没有检查点就只能重跑。
 
-Weaver 支持 PostgreSQL checkpointer；没有数据库时可退回内存检查点，但内存模式不适合跨进程恢复。面试时可以强调：**HITL interrupt 要生产可用，必须配合持久化 checkpointer。**
+SoulSearcher 支持 PostgreSQL checkpointer；没有数据库时可退回内存检查点，但内存模式不适合跨进程恢复。面试时可以强调：**HITL interrupt 要生产可用，必须配合持久化 checkpointer。**
 
 ---
 
 ## 4. 多智能体编排
 
-### Q14：Weaver 的多智能体是什么模式？
+### Q14：SoulSearcher 的多智能体是什么模式？
 
 **A**：是 **Orchestrator-Workers** 模式。
 
@@ -229,7 +229,7 @@ Weaver 支持 PostgreSQL checkpointer；没有数据库时可退回内存检查�
 
 研究任务通常可以拆成相对独立的子主题，比如市场规模、竞品、法规、技术路线。每个研究员独立调查，最终由监督者综合。让研究员互相对话会带来 token 膨胀、状态同步复杂、观点污染和收敛不可控。
 
-Weaver 的选择是：**集中决策，分散执行。**
+SoulSearcher 的选择是：**集中决策，分散执行。**
 
 ---
 
@@ -306,7 +306,7 @@ END
 
 **A**：Deep Research 的上下文增长非常快：多轮搜索、页面内容、工具输出、研究员摘要、来源和报告草稿都会进入上下文。如果不控制，模型会超上下文、成本爆炸、注意力稀释，最后反而更容易幻觉。
 
-Weaver 的策略是：**子代理隔离 + 压缩回传 + 消息预算 + 工具结果截断 + 系统前缀重建。**
+SoulSearcher 的策略是：**子代理隔离 + 压缩回传 + 消息预算 + 工具结果截断 + 系统前缀重建。**
 
 ---
 
@@ -353,7 +353,7 @@ embedding 过滤使用 `text-embedding-3-small` 和相似度阈值；失败会�
 
 ## 7. 模型路由与成本控制
 
-### Q26：Weaver 的模型路由怎么设计？
+### Q26：SoulSearcher 的模型路由怎么设计？
 
 **A**：模型路由是 **三层模型 + 任务类型覆盖**：
 
@@ -384,7 +384,7 @@ embedding 过滤使用 `text-embedding-3-small` 和相似度阈值；失败会�
 3. **迭代降级**：降低监督者轮数和研究员工具调用轮数。
 4. **内容降级**：提高压缩强度、减少 curated sources、缩短报告输出。
 
-Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt 里。
+SoulSearcher 的优势是这些参数主要在配置层，而不是硬编码在 prompt 里。
 
 ---
 
@@ -436,7 +436,7 @@ Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt
 
 ### Q33：怎么防幻觉？
 
-**A**：Weaver 的幻觉防御不是靠一句“请不要幻觉”，而是 **多层约束**：
+**A**：SoulSearcher 的幻觉防御不是靠一句“请不要幻觉”，而是 **多层约束**：
 
 - 研究阶段尽量基于搜索、RAG、学术源和工具结果。
 - 压缩时要求保留关键信息和来源线索。
@@ -465,7 +465,7 @@ Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt
 
 ---
 
-### Q35：资料库 / RAG 在 Weaver 里怎么接入？
+### Q35：资料库 / RAG 在 SoulSearcher 里怎么接入？
 
 **A**：RAG 已收敛为统一检索网关里的 `private_corpus` 来源：用户通过文档资料库 API 上传 PDF、DOCX、TXT、MD、CSV 等文件，系统保存原文、切分 chunk、计算 hash，并在数据库可用时写入 pgvector；数据库或 pgvector 不可用时，资料库 API 会返回清晰的不可用状态，但公开 Web 研究仍可启动。
 
@@ -498,7 +498,7 @@ Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt
 
 ## 10. 记忆系统
 
-### Q38：Weaver 的记忆系统怎么设计？
+### Q38：SoulSearcher 的记忆系统怎么设计？
 
 **A**：有两套相关记忆能力：
 
@@ -535,7 +535,7 @@ Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt
 
 **A**：Skills 解决 **专业工作流按需注入**的问题。不是把所有领域指南都塞进系统提示词，而是用 `SKILL.md` 描述某类任务的触发条件、方法论、输出规范和工具约束。
 
-Weaver 有 20 个内置 public skills，如 deep-research、html-report、systematic-literature-review、github-deep-research、academic-paper-review、ppt-generation 等，也支持 custom skills。
+SoulSearcher 有 20 个内置 public skills，如 deep-research、html-report、systematic-literature-review、github-deep-research、academic-paper-review、ppt-generation 等，也支持 custom skills。
 
 ---
 
@@ -654,7 +654,7 @@ Weaver 有 20 个内置 public skills，如 deep-research、html-report、system
 
 **A**：项目有 channels 模块，当前重点是飞书/Lark 通道。飞书通过 WebSocket 长连接接收消息，机器人加 OK reaction、回复“Working on it...”，处理过程中更新卡片，完成后发最终卡片并加 DONE reaction。
 
-这说明 Weaver 不是只服务网页，而是把 Agent 运行能力抽象成 **多通道复用的后端服务**。
+这说明 SoulSearcher 不是只服务网页，而是把 Agent 运行能力抽象成 **多通道复用的后端服务**。
 
 ---
 
@@ -700,7 +700,7 @@ Weaver 有 20 个内置 public skills，如 deep-research、html-report、system
 
 **A**：不要说成源码里有固定 45% 开关。正确说法是 **实验口径**：
 
-> 我用同类复杂研究任务做过对比，一组是朴素长上下文方案，把搜索结果和中间推理持续累加；另一组是 Weaver 的子代理隔离、三段压缩、工具结果截断、模型路由。统计相同任务完成一次研究的输入/输出 token，总体下降约 45%。下降主要来自研究员只回传摘要、监督者消息预算、fast/smart/strategic 模型路由。
+> 我用同类复杂研究任务做过对比，一组是朴素长上下文方案，把搜索结果和中间推理持续累加；另一组是 SoulSearcher 的子代理隔离、三段压缩、工具结果截断、模型路由。统计相同任务完成一次研究的输入/输出 token，总体下降约 45%。下降主要来自研究员只回传摘要、监督者消息预算、fast/smart/strategic 模型路由。
 
 如果继续追问，要补充：这个指标是项目实验数据，不是理论保证；不同任务下降幅度会变化，越是长链路、多搜索、多页面任务，收益越明显。
 
@@ -749,15 +749,15 @@ Weaver 有 20 个内置 public skills，如 deep-research、html-report、system
 | Workflow | 代码 | 稳定流程、审批、路由、质量门 |
 | Agent | LLM | 搜索探索、动态决策、多工具选择 |
 
-Weaver 是混合架构：输入网关和报告质量是 Workflow，监督者和研究员是 Agent。面试重点不是背概念，而是说明：**确定性环节用代码控制，不确定性探索交给模型。**
+SoulSearcher 是混合架构：输入网关和报告质量是 Workflow，监督者和研究员是 Agent。面试重点不是背概念，而是说明：**确定性环节用代码控制，不确定性探索交给模型。**
 
 ---
 
-### Q60：Anthropic 的五种 Agent 模式在 Weaver 里怎么映射？
+### Q60：Anthropic 的五种 Agent 模式在 SoulSearcher 里怎么映射？
 
 **A**：
 
-| 模式 | Weaver 映射 |
+| 模式 | SoulSearcher 映射 |
 |---|---|
 | Prompt Chaining | 澄清 → 简报 → 分类 → 计划 → 报告 |
 | Routing | simple/deep 路由，web/rag/mcp 来源路由 |
@@ -806,7 +806,7 @@ Weaver 是混合架构：输入网关和报告质量是 Workflow，监督者和�
 
 ---
 
-### Q64：如果要继续优化 Weaver，你会做什么？
+### Q64：如果要继续优化 SoulSearcher，你会做什么？
 
 **A**：我会优先做五件事：
 
@@ -828,11 +828,11 @@ Weaver 是混合架构：输入网关和报告质量是 Workflow，监督者和�
 - 前端能点击声明看到支撑证据。
 - 质量门基于结构化证据检查，而不是只看最终文本。
 
-Weaver 当前已有 evidence extractor、claim alignment、quality artifacts 的基础，可以继续往这个方向增强。
+SoulSearcher 当前已有 evidence extractor、claim alignment、quality artifacts 的基础，可以继续往这个方向增强。
 
 ---
 
-### Q66：如果要把 Weaver 做成企业内部研究平台，要补哪些？
+### Q66：如果要把 SoulSearcher 做成企业内部研究平台，要补哪些？
 
 **A**：优先补这些生产治理能力：
 

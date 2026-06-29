@@ -1,4 +1,4 @@
-"""Read selected sections from Weaver source-cache files."""
+"""Read selected sections from SoulSearcher source-cache files."""
 
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def deep_read(
     start_line: int | None = None,
     end_line: int | None = None,
 ) -> str:
-    """Read a section from a file previously written to Weaver's source-cache.
+    """Read a section from a file previously written to SoulSearcher's source-cache.
 
     Use this when a tool result says full content was cached and gives a
     cached_path. You can ask for a section query or a line range.

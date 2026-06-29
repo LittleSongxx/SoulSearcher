@@ -32,7 +32,7 @@ class BrowserUseTool(BaseTool):
 
     This is a light-weight adaptation of OpenManus' BrowserUseTool. It keeps
     the same action contract but trims the feature set to the common actions
-    used in Weaver (navigate, click, input, scroll, screenshot).
+    used in SoulSearcher (navigate, click, input, scroll, screenshot).
     """
 
     name: str = "browser_use"

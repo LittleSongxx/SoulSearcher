@@ -135,7 +135,7 @@ def _env_for_server(*, tmp_root: Path) -> dict[str, str]:
         env.pop(key, None)
 
     # Keep server side-effects inside tmp_root
-    env["WEAVER_DATA_DIR"] = str(tmp_root / "data")
+    env["SOULSEARCHER_DATA_DIR"] = str(tmp_root / "data")
 
     # Ensure we can import `main:app` even though cwd is temp.
     repo = str(_repo_root())
@@ -220,10 +220,10 @@ async def _wait_for_health(
     *,
     timeout_s: float,
     proc: Optional[asyncio.subprocess.Process] = None,
-    expected_openapi_title: str = "Weaver Research Agent API",
+    expected_openapi_title: str = "SoulSearcher Research Agent API",
 ) -> None:
     """
-    Wait until the started server is ready *and* looks like Weaver.
+    Wait until the started server is ready *and* looks like SoulSearcher.
 
     Why we validate OpenAPI:
     When binding to a fixed port, it's possible another service is already
@@ -1020,7 +1020,7 @@ async def amain(argv: list[str]) -> int:
     try:
         if not args.no_start:
             port = int(args.port) if int(args.port) > 0 else _find_free_port(args.host)
-            tmp_ctx = tempfile.TemporaryDirectory(prefix="weaver-live-smoke-")
+            tmp_ctx = tempfile.TemporaryDirectory(prefix="soulsearcher-live-smoke-")
             tmp_root = Path(tmp_ctx.name).resolve()
             base_url = f"http://{args.host}:{port}"
 

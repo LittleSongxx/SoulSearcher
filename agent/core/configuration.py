@@ -299,7 +299,7 @@ class ResearchConfiguration:
     # Each task type can override the complexity-based default.  Empty means
     # "use the complexity-based selection".  This follows open_deep_research's
     # decomposition of LLM roles — Summarization / Research / Compression /
-    # Final Report — extended with finer-grained Weaver-specific tasks.
+    # Final Report — extended with finer-grained SoulSearcher-specific tasks.
 
     query_generation_model: str = ""
     """Model for generating search queries (high-volume, cheap). Falls back to fast_llm."""
@@ -351,7 +351,7 @@ class ResearchConfiguration:
     # ------------------------------------------------------------------
     # Follows open_deep_research's decomposition of LLM roles into
     # summarization / research / compression / final-report, extended with
-    # finer-grained Weaver task types.  Each task has a dedicated override
+    # finer-grained SoulSearcher task types.  Each task has a dedicated override
     # field; when empty the complexity-based fallback is used.
     #
     # Rationale (from Anthropic's "Building Effective Agents"):

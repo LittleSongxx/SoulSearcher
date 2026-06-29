@@ -1,5 +1,5 @@
 """
-Prompt Manager for Weaver Agent System.
+Prompt Manager for SoulSearcher Agent System.
 
 Provides centralized prompt management with support for:
 - Simple vs Enhanced prompt modes
@@ -42,7 +42,7 @@ Return JSON with queries and reasoning."""
 
 class PromptManager:
     """
-    Centralized prompt management for Weaver agents.
+    Centralized prompt management for SoulSearcher agents.
 
     Supports multiple prompt styles:
     - "simple": Concise, minimal prompts

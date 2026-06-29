@@ -7,7 +7,7 @@ This tool provides structured task management for AI agents, allowing:
 - Real-time visualization through events
 - Persistent storage
 
-Similar to Manus's task_list_tool.py but adapted for Weaver's LangChain-based architecture.
+Similar to Manus's task_list_tool.py but adapted for SoulSearcher's LangChain-based architecture.
 
 Usage:
     from tools.automation.task_list_tool import TaskListTool, build_task_list_tools

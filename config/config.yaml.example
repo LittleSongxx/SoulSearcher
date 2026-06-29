@@ -1,4 +1,4 @@
-# Optional Weaver YAML Configuration
+# Optional SoulSearcher YAML Configuration
 # TOML (`config/config.example.toml`) is the primary checked-in example.
 # YAML remains supported for deployments that prefer structured config files.
 # Priority: env vars > TOML config > YAML config > defaults.

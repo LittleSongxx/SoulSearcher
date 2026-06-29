@@ -2,14 +2,14 @@ import type { StreamEvent } from './types.js'
 import { readSseEvents } from './sse.js'
 import type { components } from './openapi-types.js'
 
-export class WeaverApiError extends Error {
+export class SoulSearcherApiError extends Error {
   status: number
   path: string
   bodyText: string
 
   constructor(opts: { status: number; path: string; bodyText: string }) {
     const suffix = opts.bodyText ? `: ${opts.bodyText}` : ''
-    super(`Weaver API request failed (${opts.status}) ${opts.path}${suffix}`)
+    super(`SoulSearcher API request failed (${opts.status}) ${opts.path}${suffix}`)
     this.status = opts.status
     this.path = opts.path
     this.bodyText = opts.bodyText
@@ -41,7 +41,7 @@ function mergeHeaders(
   return merged
 }
 
-export class WeaverClient {
+export class SoulSearcherClient {
   private baseUrl: string
   private headers: Record<string, string>
   private fetchImpl: FetchLike
@@ -68,7 +68,7 @@ export class WeaverClient {
 
     const bodyText = await response.text().catch(() => '')
     if (!response.ok) {
-      throw new WeaverApiError({ status: response.status, path, bodyText })
+      throw new SoulSearcherApiError({ status: response.status, path, bodyText })
     }
 
     if (!bodyText) return undefined as T
@@ -87,7 +87,7 @@ export class WeaverClient {
 
     if (!response.ok) {
       const bodyText = await response.text().catch(() => '')
-      throw new WeaverApiError({ status: response.status, path, bodyText })
+      throw new SoulSearcherApiError({ status: response.status, path, bodyText })
     }
 
     return response
@@ -125,7 +125,7 @@ export class WeaverClient {
 
     if (!response.ok) {
       const bodyText = await response.text().catch(() => '')
-      throw new WeaverApiError({ status: response.status, path: '/api/research/sse', bodyText })
+      throw new SoulSearcherApiError({ status: response.status, path: '/api/research/sse', bodyText })
     }
 
     this.lastThreadId =
@@ -197,7 +197,7 @@ export class WeaverClient {
 
     if (!response.ok) {
       const bodyText = await response.text().catch(() => '')
-      throw new WeaverApiError({ status: response.status, path, bodyText })
+      throw new SoulSearcherApiError({ status: response.status, path, bodyText })
     }
 
     for await (const event of readSseEvents(response)) {

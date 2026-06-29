@@ -34,7 +34,7 @@ def resolve_slash_skill(text: str, active_skill_ids: list[str] | None = None) ->
 
     repo_root = Path(__file__).resolve().parents[2]
     skills_root = Path(
-        os.environ.get("WEAVER_SKILLS_PATH", "")
+        os.environ.get("SOULSEARCHER_SKILLS_PATH", "")
         or repo_root / "skills" / "public"
     ).resolve()
     candidates = [

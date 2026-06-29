@@ -1,5 +1,5 @@
 """
-Logging configuration for Weaver backend.
+Logging configuration for SoulSearcher backend.
 Provides structured logging with file rotation and optional JSON formatting.
 """
 
@@ -55,7 +55,7 @@ def setup_logging():
 
     # Avoid double-initializing when uvicorn --reload spawns extra processes
     root_logger = logging.getLogger()
-    if getattr(root_logger, "_weaver_configured", False):
+    if getattr(root_logger, "_soulsearcher_configured", False):
         return root_logger
 
     # Determine log level (do NOT force DEBUG when settings.debug is True; keep it explicit)
@@ -120,7 +120,7 @@ def setup_logging():
     logger.info(f"JSON logging: {'Enabled' if settings.enable_json_logging else 'Disabled'}")
     logger.info("=" * 80)
 
-    root_logger._weaver_configured = True
+    root_logger._soulsearcher_configured = True
 
 
 def get_logger(name: str) -> logging.Logger:

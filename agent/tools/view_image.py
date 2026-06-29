@@ -67,7 +67,7 @@ async def view_image(
 ) -> dict:
     """Read an image file and return base64-encoded data for multimodal LLM input.
 
-    This is the Weaver-adapted version of deer-flow's view_image_tool.
+    This is the SoulSearcher-adapted version of deer-flow's view_image_tool.
     It can be called both as a LangChain tool and directly from nodes.
 
     Args:

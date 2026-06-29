@@ -18,7 +18,7 @@ def build_openapi_spec() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Export Weaver OpenAPI spec as JSON.")
+    parser = argparse.ArgumentParser(description="Export SoulSearcher OpenAPI spec as JSON.")
     parser.add_argument(
         "--output",
         "-o",

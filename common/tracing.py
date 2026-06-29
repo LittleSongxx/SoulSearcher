@@ -1,5 +1,5 @@
 """
-Tracing and Observability for Weaver.
+Tracing and Observability for SoulSearcher.
 
 Provides lightweight LLM call tracing, node execution timing,
 and tool invocation tracking for debugging and monitoring.

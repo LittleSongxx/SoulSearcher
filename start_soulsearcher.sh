@@ -13,7 +13,7 @@ WEB_ENV_FILE="$PROJECT_ROOT/web/.env.local"
 WEB_ENV_EXAMPLE_FILE="$PROJECT_ROOT/web/.env.local.example"
 CONFIG_FILE="$PROJECT_ROOT/config/config.toml"
 CONFIG_EXAMPLE_FILE="$PROJECT_ROOT/config/config.example.toml"
-INSIGHT_ENV_FILE="${WEAVER_SECRETS_ENV_FILE:-}"
+INSIGHT_ENV_FILE="${SOULSEARCHER_SECRETS_ENV_FILE:-}"
 DOCKER_CONFIG_FALLBACK_DIR="$RUN_DIR/docker-config"
 
 DO_BUILD=0
@@ -23,7 +23,7 @@ TOTAL_STEPS=6
 
 usage() {
   cat <<'EOF'
-Usage: ./start_weaver.sh [--build] [--help]
+Usage: ./start_soulsearcher.sh [--build] [--help]
 
 Options:
   --build    rebuild Docker images before starting services
@@ -34,7 +34,7 @@ It records selected host ports in .run/compose.env and reuses them on later star
 It scaffolds .env, web/.env.local, and config/config.toml from committed templates when missing.
 
 Optional environment variables:
-  WEAVER_SECRETS_ENV_FILE   path to another .env file whose compatible keys should be imported
+  SOULSEARCHER_SECRETS_ENV_FILE   path to another .env file whose compatible keys should be imported
 EOF
 }
 
@@ -226,7 +226,7 @@ ensure_env_files() {
   fi
 
   if ! dotenv_value_is_set "$INSIGHT_ENV_FILE"; then
-    INSIGHT_ENV_FILE="$(dotenv_get "$ENV_FILE" "WEAVER_SECRETS_ENV_FILE" || true)"
+    INSIGHT_ENV_FILE="$(dotenv_get "$ENV_FILE" "SOULSEARCHER_SECRETS_ENV_FILE" || true)"
   fi
 }
 
@@ -317,31 +317,31 @@ docker_port_reserved() {
   docker_port_bindings | awk -v port="$port" '$2 == port { found = 1 } END { exit(found ? 0 : 1) }'
 }
 
-port_owned_by_weaver() {
+port_owned_by_soulsearcher() {
   local port="$1"
   docker_port_bindings \
     | awk -v port="$port" '
         $2 == port {
           found = 1
-          if ($1 !~ /^\/weaver_/) {
-            non_weaver = 1
+          if ($1 !~ /^\/soulsearcher_/) {
+            non_soulsearcher = 1
           }
         }
-        END { exit(found && !non_weaver ? 0 : 1) }
+        END { exit(found && !non_soulsearcher ? 0 : 1) }
       '
 }
 
-port_available_or_weaver() {
+port_available_or_soulsearcher() {
   local port="$1"
   if ! port_in_use "$port" && ! docker_port_reserved "$port"; then
     return 0
   fi
-  port_owned_by_weaver "$port"
+  port_owned_by_soulsearcher "$port"
 }
 
 find_available_port() {
   local port="$1"
-  while ! port_available_or_weaver "$port"; do
+  while ! port_available_or_soulsearcher "$port"; do
     port=$((port + 1))
   done
   echo "$port"
@@ -368,16 +368,16 @@ write_compose_env() {
   postgres_port="${POSTGRES_PORT:-}"
   redis_port="${REDIS_PORT:-}"
 
-  if [[ -z "$frontend_port" ]] || ! port_available_or_weaver "$frontend_port"; then
+  if [[ -z "$frontend_port" ]] || ! port_available_or_soulsearcher "$frontend_port"; then
     frontend_port="$(find_available_port 3100)"
   fi
-  if [[ -z "$backend_port" ]] || ! port_available_or_weaver "$backend_port"; then
+  if [[ -z "$backend_port" ]] || ! port_available_or_soulsearcher "$backend_port"; then
     backend_port="$(find_available_port 8001)"
   fi
-  if [[ -z "$postgres_port" ]] || ! port_available_or_weaver "$postgres_port"; then
+  if [[ -z "$postgres_port" ]] || ! port_available_or_soulsearcher "$postgres_port"; then
     postgres_port="$(find_available_port 5432)"
   fi
-  if [[ -z "$redis_port" ]] || ! port_available_or_weaver "$redis_port"; then
+  if [[ -z "$redis_port" ]] || ! port_available_or_soulsearcher "$redis_port"; then
     redis_port="$(find_available_port 6379)"
   fi
 
@@ -396,7 +396,7 @@ EOF
 
 sync_runtime_urls() {
   upsert_env "$ENV_FILE" "PORT" "$BACKEND_PORT"
-  upsert_env "$ENV_FILE" "WEAVER_BASE_URL" "http://127.0.0.1:$BACKEND_PORT"
+  upsert_env "$ENV_FILE" "SOULSEARCHER_BASE_URL" "http://127.0.0.1:$BACKEND_PORT"
   upsert_env "$ENV_FILE" "CORS_ORIGINS" "http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT"
   upsert_env "$WEB_ENV_FILE" "NEXT_PUBLIC_API_URL" "http://127.0.0.1:$BACKEND_PORT"
   upsert_env "$WEB_ENV_FILE" "NEXT_PUBLIC_CHAT_STREAM_PROTOCOL" "sse"
@@ -424,7 +424,7 @@ wait_http() {
 
 wait_container_healthy() {
   local service="$1"
-  local container="weaver_$service"
+  local container="soulsearcher_$service"
   local max_retry="${2:-90}"
   local i status
 
@@ -486,11 +486,11 @@ wait_http "backend" "http://127.0.0.1:$BACKEND_PORT/health" 180
 wait_http "frontend" "http://127.0.0.1:$FRONTEND_PORT/" 300
 
 echo ""
-echo "weaver started successfully"
+echo "soulsearcher started successfully"
 echo "- frontend : http://127.0.0.1:$FRONTEND_PORT"
 echo "- backend  : http://127.0.0.1:$BACKEND_PORT"
 echo "- OpenAPI  : http://127.0.0.1:$BACKEND_PORT/docs"
 echo "- Metrics  : http://127.0.0.1:$BACKEND_PORT/metrics"
 echo "- logs     : docker compose --env-file .env --env-file .run/compose.env -f docker/docker-compose.yml logs -f"
-echo "- stop app : ./stop_weaver.sh"
-echo "- stop all : ./stop_weaver.sh --all"
+echo "- stop app : ./stop_soulsearcher.sh"
+echo "- stop all : ./stop_soulsearcher.sh --all"

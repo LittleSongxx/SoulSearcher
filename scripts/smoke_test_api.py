@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Weaver API smoke test (no secret leakage).
+SoulSearcher API smoke test (no secret leakage).
 
 Runs a minimal end-to-end check against a running backend:
   - /health
@@ -43,10 +43,10 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 try:
-    # Prefer Weaver's Settings (reads .env) over raw process env when available.
-    from common.config import settings as _WEAVER_SETTINGS  # type: ignore
+    # Prefer SoulSearcher's Settings (reads .env) over raw process env when available.
+    from common.config import settings as _SOULSEARCHER_SETTINGS  # type: ignore
 except Exception:  # pragma: no cover
-    _WEAVER_SETTINGS = None  # type: ignore
+    _SOULSEARCHER_SETTINGS = None  # type: ignore
 
 
 def _env(name: str, default: str = "") -> str:
@@ -114,18 +114,18 @@ def _client(base_url: str) -> httpx.Client:
     _normalize_socks_proxy_env()
     headers: dict[str, str] = {}
 
-    internal_key = _env("WEAVER_INTERNAL_API_KEY", "")
-    if not internal_key and _WEAVER_SETTINGS is not None:
-        internal_key = (getattr(_WEAVER_SETTINGS, "internal_api_key", "") or "").strip()
+    internal_key = _env("SOULSEARCHER_INTERNAL_API_KEY", "")
+    if not internal_key and _SOULSEARCHER_SETTINGS is not None:
+        internal_key = (getattr(_SOULSEARCHER_SETTINGS, "internal_api_key", "") or "").strip()
     if internal_key:
         headers["Authorization"] = f"Bearer {internal_key}"
-        # Optional identity header used by Weaver when internal auth is enabled.
-        user_header = _env("WEAVER_AUTH_USER_HEADER", "")
-        if not user_header and _WEAVER_SETTINGS is not None:
+        # Optional identity header used by SoulSearcher when internal auth is enabled.
+        user_header = _env("SOULSEARCHER_AUTH_USER_HEADER", "")
+        if not user_header and _SOULSEARCHER_SETTINGS is not None:
             user_header = (
-                getattr(_WEAVER_SETTINGS, "auth_user_header", "") or ""
+                getattr(_SOULSEARCHER_SETTINGS, "auth_user_header", "") or ""
             ).strip()
-        headers[user_header or "X-Weaver-User"] = _env("WEAVER_TEST_USER", "smoke")
+        headers[user_header or "X-SoulSearcher-User"] = _env("SOULSEARCHER_TEST_USER", "smoke")
 
     return httpx.Client(
         base_url=base_url.rstrip("/"),
@@ -217,7 +217,7 @@ def _check_tts_status(client: httpx.Client) -> CheckResult:
 def _check_tts_synthesize(client: httpx.Client) -> CheckResult:
     t0 = time.time()
     try:
-        payload = {"text": "Hello from Weaver", "voice": "loongstella"}
+        payload = {"text": "Hello from SoulSearcher", "voice": "loongstella"}
         r = client.post("/api/tts/synthesize", json=payload)
         data = _try_json(r)
         if r.status_code >= 400:
@@ -364,9 +364,9 @@ def _check_research_deep_cancel(base_url: str) -> CheckResult:
 def _check_provider_serper() -> CheckResult:
     t0 = time.time()
     configured = bool(_env("SERPER_API_KEY", ""))
-    if not configured and _WEAVER_SETTINGS is not None:
+    if not configured and _SOULSEARCHER_SETTINGS is not None:
         configured = bool(
-            (getattr(_WEAVER_SETTINGS, "serper_api_key", "") or "").strip()
+            (getattr(_SOULSEARCHER_SETTINGS, "serper_api_key", "") or "").strip()
         )
     if not configured:
         return CheckResult("provider_serper", True, "not_configured", time.time() - t0)
@@ -390,9 +390,9 @@ def _check_provider_serper() -> CheckResult:
 def _check_provider_firecrawl() -> CheckResult:
     t0 = time.time()
     configured = bool(_env("FIRECRAWL_API_KEY", ""))
-    if not configured and _WEAVER_SETTINGS is not None:
+    if not configured and _SOULSEARCHER_SETTINGS is not None:
         configured = bool(
-            (getattr(_WEAVER_SETTINGS, "firecrawl_api_key", "") or "").strip()
+            (getattr(_SOULSEARCHER_SETTINGS, "firecrawl_api_key", "") or "").strip()
         )
     if not configured:
         return CheckResult(
@@ -418,8 +418,8 @@ def _check_provider_firecrawl() -> CheckResult:
 def _check_provider_e2b() -> CheckResult:
     t0 = time.time()
     configured = bool(_env("E2B_API_KEY", ""))
-    if not configured and _WEAVER_SETTINGS is not None:
-        configured = bool((getattr(_WEAVER_SETTINGS, "e2b_api_key", "") or "").strip())
+    if not configured and _SOULSEARCHER_SETTINGS is not None:
+        configured = bool((getattr(_SOULSEARCHER_SETTINGS, "e2b_api_key", "") or "").strip())
     if not configured:
         return CheckResult("provider_e2b", True, "not_configured", time.time() - t0)
     try:
@@ -448,8 +448,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--base-url",
-        default=_env("WEAVER_BASE_URL", "http://127.0.0.1:8001"),
-        help="Backend base URL (default from WEAVER_BASE_URL or http://127.0.0.1:8001)",
+        default=_env("SOULSEARCHER_BASE_URL", "http://127.0.0.1:8001"),
+        help="Backend base URL (default from SOULSEARCHER_BASE_URL or http://127.0.0.1:8001)",
     )
     ap.add_argument(
         "--skip-tts", action="store_true", help="Skip /api/tts/synthesize check"

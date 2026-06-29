@@ -119,14 +119,14 @@ COPY --from=builder /opt/venv /opt/venv
 
 RUN mkdir -p /ms-playwright \
     && python -m playwright install chromium \
-    && groupadd --gid 1000 weaver \
-    && useradd --uid 1000 --gid weaver --shell /bin/bash --create-home weaver \
+    && groupadd --gid 1000 soulsearcher \
+    && useradd --uid 1000 --gid soulsearcher --shell /bin/bash --create-home soulsearcher \
     && mkdir -p /app/logs /app/data /app/.docker-data \
-    && chown -R weaver:weaver /app /ms-playwright
+    && chown -R soulsearcher:soulsearcher /app /ms-playwright
 
-COPY --chown=weaver:weaver . .
+COPY --chown=soulsearcher:soulsearcher . .
 
-USER weaver
+USER soulsearcher
 
 EXPOSE 8000
 

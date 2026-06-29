@@ -1,9 +1,9 @@
 """
-Weaver Tool Base Classes - Inspired by Manus AgentPress
+SoulSearcher Tool Base Classes - Inspired by Manus AgentPress
 
-This module provides the foundational classes for building tools in Weaver:
+This module provides the foundational classes for building tools in SoulSearcher:
 - ToolResult: Unified result container
-- WeaverTool: Abstract base class with decorator-driven schema registration
+- SoulSearcherTool: Abstract base class with decorator-driven schema registration
 - tool_schema: Decorator for declaring tool schemas
 
 Design Philosophy:
@@ -67,9 +67,9 @@ class ToolResult:
         return f"{status} ToolResult: {preview}"
 
 
-class WeaverTool(ABC):
+class SoulSearcherTool(ABC):
     """
-    Abstract base class for Weaver tools.
+    Abstract base class for SoulSearcher tools.
 
     Features:
     1. Decorator-driven schema registration
@@ -78,7 +78,7 @@ class WeaverTool(ABC):
     4. Built-in error handling helpers
 
     Usage:
-        class MyTool(WeaverTool):
+        class MyTool(SoulSearcherTool):
             def __init__(self, api_key: str):
                 self.api_key = api_key
                 super().__init__()
@@ -326,7 +326,7 @@ def merge_tool_results(results: list[ToolResult]) -> ToolResult:
 
 if __name__ == "__main__":
     # Example tool implementation
-    class ExampleTool(WeaverTool):
+    class ExampleTool(SoulSearcherTool):
         """Example tool to demonstrate usage."""
 
         def __init__(self, api_key: str):
@@ -384,7 +384,7 @@ if __name__ == "__main__":
 
     # Test the example tool
     print("=" * 60)
-    print("Testing WeaverTool Base Classes")
+    print("Testing SoulSearcherTool Base Classes")
     print("=" * 60)
 
     tool = ExampleTool(api_key="test-key")

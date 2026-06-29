@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""GAIA Benchmark Runner for Weaver.
+"""GAIA Benchmark Runner for SoulSearcher.
 
-Evaluates Weaver against the GAIA benchmark or a curated internal dataset.
+Evaluates SoulSearcher against the GAIA benchmark or a curated internal dataset.
 Runs each question through the deep-research pipeline in GAIA mode (short
 answers), scores against ground truth, and produces a JSON report.
 
@@ -140,13 +140,13 @@ def validate_gaia_questions(questions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 # =============================================================================
-# Remote mode — calls the running Weaver server via its research SSE endpoint
+# Remote mode — calls the running SoulSearcher server via its research SSE endpoint
 # =============================================================================
 
 async def run_remote(
     question: dict[str, Any], base_url: str, timeout: float = 300.0
 ) -> BenchmarkResult:
-    """Run a benchmark question against a remote Weaver server."""
+    """Run a benchmark question against a remote SoulSearcher server."""
     import httpx
 
     task_id = question.get("id") or question.get("task_id", "unknown")
@@ -432,7 +432,7 @@ def save_report(report: BenchmarkReport, output_path: str) -> None:
 # =============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="GAIA Benchmark Runner for Weaver")
+    parser = argparse.ArgumentParser(description="GAIA Benchmark Runner for SoulSearcher")
     parser.add_argument("--source", default="curated",
                         choices=["curated", "gaia", "local"],
                         help="Question source (default: curated)")

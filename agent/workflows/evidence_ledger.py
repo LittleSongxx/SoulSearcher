@@ -31,7 +31,7 @@ def normalize_evidence_item(
     fallback_id_prefix: str = "evidence",
     index: int = 1,
 ) -> dict[str, Any] | None:
-    """Normalize one evidence-like dict into Weaver's public artifact shape."""
+    """Normalize one evidence-like dict into SoulSearcher's public artifact shape."""
     if not isinstance(item, dict):
         return None
 

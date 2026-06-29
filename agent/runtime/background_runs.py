@@ -109,7 +109,7 @@ class BackgroundRunManager:
             run_manager.update(request.thread_id, status=RunStatus.queued)
             task = asyncio.create_task(
                 self._run(request, stream_factory=stream_factory),
-                name=f"weaver-background-run:{request.thread_id}",
+                name=f"soulsearcher-background-run:{request.thread_id}",
             )
             self._tasks[request.thread_id] = task
             return self.status(request.thread_id)
@@ -158,7 +158,7 @@ class BackgroundRunManager:
             )
             task = asyncio.create_task(
                 self._run(request, stream_factory=stream_factory),
-                name=f"weaver-background-run:{thread_id}:resume",
+                name=f"soulsearcher-background-run:{thread_id}:resume",
             )
             self._tasks[thread_id] = task
             return self.status(thread_id)

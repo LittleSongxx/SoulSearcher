@@ -81,10 +81,10 @@ graph TD
 | ELIGIBILITY | Excluded: other reasons | w4 |
 | INCLUDED | Papers in final synthesis | P |
 
-## Important Notes for PRISMA Mode in Weaver
+## Important Notes for PRISMA Mode in SoulSearcher
 
 - Use REAL counts from the actual search process. Do not fabricate or estimate.
 - The citation graph phase naturally adds "Records from citation graph" to the identification stage.
-- In Weaver's automated pipeline, screening is done by the LLM, not human reviewers. This must be disclosed: "Screening was performed by an AI language model, not human reviewers, as stated in the methodology."
+- In SoulSearcher's automated pipeline, screening is done by the LLM, not human reviewers. This must be disclosed: "Screening was performed by an AI language model, not human reviewers, as stated in the methodology."
 - The PRISMA checklist should be included as an appendix to the systematic review report.
 - For items not applicable to CS/ML preprints (e.g., some biomedical-specific items), mark as "N/A for preprint-based review" rather than omitting.

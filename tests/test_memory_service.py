@@ -24,10 +24,10 @@ def test_memory_record_upsert_dedupes_and_soft_deletes():
 
     service, store = _service()
     first = service.upsert_record(
-        MemoryRecord(user_id="u1", content="Weaver uses LangGraph for orchestration.")
+        MemoryRecord(user_id="u1", content="SoulSearcher uses LangGraph for orchestration.")
     )
     second = service.upsert_record(
-        MemoryRecord(user_id="u1", content="Weaver uses LangGraph for orchestration.")
+        MemoryRecord(user_id="u1", content="SoulSearcher uses LangGraph for orchestration.")
     )
 
     assert first.id != second.id
@@ -46,11 +46,11 @@ def test_ingest_research_run_gates_evidence_quality_and_sensitive_content():
         "evidence_items": [
             {
                 "id": "ev1",
-                "url": "https://example.com/weaver",
-                "content": "Weaver evidence passage with enough content for memory.",
+                "url": "https://example.com/soulsearcher",
+                "content": "SoulSearcher evidence passage with enough content for memory.",
             }
         ],
-        "claims": [{"claim": "Weaver keeps citations evidence-backed.", "status": "supported"}],
+        "claims": [{"claim": "SoulSearcher keeps citations evidence-backed.", "status": "supported"}],
     }
 
     result = asyncio.run(
@@ -58,7 +58,7 @@ def test_ingest_research_run_gates_evidence_quality_and_sensitive_content():
             user_id="u1",
             thread_id="thread_1",
             run_id="run_1",
-            research_brief="Analyze Weaver memory architecture",
+            research_brief="Analyze SoulSearcher memory architecture",
             final_report="Final report with source-backed synthesis.",
             artifacts=good_artifacts,
             notes=[],
@@ -157,7 +157,7 @@ def test_memory_status_and_manual_record_shape():
     saved = service.upsert_record(
         MemoryRecord(
             user_id="u1",
-            content="OpenAI and LangGraph are relevant entities for Weaver.",
+            content="OpenAI and LangGraph are relevant entities for SoulSearcher.",
             confidence=0.9,
         )
     )

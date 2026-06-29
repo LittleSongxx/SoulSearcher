@@ -1,5 +1,5 @@
 """
-Shared constants for Weaver workflows.
+Shared constants for SoulSearcher workflows.
 
 Single source of truth for domain markers, quality thresholds, claim markers,
 and other constants that were previously scattered across multiple modules.

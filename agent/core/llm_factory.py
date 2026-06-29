@@ -1,5 +1,5 @@
 """
-Centralized LLM Factory for Weaver.
+Centralized LLM Factory for SoulSearcher.
 
 Provides unified model initialization across all modules.
 Replaces duplicated _chat_model() functions.

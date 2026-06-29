@@ -34,17 +34,17 @@ _FALLBACKS: dict[str, str] = {}
 
 # Map of prompt_name → (default_file_name, env_var_override)
 _PROMPT_REGISTRY: dict[str, tuple[str, str]] = {
-    "clarify_with_user":    ("clarify_with_user.md",    "WEAVER_PROMPT_CLARIFY"),
-    "research_brief":       ("research_brief.md",       "WEAVER_PROMPT_BRIEF"),
-    "complexity_classifier": ("complexity_classifier.md","WEAVER_PROMPT_COMPLEXITY"),
-    "lead_researcher":      ("lead_researcher.md",      "WEAVER_PROMPT_SUPERVISOR"),
-    "researcher":           ("researcher.md",           "WEAVER_PROMPT_RESEARCHER"),
-    "compression":          ("compression.md",          "WEAVER_PROMPT_COMPRESSION"),
-    "final_report":         ("final_report.md",         "WEAVER_PROMPT_REPORT"),
-    "final_report_html":    ("final_report_html.md",    "WEAVER_PROMPT_REPORT_HTML"),
-    "direct_answer":        ("direct_answer.md",        "WEAVER_PROMPT_DIRECT"),
-    "source_curation":      ("source_curation.md",      "WEAVER_PROMPT_CURATION"),
-    "summarize_webpage":    ("summarize_webpage.md",    "WEAVER_PROMPT_SUMMARIZE"),
+    "clarify_with_user":    ("clarify_with_user.md",    "SOULSEARCHER_PROMPT_CLARIFY"),
+    "research_brief":       ("research_brief.md",       "SOULSEARCHER_PROMPT_BRIEF"),
+    "complexity_classifier": ("complexity_classifier.md","SOULSEARCHER_PROMPT_COMPLEXITY"),
+    "lead_researcher":      ("lead_researcher.md",      "SOULSEARCHER_PROMPT_SUPERVISOR"),
+    "researcher":           ("researcher.md",           "SOULSEARCHER_PROMPT_RESEARCHER"),
+    "compression":          ("compression.md",          "SOULSEARCHER_PROMPT_COMPRESSION"),
+    "final_report":         ("final_report.md",         "SOULSEARCHER_PROMPT_REPORT"),
+    "final_report_html":    ("final_report_html.md",    "SOULSEARCHER_PROMPT_REPORT_HTML"),
+    "direct_answer":        ("direct_answer.md",        "SOULSEARCHER_PROMPT_DIRECT"),
+    "source_curation":      ("source_curation.md",      "SOULSEARCHER_PROMPT_CURATION"),
+    "summarize_webpage":    ("summarize_webpage.md",    "SOULSEARCHER_PROMPT_SUMMARIZE"),
 }
 
 
@@ -65,15 +65,15 @@ class PromptLoader:
 
         Args:
             base_dir: Directory containing .md prompt files.
-                      Defaults to WEAVER_PROMPTS_PATH env var, or
+                      Defaults to SOULSEARCHER_PROMPTS_PATH env var, or
                       agent/prompts/deep_research/ relative to this file.
             load_fallbacks: If True, import hardcoded fallbacks from agent.core.prompts
                             on first load.
         """
         if base_dir:
             self._base_dir = Path(base_dir)
-        elif os.environ.get("WEAVER_PROMPTS_PATH"):
-            self._base_dir = Path(os.environ["WEAVER_PROMPTS_PATH"])
+        elif os.environ.get("SOULSEARCHER_PROMPTS_PATH"):
+            self._base_dir = Path(os.environ["SOULSEARCHER_PROMPTS_PATH"])
         else:
             self._base_dir = Path(__file__).resolve().parent / "deep_research"
 
@@ -93,7 +93,7 @@ class PromptLoader:
         """Get a prompt by name.
 
         Resolution order:
-        1. WEAVER_PROMPT_<NAME> environment variable (per-prompt override)
+        1. SOULSEARCHER_PROMPT_<NAME> environment variable (per-prompt override)
         2. .md file in base_dir
         3. Hardcoded fallback from agent.core.prompts
 

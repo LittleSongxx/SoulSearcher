@@ -18,7 +18,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Weaver - Deep Research AI Agent",
+  title: "SoulSearcher - Deep Research AI Agent",
   description: "AI-powered research assistant with deep search and code execution",
   icons: {
     icon: '/favicon.ico',
@@ -39,7 +39,7 @@ export default function RootLayout({
       )}>
         <ThemeProvider
           defaultTheme="system"
-          storageKey="weaver-theme"
+          storageKey="soulsearcher-theme"
         >
           <I18nProvider>
             {children}

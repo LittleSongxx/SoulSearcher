@@ -42,7 +42,7 @@ python /mnt/skills/public/systematic-literature-review/scripts/arxiv_search.py \
   "<topic>" --max-results 50 --sort-by relevance --start-date YYYY-MM-DD --end-date YYYY-MM-DD
 ```
 
-For broader reach, also use the Semantic Scholar API through Weaver's academic search providers.
+For broader reach, also use the Semantic Scholar API through SoulSearcher's academic search providers.
 
 #### Step 1.2: Sub-Topic Mining
 

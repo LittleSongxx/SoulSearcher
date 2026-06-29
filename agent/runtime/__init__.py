@@ -1,4 +1,4 @@
-"""Runtime layer for Weaver agents."""
+"""Runtime layer for SoulSearcher agents."""
 
 __all__ = [
     "RuntimeContext",

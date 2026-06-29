@@ -1,5 +1,5 @@
 """
-Academic Search Providers and Tools for Weaver.
+Academic Search Providers and Tools for SoulSearcher.
 
 Provides access to academic literature:
 - arXiv (preprints, no API key)

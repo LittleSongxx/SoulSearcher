@@ -1,4 +1,4 @@
-"""Lightweight run lifecycle registry for Weaver research flows."""
+"""Lightweight run lifecycle registry for SoulSearcher research flows."""
 
 from __future__ import annotations
 
@@ -102,7 +102,7 @@ class RunManager:
             ) as conn, conn.cursor() as cur:
                 cur.execute(
                     """
-                        CREATE TABLE IF NOT EXISTS weaver_run_records (
+                        CREATE TABLE IF NOT EXISTS soulsearcher_run_records (
                             run_id text PRIMARY KEY,
                             thread_id text NOT NULL,
                             model text NOT NULL DEFAULT '',
@@ -121,14 +121,14 @@ class RunManager:
                 """
             )
                 cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_weaver_run_thread_id ON weaver_run_records(thread_id)"
+                    "CREATE INDEX IF NOT EXISTS idx_soulsearcher_run_thread_id ON soulsearcher_run_records(thread_id)"
                 )
                 cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_weaver_run_status ON weaver_run_records(status)"
+                    "CREATE INDEX IF NOT EXISTS idx_soulsearcher_run_status ON soulsearcher_run_records(status)"
                 )
                 cur.execute(
                     """
-                        CREATE TABLE IF NOT EXISTS weaver_run_events (
+                        CREATE TABLE IF NOT EXISTS soulsearcher_run_events (
                             id bigserial PRIMARY KEY,
                             run_id text NOT NULL,
                             thread_id text NOT NULL,
@@ -142,7 +142,7 @@ class RunManager:
                     """
                 )
                 cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_weaver_run_events_thread_seq ON weaver_run_events(thread_id, seq)"
+                    "CREATE INDEX IF NOT EXISTS idx_soulsearcher_run_events_thread_seq ON soulsearcher_run_events(thread_id, seq)"
                 )
             self._backend = "postgres"
             self._db_ready = True
@@ -180,7 +180,7 @@ class RunManager:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                    INSERT INTO weaver_run_records (
+                    INSERT INTO soulsearcher_run_records (
                         run_id, thread_id, model, route, user_id, status,
                         created_at, updated_at, ended_at, error, token_summary,
                         quality_summary, workspace, metadata
@@ -222,7 +222,7 @@ class RunManager:
                 cur.execute(
                     """
                         SELECT *
-                        FROM weaver_run_records
+                        FROM soulsearcher_run_records
                         WHERE run_id = %s OR thread_id = %s
                         ORDER BY updated_at DESC
                         LIMIT 1
@@ -356,7 +356,7 @@ class RunManager:
             try:
                 with self._connect() as conn, conn.cursor() as cur:
                     cur.execute(
-                        "SELECT * FROM weaver_run_records ORDER BY updated_at DESC LIMIT 500"
+                        "SELECT * FROM soulsearcher_run_records ORDER BY updated_at DESC LIMIT 500"
                     )
                     columns = [desc[0] for desc in cur.description or []]
                     rows = cur.fetchall()
@@ -402,7 +402,7 @@ class RunManager:
                 with self._connect() as conn, conn.cursor() as cur:
                     cur.execute(
                         """
-                            INSERT INTO weaver_run_events (
+                            INSERT INTO soulsearcher_run_events (
                                 run_id, thread_id, seq, type, status, payload
                             ) VALUES (
                                 %(run_id)s, %(thread_id)s, %(seq)s, %(type)s,
@@ -437,7 +437,7 @@ class RunManager:
         try:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COALESCE(MAX(seq), 0) FROM weaver_run_events WHERE thread_id = %s",
+                    "SELECT COALESCE(MAX(seq), 0) FROM soulsearcher_run_events WHERE thread_id = %s",
                     (thread_id,),
                 )
                 row = cur.fetchone()
@@ -457,7 +457,7 @@ class RunManager:
                     cur.execute(
                         """
                             SELECT run_id, thread_id, seq, type, status, payload, created_at
-                            FROM weaver_run_events
+                            FROM soulsearcher_run_events
                             WHERE thread_id = %s AND seq > %s
                             ORDER BY seq ASC
                             LIMIT %s

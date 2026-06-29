@@ -2,7 +2,7 @@
 Multi-provider web search (API-based).
 
 This is adapted from Shannon's `llm_service/tools/builtin/web_search.py`, but implemented
-with Weaver's settings and sync `requests` calls so it can be used inside LangChain tools.
+with SoulSearcher's settings and sync `requests` calls so it can be used inside LangChain tools.
 
 Why this exists:
 - Directly opening Google/Bing/DuckDuckGo in Playwright often triggers anti-bot challenges.

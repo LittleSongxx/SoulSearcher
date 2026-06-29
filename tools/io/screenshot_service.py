@@ -410,7 +410,7 @@ def get_screenshot_service() -> ScreenshotService:
     global _screenshot_service
 
     if _screenshot_service is None:
-        override = (os.getenv("WEAVER_DATA_DIR") or "").strip()
+        override = (os.getenv("SOULSEARCHER_DATA_DIR") or "").strip()
         if override:
             root = Path(override).expanduser()
             if not root.is_absolute():

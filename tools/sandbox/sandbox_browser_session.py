@@ -159,7 +159,7 @@ nohup "$CHROME_BIN" \\
   --metrics-recording-only \\
   --mute-audio \\
   --no-zygote \\
-  --user-data-dir=/tmp/weaver-chrome-{port} \\
+  --user-data-dir=/tmp/soulsearcher-chrome-{port} \\
   --window-size=1920,1080 \\
   > /tmp/chrome.log 2>&1 &
 """
@@ -308,7 +308,7 @@ class SandboxBrowserSession:
             port = _chrome_port()
 
             metadata: dict[str, str] = {
-                "weaver": "sandbox_browser",
+                "soulsearcher": "sandbox_browser",
                 "thread_id": self.thread_id,
             }
 
@@ -770,7 +770,7 @@ class SandboxBrowserSessionManager:
             if executor is None:
                 executor = ThreadPoolExecutor(
                     max_workers=1,
-                    thread_name_prefix=f"weaver-sb-{thread_id[:12]}",
+                    thread_name_prefix=f"soulsearcher-sb-{thread_id[:12]}",
                 )
                 self._executors[thread_id] = executor
             return executor

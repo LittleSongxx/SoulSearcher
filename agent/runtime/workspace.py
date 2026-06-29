@@ -9,7 +9,7 @@ from typing import Any
 
 
 def _workspace_root() -> Path:
-    override = os.environ.get("WEAVER_RESEARCH_WORKSPACE_PATH", "").strip()
+    override = os.environ.get("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", "").strip()
     if override:
         root = Path(override).expanduser()
         if not root.is_absolute():

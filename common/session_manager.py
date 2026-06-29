@@ -1,5 +1,5 @@
 """
-Session Manager for Weaver.
+Session Manager for SoulSearcher.
 
 Provides high-level CRUD operations for research sessions.
 Wraps the LangGraph checkpointer for persistence and recovery.

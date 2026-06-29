@@ -1,3 +1,3 @@
-"""Weaver API router package."""
+"""SoulSearcher API router package."""
 
 __all__: list[str] = []

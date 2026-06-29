@@ -36,7 +36,7 @@ def test_settings_keep_env_models_and_inherit_tiers(tmp_path, monkeypatch):
 
 
 def test_request_model_is_used_as_workflow_tier_default(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path / "workspaces"))
 
     bundle = build_research_runtime(
         ResearchRuntimeRequest(
@@ -60,7 +60,7 @@ def test_request_model_is_used_as_workflow_tier_default(tmp_path, monkeypatch):
 
 
 def test_explicit_tier_overrides_take_precedence_over_request_model(tmp_path, monkeypatch):
-    monkeypatch.setenv("WEAVER_RESEARCH_WORKSPACE_PATH", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("SOULSEARCHER_RESEARCH_WORKSPACE_PATH", str(tmp_path / "workspaces"))
 
     bundle = build_research_runtime(
         ResearchRuntimeRequest(

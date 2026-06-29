@@ -1,10 +1,10 @@
 """
-Lightweight ToolCollection for Weaver.
+Lightweight ToolCollection for SoulSearcher.
 
 Purpose: provide a simple, runtime-mutable aggregation of tools (functions or
 LangChain BaseTool instances) with name-based lookup and optional whitelist /
 blacklist filtering. This mirrors OpenManus's ToolCollection but is adapted to
-Weaver's tool registry and LangGraph agents.
+SoulSearcher's tool registry and LangGraph agents.
 """
 
 from collections.abc import Iterable

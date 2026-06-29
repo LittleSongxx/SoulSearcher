@@ -34,7 +34,7 @@ class ExtensionsConfig(BaseModel):
 
         Priority:
         1. Explicit ``config_path`` argument.
-        2. ``WEAVER_EXTENSIONS_CONFIG_PATH`` environment variable.
+        2. ``SOULSEARCHER_EXTENSIONS_CONFIG_PATH`` environment variable.
         3. ``extensions_config.json`` in current directory.
         4. ``extensions_config.json`` in parent directory (project root).
         """
@@ -44,7 +44,7 @@ class ExtensionsConfig(BaseModel):
                 raise FileNotFoundError(f"Extensions config file not found at {path}")
             return path
 
-        if env_path := os.getenv("WEAVER_EXTENSIONS_CONFIG_PATH"):
+        if env_path := os.getenv("SOULSEARCHER_EXTENSIONS_CONFIG_PATH"):
             path = Path(env_path)
             if not path.exists():
                 raise FileNotFoundError(f"Extensions config file not found at {path}")

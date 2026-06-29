@@ -1,10 +1,10 @@
-name: weaver
+name: soulsearcher
 
 services:
   # ---------- PostgreSQL (pgvector) ----------
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: weaver_postgres
+    container_name: soulsearcher_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-manus}
@@ -20,12 +20,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - weaver-net
+      - soulsearcher-net
 
   # ---------- Redis (cache / runtime services) ----------
   redis:
     image: redis/redis-stack-server:7.4.0-v8
-    container_name: weaver_redis
+    container_name: soulsearcher_redis
     restart: unless-stopped
     environment:
       REDIS_ARGS: "--maxmemory 256mb --maxmemory-policy allkeys-lru"
@@ -39,7 +39,7 @@ services:
       timeout: 3s
       retries: 5
     networks:
-      - weaver-net
+      - soulsearcher-net
 
   # ---------- Backend (FastAPI + LangGraph) ----------
   backend:
@@ -51,7 +51,7 @@ services:
         PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
         PIP_DEFAULT_TIMEOUT: ${PIP_DEFAULT_TIMEOUT:-1200}
         PIP_RETRIES: ${PIP_RETRIES:-10}
-    container_name: weaver_backend
+    container_name: soulsearcher_backend
     restart: unless-stopped
     env_file:
       - ../.env
@@ -64,8 +64,8 @@ services:
       MEMORY_ENABLED: "true"
       MEMORY_BACKEND: postgres
       MEMORY_DATABASE_URL: postgresql://${POSTGRES_USER:-manus}:${POSTGRES_PASSWORD:-manus_dev_password}@postgres:5432/${POSTGRES_DB:-manus_db}
-      WEAVER_DATA_DIR: /app/.docker-data/data
-      WEAVER_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8001}
+      SOULSEARCHER_DATA_DIR: /app/.docker-data/data
+      SOULSEARCHER_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8001}
       CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3100},http://127.0.0.1:${FRONTEND_PORT:-3100}
       TOOL_RETRY: "true"
       PYTHONUNBUFFERED: "1"
@@ -112,14 +112,14 @@ services:
         "web/.next",
       ]
     networks:
-      - weaver-net
+      - soulsearcher-net
 
   # ---------- Frontend (Next.js dev server) ----------
   frontend:
     build:
       context: ../web
       dockerfile: Dockerfile
-    container_name: weaver_frontend
+    container_name: soulsearcher_frontend
     restart: unless-stopped
     environment:
       FRONTEND_PORT: "3100"
@@ -139,7 +139,7 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - weaver-net
+      - soulsearcher-net
 
 volumes:
   postgres_data:
@@ -148,5 +148,5 @@ volumes:
   frontend_next:
 
 networks:
-  weaver-net:
+  soulsearcher-net:
     driver: bridge

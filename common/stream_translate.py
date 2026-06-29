@@ -9,7 +9,7 @@ from common.sse import format_sse_event
 
 def data_stream_line_to_payload(line: str, *, seq: int) -> dict[str, Any] | None:
     """
-    Decode Weaver's internal data-stream envelope (`0:{json}\\n`).
+    Decode SoulSearcher's internal data-stream envelope (`0:{json}\\n`).
 
     Internal format: `0:{"type": "...", "data": {...}}\\n`
     """
@@ -41,7 +41,7 @@ def data_stream_line_to_payload(line: str, *, seq: int) -> dict[str, Any] | None
 
 def translate_data_stream_line_to_sse(line: str, *, seq: int) -> str:
     """
-    Translate Weaver's internal data-stream envelope (`0:{json}\\n`) into SSE.
+    Translate SoulSearcher's internal data-stream envelope (`0:{json}\\n`) into SSE.
 
     Internal format: `0:{"type": "...", "data": {...}}\\n`
     SSE format:      `id: <seq>\\nevent: <type>\\ndata: <json>\\n\\n`

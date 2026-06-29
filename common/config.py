@@ -111,7 +111,7 @@ class AppConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    # Local `.env` files often include variables for the frontend (e.g. `WEAVER_BASE_URL`)
+    # Local `.env` files often include variables for the frontend (e.g. `SOULSEARCHER_BASE_URL`)
     # or optional providers that aren't always modeled here. Rejecting unknown keys makes
     # local setup brittle, so we ignore extras.
     model_config = ConfigDict(
@@ -257,17 +257,17 @@ class Settings(BaseSettings):
         validation_alias="PORT",
         description="Backend listen port (used by `python main.py`).",
     )
-    weaver_reload: bool = Field(
+    soulsearcher_reload: bool = Field(
         default=False,
-        validation_alias="WEAVER_RELOAD",
+        validation_alias="SOULSEARCHER_RELOAD",
         description="Enable uvicorn hot reload when running `python main.py` (only in DEBUG).",
     )
     internal_api_key: str = Field(
-        default="", validation_alias="WEAVER_INTERNAL_API_KEY"
+        default="", validation_alias="SOULSEARCHER_INTERNAL_API_KEY"
     )
     auth_user_header: str = Field(
-        default="X-Weaver-User",
-        validation_alias="WEAVER_AUTH_USER_HEADER",
+        default="X-SoulSearcher-User",
+        validation_alias="SOULSEARCHER_AUTH_USER_HEADER",
         description="Trusted user identity header (only meaningful behind an authenticated proxy).",
     )
 
@@ -316,7 +316,7 @@ class Settings(BaseSettings):
 
     # Logging Config
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-    log_file: str = "logs/weaver.log"  # Log file path
+    log_file: str = "logs/soulsearcher.log"  # Log file path
     log_max_bytes: int = 10485760  # 10MB
     log_backup_count: int = 5  # Keep 5 backup files
     log_format: str = (
@@ -494,7 +494,7 @@ class Settings(BaseSettings):
     twitter_api_secret: str = ""  # Twitter API Secret (optional)
     reddit_client_id: str = ""  # Reddit OAuth client ID
     reddit_client_secret: str = ""  # Reddit OAuth client secret
-    reddit_user_agent: str = "Weaver/1.0"  # Reddit API user agent
+    reddit_user_agent: str = "SoulSearcher/1.0"  # Reddit API user agent
     hackernews_enabled: bool = True  # HackerNews search (no API key needed)
 
     # Academic Search Settings
@@ -665,7 +665,7 @@ class Settings(BaseSettings):
     # Context Offloading
     context_offloading: bool = False  # offload large tool results to filesystem
     context_offloading_threshold: int = 2000  # chars above which content is offloaded
-    context_offloading_dir: str = ""  # empty = /tmp/weaver_offload
+    context_offloading_dir: str = ""  # empty = /tmp/soulsearcher_offload
 
     # Agent Reflexion
     agent_reflexion_enabled: bool = True  # self-reflection after tool-calling rounds

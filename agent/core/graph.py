@@ -1,6 +1,6 @@
 """Unified Deep Research StateGraph — bounded cyclic research workflow.
 
-This is not a pure DAG. Weaver uses a mostly linear top-level workflow with
+This is not a pure DAG. SoulSearcher uses a mostly linear top-level workflow with
 bounded supervisor/researcher loops and quality follow-up edges, all controlled
 by typed state, iteration budgets, and deterministic exit guards.
 
@@ -100,7 +100,7 @@ def create_research_graph(
 ):
     """Create the unified deep research StateGraph.
 
-    This is the main entry point for the Weaver Deep Research Agent.
+    This is the main entry point for the SoulSearcher Deep Research Agent.
     It compiles the full bounded workflow with subgraph nesting for clean
     boundaries. Cyclic edges are intentional and budgeted.
 

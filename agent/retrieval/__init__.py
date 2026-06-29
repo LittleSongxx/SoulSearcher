@@ -1,4 +1,4 @@
-"""Unified retrieval layer for Weaver Deep Research."""
+"""Unified retrieval layer for SoulSearcher Deep Research."""
 
 from agent.retrieval.gateway import (
     build_retrieval_tools,

@@ -1,5 +1,5 @@
 """
-Real-time Feed Providers for Weaver.
+Real-time Feed Providers for SoulSearcher.
 
 Provides access to social media and tech news feeds:
 - Twitter/X (via tweepy)

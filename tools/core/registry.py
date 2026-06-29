@@ -2,7 +2,7 @@
 Tool Registry - Dynamic tool registration and management system
 
 This module provides a comprehensive tool registry system for managing,
-discovering, validating, and tracking tools in the Weaver agent framework.
+discovering, validating, and tracking tools in the SoulSearcher agent framework.
 
 Features:
 - Dynamic tool registration and unregistration
@@ -40,7 +40,7 @@ try:  # Older LangChain compatibility location
 except Exception:  # pragma: no cover
     BaseTool = CoreBaseTool  # type: ignore[assignment]
 
-from tools.core.base import WeaverTool
+from tools.core.base import SoulSearcherTool
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ToolMetadata:
     # Basic info
     name: str
     description: str
-    tool_type: str  # "weaver" | "langchain" | "function"
+    tool_type: str  # "soulsearcher" | "langchain" | "function"
 
     # Schema
     parameters: dict[str, Any] = field(default_factory=dict)
@@ -177,7 +177,7 @@ class ToolRegistry:
 
         Args:
             name: Unique tool name
-            tool: Tool callable (function, WeaverTool method, etc.)
+            tool: Tool callable (function, SoulSearcherTool method, etc.)
             description: Tool description
             parameters: Parameter schema (auto-detected if not provided)
             tags: Tags for categorization
@@ -236,17 +236,17 @@ class ToolRegistry:
 
         return metadata
 
-    def register_weaver_tool(
+    def register_soulsearcher_tool(
         self,
-        tool_instance: Any,  # WeaverTool
+        tool_instance: Any,  # SoulSearcherTool
         method_name: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ) -> list[ToolMetadata]:
         """
-        Register all methods from a WeaverTool instance.
+        Register all methods from a SoulSearcherTool instance.
 
         Args:
-            tool_instance: WeaverTool instance
+            tool_instance: SoulSearcherTool instance
             method_name: Specific method name (None = register all)
             tags: Additional tags for all methods
 
@@ -254,8 +254,8 @@ class ToolRegistry:
             List of ToolMetadata for registered methods
         """
 
-        if WeaverTool is None:
-            raise ImportError("WeaverTool not available")
+        if SoulSearcherTool is None:
+            raise ImportError("SoulSearcherTool not available")
 
         registered = []
 
@@ -274,7 +274,7 @@ class ToolRegistry:
                 tool=tool_method,
                 description=schema.get("description", ""),
                 parameters=schema.get("parameters", {}),
-                tags=(tags or []) + ["weaver_tool"],
+                tags=(tags or []) + ["soulsearcher_tool"],
                 version=getattr(tool_instance, "__version__", "1.0.0"),
             )
 
@@ -321,7 +321,7 @@ class ToolRegistry:
         Discover and register tools from a module.
 
         Automatically finds:
-        - WeaverTool subclasses
+        - SoulSearcherTool subclasses
         - Functions decorated with @tool_schema
         - Async functions with ToolResult return type
 
@@ -339,13 +339,13 @@ class ToolRegistry:
         # Import module
         module = importlib.import_module(module_name)
 
-        # Scan for WeaverTool subclasses
-        if WeaverTool is not None:
+        # Scan for SoulSearcherTool subclasses
+        if SoulSearcherTool is not None:
             for name, obj in inspect.getmembers(module, inspect.isclass):
-                if issubclass(obj, WeaverTool) and obj is not WeaverTool:
+                if issubclass(obj, SoulSearcherTool) and obj is not SoulSearcherTool:
                     try:
                         instance = obj()
-                        registered.extend(self.register_weaver_tool(instance, tags=tags))
+                        registered.extend(self.register_soulsearcher_tool(instance, tags=tags))
                     except Exception as e:
                         logger.error(f"Failed to instantiate {name}: {e}")
 
@@ -607,8 +607,8 @@ class ToolRegistry:
 
     def _detect_tool_type(self, tool: Callable) -> str:
         """Detect tool type from callable."""
-        if WeaverTool and isinstance(tool, WeaverTool) or hasattr(tool, "__self__") and WeaverTool and isinstance(tool.__self__, WeaverTool):
-            return "weaver"
+        if SoulSearcherTool and isinstance(tool, SoulSearcherTool) or hasattr(tool, "__self__") and SoulSearcherTool and isinstance(tool.__self__, SoulSearcherTool):
+            return "soulsearcher"
         elif hasattr(tool, "__self__") and BaseTool and isinstance(tool.__self__, BaseTool) or hasattr(tool, "__self__") and CoreBaseTool is not None and isinstance(tool.__self__, CoreBaseTool) or BaseTool and isinstance(tool, BaseTool):
             return "langchain"
         elif hasattr(tool, "_tool_schema"):

@@ -32,7 +32,7 @@ def build_skill_markdown(skill_name: str, procedural_records: list[MemoryRecord]
     return (
         "---\n"
         f"name: {skill_name}\n"
-        "description: Auto-evolved research procedure distilled from successful Weaver DeepResearch runs.\n"
+        "description: Auto-evolved research procedure distilled from successful SoulSearcher DeepResearch runs.\n"
         "allowed-tools:\n"
         "  - tavily_search\n"
         "  - fallback_search\n"

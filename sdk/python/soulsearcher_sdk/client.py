@@ -13,14 +13,14 @@ from .types import StreamEvent
 
 
 @dataclass(frozen=True)
-class WeaverApiError(RuntimeError):
+class SoulSearcherApiError(RuntimeError):
     status: int
     path: str
     body_text: str
 
     def __str__(self) -> str:
         suffix = f": {self.body_text}" if self.body_text else ""
-        return f"Weaver API request failed ({self.status}) {self.path}{suffix}"
+        return f"SoulSearcher API request failed ({self.status}) {self.path}{suffix}"
 
 
 def _normalize_base_url(raw: str) -> str:
@@ -34,7 +34,7 @@ def _encode_path_param(value: str) -> str:
     return quote(str(value or ""), safe="")
 
 
-class WeaverClient:
+class SoulSearcherClient:
     def __init__(
         self,
         *,
@@ -73,7 +73,7 @@ class WeaverClient:
 
         body_text = resp.text or ""
         if resp.status_code < 200 or resp.status_code >= 300:
-            raise WeaverApiError(status=resp.status_code, path=path, body_text=body_text)
+            raise SoulSearcherApiError(status=resp.status_code, path=path, body_text=body_text)
 
         if not body_text.strip():
             return None
@@ -111,7 +111,7 @@ class WeaverClient:
                     body_text = resp.read().decode("utf-8", errors="ignore")
                 except Exception:
                     body_text = ""
-                raise WeaverApiError(status=resp.status_code, path=path, body_text=body_text)
+                raise SoulSearcherApiError(status=resp.status_code, path=path, body_text=body_text)
 
             self.last_thread_id = (
                 resp.headers.get("X-Thread-ID")
@@ -223,7 +223,7 @@ class WeaverClient:
         )
         body = resp.content or b""
         if resp.status_code < 200 or resp.status_code >= 300:
-            raise WeaverApiError(
+            raise SoulSearcherApiError(
                 status=resp.status_code,
                 path=f"/api/export/{safe_id}",
                 body_text=body.decode("utf-8", errors="ignore"),

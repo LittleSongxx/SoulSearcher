@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "weaver-internal-sdk"
+name = "soulsearcher-internal-sdk"
 version = "0.0.0"
-description = "Internal Weaver SDK (TypeScript + Python) for repository-local reuse"
+description = "Internal SoulSearcher SDK (TypeScript + Python) for repository-local reuse"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["httpx>=0.28.1"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["weaver_sdk*"]
+include = ["soulsearcher_sdk*"]
 

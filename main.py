@@ -139,7 +139,7 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Weaver Research Agent API",
+    title="SoulSearcher Research Agent API",
     description="Deep  research AI agent with code execution capabilities",
     version="0.1.0",
     lifespan=lifespan,
@@ -165,7 +165,7 @@ def _get_or_create_gauge(name: str, *args, **kwargs):
 
 http_requests_total = (
     _get_or_create_counter(
-        "weaver_http_requests_total",
+        "soulsearcher_http_requests_total",
         "Total HTTP requests",
         ["method", "path", "status"],
     )
@@ -173,14 +173,14 @@ http_requests_total = (
     else None
 )
 http_inprogress = (
-    _get_or_create_gauge("weaver_http_inprogress", "In-flight HTTP requests")
+    _get_or_create_gauge("soulsearcher_http_inprogress", "In-flight HTTP requests")
     if settings.enable_prometheus
     else None
 )
 
 # Streaming connection gauges (always registered; cheap + useful for debugging).
 sse_active_connections = _get_or_create_gauge(
-    "weaver_sse_active_connections",
+    "soulsearcher_sse_active_connections",
     "Active SSE connections",
     ["endpoint"],
 )
@@ -201,7 +201,7 @@ async def log_requests(request: Request, call_next):
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     auth_user_header = (
         getattr(settings, "auth_user_header", "") or ""
-    ).strip() or "X-Weaver-User"
+    ).strip() or "X-SoulSearcher-User"
     path = request.url.path
     method = request.method.upper()
     rate_limit_enabled = bool(getattr(settings, "rate_limit_enabled_effective", True))
@@ -521,7 +521,7 @@ def _apply_mcp_thread_id(config: Any, thread_id: str) -> Any:
 async def startup_event():
     """Initialize application on startup."""
     logger.info("=" * 80)
-    logger.info("Weaver Research Agent Starting...")
+    logger.info("SoulSearcher Research Agent Starting...")
     logger.info("=" * 80)
 
     # Normalize common proxy env quirks (e.g. `ALL_PROXY=socks://...`) so
@@ -605,14 +605,14 @@ async def startup_event():
         logger.warning(f"Skills cache priming failed: {e}", exc_info=settings.debug)
 
     logger.info("=" * 80)
-    logger.info("Weaver Research Agent Ready")
+    logger.info("SoulSearcher Research Agent Ready")
     logger.info("=" * 80)
 
 
 async def shutdown_event():
     """Cleanup on application shutdown."""
     logger.info("=" * 80)
-    logger.info("Weaver Research Agent Shutting Down...")
+    logger.info("SoulSearcher Research Agent Shutting Down...")
     logger.info("=" * 80)
 
     # Stop channel service
@@ -1152,7 +1152,7 @@ def _normalize_interrupt_resume_payload(payload: Any) -> Any:
     """
     Normalize /api/interrupt/resume payloads for LangGraph `interrupt()` resumes.
 
-    Weaver clients may send a shorthand payload shape:
+    SoulSearcher clients may send a shorthand payload shape:
         {"tool_approved": true/false, "tool_calls": [{name, args, ...}, ...]}
 
     LangChain's official HumanInTheLoopMiddleware expects a HITLResponse:
@@ -1283,7 +1283,7 @@ app.include_router(tracing_router)
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "Weaver Research Agent", "version": "0.1.0"}
+    return {"status": "healthy", "service": "SoulSearcher Research Agent", "version": "0.1.0"}
 
 
 @app.get("/health")
@@ -1577,7 +1577,7 @@ async def get_active_tasks(request: Request):
 
 async def format_stream_event(event_type: str, data: Any) -> str:
     """
-    Format events in Weaver's internal data-stream envelope.
+    Format events in SoulSearcher's internal data-stream envelope.
 
     Format: {type}:{json_data}\n
     """
@@ -4121,7 +4121,7 @@ async def list_export_templates():
             {
                 "id": "default",
                 "name": "Default",
-                "description": "Standard research report format with Weaver branding",
+                "description": "Standard research report format with SoulSearcher branding",
             },
             {
                 "id": "academic",
@@ -5921,10 +5921,10 @@ if __name__ == "__main__":
     #
     # Keep reload opt-in to make `python main.py` reliable out-of-the-box.
     reload_enabled = bool(settings.debug) and bool(
-        getattr(settings, "weaver_reload", False)
+        getattr(settings, "soulsearcher_reload", False)
     )
     if settings.debug and not reload_enabled:
-        logger.info("Hot reload disabled (set WEAVER_RELOAD=true to enable).")
+        logger.info("Hot reload disabled (set SOULSEARCHER_RELOAD=true to enable).")
 
     reload_dirs = None
     reload_excludes = None

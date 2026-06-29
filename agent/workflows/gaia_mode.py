@@ -1,7 +1,7 @@
 """GAIA Mode — Short-answer research pipeline for benchmark evaluation.
 
 GAIA (General AI Assistants) evaluates agents on multi-step reasoning tasks
-requiring web search, tool use, and information synthesis.  Unlike Weaver's
+requiring web search, tool use, and information synthesis.  Unlike SoulSearcher's
 default deep-research pipeline (which produces long-form cited reports), GAIA
 expects concise, factual answers (a string, number, or list).
 

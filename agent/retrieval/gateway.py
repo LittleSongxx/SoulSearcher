@@ -213,7 +213,7 @@ def build_retrieval_tools(config: RunnableConfig | None = None) -> list[Structur
             coroutine=_retrieve_sources_tool,
             name="retrieve_sources",
             description=(
-                "Search all allowed retrieval origins through Weaver's unified "
+                "Search all allowed retrieval origins through SoulSearcher's unified "
                 "retrieval policy. Returns normalized sources, passages, warnings, "
                 "and evidence_items."
             ),

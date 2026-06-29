@@ -8,7 +8,7 @@ This module provides image analysis capabilities in an E2B sandbox:
 - Basic image analysis (colors, dimensions)
 - QR/Barcode reading
 
-Similar to Manus's sb_vision_tool.py but adapted for Weaver's E2B integration.
+Similar to Manus's sb_vision_tool.py but adapted for SoulSearcher's E2B integration.
 
 Usage:
     from tools.sandbox.sandbox_vision_tool import build_sandbox_vision_tools

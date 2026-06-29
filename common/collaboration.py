@@ -18,11 +18,11 @@ def _data_dir() -> Path:
 
     By default this stores under `data/collaboration` in the repo cwd.
 
-    For integration tests / ephemeral runs, set `WEAVER_DATA_DIR` to point at a
+    For integration tests / ephemeral runs, set `SOULSEARCHER_DATA_DIR` to point at a
     temp folder; collaboration artifacts will be stored under
-    `${WEAVER_DATA_DIR}/collaboration` so tests don't dirty the git checkout.
+    `${SOULSEARCHER_DATA_DIR}/collaboration` so tests don't dirty the git checkout.
     """
-    override = (os.getenv("WEAVER_DATA_DIR") or "").strip()
+    override = (os.getenv("SOULSEARCHER_DATA_DIR") or "").strip()
     if override:
         root = Path(override).expanduser()
         if not root.is_absolute():

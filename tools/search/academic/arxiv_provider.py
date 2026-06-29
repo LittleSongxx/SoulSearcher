@@ -45,7 +45,7 @@ class ArxivProvider(SearchProvider):
         super().__init__("arxiv", None)
         self._session = requests.Session()
         self._session.headers.update({
-            "User-Agent": "Weaver/1.0 (Research Tool; mailto:research@example.com)"
+            "User-Agent": "SoulSearcher/1.0 (Research Tool; mailto:research@example.com)"
         })
 
     def is_available(self) -> bool:

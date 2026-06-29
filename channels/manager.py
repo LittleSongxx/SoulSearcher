@@ -1,6 +1,6 @@
-"""ChannelManager — consumes inbound IM messages and dispatches to Weaver agent.
+"""ChannelManager — consumes inbound IM messages and dispatches to SoulSearcher agent.
 
-Bridges IM channels (Feishu, Slack, Telegram, etc.) to Weaver's research SSE API
+Bridges IM channels (Feishu, Slack, Telegram, etc.) to SoulSearcher's research SSE API
 or LangGraph-compatible agent runtime. Supports both streaming and wait modes.
 """
 
@@ -72,7 +72,7 @@ def _extract_response_text(result: dict | list) -> str:
 
 
 class ChannelManager:
-    """Core dispatcher bridging IM channels to Weaver agent."""
+    """Core dispatcher bridging IM channels to SoulSearcher agent."""
 
     def __init__(
         self,

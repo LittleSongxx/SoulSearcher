@@ -8,7 +8,7 @@ export const translations = {
     recentReports: 'Recent Reports',
     noRecentChats: 'No recent chats',
     newInvestigation: 'New Investigation',
-    weaver: 'Weaver',
+    soulsearcher: 'SoulSearcher',
 
     // Header
     toggleTheme: 'Toggle theme',
@@ -43,7 +43,7 @@ export const translations = {
     web: 'Web',
 
     // Empty state
-    emptyStateTitle: 'Weaver AI',
+    emptyStateTitle: 'SoulSearcher AI',
     emptyStateSubtitle: 'Your deep research companion.',
     emptyStateDescription: 'Ask me anything to start a comprehensive investigation.',
     starterAnalyze: 'Analyze the current state of AI Agent frameworks in 2024',
@@ -247,7 +247,7 @@ export const translations = {
     recentReports: '最近报告',
     noRecentChats: '暂无最近聊天',
     newInvestigation: '新建调查',
-    weaver: 'Weaver',
+    soulsearcher: 'SoulSearcher',
 
     // Header
     toggleTheme: '切换主题',
@@ -282,7 +282,7 @@ export const translations = {
     web: '网络',
 
     // Empty state
-    emptyStateTitle: 'Weaver AI',
+    emptyStateTitle: 'SoulSearcher AI',
     emptyStateSubtitle: '您的深度研究助手',
     emptyStateDescription: '提出任何问题，开始全面调查。',
     starterAnalyze: '分析 2024 年 AI Agent 框架的现状',
@@ -486,7 +486,7 @@ export const translations = {
     recentReports: '最近のレポート',
     noRecentChats: '最近のチャットはありません',
     newInvestigation: '新しい調査',
-    weaver: 'Weaver',
+    soulsearcher: 'SoulSearcher',
 
     // Header
     toggleTheme: 'テーマ切り替え',
@@ -521,7 +521,7 @@ export const translations = {
     web: 'ウェブ',
 
     // Empty state
-    emptyStateTitle: 'Weaver AI',
+    emptyStateTitle: 'SoulSearcher AI',
     emptyStateSubtitle: 'あなたの深層研究パートナー',
     emptyStateDescription: '何でも質問して、包括的な調査を始めましょう。',
     starterAnalyze: '2024年のAIエージェントフレームワークの現状を分析する',
@@ -603,7 +603,7 @@ export const translations = {
     recentReports: '최근 보고서',
     noRecentChats: '최근 채팅 없음',
     newInvestigation: '새 조사',
-    weaver: 'Weaver',
+    soulsearcher: 'SoulSearcher',
 
     // Header
     toggleTheme: '테마 전환',
@@ -638,7 +638,7 @@ export const translations = {
     web: '웹',
 
     // Empty state
-    emptyStateTitle: 'Weaver AI',
+    emptyStateTitle: 'SoulSearcher AI',
     emptyStateSubtitle: '당신의 심층 연구 파트너',
     emptyStateDescription: '무엇이든 질문하여 포괄적인 조사를 시작하세요.',
     starterAnalyze: '2024년 AI 에이전트 프레임워크 현황 분석',

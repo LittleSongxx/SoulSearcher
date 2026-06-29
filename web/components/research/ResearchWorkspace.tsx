@@ -202,7 +202,7 @@ export function ResearchWorkspace() {
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">W</div>
               <div>
-                <div className="text-sm font-bold tracking-tight">Weaver</div>
+                <div className="text-sm font-bold tracking-tight">SoulSearcher</div>
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Chat + Deep Research</div>
               </div>
             </div>

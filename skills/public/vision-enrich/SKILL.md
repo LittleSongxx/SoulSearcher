@@ -167,11 +167,11 @@ Before finalizing visual-enriched research:
 
 ## Configuration
 
-This skill's tools are controlled by Weaver configuration flags:
+This skill's tools are controlled by SoulSearcher configuration flags:
 
 ```bash
 # Enable basic vision (user images + view_image tool)
-WEAVER_MODE=deepresearch
+SOULSEARCHER_MODE=deepresearch
 supports_vision=true
 
 # Enable autonomous web image extraction (THIS SKILL's domain)

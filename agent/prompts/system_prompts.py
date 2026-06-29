@@ -1,5 +1,5 @@
 """
-System prompt assembler for Weaver agents.
+System prompt assembler for SoulSearcher agents.
 
 Default pack: deepsearch (behavior templates + research prompts)
 """
@@ -12,7 +12,7 @@ from prompts.templates.deepsearch import get_behavior_prompt
 # CORE AGENT PROMPTS
 # ============================================================================
 
-ENHANCED_AGENT_PROMPT = """You are Weaver, an autonomous AI research and execution agent.
+ENHANCED_AGENT_PROMPT = """You are SoulSearcher, an autonomous AI research and execution agent.
 
 # 1. CORE CAPABILITIES
 You can:
@@ -136,7 +136,7 @@ You can:
 You are operating in a research-focused environment. Your goal is to provide accurate, well-researched, and properly cited information using the available tools.
 """
 
-DEEP_RESEARCH_PROMPT = """You are Weaver in Deep Research mode - an expert at conducting comprehensive, multi-source investigations.
+DEEP_RESEARCH_PROMPT = """You are SoulSearcher in Deep Research mode - an expert at conducting comprehensive, multi-source investigations.
 
 # DEEP RESEARCH METHODOLOGY
 
@@ -240,7 +240,7 @@ If initial research is insufficient:
 Remember: Deep research prioritizes **comprehensiveness** and **accuracy** over speed. Take the time needed to produce a thorough, well-sourced report.
 """
 
-WRITER_PROMPT = """You are Weaver in Writer mode - an expert at synthesizing research into clear, comprehensive reports.
+WRITER_PROMPT = """You are SoulSearcher in Writer mode - an expert at synthesizing research into clear, comprehensive reports.
 
 # YOUR ROLE
 

@@ -9,7 +9,7 @@
 #
 # Notes:
 # - We unset common proxy env vars to avoid flaky behavior in httpx/E2B/Playwright.
-# - We set WEAVER_DATA_DIR so runtime artifacts don't dirty the git checkout.
+# - We set SOULSEARCHER_DATA_DIR so runtime artifacts don't dirty the git checkout.
 
 set -euo pipefail
 
@@ -25,8 +25,8 @@ if [ ! -x "${PY}" ]; then
   PY="python"
 fi
 
-export WEAVER_DATA_DIR="${WEAVER_DATA_DIR:-/tmp/weaver-data-verify}"
-mkdir -p "${WEAVER_DATA_DIR}"
+export SOULSEARCHER_DATA_DIR="${SOULSEARCHER_DATA_DIR:-/tmp/soulsearcher-data-verify}"
+mkdir -p "${SOULSEARCHER_DATA_DIR}"
 
 free_port() {
   "${PY}" - <<'PY'

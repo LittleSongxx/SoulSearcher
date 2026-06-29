@@ -45,7 +45,7 @@ CITATION_FIELDS = (
 
 def _request(url: str, api_key: str = "") -> dict[str, Any]:
     req = urllib.request.Request(url)
-    req.add_header("User-Agent", "Weaver-SLR/1.0")
+    req.add_header("User-Agent", "SoulSearcher-SLR/1.0")
     if api_key:
         req.add_header("x-api-key", api_key)
     try:
@@ -106,7 +106,7 @@ def _batch_paper_lookup(paper_ids: list[str], fields: str, api_key: str = "") ->
             data=body,
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": "Weaver-SLR/1.0",
+                "User-Agent": "SoulSearcher-SLR/1.0",
                 **({"x-api-key": api_key} if api_key else {}),
             },
             method="POST",

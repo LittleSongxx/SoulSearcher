@@ -32,7 +32,7 @@ class SemanticScholarProvider(SearchProvider):
         api_key = getattr(settings, "semantic_scholar_api_key", None)
         super().__init__("semantic_scholar", api_key)
         self._session = requests.Session()
-        headers = {"User-Agent": "Weaver/1.0 (Research Tool)"}
+        headers = {"User-Agent": "SoulSearcher/1.0 (Research Tool)"}
         if api_key:
             headers["x-api-key"] = api_key
         self._session.headers.update(headers)

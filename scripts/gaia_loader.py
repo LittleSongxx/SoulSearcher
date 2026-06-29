@@ -115,7 +115,7 @@ def _parse_gaia_row(row: dict) -> dict[str, Any]:
 
 
 # =============================================================================
-# Built-in curated benchmark queries (Weaver-specific, not GAIA)
+# Built-in curated benchmark queries (SoulSearcher-specific, not GAIA)
 # =============================================================================
 
 CURATED_BENCHMARK = [

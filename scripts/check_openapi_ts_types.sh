@@ -17,7 +17,7 @@ if [[ -n "$OPENAPI_JSON" && "$OPENAPI_JSON" != /* ]]; then
 fi
 
 if [[ -z "$OPENAPI_JSON" ]]; then
-  OPENAPI_JSON="/tmp/weaver-openapi.json"
+  OPENAPI_JSON="/tmp/soulsearcher-openapi.json"
 
   PY="$ROOT_DIR/.venv/bin/python"
   if [[ ! -x "$PY" ]]; then

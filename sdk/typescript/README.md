@@ -1,6 +1,6 @@
-# Weaver Internal SDK (TypeScript)
+# SoulSearcher Internal SDK (TypeScript)
 
-Internal-only TypeScript client for Weaver (not published).
+Internal-only TypeScript client for SoulSearcher (not published).
 
 The client targets the current research API: `researchSse()`, research cancellation,
 sessions, evidence, run events, and export. There is no separate chat endpoint.
@@ -18,5 +18,5 @@ bash sdk/typescript/scripts/build.sh
 ## Example
 
 ```bash
-WEAVER_BASE_URL=http://127.0.0.1:8001 node sdk/typescript/examples/research.mjs
+SOULSEARCHER_BASE_URL=http://127.0.0.1:8001 node sdk/typescript/examples/research.mjs
 ```

@@ -35,7 +35,7 @@ class HackerNewsProvider(SearchProvider):
         super().__init__("hackernews", None)
         self._session = requests.Session()
         self._session.headers.update({
-            "User-Agent": "Weaver/1.0 (Research Tool)"
+            "User-Agent": "SoulSearcher/1.0 (Research Tool)"
         })
 
     def is_available(self) -> bool:

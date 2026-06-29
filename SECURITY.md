@@ -31,8 +31,8 @@ If you accidentally committed a real secret:
 
 ## API Authentication
 
-- Set `WEAVER_INTERNAL_API_KEY` to enable Bearer token or `X-API-Key` authentication on most `/api/*` endpoints.
-- The `WEAVER_AUTH_USER_HEADER` (default: `X-Weaver-User`) provides per-user session isolation behind an authenticated proxy.
+- Set `SOULSEARCHER_INTERNAL_API_KEY` to enable Bearer token or `X-API-Key` authentication on most `/api/*` endpoints.
+- The `SOULSEARCHER_AUTH_USER_HEADER` (default: `X-SoulSearcher-User`) provides per-user session isolation behind an authenticated proxy.
 - For public deployments, enable rate limiting (`RATE_LIMIT_ENABLED=true`) to prevent abuse.
 
 ## Sandbox Security

@@ -10,7 +10,7 @@ Features:
 - Support for matplotlib/image output
 - Structured result format with stdout/stderr separation
 - Data visualization helpers
-- LangChain-compatible wrappers backed by WeaverTool results
+- LangChain-compatible wrappers backed by SoulSearcherTool results
 """
 
 import json
@@ -20,7 +20,7 @@ from typing import Any, Optional
 from langchain_core.tools import tool
 
 from common.config import settings
-from tools.core.base import ToolResult, WeaverTool, tool_schema
+from tools.core.base import ToolResult, SoulSearcherTool, tool_schema
 
 try:
     from e2b_code_interpreter import Sandbox  # type: ignore
@@ -40,7 +40,7 @@ _E2B_PLACEHOLDER_KEYS = {
 }
 
 
-class CodeExecutorTool(WeaverTool):
+class CodeExecutorTool(SoulSearcherTool):
     """
     Python code executor using E2B sandbox.
 

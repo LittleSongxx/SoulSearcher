@@ -35,7 +35,7 @@ def test_memory_api_lists_records_with_injected_service(monkeypatch):
 
     service = MemoryService(InMemoryMemoryStore(), embedding_dim=8)
     service.upsert_record(
-        MemoryRecord(user_id="default_user", content="Weaver unified memory smoke record.")
+        MemoryRecord(user_id="default_user", content="SoulSearcher unified memory smoke record.")
     )
     set_memory_service(service)
     monkeypatch.setattr(main.settings, "memory_enabled", True)
@@ -43,5 +43,5 @@ def test_memory_api_lists_records_with_injected_service(monkeypatch):
     response = asyncio.run(main.list_memory_records(_request()))
 
     assert response["count"] == 1
-    assert response["records"][0]["content"] == "Weaver unified memory smoke record."
+    assert response["records"][0]["content"] == "SoulSearcher unified memory smoke record."
     set_memory_service(None)

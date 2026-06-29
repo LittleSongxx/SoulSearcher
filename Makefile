@@ -37,7 +37,7 @@ dev:
 	@$(PY) main.py
 
 dev-reload:
-	@DEBUG=true WEAVER_RELOAD=1 $(PY) main.py
+	@DEBUG=true SOULSEARCHER_RELOAD=1 $(PY) main.py
 
 verify:
 	@$(PY) scripts/check_python_compiles.py

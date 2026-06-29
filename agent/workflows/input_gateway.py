@@ -254,7 +254,7 @@ async def direct_answer(state: AgentState, config: RunnableConfig) -> dict:
     For simple queries (e.g., "What is the capital of France?"), this
     provides a fast, cost-effective answer using the fast_llm.
 
-    Pattern from Weaver's existing direct_answer_node.
+    Pattern from SoulSearcher's existing direct_answer_node.
     """
     research_config = ResearchConfiguration.from_runnable_config(config)
 

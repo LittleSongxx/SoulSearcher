@@ -20,19 +20,19 @@ export class StorageService {
   }
 
   static getHistory<T>(): T[] {
-    return this.getItem<T[]>('weaver-history') || []
+    return this.getItem<T[]>('soulsearcher-history') || []
   }
 
   static saveHistory<T>(history: T[]): void {
-    this.setItem('weaver-history', history)
+    this.setItem('soulsearcher-history', history)
   }
 
   static getArtifacts<T>(): T[] {
-    return this.getItem<T[]>('weaver-artifacts') || []
+    return this.getItem<T[]>('soulsearcher-artifacts') || []
   }
 
   static saveArtifacts<T>(artifacts: T[]): void {
-    this.setItem('weaver-artifacts', artifacts)
+    this.setItem('soulsearcher-artifacts', artifacts)
   }
 
   static getSessionMessages<T>(sessionId: string): T[] {
@@ -64,7 +64,7 @@ export class StorageService {
     // This is tricky without a list. We rely on the history list usually.
     // A robust way is to iterate all keys.
     Object.keys(window.localStorage).forEach(key => {
-        if (key.startsWith('session_') || key === 'weaver-history' || key === 'weaver-artifacts') {
+        if (key.startsWith('session_') || key === 'soulsearcher-history' || key === 'soulsearcher-artifacts') {
              if (!keysToKeep.includes(key)) {
                  window.localStorage.removeItem(key)
              }

@@ -16,7 +16,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   // Load language from localStorage on mount
   useEffect(() => {
-    const savedLanguage = localStorage.getItem('weaver-language') as Language
+    const savedLanguage = localStorage.getItem('soulsearcher-language') as Language
     if (savedLanguage && ['en', 'zh', 'ja', 'ko'].includes(savedLanguage)) {
       setLanguageState(savedLanguage)
     }
@@ -25,7 +25,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   // Save language to localStorage when it changes
   const setLanguage = (lang: Language) => {
     setLanguageState(lang)
-    localStorage.setItem('weaver-language', lang)
+    localStorage.setItem('soulsearcher-language', lang)
   }
 
   // Translation function

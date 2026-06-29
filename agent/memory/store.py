@@ -301,7 +301,7 @@ class PostgresMemoryStore:
             )
             cur.execute(
                 f"""
-                CREATE TABLE IF NOT EXISTS weaver_memory_records (
+                CREATE TABLE IF NOT EXISTS soulsearcher_memory_records (
                     id text PRIMARY KEY,
                     user_id text NOT NULL,
                     scope text NOT NULL,
@@ -329,7 +329,7 @@ class PostgresMemoryStore:
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS weaver_memory_entities (
+                CREATE TABLE IF NOT EXISTS soulsearcher_memory_entities (
                     id text PRIMARY KEY,
                     user_id text NOT NULL,
                     name text NOT NULL,
@@ -344,7 +344,7 @@ class PostgresMemoryStore:
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS weaver_memory_relations (
+                CREATE TABLE IF NOT EXISTS soulsearcher_memory_relations (
                     id text PRIMARY KEY,
                     user_id text NOT NULL,
                     source_entity_id text NOT NULL,
@@ -363,7 +363,7 @@ class PostgresMemoryStore:
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS weaver_memory_audit_log (
+                CREATE TABLE IF NOT EXISTS soulsearcher_memory_audit_log (
                     id bigserial PRIMARY KEY,
                     action text NOT NULL,
                     payload jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -373,7 +373,7 @@ class PostgresMemoryStore:
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS weaver_skill_evolution (
+                CREATE TABLE IF NOT EXISTS soulsearcher_skill_evolution (
                     id text PRIMARY KEY,
                     user_id text NOT NULL,
                     skill_name text NOT NULL,
@@ -391,19 +391,19 @@ class PostgresMemoryStore:
                 """
             )
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_weaver_memory_user_status ON weaver_memory_records(user_id, status)"
+                "CREATE INDEX IF NOT EXISTS idx_soulsearcher_memory_user_status ON soulsearcher_memory_records(user_id, status)"
             )
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_weaver_memory_type_scope ON weaver_memory_records(type, scope)"
+                "CREATE INDEX IF NOT EXISTS idx_soulsearcher_memory_type_scope ON soulsearcher_memory_records(type, scope)"
             )
             cur.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_dedupe ON weaver_memory_records(user_id, dedupe_key) WHERE status = 'active'"
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_soulsearcher_memory_dedupe ON soulsearcher_memory_records(user_id, dedupe_key) WHERE status = 'active'"
             )
             cur.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_entity_name ON weaver_memory_entities(user_id, lower(name))"
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_soulsearcher_memory_entity_name ON soulsearcher_memory_entities(user_id, lower(name))"
             )
             cur.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_weaver_memory_relation_unique ON weaver_memory_relations(user_id, source_entity_id, target_entity_id, relation)"
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_soulsearcher_memory_relation_unique ON soulsearcher_memory_relations(user_id, source_entity_id, target_entity_id, relation)"
             )
         self._setup_done = True
 
@@ -437,7 +437,7 @@ class PostgresMemoryStore:
         with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
             cur.execute(
                 """
-                    UPDATE weaver_memory_records
+                    UPDATE soulsearcher_memory_records
                     SET status='superseded', updated_at=now()
                     WHERE user_id=%s AND dedupe_key=%s AND status='active' AND id<>%s
                     RETURNING id
@@ -450,7 +450,7 @@ class PostgresMemoryStore:
             embedding = record.embedding if self.pgvector_available else _json(record.embedding)
             cur.execute(
                 """
-                    INSERT INTO weaver_memory_records (
+                    INSERT INTO soulsearcher_memory_records (
                         id, user_id, scope, type, content, summary, embedding,
                         confidence, importance, quality_score, source_thread_id,
                         source_run_id, source_evidence_ids, source_urls, valid_from,
@@ -516,7 +516,7 @@ class PostgresMemoryStore:
             where.append("(content ILIKE %(query)s OR summary ILIKE %(query)s)")
             params["query"] = f"%{query}%"
         sql = (
-            "SELECT * FROM weaver_memory_records WHERE "
+            "SELECT * FROM soulsearcher_memory_records WHERE "
             + " AND ".join(where)
             + " ORDER BY updated_at DESC LIMIT %(limit)s"
         )
@@ -533,7 +533,7 @@ class PostgresMemoryStore:
             params.append(user_id)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                f"UPDATE weaver_memory_records SET status='deleted', updated_at=now() WHERE {where}",
+                f"UPDATE soulsearcher_memory_records SET status='deleted', updated_at=now() WHERE {where}",
                 params,
             )
             deleted = cur.rowcount > 0
@@ -552,7 +552,7 @@ class PostgresMemoryStore:
             }
             cur.execute(
                 """
-                    SELECT id FROM weaver_memory_entities
+                    SELECT id FROM soulsearcher_memory_entities
                     WHERE user_id=%(user_id)s AND lower(name)=lower(%(name)s)
                     """,
                 payload,
@@ -562,7 +562,7 @@ class PostgresMemoryStore:
                 payload["id"] = existing["id"]
                 cur.execute(
                     """
-                        UPDATE weaver_memory_entities
+                        UPDATE soulsearcher_memory_entities
                         SET aliases=%(aliases)s::jsonb,
                             metadata=metadata || %(metadata)s::jsonb,
                             updated_at=now()
@@ -574,7 +574,7 @@ class PostgresMemoryStore:
             else:
                 cur.execute(
                     """
-                        INSERT INTO weaver_memory_entities (
+                        INSERT INTO soulsearcher_memory_entities (
                             id, user_id, name, type, aliases, embedding, metadata,
                             created_at, updated_at
                         ) VALUES (
@@ -605,7 +605,7 @@ class PostgresMemoryStore:
             payload = {**relation.to_dict(), "metadata": _json(relation.metadata)}
             cur.execute(
                 """
-                    SELECT id FROM weaver_memory_relations
+                    SELECT id FROM soulsearcher_memory_relations
                     WHERE user_id=%(user_id)s
                     AND source_entity_id=%(source_entity_id)s
                     AND target_entity_id=%(target_entity_id)s
@@ -618,7 +618,7 @@ class PostgresMemoryStore:
                 payload["id"] = existing["id"]
                 cur.execute(
                     """
-                        UPDATE weaver_memory_relations
+                        UPDATE soulsearcher_memory_relations
                         SET confidence=GREATEST(confidence, %(confidence)s),
                             metadata=metadata || %(metadata)s::jsonb,
                             updated_at=now()
@@ -630,7 +630,7 @@ class PostgresMemoryStore:
             else:
                 cur.execute(
                     """
-                        INSERT INTO weaver_memory_relations (
+                        INSERT INTO soulsearcher_memory_relations (
                             id, user_id, source_entity_id, target_entity_id, relation,
                             source_record_id, confidence, valid_from, valid_to, status,
                             metadata, created_at, updated_at
@@ -671,7 +671,7 @@ class PostgresMemoryStore:
         with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
             cur.execute(
                 f"""
-                    SELECT * FROM weaver_memory_entities
+                    SELECT * FROM soulsearcher_memory_entities
                     WHERE user_id=%(user_id)s {entity_filter}
                     ORDER BY updated_at DESC LIMIT %(limit)s
                     """,
@@ -682,7 +682,7 @@ class PostgresMemoryStore:
             if ids:
                 cur.execute(
                     """
-                        SELECT * FROM weaver_memory_relations
+                        SELECT * FROM soulsearcher_memory_relations
                         WHERE user_id=%(user_id)s
                         AND (
                             source_entity_id = ANY(%(ids)s::text[])
@@ -695,7 +695,7 @@ class PostgresMemoryStore:
             else:
                 cur.execute(
                     """
-                        SELECT * FROM weaver_memory_relations
+                        SELECT * FROM soulsearcher_memory_relations
                         WHERE user_id=%(user_id)s
                         ORDER BY updated_at DESC LIMIT %(limit)s
                         """,
@@ -729,7 +729,7 @@ class PostgresMemoryStore:
         try:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO weaver_memory_audit_log(action, payload) VALUES (%s, %s::jsonb)",
+                    "INSERT INTO soulsearcher_memory_audit_log(action, payload) VALUES (%s, %s::jsonb)",
                     (action, _json(payload)),
                 )
         except Exception as exc:
@@ -740,7 +740,7 @@ class PostgresMemoryStore:
         with self._connect() as conn, conn.cursor(row_factory=self._dict_row()) as cur:
             cur.execute(
                 """
-                    INSERT INTO weaver_skill_evolution (
+                    INSERT INTO soulsearcher_skill_evolution (
                         id, user_id, skill_name, content, rationale, support_count,
                         confidence, status, validation_status, applied_path,
                         metadata, created_at, updated_at
@@ -786,7 +786,7 @@ class PostgresMemoryStore:
         if user_id:
             where.append("user_id=%(user_id)s")
             params["user_id"] = user_id
-        sql = "SELECT * FROM weaver_skill_evolution"
+        sql = "SELECT * FROM soulsearcher_skill_evolution"
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY updated_at DESC LIMIT %(limit)s"
@@ -817,10 +817,10 @@ class PostgresMemoryStore:
         with self._connect() as conn, conn.cursor() as cur:
             counts = {}
             for key, table in (
-                ("record_count", "weaver_memory_records"),
-                ("entity_count", "weaver_memory_entities"),
-                ("relation_count", "weaver_memory_relations"),
-                ("skill_evolution_count", "weaver_skill_evolution"),
+                ("record_count", "soulsearcher_memory_records"),
+                ("entity_count", "soulsearcher_memory_entities"),
+                ("relation_count", "soulsearcher_memory_relations"),
+                ("skill_evolution_count", "soulsearcher_skill_evolution"),
             ):
                 cur.execute(f"SELECT count(*) FROM {table}")
                 counts[key] = int(cur.fetchone()[0])
