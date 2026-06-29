@@ -43,7 +43,6 @@ function buildRetrievalPolicy(mode: ChatExecutionMode = {}) {
     methods.push('vector_search', 'keyword_search')
   }
   return {
-    schema_version: 3,
     allowed_origins: origins,
     channels,
     methods,

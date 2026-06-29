@@ -229,6 +229,10 @@ class AgentState(MessagesState):
     sources: list[dict[str, str]]
     curated_sources: list[dict[str, Any]]
     evidence_items: Annotated[list[dict[str, Any]], override_reducer]
+    plan_graph: Annotated[dict[str, Any], override_reducer]
+    plan_events: Annotated[list[dict[str, Any]], override_reducer]
+    plan_version: int
+    research_plan: Annotated[list[str], override_reducer]
     research_todos: Annotated[list[dict[str, Any]], override_reducer]
     todo_summary: dict[str, Any]
 
@@ -257,6 +261,10 @@ class SupervisorState(TypedDict):
     notes: Annotated[list[str], override_reducer]
     raw_notes: Annotated[list[str], override_reducer]
     evidence_items: Annotated[list[dict[str, Any]], override_reducer]
+    plan_graph: Annotated[dict[str, Any], override_reducer]
+    plan_events: Annotated[list[dict[str, Any]], override_reducer]
+    plan_version: int
+    research_plan: Annotated[list[str], override_reducer]
     research_todos: Annotated[list[dict[str, Any]], override_reducer]
     todo_summary: dict[str, Any]
     research_iterations: int
@@ -382,6 +390,10 @@ def build_initial_state(
         "sources": initial_sources,
         "curated_sources": [],
         "evidence_items": [],
+        "plan_graph": {},
+        "plan_events": [],
+        "plan_version": 1,
+        "research_plan": [],
         "research_todos": [],
         "todo_summary": {},
         "quality_summary": {},

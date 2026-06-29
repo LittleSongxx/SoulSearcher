@@ -15,7 +15,6 @@ class SseEvent(TypedDict, total=False):
 
 
 class RetrievalPolicy(TypedDict, total=False):
-    schema_version: int
     allowed_origins: list[str]
     channels: list[str]
     methods: list[str]

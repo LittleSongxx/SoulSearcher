@@ -5,7 +5,7 @@ Adapted from deer-flow's ViewImageMiddleware pattern:
 2. Injects base64 image data as HumanMessage content blocks before next LLM call
 3. Provides helpers for building multimodal message content from user images
 
-Integrates with the v2 graph at key LLM call sites:
+Integrates with the research graph at key LLM call sites:
 - clarify_with_user: inject user-uploaded images
 - researcher / supervisor: inject viewed_images after view_image tool use
 """
@@ -76,7 +76,7 @@ def build_multimodal_content(
 def _normalize_user_images(images: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Normalize user-provided image payloads to data URLs.
 
-    Pattern from Weaver v1's _normalize_images().
+    Normalize the same image payload shapes accepted by the API layer.
     Handles: base64 strings, data URLs, and file paths.
     """
     import base64

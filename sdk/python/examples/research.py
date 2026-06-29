@@ -7,9 +7,7 @@ def main() -> None:
     base_url = os.getenv("WEAVER_BASE_URL", "http://127.0.0.1:8001")
     client = WeaverClient(base_url=base_url)
 
-    for ev in client.chat_sse(
-        {"messages": [{"role": "user", "content": "Give me a 3-bullet summary of Weaver."}]}
-    ):
+    for ev in client.research_sse({"query": "Give me a 3-bullet summary of Weaver."}):
         if ev["type"] == "text":
             print(ev["data"]["content"], end="", flush=True)
         if ev["type"] == "done":
@@ -21,4 +19,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

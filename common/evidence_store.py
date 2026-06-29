@@ -14,6 +14,9 @@ class EvidenceStoreSnapshot:
     evidence_items: list[dict[str, Any]] = field(default_factory=list)
     citation_annotations: list[dict[str, Any]] = field(default_factory=list)
     quality_results: list[dict[str, Any]] = field(default_factory=list)
+    plan_graph: dict[str, Any] = field(default_factory=dict)
+    plan_events: list[dict[str, Any]] = field(default_factory=list)
+    plan_summary: dict[str, Any] = field(default_factory=dict)
     research_todos: list[dict[str, Any]] = field(default_factory=list)
     todo_summary: dict[str, Any] = field(default_factory=dict)
     retrieval_policy: dict[str, Any] = field(default_factory=dict)
@@ -31,6 +34,9 @@ class EvidenceStoreSnapshot:
             "claims": self.claims,
             "quality_details": _dict_from(self.metadata.get("quality_details")),
             "quality_gates": self.quality_results,
+            "plan_graph": self.plan_graph,
+            "plan_events": self.plan_events,
+            "plan_summary": self.plan_summary,
             "research_todos": self.research_todos,
             "todo_summary": self.todo_summary,
             "evidence_items": self.evidence_items,
@@ -61,6 +67,9 @@ def build_evidence_store_snapshot(
             "visibility": str(artifacts.get("visibility") or state.get("visibility") or "private"),
             "task_bound_to_owner": bool(owner),
         }
+    plan_graph = _dict_from(artifacts.get("plan_graph"))
+    plan_events = _list_from(plan_graph.get("events")) or _list_from(artifacts.get("plan_events"))
+    plan_summary = _dict_from(plan_graph.get("summary")) or _dict_from(artifacts.get("plan_summary"))
     return EvidenceStoreSnapshot(
         thread_id=thread_id,
         sources=_list_from(artifacts.get("sources")),
@@ -69,6 +78,9 @@ def build_evidence_store_snapshot(
         evidence_items=_list_from(artifacts.get("evidence_items")),
         citation_annotations=_list_from(artifacts.get("citation_annotations")),
         quality_results=_list_from(artifacts.get("quality_gates")),
+        plan_graph=plan_graph,
+        plan_events=plan_events,
+        plan_summary=plan_summary,
         research_todos=_list_from(artifacts.get("research_todos")),
         todo_summary=_dict_from(artifacts.get("todo_summary")),
         retrieval_policy=_dict_from(artifacts.get("retrieval_policy")),

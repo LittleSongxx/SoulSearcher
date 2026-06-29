@@ -15,6 +15,7 @@ type CancelRequest = components['schemas']['CancelRequest'];
 type ResearchRequest = components['schemas']['ResearchRequest'];
 type SessionsListResponse = components['schemas']['SessionsListResponse'];
 type EvidenceResponse = components['schemas']['EvidenceResponse'];
+type RunEventsResponse = components['schemas']['RunEventsResponse'];
 export declare class WeaverClient {
     private baseUrl;
     private headers;
@@ -39,6 +40,14 @@ export declare class WeaverClient {
     }): Promise<SessionsListResponse>;
     getSession(threadId: string): Promise<unknown>;
     getEvidence(threadId: string): Promise<EvidenceResponse>;
+    getRunEvents(threadId: string, opts?: {
+        afterSeq?: number;
+        limit?: number;
+    }): Promise<RunEventsResponse>;
+    runEventsSse(threadId: string, opts?: {
+        afterSeq?: number;
+        signal?: AbortSignal;
+    }): AsyncGenerator<StreamEvent>;
     listExportTemplates(): Promise<unknown>;
     exportReport(threadId: string, opts?: {
         format?: string;

@@ -476,6 +476,10 @@ class SessionManager:
                 restored["research_plan"] = list(artifacts.get("queries", []))
             if artifacts.get("research_tree") and not restored.get("research_tree"):
                 restored["research_tree"] = artifacts.get("research_tree")
+            if artifacts.get("plan_graph") and not restored.get("plan_graph"):
+                restored["plan_graph"] = artifacts.get("plan_graph")
+            if artifacts.get("plan_events") and not restored.get("plan_events"):
+                restored["plan_events"] = list(artifacts.get("plan_events", []))
             if artifacts.get("quality_summary") and not restored.get("quality_summary"):
                 restored["quality_summary"] = artifacts.get("quality_summary")
             if artifacts.get("query_coverage") and not restored.get("query_coverage"):
@@ -604,6 +608,27 @@ class SessionManager:
             state_todo_summary = state.get("todo_summary")
             if "todo_summary" not in enriched and isinstance(state_todo_summary, dict):
                 enriched["todo_summary"] = state_todo_summary
+            state_plan_graph = state.get("plan_graph")
+            if "plan_graph" not in enriched and isinstance(state_plan_graph, dict):
+                enriched["plan_graph"] = state_plan_graph
+            if enriched.get("plan_graph"):
+                try:
+                    from agent.workflows.plan_graph import summarize_plan_graph
+
+                    enriched["plan_summary"] = summarize_plan_graph(enriched["plan_graph"])
+                except Exception:
+                    enriched["plan_summary"] = {}
+            graph_events = (
+                enriched.get("plan_graph", {}).get("events")
+                if isinstance(enriched.get("plan_graph"), dict)
+                else None
+            )
+            if isinstance(graph_events, list):
+                enriched["plan_events"] = [item for item in graph_events if isinstance(item, dict)]
+            elif "plan_events" not in enriched:
+                state_plan_events = state.get("plan_events")
+                if isinstance(state_plan_events, list):
+                    enriched["plan_events"] = state_plan_events
             if enriched.get("research_todos") and not enriched.get("todo_summary"):
                 try:
                     from agent.workflows.research_todo import summarize_todos
@@ -684,6 +709,26 @@ class SessionManager:
                 todo_summary = summarize_todos(research_todos)
             except Exception:
                 todo_summary = {}
+        plan_graph = (
+            state.get("plan_graph")
+            if isinstance(state.get("plan_graph"), dict)
+            else {}
+        )
+        graph_events = plan_graph.get("events")
+        if isinstance(graph_events, list):
+            plan_events = graph_events
+        elif isinstance(state.get("plan_events"), list):
+            plan_events = state.get("plan_events", [])
+        else:
+            plan_events = []
+        plan_summary: dict[str, Any] = {}
+        if plan_graph:
+            try:
+                from agent.workflows.plan_graph import summarize_plan_graph
+
+                plan_summary = summarize_plan_graph(plan_graph)
+            except Exception:
+                plan_summary = {}
 
         if (
             not queries
@@ -691,6 +736,7 @@ class SessionManager:
             and not quality_summary
             and not query_coverage
             and not freshness_summary
+            and not plan_graph
             and not research_todos
         ):
             return {}
@@ -705,6 +751,9 @@ class SessionManager:
             "quality_summary": quality_summary,
             "query_coverage": query_coverage,
             "freshness_summary": freshness_summary,
+            "plan_graph": plan_graph,
+            "plan_events": plan_events,
+            "plan_summary": plan_summary,
             "fetched_pages": [],
             "passages": [],
             "sources": sources,

@@ -4,9 +4,7 @@ Weaver API smoke test (no secret leakage).
 
 Runs a minimal end-to-end check against a running backend:
   - /health
-  - /api/chat (direct, non-stream)
-  - /api/chat/sse (stream)
-  - /api/chat (web mode, non-stream) [optional/slow]
+  - /api/research/sse (stream)
   - /api/asr/status
   - /api/tts/status
   - /api/tts/synthesize [optional]
@@ -155,38 +153,13 @@ def _check_health(client: httpx.Client) -> CheckResult:
         return CheckResult("health", False, _compact_error(e), time.time() - t0)
 
 
-def _check_chat_direct(client: httpx.Client) -> CheckResult:
+def _check_research_sse(client: httpx.Client) -> CheckResult:
     t0 = time.time()
     try:
-        payload = {
-            "messages": [{"role": "user", "content": "Reply with exactly: pong"}],
-            "stream": False,
-        }
-        r = client.post("/api/chat", json=payload)
-        r.raise_for_status()
-        data = r.json()
-        content = (data or {}).get("content") or ""
-        ok = content.strip() == "pong"
-        return CheckResult(
-            name="chat_direct",
-            ok=bool(ok),
-            detail=f"content={content.strip()[:30]!r}",
-            seconds=time.time() - t0,
-        )
-    except Exception as e:
-        return CheckResult("chat_direct", False, _compact_error(e), time.time() - t0)
-
-
-def _check_chat_sse(client: httpx.Client) -> CheckResult:
-    t0 = time.time()
-    try:
-        payload = {
-            "messages": [{"role": "user", "content": "Reply with exactly: pong"}],
-            "stream": True,
-        }
+        payload = {"query": "Reply with exactly: pong"}
 
         got_event = False
-        with client.stream("POST", "/api/chat/sse", json=payload) as resp:
+        with client.stream("POST", "/api/research/sse", json=payload) as resp:
             resp.raise_for_status()
             for line in resp.iter_lines():
                 if not line:
@@ -200,41 +173,13 @@ def _check_chat_sse(client: httpx.Client) -> CheckResult:
                     break
 
         return CheckResult(
-            name="chat_sse",
+            name="research_sse",
             ok=bool(got_event),
             detail=("got_sse_event" if got_event else "no_sse_event"),
             seconds=time.time() - t0,
         )
     except Exception as e:
-        return CheckResult("chat_sse", False, _compact_error(e), time.time() - t0)
-
-
-def _check_chat_web(client: httpx.Client) -> CheckResult:
-    t0 = time.time()
-    try:
-        payload = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "Find 1 technology news headline today and cite the source URL.",
-                }
-            ],
-            "stream": False,
-            "search_mode": "web",
-        }
-        r = client.post("/api/chat", json=payload)
-        r.raise_for_status()
-        data = r.json()
-        content = (data or {}).get("content") or ""
-        ok = bool(content.strip()) and "http" in content
-        return CheckResult(
-            name="chat_web",
-            ok=bool(ok),
-            detail=f"chars={len(content)}",
-            seconds=time.time() - t0,
-        )
-    except Exception as e:
-        return CheckResult("chat_web", False, _compact_error(e), time.time() - t0)
+        return CheckResult("research_sse", False, _compact_error(e), time.time() - t0)
 
 
 def _check_asr_status(client: httpx.Client) -> CheckResult:
@@ -295,13 +240,13 @@ def _check_tts_synthesize(client: httpx.Client) -> CheckResult:
         return CheckResult("tts_synthesize", False, _compact_error(e), time.time() - t0)
 
 
-def _check_chat_deep_cancel(base_url: str) -> CheckResult:
+def _check_research_deep_cancel(base_url: str) -> CheckResult:
     """
     Start a deep-mode SSE run and cancel it, asserting we observe a cancellation frame.
 
     This is a behavior check for:
       - deep search path runs
-      - /api/chat/cancel/{thread_id} wiring
+      - /api/research/cancel/{thread_id} wiring
       - server-side cancellation propagation to stream
     """
     t0 = time.time()
@@ -321,16 +266,10 @@ def _check_chat_deep_cancel(base_url: str) -> CheckResult:
         try:
             with _client(base_url) as c:
                 payload = {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": "Do deep research on: AI agent framework trends. Provide a short outline.",
-                        }
-                    ],
-                    "stream": True,
-                    "search_mode": "deep",
+                    "query": "Do deep research on: AI agent framework trends. Provide a short outline.",
+                    "deep_research": True,
                 }
-                with c.stream("POST", "/api/chat/sse", json=payload) as resp:
+                with c.stream("POST", "/api/research/sse", json=payload) as resp:
                     resp.raise_for_status()
                     state["thread_id"] = resp.headers.get("X-Thread-ID")
                     stream_ready.set()
@@ -361,46 +300,46 @@ def _check_chat_deep_cancel(base_url: str) -> CheckResult:
     # Wait until we have thread_id (or error)
     if not stream_ready.wait(timeout=8.0):
         return CheckResult(
-            "chat_deep_cancel", False, "stream did not start", time.time() - t0
+            "research_deep_cancel", False, "stream did not start", time.time() - t0
         )
 
     thread_id = (state.get("thread_id") or "").strip()
     if state.get("error"):
         return CheckResult(
-            "chat_deep_cancel",
+            "research_deep_cancel",
             False,
             f"stream_error={state['error']}",
             time.time() - t0,
         )
     if not thread_id:
         return CheckResult(
-            "chat_deep_cancel", False, "missing X-Thread-ID header", time.time() - t0
+            "research_deep_cancel", False, "missing X-Thread-ID header", time.time() - t0
         )
 
     try:
         with _client(base_url) as c:
             cr = c.post(
-                f"/api/chat/cancel/{thread_id}", json={"reason": "smoke test cancel"}
+                f"/api/research/cancel/{thread_id}", json={"reason": "smoke test cancel"}
             )
             data = _try_json(cr)
             if cr.status_code >= 400:
                 msg = data.get("error") or data.get("detail") or cr.text
                 return CheckResult(
-                    "chat_deep_cancel",
+                    "research_deep_cancel",
                     False,
                     f"cancel_status={cr.status_code} msg={_truncate(str(msg))}",
                     time.time() - t0,
                 )
             if (data or {}).get("status") != "cancelled":
                 return CheckResult(
-                    "chat_deep_cancel",
+                    "research_deep_cancel",
                     False,
                     f"cancel_unexpected={_truncate(json.dumps(data, ensure_ascii=False)[:300])}",
                     time.time() - t0,
                 )
     except Exception as e:
         return CheckResult(
-            "chat_deep_cancel",
+            "research_deep_cancel",
             False,
             f"cancel_error={_compact_error(e)}",
             time.time() - t0,
@@ -419,7 +358,7 @@ def _check_chat_deep_cancel(base_url: str) -> CheckResult:
         ok = False
         detail = "no_sse_event_observed"
 
-    return CheckResult("chat_deep_cancel", ok, detail, time.time() - t0)
+    return CheckResult("research_deep_cancel", ok, detail, time.time() - t0)
 
 
 def _check_provider_serper() -> CheckResult:
@@ -513,9 +452,6 @@ def main() -> int:
         help="Backend base URL (default from WEAVER_BASE_URL or http://127.0.0.1:8001)",
     )
     ap.add_argument(
-        "--skip-web", action="store_true", help="Skip slow web-search chat check"
-    )
-    ap.add_argument(
         "--skip-tts", action="store_true", help="Skip /api/tts/synthesize check"
     )
     ap.add_argument(
@@ -534,17 +470,14 @@ def main() -> int:
 
     with _client(args.base_url) as client:
         results.append(_check_health(client))
-        results.append(_check_chat_direct(client))
-        results.append(_check_chat_sse(client))
-        if not args.skip_web:
-            results.append(_check_chat_web(client))
+        results.append(_check_research_sse(client))
         results.append(_check_asr_status(client))
         results.append(_check_tts_status(client))
         if not args.skip_tts:
             results.append(_check_tts_synthesize(client))
 
     if not args.skip_deep:
-        results.append(_check_chat_deep_cancel(args.base_url))
+        results.append(_check_research_deep_cancel(args.base_url))
 
     if args.check_providers:
         results.append(_check_provider_serper())

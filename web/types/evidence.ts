@@ -57,6 +57,52 @@ export interface ContinueResearchRequestItem {
   created_at?: string
 }
 
+export interface PlanTask {
+  id: string
+  title: string
+  question?: string
+  deps?: string[]
+  status?: string
+  priority?: number
+  retrieval_policy_hint?: Record<string, any>
+  budget?: Record<string, any>
+  evidence_ids?: string[]
+  claim_ids?: string[]
+  blocked_reason?: string
+  attempts?: number
+  source?: string
+  result_preview?: string
+  updated_at?: string
+}
+
+export interface PlanGraph {
+  schema_version?: number
+  version?: number
+  status?: string
+  tasks?: PlanTask[]
+  events?: Array<Record<string, any>>
+  frontier?: string[]
+  summary?: Record<string, any>
+  updated_at?: string
+}
+
+export interface RunEventRecord {
+  run_id: string
+  thread_id: string
+  seq: number
+  type: string
+  status?: string
+  payload?: Record<string, any>
+  created_at?: string
+}
+
+export interface RunEventsResponse {
+  thread_id: string
+  after_seq: number
+  count: number
+  events: RunEventRecord[]
+}
+
 export interface ResearchTodo {
   id?: string
   title?: string
@@ -64,6 +110,9 @@ export interface ResearchTodo {
   progress?: number
   source?: string
   result_preview?: string
+  priority?: number
+  dependencies?: string[]
+  coverage_status?: string
   updated_at?: string
 }
 
@@ -72,6 +121,9 @@ export interface EvidenceResponse {
   claims?: EvidenceClaim[]
   quality_summary?: Record<string, any>
   research_brief?: Record<string, any>
+  plan_graph?: PlanGraph
+  plan_events?: Array<Record<string, any>>
+  plan_summary?: Record<string, any>
   research_todos?: ResearchTodo[]
   todo_summary?: Record<string, any>
   retrieval_policy?: Record<string, any>

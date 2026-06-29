@@ -10,7 +10,6 @@ export type SseEvent = {
 }
 
 export type RetrievalPolicy = {
-  schema_version: 3
   allowed_origins: Array<'public_web' | 'private_corpus' | 'user_provided' | 'external_system'>
   channels: Array<'search_api' | 'browser' | 'crawler' | 'file_upload' | 'mcp' | 'native_connector'>
   methods: Array<'web_search' | 'academic_search' | 'vector_search' | 'keyword_search' | 'crawl' | 'deep_read' | 'mcp_search' | 'mcp_fetch'>

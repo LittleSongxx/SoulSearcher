@@ -2,6 +2,9 @@
 
 Internal-only TypeScript client for Weaver (not published).
 
+The client targets the current research API: `researchSse()`, research cancellation,
+sessions, evidence, run events, and export. There is no separate chat endpoint.
+
 ## Build
 
 This repo keeps a compiled `dist/` so Node can use the SDK directly.

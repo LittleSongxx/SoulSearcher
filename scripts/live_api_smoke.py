@@ -864,17 +864,7 @@ async def _sweep_all_routes(
             files = None
             params = None
 
-            if method_u == "POST" and path == "/api/chat":
-                json_body = {
-                    "messages": [{"role": "user", "content": "Hello, just say hi."}],
-                    "stream": False,
-                }
-            elif method_u == "POST" and path == "/api/chat/sse":
-                json_body = {
-                    "messages": [{"role": "user", "content": "Hello, just say hi."}],
-                    "stream": True,
-                }
-            elif method_u == "POST" and path == "/api/support/chat":
+            if method_u == "POST" and path == "/api/support/chat":
                 json_body = {"message": "Hello support, just say hi.", "stream": False}
             elif method_u == "POST" and path == "/api/asr/recognize":
                 json_body = {"audio_data": "AA==", "format": "wav", "sample_rate": 16000}
@@ -892,9 +882,9 @@ async def _sweep_all_routes(
                 json_body = {"thread_id": pick_id("thread_id"), "payload": {}}
 
             # Streaming endpoints
-            if path in {"/api/events/{thread_id}", "/api/chat/sse", "/api/research/sse"}:
+            if path in {"/api/events/{thread_id}", "/api/research/sse"}:
                 first_byte_timeout_s = 1.5
-                if path in {"/api/chat/sse", "/api/research/sse"}:
+                if path == "/api/research/sse":
                     # These hit a real model + graph; allow a little more time
                     # for the first SSE frame.
                     first_byte_timeout_s = 10.0
@@ -920,7 +910,7 @@ async def _sweep_all_routes(
                     params=params,
                     json_body=json_body,
                     files=files,
-                    timeout_s=max(timeout_s, 10.0) if path in {"/api/chat", "/api/support/chat"} else timeout_s,
+                    timeout_s=max(timeout_s, 10.0) if path == "/api/support/chat" else timeout_s,
                 )
             )
             done.add(key)

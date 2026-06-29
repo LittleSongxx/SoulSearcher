@@ -26,6 +26,11 @@ from agent.workflows.research_todo import (
     emit_todo_updates,
     summarize_todos,
 )
+from agent.workflows.plan_graph import (
+    create_plan_graph,
+    summarize_plan_graph,
+    todos_from_plan_graph,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,9 +159,41 @@ async def plan_research(
 
     research_todos = derive_todos_from_plan(plan_content, research_brief)
     research_todos = _annotate_plan_todos(research_todos, complexity=complexity)
+    plan_graph = create_plan_graph(
+        [
+            {
+                "id": todo.get("id"),
+                "title": todo.get("title"),
+                "question": todo.get("title"),
+                "deps": todo.get("dependencies", []),
+                "status": todo.get("status", "pending"),
+                "priority": todo.get("priority"),
+                "source": todo.get("source", "plan"),
+                "retrieval_policy_hint": {
+                    "profiles": ["academic"] if complexity == "deep" else ["general"],
+                    "methods": ["web_search", "crawl", "deep_read"],
+                },
+                "budget": {"research_effort": "thorough" if complexity == "deep" else "normal"},
+            }
+            for todo in research_todos
+        ],
+        source="plan",
+    )
+    research_todos = todos_from_plan_graph(plan_graph)
     todo_summary = summarize_todos(research_todos)
     thread_id = str((config.get("configurable") or {}).get("thread_id") or "")
     await emit_todo_updates(thread_id, research_todos, previous=[])
+    await _emit_plan_graph_update(thread_id, plan_graph, reason="plan approved")
+    deepsearch_artifacts = dict(state.get("deepsearch_artifacts", {}) or {})
+    deepsearch_artifacts.update(
+        {
+            "plan_graph": plan_graph,
+            "plan_events": list(plan_graph.get("events", []) or []),
+            "plan_summary": summarize_plan_graph(plan_graph),
+            "research_todos": research_todos,
+            "todo_summary": todo_summary,
+        }
+    )
 
     # Proceed to supervisor with the approved plan injected
     effective_depth = max(1, int(depth or 1))
@@ -182,8 +219,19 @@ async def plan_research(
             "complexity": complexity,
             "estimated_depth": effective_depth,
             "estimated_breadth": effective_breadth,
+            "research_plan": {
+                "type": "override",
+                "value": [str(todo.get("title") or "") for todo in research_todos],
+            },
+            "plan_graph": {"type": "override", "value": plan_graph},
+            "plan_events": {
+                "type": "override",
+                "value": list(plan_graph.get("events", []) or []),
+            },
+            "plan_version": int(plan_graph.get("version") or 1),
             "research_todos": {"type": "override", "value": research_todos},
             "todo_summary": todo_summary,
+            "deepsearch_artifacts": deepsearch_artifacts,
         },
     )
 
@@ -240,3 +288,27 @@ async def _revise_plan_with_feedback(
         HumanMessage(content=prompt),
     ])
     return response.content if hasattr(response, "content") else str(response)
+
+
+async def _emit_plan_graph_update(
+    thread_id: str,
+    plan_graph: dict[str, Any],
+    *,
+    reason: str = "",
+) -> None:
+    if not thread_id:
+        return
+    try:
+        from agent.core.events import ToolEvent, get_emitter
+
+        emitter = await get_emitter(thread_id)
+        await emitter.emit(
+            ToolEvent.PLAN_GRAPH_UPDATE,
+            {
+                "plan_graph": plan_graph,
+                "plan_summary": summarize_plan_graph(plan_graph),
+                "reason": reason,
+            },
+        )
+    except Exception:
+        return

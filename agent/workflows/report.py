@@ -43,9 +43,15 @@ from agent.workflows.evidence_ledger import (
     evidence_passages as structured_evidence_passages,
 )
 from agent.workflows.research_todo import (
-    append_gap_todos,
     emit_todo_updates,
     summarize_todos,
+)
+from agent.workflows.plan_graph import (
+    apply_replan_actions,
+    build_gap_replan_actions,
+    ensure_plan_graph,
+    summarize_plan_graph,
+    todos_from_plan_graph,
 )
 
 logger = logging.getLogger(__name__)
@@ -635,6 +641,59 @@ def _build_followup_research_brief(
     )
 
 
+def _quality_gap_texts(
+    quality_gates: list[dict[str, Any]],
+    quality_result: Any | None,
+) -> list[str]:
+    gaps: list[str] = []
+    if quality_result is not None:
+        gaps.extend(str(item) for item in getattr(quality_result, "issues", []) or [])
+        gaps.extend(str(item) for item in getattr(quality_result, "suggestions", []) or [])
+    for gate in quality_gates:
+        if not isinstance(gate, dict) or gate.get("passed"):
+            continue
+        details = gate.get("details") if isinstance(gate.get("details"), dict) else {}
+        for key in ("missing_dimensions", "issues", "unsupported_claims", "citations_missing"):
+            value = details.get(key)
+            if isinstance(value, list):
+                gaps.extend(str(item) for item in value)
+        summary = details.get("summary") or details.get("error") or gate.get("name")
+        if summary:
+            gaps.append(str(summary))
+    output: list[str] = []
+    seen: set[str] = set()
+    for gap in gaps:
+        text = re.sub(r"\s+", " ", str(gap or "")).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        output.append(text)
+    return output[:8]
+
+
+async def _emit_report_plan_replan(
+    thread_id: str,
+    plan_graph: dict[str, Any],
+    *,
+    reason: str,
+) -> None:
+    if not thread_id:
+        return
+    try:
+        from agent.core.events import ToolEvent, get_emitter
+
+        emitter = await get_emitter(thread_id)
+        payload = {
+            "reason": reason,
+            "plan_graph": plan_graph,
+            "plan_summary": summarize_plan_graph(plan_graph),
+        }
+        await emitter.emit(ToolEvent.REPLAN_APPLIED, payload)
+        await emitter.emit(ToolEvent.PLAN_GRAPH_UPDATE, payload)
+    except Exception:
+        return
+
+
 # =============================================================================
 # Final Report Generation Node
 # =============================================================================
@@ -729,7 +788,15 @@ async def final_report_generation(
     l3_result = None
     pre_quality_artifacts = dict(state.get("deepsearch_artifacts", {}) or {})
     research_todos = list(state.get("research_todos", []) or [])
+    plan_graph = ensure_plan_graph(
+        state.get("plan_graph") or pre_quality_artifacts.get("plan_graph"),
+        fallback_todos=research_todos,
+    )
+    research_todos = todos_from_plan_graph(plan_graph) or research_todos
     todo_summary = summarize_todos(research_todos)
+    pre_quality_artifacts["plan_graph"] = plan_graph
+    pre_quality_artifacts["plan_events"] = list(plan_graph.get("events", []) or [])
+    pre_quality_artifacts["plan_summary"] = summarize_plan_graph(plan_graph)
     pre_quality_artifacts["research_todos"] = research_todos
     pre_quality_artifacts["todo_summary"] = todo_summary
     preliminary_evidence = _build_evidence_ledger(
@@ -1031,21 +1098,38 @@ async def final_report_generation(
                     "quality_summary": quality_summary,
                 })
                 previous_todos = list(research_todos)
-                research_todos = append_gap_todos(
-                    research_todos,
-                    [
+                gap_texts = _quality_gap_texts(quality_gates, quality_result)
+                if not gap_texts:
+                    gap_texts = [
                         (
                             f"Follow-up research round {followup_count + 1}: "
-                            f"{followup_brief[:140]}"
+                            f"{followup_brief[:180]}"
                         )
-                    ],
+                    ]
+                plan_graph = apply_replan_actions(
+                    plan_graph,
+                    build_gap_replan_actions(
+                        gap_texts,
+                        source="quality_gate",
+                    ),
+                    reason=f"quality follow-up round {followup_count + 1}",
+                    source="quality_gate",
                 )
+                research_todos = todos_from_plan_graph(plan_graph)
                 todo_summary = summarize_todos(research_todos)
                 thread_id = str(
                     (config.get("configurable") or {}).get("thread_id") or ""
                 )
                 await emit_todo_updates(thread_id, research_todos, previous_todos)
+                await _emit_report_plan_replan(
+                    thread_id,
+                    plan_graph,
+                    reason=f"quality follow-up round {followup_count + 1}",
+                )
                 deepsearch_artifacts["quality_followup_requests"] = followup_requests
+                deepsearch_artifacts["plan_graph"] = plan_graph
+                deepsearch_artifacts["plan_events"] = list(plan_graph.get("events", []) or [])
+                deepsearch_artifacts["plan_summary"] = summarize_plan_graph(plan_graph)
                 deepsearch_artifacts["research_todos"] = research_todos
                 deepsearch_artifacts["todo_summary"] = todo_summary
                 deepsearch_artifacts["quality_details"] = {
@@ -1090,6 +1174,16 @@ async def final_report_generation(
                     "quality_followup_required": True,
                     "quality_followup_count": followup_count + 1,
                     "deepsearch_artifacts": deepsearch_artifacts,
+                    "plan_graph": {"type": "override", "value": plan_graph},
+                    "plan_events": {
+                        "type": "override",
+                        "value": list(plan_graph.get("events", []) or []),
+                    },
+                    "plan_version": int(plan_graph.get("version") or 1),
+                    "research_plan": {
+                        "type": "override",
+                        "value": [str(task.get("title") or "") for task in plan_graph.get("tasks", [])],
+                    },
                     "research_todos": {"type": "override", "value": research_todos},
                     "todo_summary": todo_summary,
                     "supervisor_messages": {"type": "override", "value": []},
@@ -1107,6 +1201,9 @@ async def final_report_generation(
             deepsearch_artifacts["evidence_items"] = evidence_items
             deepsearch_artifacts["citation_table"] = final_citation_table
             deepsearch_artifacts["claim_citation_matrix"] = claim_citation_matrix
+            deepsearch_artifacts["plan_graph"] = plan_graph
+            deepsearch_artifacts["plan_events"] = list(plan_graph.get("events", []) or [])
+            deepsearch_artifacts["plan_summary"] = summarize_plan_graph(plan_graph)
             deepsearch_artifacts["research_todos"] = research_todos
             deepsearch_artifacts["todo_summary"] = todo_summary
             deepsearch_artifacts["research_brief"] = {
@@ -1136,6 +1233,16 @@ async def final_report_generation(
                 "quality_gates": quality_gates,
                 "quality_followup_required": False,
                 "deepsearch_artifacts": deepsearch_artifacts,
+                "plan_graph": {"type": "override", "value": plan_graph},
+                "plan_events": {
+                    "type": "override",
+                    "value": list(plan_graph.get("events", []) or []),
+                },
+                "plan_version": int(plan_graph.get("version") or 1),
+                "research_plan": {
+                    "type": "override",
+                    "value": [str(task.get("title") or "") for task in plan_graph.get("tasks", [])],
+                },
                 "research_todos": {"type": "override", "value": research_todos},
                 "todo_summary": todo_summary,
                 **cleared_state,

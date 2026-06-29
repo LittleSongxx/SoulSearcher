@@ -823,7 +823,7 @@ def _filter_tools_for_policy(
         if name in _CONTROL_TOOL_NAMES or name in _VISION_TOOL_NAMES:
             output.append(tool)
             continue
-        # Retrieval v3 enforces a single gateway tool surface for researcher
+        # Retrieval policy enforces a single gateway tool surface for researcher
         # agents. Raw provider/crawler/browser/MCP/sandbox tools stay hidden.
         continue
         if getattr(tool, "is_mcp_tool", False) and not include_mcp:
@@ -867,7 +867,7 @@ def _researcher_source_policy(config: RunnableConfig) -> dict[str, Any]:
     )
 
     return {
-        "mode": "retrieval_v3",
+        "mode": "retrieval",
         "providers": sorted(origins),
         "allowed_origins": sorted(origins),
         "channels": sorted(channels),
@@ -896,7 +896,7 @@ def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
                 budget_lines.append(f"- {key}: {budget[key]}")
     lines = [
         "<Source Policy>",
-        f"- mode: {source_policy.get('mode', 'retrieval_v3')}",
+        f"- mode: {source_policy.get('mode', 'retrieval')}",
         f"- allowed origins: {origins}",
         f"- access channels: {channels}",
         f"- retrieval methods: {methods}",

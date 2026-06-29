@@ -188,13 +188,10 @@ export interface paths {
         put?: never;
         /**
          * Resume From Interrupt
-         * @description Resume execution from an interrupt point.
+         * @description Compatibility path for interrupt resume.
          *
-         *     Actions:
-         *     - approve: Continue with current state
-         *     - modify: Apply modifications and continue
-         *     - reject: Stop execution
-         *     - skip: Skip this step and continue
+         *     The canonical implementation is /api/interrupt/resume; keep this route as
+         *     a thin adapter so there is only one resume code path.
          */
         post: operations["resume_from_interrupt_api_interrupt__thread_id__resume_post"];
         delete?: never;
@@ -649,6 +646,46 @@ export interface paths {
         put?: never;
         /** Cancel Background Run */
         post: operations["cancel_background_run_api_runs__thread_id__background_cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{thread_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run Events
+         * @description Return persisted run events after a sequence number.
+         */
+        get: operations["get_run_events_api_runs__thread_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{thread_id}/events/sse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Replay Run Events Sse
+         * @description Replay persisted run events as standard SSE frames.
+         */
+        get: operations["replay_run_events_sse_api_runs__thread_id__events_sse_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1684,6 +1721,27 @@ export interface components {
              */
             passages: components["schemas"]["EvidencePassageItem"][];
             /**
+             * Plan Events
+             * @default []
+             */
+            plan_events: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Plan Graph
+             * @default {}
+             */
+            plan_graph: {
+                [key: string]: unknown;
+            };
+            /**
+             * Plan Summary
+             * @default {}
+             */
+            plan_summary: {
+                [key: string]: unknown;
+            };
+            /**
              * Quality Details
              * @default {}
              */
@@ -2287,6 +2345,48 @@ export interface components {
             };
             /** User Id */
             user_id?: string | null;
+        };
+        /** RunEventResponse */
+        RunEventResponse: {
+            /**
+             * Created At
+             * @default
+             */
+            created_at: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** Run Id */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /** Thread Id */
+            thread_id: string;
+            /** Type */
+            type: string;
+        };
+        /** RunEventsResponse */
+        RunEventsResponse: {
+            /**
+             * After Seq
+             * @default 0
+             */
+            after_seq: number;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Events */
+            events?: components["schemas"]["RunEventResponse"][];
+            /** Thread Id */
+            thread_id: string;
         };
         /** RunEvidenceSummary */
         RunEvidenceSummary: {
@@ -3869,6 +3969,74 @@ export interface operations {
                 "application/json": components["schemas"]["CancelRequest"] | null;
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_events_api_runs__thread_id__events_get: {
+        parameters: {
+            query?: {
+                after_seq?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunEventsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replay_run_events_sse_api_runs__thread_id__events_sse_get: {
+        parameters: {
+            query?: {
+                after_seq?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

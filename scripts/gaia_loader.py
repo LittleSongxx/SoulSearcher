@@ -144,7 +144,7 @@ CURATED_BENCHMARK = [
     # Level 2 — Comparisons and analysis (~5-10 steps)
     {
         "id": "wv_compare_01",
-        "query": "对比 Qwen 3 和 DeepSeek-V3 在推理能力、训练成本和开源策略上的差异",
+        "query": "对比 Qwen 3 和 DeepSeek 系列模型在推理能力、训练成本和开源策略上的差异",
         "level": 2,
         "expected_length": (500, 2000),
         "ground_truth": "Qwen, DeepSeek, 推理, 训练, 开源, 成本, MoE",

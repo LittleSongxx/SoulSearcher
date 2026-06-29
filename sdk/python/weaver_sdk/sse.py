@@ -55,7 +55,7 @@ def iter_sse_events_from_text(text: str) -> list[SseEvent]:
     Best-effort parse SSE events from an accumulated text buffer.
 
     This is mostly useful for unit tests and small payloads. Streaming parsing
-    should be done incrementally (see WeaverClient.chat_sse()).
+    should be done incrementally (see WeaverClient.research_sse()).
     """
     buf = (text or "").replace("\r\n", "\n")
     frames = buf.split("\n\n")

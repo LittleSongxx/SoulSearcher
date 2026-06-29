@@ -171,7 +171,7 @@ This skill's tools are controlled by Weaver configuration flags:
 
 ```bash
 # Enable basic vision (user images + view_image tool)
-WEAVER_V2=true
+WEAVER_MODE=deepresearch
 supports_vision=true
 
 # Enable autonomous web image extraction (THIS SKILL's domain)

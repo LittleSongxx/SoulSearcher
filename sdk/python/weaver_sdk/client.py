@@ -4,7 +4,7 @@ import json
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -83,32 +83,27 @@ class WeaverClient:
         except Exception:
             return body_text
 
-    def cancel_chat(self, thread_id: str) -> Any:
-        safe_id = _encode_path_param(thread_id)
-        return self.request_json(f"/api/chat/cancel/{safe_id}", method="POST")
-
-    def cancel_all_chats(self) -> Any:
-        return self.request_json("/api/chat/cancel-all", method="POST")
-
-    def chat_sse(self, payload: dict[str, Any]) -> Iterator[StreamEvent]:
-        """
-        Start a chat request and yield StreamEvent items parsed from SSE frames.
-
-        The server typically emits JSON envelope objects: {"type": "...", "data": {...}}.
-        This method yields that envelope when present, otherwise falls back to
-        {"type": <event>, "data": <parsed data>}.
-        """
+    def _stream_sse(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        payload: dict[str, Any] | None = None,
+    ) -> Iterator[StreamEvent]:
         merged_headers = {
             "Accept": "text/event-stream",
-            "Content-Type": "application/json",
             **self.headers,
         }
+        body = None
+        if payload is not None:
+            merged_headers["Content-Type"] = "application/json"
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
         with self._http.stream(
-            "POST",
-            self._url("/api/chat/sse"),
+            method,
+            self._url(path),
             headers=merged_headers,
-            content=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            content=body,
         ) as resp:
             body_text = ""
             if resp.status_code < 200 or resp.status_code >= 300:
@@ -116,7 +111,7 @@ class WeaverClient:
                     body_text = resp.read().decode("utf-8", errors="ignore")
                 except Exception:
                     body_text = ""
-                raise WeaverApiError(status=resp.status_code, path="/api/chat/sse", body_text=body_text)
+                raise WeaverApiError(status=resp.status_code, path=path, body_text=body_text)
 
             self.last_thread_id = (
                 resp.headers.get("X-Thread-ID")
@@ -173,68 +168,7 @@ class WeaverClient:
         This method yields that envelope when present, otherwise falls back to
         {"type": <event>, "data": <parsed data>}.
         """
-        merged_headers = {
-            "Accept": "text/event-stream",
-            "Content-Type": "application/json",
-            **self.headers,
-        }
-
-        with self._http.stream(
-            "POST",
-            self._url("/api/research/sse"),
-            headers=merged_headers,
-            content=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        ) as resp:
-            body_text = ""
-            if resp.status_code < 200 or resp.status_code >= 300:
-                try:
-                    body_text = resp.read().decode("utf-8", errors="ignore")
-                except Exception:
-                    body_text = ""
-                raise WeaverApiError(status=resp.status_code, path="/api/research/sse", body_text=body_text)
-
-            self.last_thread_id = (
-                resp.headers.get("X-Thread-ID")
-                or resp.headers.get("x-thread-id")
-                or None
-            )
-
-            buffer = ""
-            for chunk in resp.iter_bytes():
-                try:
-                    buffer += chunk.decode("utf-8", errors="ignore")
-                except Exception:
-                    continue
-
-                buffer = buffer.replace("\r\n", "\n")
-                frames = buffer.split("\n\n")
-                buffer = frames.pop() or ""
-
-                for frame in frames:
-                    parsed = parse_sse_frame(frame)
-                    if not parsed:
-                        continue
-
-                    data = parsed.get("data")
-                    if isinstance(data, dict) and "type" in data and "data" in data:
-                        yield data  # type: ignore[misc]
-                        continue
-
-                    event_name = parsed.get("event")
-                    if isinstance(event_name, str) and event_name:
-                        yield {"type": event_name, "data": data}
-
-            tail = buffer.strip()
-            if tail:
-                parsed = parse_sse_frame(tail)
-                if parsed:
-                    data = parsed.get("data")
-                    if isinstance(data, dict) and "type" in data and "data" in data:
-                        yield data  # type: ignore[misc]
-                    else:
-                        event_name = parsed.get("event")
-                        if isinstance(event_name, str) and event_name:
-                            yield {"type": event_name, "data": data}
+        yield from self._stream_sse("/api/research/sse", method="POST", payload=payload)
 
     def list_sessions(self, *, limit: int | None = None, status: str | None = None) -> Any:
         params: dict[str, Any] = {}
@@ -251,6 +185,24 @@ class WeaverClient:
     def get_evidence(self, thread_id: str) -> Any:
         safe_id = _encode_path_param(thread_id)
         return self.request_json(f"/api/sessions/{safe_id}/evidence")
+
+    def get_run_events(
+        self,
+        thread_id: str,
+        *,
+        after_seq: int = 0,
+        limit: int | None = None,
+    ) -> Any:
+        safe_id = _encode_path_param(thread_id)
+        params: dict[str, Any] = {"after_seq": int(after_seq)}
+        if limit is not None:
+            params["limit"] = int(limit)
+        return self.request_json(f"/api/runs/{safe_id}/events", params=params)
+
+    def run_events_sse(self, thread_id: str, *, after_seq: int = 0) -> Iterator[StreamEvent]:
+        safe_id = _encode_path_param(thread_id)
+        query = urlencode({"after_seq": int(after_seq)})
+        yield from self._stream_sse(f"/api/runs/{safe_id}/events/sse?{query}")
 
     def list_export_templates(self) -> Any:
         return self.request_json("/api/export/templates")

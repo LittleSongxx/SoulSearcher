@@ -129,6 +129,46 @@ export class WeaverClient {
         const safeId = encodeURIComponent(String(threadId));
         return this.requestJson(`/api/sessions/${safeId}/evidence`);
     }
+    async getRunEvents(threadId, opts = {}) {
+        const safeId = encodeURIComponent(String(threadId));
+        const params = new URLSearchParams();
+        if (opts.afterSeq != null)
+            params.set('after_seq', String(opts.afterSeq));
+        if (opts.limit != null)
+            params.set('limit', String(opts.limit));
+        const query = params.toString();
+        const path = query ? `/api/runs/${safeId}/events?${query}` : `/api/runs/${safeId}/events`;
+        return this.requestJson(path);
+    }
+    async *runEventsSse(threadId, opts = {}) {
+        const safeId = encodeURIComponent(String(threadId));
+        const params = new URLSearchParams();
+        if (opts.afterSeq != null)
+            params.set('after_seq', String(opts.afterSeq));
+        const query = params.toString();
+        const path = query ? `/api/runs/${safeId}/events/sse?${query}` : `/api/runs/${safeId}/events/sse`;
+        const response = await this.fetchImpl(this.url(path), {
+            method: 'GET',
+            headers: mergeHeaders({ ...this.headers }, {
+                Accept: 'text/event-stream',
+            }),
+            signal: opts.signal,
+        });
+        if (!response.ok) {
+            const bodyText = await response.text().catch(() => '');
+            throw new WeaverApiError({ status: response.status, path, bodyText });
+        }
+        for await (const event of readSseEvents(response)) {
+            const data = event.data;
+            if (data && typeof data === 'object' && 'type' in data && 'data' in data) {
+                yield data;
+                continue;
+            }
+            if (event.event) {
+                yield { type: event.event, data };
+            }
+        }
+    }
     async listExportTemplates() {
         return this.requestJson('/api/export/templates');
     }

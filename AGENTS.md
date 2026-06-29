@@ -46,7 +46,7 @@ agent/workflows/        # Deep research pipeline nodes
     researcher.py       # Deep-dive investigation agent
     reporter.py         # Synthesis and report generation agent
 
-agent/retrieval/        # RetrievalPolicy v3 + unified retrieval gateway
+agent/retrieval/        # RetrievalPolicy + unified retrieval gateway
   policy.py             # source_origin / access_channel / retrieval_method / profile
   gateway.py            # retrieve_sources/read_source tools
   documents.py          # user document library parsing, chunking, hybrid ranking

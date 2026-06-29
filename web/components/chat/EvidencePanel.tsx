@@ -1,14 +1,15 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, ExternalLink, GitBranch, Layers, ListTodo, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ExternalLink, GitBranch, Layers, ListChecks, RefreshCw, Search, ShieldCheck, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { fetchResearchEvidence } from '@/lib/researchApiClient'
-import { EvidenceClaim, EvidenceResponse, EvidenceSource } from '@/types/evidence'
+import { fetchResearchEvidence, fetchRunEvents } from '@/lib/researchApiClient'
+import { EvidenceClaim, EvidenceResponse, EvidenceSource, PlanGraph, PlanTask, RunEventRecord } from '@/types/evidence'
 
 interface ContinueTarget {
   target_type: 'claim' | 'source' | 'gap' | 'section'
+  target_id?: string
   target_index?: number
   target_text?: string
   instruction?: string
@@ -75,14 +76,10 @@ function todoTone(status?: string) {
   return 'text-slate-600 bg-slate-500/10'
 }
 
-function todoProgress(value: unknown) {
-  const num = Number(value)
-  if (!Number.isFinite(num)) return 0
-  return Math.max(0, Math.min(100, Math.round(num)))
-}
-
 export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelProps) {
   const [data, setData] = useState<EvidenceResponse | null>(null)
+  const [runEvents, setRunEvents] = useState<RunEventRecord[]>([])
+  const [activeTab, setActiveTab] = useState<AuditTabKey>('sources')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -96,7 +93,12 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
     setIsLoading(true)
     setError('')
     try {
-      setData(await fetchResearchEvidence(threadId))
+      const [evidence, events] = await Promise.all([
+        fetchResearchEvidence(threadId),
+        fetchRunEvents(threadId).catch(() => ({ events: [] })),
+      ])
+      setData(evidence)
+      setRunEvents(events.events || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load evidence')
     } finally {
@@ -111,10 +113,9 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
   const sources = useMemo(() => data?.sources || data?.evidence_items || [], [data])
   const claims = useMemo(() => data?.claims || [], [data])
   const passages = useMemo(() => data?.passages || [], [data])
+  const planGraph = data?.plan_graph
   const gaps = useMemo(() => collectQualityGaps(data), [data])
-  const researchTodos = useMemo(() => data?.research_todos || [], [data])
   const quality = data?.quality_summary || {}
-  const todoSummary = data?.todo_summary || {}
   const pipeline = data?.research_pipeline || {}
   const sourceQuality = data?.source_quality || {}
   const readerPlan = data?.browser_reader_plan || {}
@@ -170,38 +171,31 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
           <div className="grid grid-cols-3 gap-2 text-center text-xs">
             <Metric label="Sources" value={sources.length} />
             <Metric label="Claims" value={claims.length} />
-            <Metric label="Passages" value={passages.length} />
+            <Metric label="Plan" value={planGraph?.tasks?.length || 0} />
           </div>
 
-          {researchTodos.length > 0 && (
-            <Section title="Research Todos">
-              <RuntimeCard icon={<ListTodo className="h-3.5 w-3.5" />} title="Progress">
-                <RuntimeRow label="complete" value={`${todoSummary.completed ?? researchTodos.filter((todo) => todo.status === 'completed').length}/${todoSummary.total ?? researchTodos.length}`} />
-                <RuntimeRow label="pending" value={todoSummary.pending} />
-                <RuntimeRow label="running" value={todoSummary.running} />
-                <RuntimeRow label="blocked" value={todoSummary.blocked} />
-              </RuntimeCard>
-              {researchTodos.slice(0, 8).map((todo, index) => {
-                const status = String(todo.status || 'pending')
-                const progress = todoProgress(todo.progress)
-                return (
-                  <div key={`${todo.id || todo.title}-${index}`} className="rounded-lg border p-3 text-xs">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-medium leading-relaxed">{todo.title || `Task ${index + 1}`}</div>
-                        {todo.source && <div className="mt-1 text-muted-foreground">{todo.source}</div>}
-                      </div>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${todoTone(status)}`}>{status}</span>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary/70" style={{ width: `${progress}%` }} />
-                    </div>
-                    {todo.result_preview && <p className="mt-2 line-clamp-2 text-muted-foreground">{todo.result_preview}</p>}
-                  </div>
-                )
-              })}
-            </Section>
-          )}
+          <AuditTabs
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            counts={{
+              sources: sources.length,
+              claims: claims.length,
+              plan: planGraph?.tasks?.length || 0,
+              events: runEvents.length,
+              gaps: gaps.length,
+            }}
+          />
+
+          <EvidenceAuditTab
+            activeTab={activeTab}
+            sources={sources as EvidenceSource[]}
+            claims={claims}
+            passages={passages}
+            planGraph={planGraph}
+            runEvents={runEvents}
+            gaps={gaps}
+            onContinueResearch={onContinueResearch}
+          />
 
           {Object.keys(quality).length > 0 && (
             <Card className="border-none shadow-sm ring-1 ring-border/50">
@@ -273,62 +267,6 @@ export function EvidencePanel({ threadId, onContinueResearch }: EvidencePanelPro
             </Section>
           )}
 
-          {gaps.length > 0 && (
-            <Section title="Quality Gaps">
-              {gaps.slice(0, 5).map((gap, index) => (
-                <div key={`${gap}-${index}`} className="rounded-lg border p-3 text-xs">
-                  <div className="font-medium">{gap}</div>
-                  {onContinueResearch && (
-                    <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'gap', target_index: index + 1, target_text: gap })}>
-                      <Search className="mr-1 h-3 w-3" /> Continue
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </Section>
-          )}
-
-          {claims.length > 0 && (
-            <Section title="Claims">
-              {claims.slice(0, 8).map((claim, index) => (
-                <ClaimCard key={`${claim.claim}-${index}`} claim={claim} index={index} onContinueResearch={onContinueResearch} />
-              ))}
-            </Section>
-          )}
-
-          {sources.length > 0 && (
-            <Section title="Sources">
-              {(sources as EvidenceSource[]).slice(0, 10).map((source, index) => (
-                <div key={`${source.url || source.title}-${index}`} className="rounded-lg border p-3 text-xs">
-                  <div className="font-medium leading-relaxed">{source.title || shortUrl(source.url) || `Source ${index + 1}`}</div>
-                  {source.url && (
-                    <a className="mt-1 flex items-center gap-1 text-muted-foreground hover:text-primary" href={source.url} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-3 w-3" /> {shortUrl(source.url)}
-                    </a>
-                  )}
-                  {(source.snippet || source.summary) && <p className="mt-2 text-muted-foreground line-clamp-3">{source.snippet || source.summary}</p>}
-                  {onContinueResearch && (
-                    <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'source', target_index: index + 1, target_text: source.title || source.url })}>
-                      <Search className="mr-1 h-3 w-3" /> Continue
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </Section>
-          )}
-
-          {passages.length > 0 && (
-            <Section title="Passages">
-              {passages.slice(0, 6).map((passage, index) => (
-                <div key={`${passage.snippet_hash || passage.url}-${index}`} className="rounded-lg bg-muted/40 p-3 text-xs">
-                  <div className="mb-1 flex items-center gap-1 text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3" /> {passage.heading || passage.page_title || shortUrl(passage.url)}
-                  </div>
-                  <p className="line-clamp-4 leading-relaxed">{passage.quote || passage.text}</p>
-                </div>
-              ))}
-            </Section>
-          )}
         </>
       )}
     </div>
@@ -340,6 +278,208 @@ function Metric({ label, value }: { label: string, value: number }) {
     <div className="rounded-lg bg-muted/50 p-2">
       <div className="text-base font-semibold text-foreground">{value}</div>
       <div className="text-muted-foreground">{label}</div>
+    </div>
+  )
+}
+
+type AuditTabKey = 'sources' | 'claims' | 'plan' | 'events' | 'gaps'
+
+function AuditTabs({ activeTab, onChange, counts }: { activeTab: AuditTabKey, onChange: (tab: AuditTabKey) => void, counts: Record<AuditTabKey, number> }) {
+  const tabs: Array<{ key: AuditTabKey, label: string }> = [
+    { key: 'sources', label: 'Sources' },
+    { key: 'claims', label: 'Claims' },
+    { key: 'plan', label: 'Plan' },
+    { key: 'events', label: 'Events' },
+    { key: 'gaps', label: 'Gaps' },
+  ]
+  return (
+    <div className="grid grid-cols-5 gap-1 rounded-lg bg-muted/50 p-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => onChange(tab.key)}
+          className={`rounded-md px-1.5 py-1.5 text-[11px] font-medium transition ${activeTab === tab.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <span className="block truncate">{tab.label}</span>
+          <span className="tabular-nums">{counts[tab.key] || 0}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function EvidenceAuditTab({
+  activeTab,
+  sources,
+  claims,
+  passages,
+  planGraph,
+  runEvents,
+  gaps,
+  onContinueResearch,
+}: {
+  activeTab: AuditTabKey
+  sources: EvidenceSource[]
+  claims: EvidenceClaim[]
+  passages: EvidenceResponse['passages']
+  planGraph?: PlanGraph
+  runEvents: RunEventRecord[]
+  gaps: string[]
+  onContinueResearch?: (target: ContinueTarget) => void
+}) {
+  if (activeTab === 'sources') {
+    return (
+      <Section title="Sources">
+        {sources.length === 0 && <EmptyAuditState text="No sources registered yet." />}
+        {sources.slice(0, 10).map((source, index) => (
+          <SourceCard key={`${source.url || source.title}-${index}`} source={source} index={index} onContinueResearch={onContinueResearch} />
+        ))}
+        {(!sources.length && passages?.length) ? passages.slice(0, 6).map((passage, index) => (
+          <div key={`${passage.snippet_hash || passage.url}-${index}`} className="rounded-lg bg-muted/40 p-3 text-xs">
+            <div className="mb-1 flex items-center gap-1 text-muted-foreground">
+              <CheckCircle2 className="h-3 w-3" /> {passage.heading || passage.page_title || shortUrl(passage.url)}
+            </div>
+            <p className="line-clamp-4 leading-relaxed">{passage.quote || passage.text}</p>
+          </div>
+        )) : null}
+      </Section>
+    )
+  }
+
+  if (activeTab === 'claims') {
+    return (
+      <Section title="Claims">
+        {claims.length === 0 && <EmptyAuditState text="No claim records yet." />}
+        {claims.slice(0, 8).map((claim, index) => (
+          <ClaimCard key={`${claim.claim}-${index}`} claim={claim} index={index} onContinueResearch={onContinueResearch} />
+        ))}
+      </Section>
+    )
+  }
+
+  if (activeTab === 'plan') {
+    const tasks = planGraph?.tasks || []
+    return (
+      <Section title={`Plan Graph v${planGraph?.version || 1}`}>
+        {tasks.length === 0 && <EmptyAuditState text="No plan graph tasks recorded yet." />}
+        {hasObject(planGraph?.summary) && (
+          <RuntimeCard icon={<GitBranch className="h-3.5 w-3.5" />} title="Plan Summary">
+            <RuntimeRow label="status" value={planGraph?.status} />
+            <RuntimeRow label="ready" value={planGraph?.summary?.ready} />
+            <RuntimeRow label="completed" value={`${planGraph?.summary?.completed ?? 0}/${planGraph?.summary?.total ?? tasks.length}`} />
+            <RuntimeRow label="progress" value={`${planGraph?.summary?.progress_percent ?? 0}%`} />
+          </RuntimeCard>
+        )}
+        {tasks.slice(0, 16).map((task, index) => (
+          <PlanTaskCard key={`${task.id}-${index}`} task={task} index={index} onContinueResearch={onContinueResearch} />
+        ))}
+      </Section>
+    )
+  }
+
+  if (activeTab === 'events') {
+    return (
+      <Section title="Run Events">
+        {runEvents.length === 0 && <EmptyAuditState text="No persisted run events yet." />}
+        {runEvents.slice(-20).map((event) => (
+          <RunEventCard key={`${event.run_id}-${event.seq}`} event={event} />
+        ))}
+      </Section>
+    )
+  }
+
+  return (
+    <Section title="Quality Gaps">
+      {gaps.length === 0 && <EmptyAuditState text="No quality gaps recorded yet." />}
+      {gaps.slice(0, 8).map((gap, index) => (
+        <div key={`${gap}-${index}`} className="rounded-lg border p-3 text-xs">
+          <div className="font-medium">{gap}</div>
+          {onContinueResearch && (
+            <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'gap', target_index: index + 1, target_text: gap })}>
+              <Search className="mr-1 h-3 w-3" /> Continue
+            </Button>
+          )}
+        </div>
+      ))}
+    </Section>
+  )
+}
+
+function EmptyAuditState({ text }: { text: string }) {
+  return (
+    <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+      {text}
+    </div>
+  )
+}
+
+function SourceCard({ source, index, onContinueResearch }: { source: EvidenceSource, index: number, onContinueResearch?: (target: ContinueTarget) => void }) {
+  const title = source.title || shortUrl(source.url) || `Source ${index + 1}`
+  return (
+    <div className="rounded-lg border p-3 text-xs">
+      <div className="font-medium leading-relaxed">{title}</div>
+      {source.url && (
+        <a className="mt-1 flex items-center gap-1 text-muted-foreground hover:text-primary" href={source.url} target="_blank" rel="noreferrer">
+          <ExternalLink className="h-3 w-3" /> {shortUrl(source.url)}
+        </a>
+      )}
+      {(source.snippet || source.summary) && <p className="mt-2 text-muted-foreground line-clamp-3">{source.snippet || source.summary}</p>}
+      {onContinueResearch && (
+        <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'source', target_index: index + 1, target_text: title || source.url })}>
+          <Search className="mr-1 h-3 w-3" /> Continue
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function PlanTaskCard({ task, index, onContinueResearch }: { task: PlanTask, index: number, onContinueResearch?: (target: ContinueTarget) => void }) {
+  const status = String(task.status || 'pending')
+  const deps = task.deps || []
+  const evidenceCount = task.evidence_ids?.length || 0
+  return (
+    <div className="rounded-lg border p-3 text-xs">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium leading-relaxed">{task.title || `Plan task ${index + 1}`}</div>
+          <div className="mt-1 font-mono text-[10px] text-muted-foreground">{task.id}</div>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${todoTone(status)}`}>{status}</span>
+      </div>
+      {task.question && task.question !== task.title && <p className="mt-2 line-clamp-3 text-muted-foreground">{task.question}</p>}
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+        <RuntimeRow label="priority" value={task.priority} />
+        <RuntimeRow label="attempts" value={task.attempts} />
+        <RuntimeRow label="deps" value={deps.length ? deps.join(', ') : 'none'} />
+        <RuntimeRow label="evidence" value={evidenceCount} />
+      </div>
+      {task.blocked_reason && <p className="mt-2 line-clamp-3 text-amber-600">{task.blocked_reason}</p>}
+      {task.result_preview && <p className="mt-2 line-clamp-2 text-muted-foreground">{task.result_preview}</p>}
+      {onContinueResearch && (
+        <Button className="mt-2 h-7 px-2 text-xs" variant="outline" onClick={() => onContinueResearch({ target_type: 'gap', target_id: task.id, target_text: task.title })}>
+          <Search className="mr-1 h-3 w-3" /> Continue
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function RunEventCard({ event }: { event: RunEventRecord }) {
+  const status = event.status || event.payload?.data?.status || ''
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 font-medium">
+          <ListChecks className="h-3.5 w-3.5" />
+          <span className="truncate">{event.type}</span>
+        </div>
+        <div className="font-mono text-[10px] text-muted-foreground">#{event.seq}</div>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+        <span className="truncate">{event.created_at || event.run_id}</span>
+        {status && <span className="rounded bg-muted px-1.5 py-0.5">{status}</span>}
+      </div>
     </div>
   )
 }

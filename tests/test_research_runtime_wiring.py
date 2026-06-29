@@ -17,6 +17,9 @@ def test_build_initial_state_preserves_user_query_with_system_messages():
     assert isinstance(state["messages"][0], SystemMessage)
     assert isinstance(state["messages"][-1], HumanMessage)
     assert state["messages"][-1].content == "Explain Weaver architecture"
+    assert state["plan_graph"] == {}
+    assert state["plan_events"] == []
+    assert state["plan_version"] == 1
     assert "source_routing" not in state
 
 
@@ -25,7 +28,6 @@ def test_research_brief_and_evidence_store_do_not_emit_legacy_source_routing():
     from common.evidence_store import build_evidence_store_snapshot
 
     policy = {
-        "schema_version": 3,
         "allowed_origins": ["public_web"],
         "channels": ["search_api"],
         "methods": ["web_search"],
@@ -48,7 +50,32 @@ def test_research_brief_and_evidence_store_do_not_emit_legacy_source_routing():
     assert "source_routing" not in brief_payload
     assert "source_routing" not in snapshot.to_dict()
     assert "source_routing" not in patch
-    assert patch["retrieval_policy"]["schema_version"] == 3
+    assert patch["retrieval_policy"]["allowed_origins"] == ["public_web"]
+
+
+def test_evidence_store_response_patch_includes_plan_graph():
+    from common.evidence_store import build_evidence_store_snapshot
+
+    plan_graph = {
+        "version": 2,
+        "tasks": [{"id": "pt_a", "title": "Audit task", "status": "ready"}],
+        "frontier": ["pt_a"],
+        "events": [{"type": "graph_event"}],
+        "summary": {"ready": 2},
+    }
+    snapshot = build_evidence_store_snapshot(
+        thread_id="thread-plan",
+        artifacts={
+            "plan_graph": plan_graph,
+            "plan_events": [{"type": "stale_artifact_event"}],
+            "plan_summary": {"ready": 1},
+        },
+    )
+    patch = snapshot.to_response_patch()
+
+    assert patch["plan_graph"]["version"] == 2
+    assert patch["plan_events"][0]["type"] == "graph_event"
+    assert patch["plan_summary"]["ready"] == 2
 
 
 def test_researcher_tool_name_map_accepts_pydantic_tool_classes():
@@ -61,7 +88,7 @@ def test_researcher_tool_name_map_accepts_pydantic_tool_classes():
     assert tools_by_name["ResearchComplete"] is ResearchComplete
 
 
-def test_retrieval_policy_v3_defaults_and_rejects_legacy():
+def test_retrieval_policy_defaults_and_rejects_legacy():
     import pytest
 
     from agent.retrieval.policy import (
@@ -72,7 +99,7 @@ def test_retrieval_policy_v3_defaults_and_rejects_legacy():
 
     policy = build_retrieval_policy(user_id="u1")
 
-    assert policy["schema_version"] == 3
+    assert "schema_version" not in policy
     assert policy["allowed_origins"] == ["public_web"]
     assert "search_api" in policy["channels"]
     assert "web_search" in policy["methods"]
@@ -82,7 +109,7 @@ def test_retrieval_policy_v3_defaults_and_rejects_legacy():
     with pytest.raises(LegacySourceRoutingError):
         build_retrieval_policy({"mode": "web_only"})
     with pytest.raises(LegacySourceRoutingError):
-        build_retrieval_policy({"schema_version": 2})
+        build_retrieval_policy({"schema_version": 1})
 
 
 def test_retrieval_policy_private_and_external_expands_channels():
@@ -90,7 +117,6 @@ def test_retrieval_policy_private_and_external_expands_channels():
 
     policy = build_retrieval_policy(
         {
-            "schema_version": 3,
             "allowed_origins": ["public_web", "private_corpus", "external_system"],
             "channels": ["search_api"],
             "methods": ["web_search"],
@@ -113,7 +139,6 @@ def test_researcher_source_policy_uses_retrieval_policy():
     policy = _researcher_source_policy({
         "configurable": {
             "retrieval_policy": {
-                "schema_version": 3,
                 "allowed_origins": ["private_corpus"],
                 "channels": ["file_upload"],
                 "methods": ["vector_search"],
@@ -121,7 +146,7 @@ def test_researcher_source_policy_uses_retrieval_policy():
         }
     })
 
-    assert policy["mode"] == "retrieval_v3"
+    assert policy["mode"] == "retrieval"
     assert policy["include_web"] is False
     assert policy["include_rag"] is True
 
@@ -255,7 +280,6 @@ def test_retrieval_gateway_binds_origin_channel_method(monkeypatch):
                 "configurable": {
                     "user_id": "u1",
                     "retrieval_policy": {
-                        "schema_version": 3,
                         "allowed_origins": ["public_web"],
                         "channels": ["search_api"],
                         "methods": ["web_search"],
@@ -330,6 +354,72 @@ def test_conduct_research_effort_caps_simple_task_to_quick():
 
     assert budget["research_effort"] == "quick"
     assert budget["max_tool_calls"] == 4
+
+
+def test_run_manager_appends_and_replays_memory_events(monkeypatch):
+    from agent.runtime import runs
+    from agent.runtime.runs import RunManager
+
+    monkeypatch.setattr(runs.settings, "database_url", "")
+    monkeypatch.setattr(runs.settings, "memory_database_url", "")
+    manager = RunManager()
+    manager.start(run_id="run_a", thread_id="thread_a")
+
+    manager.append_event(
+        run_id="run_a",
+        thread_id="thread_a",
+        seq=1,
+        type="plan_graph_update",
+        payload={"type": "plan_graph_update", "data": {"ready": 1}},
+    )
+    manager.append_event(
+        run_id="run_a",
+        thread_id="thread_a",
+        seq=2,
+        type="done",
+        payload={"type": "done"},
+    )
+    manager.append_event(
+        run_id="run_b",
+        thread_id="thread_a",
+        seq=1,
+        type="resume",
+        payload={
+            "type": "resume",
+            "research_event": {"type": "resume", "sequence": 1},
+        },
+    )
+
+    events = manager.events_after("thread_a", after_seq=1)
+    assert [event["seq"] for event in events] == [2, 3]
+    assert events[0]["type"] == "done"
+    assert events[1]["run_id"] == "run_b"
+    assert events[1]["payload"]["research_event"]["sequence"] == 3
+
+
+def test_run_manager_start_preserves_existing_run_metadata(monkeypatch):
+    from agent.runtime import runs
+    from agent.runtime.runs import RunManager
+
+    monkeypatch.setattr(runs.settings, "database_url", "")
+    monkeypatch.setattr(runs.settings, "memory_database_url", "")
+    manager = RunManager()
+    first = manager.start(
+        run_id="run_a",
+        thread_id="thread_a",
+        workspace={"root": "/tmp/a"},
+        metadata={"background_request": {"thread_id": "thread_a"}},
+    )
+    second = manager.start(
+        run_id="run_a",
+        thread_id="thread_a",
+        metadata={"input_preview": "hello"},
+    )
+
+    assert second.created_at == first.created_at
+    assert second.workspace == {"root": "/tmp/a"}
+    assert second.metadata["background_request"]["thread_id"] == "thread_a"
+    assert second.metadata["input_preview"] == "hello"
 
 
 def test_supervisor_completion_guard_blocks_open_todos_without_evidence():

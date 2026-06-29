@@ -34,7 +34,7 @@ LEGACY_MODES = {
 
 
 class LegacySourceRoutingError(ValueError):
-    """Raised when a caller sends deprecated source_routing v2 fields."""
+    """Raised when a caller sends deprecated source_routing fields."""
 
 
 @dataclass(frozen=True)
@@ -81,7 +81,6 @@ class RetrievalBudget:
 
 @dataclass(frozen=True)
 class RetrievalPolicy:
-    schema_version: int = 3
     allowed_origins: list[str] = field(default_factory=lambda: ["public_web"])
     channels: list[str] = field(default_factory=lambda: ["search_api", "crawler"])
     methods: list[str] = field(default_factory=lambda: ["web_search", "crawl", "deep_read"])
@@ -101,14 +100,14 @@ class RetrievalPolicy:
 
 
 def reject_legacy_source_routing(value: Any) -> None:
-    """Reject v2 source_routing modes at API/runtime boundaries."""
+    """Reject source_routing modes at API/runtime boundaries."""
     if not isinstance(value, dict) or not value:
         return
     mode = str(value.get("mode") or value.get("source_policy") or "").strip().lower()
     if mode in LEGACY_MODES or "providers" in value:
         raise LegacySourceRoutingError(
-            "source_routing v2 is no longer accepted. Use retrieval_policy "
-            "schema_version=3 with allowed_origins/channels/methods/profiles."
+            "source_routing is no longer accepted. Use retrieval_policy with "
+            "allowed_origins/channels/methods/profiles."
         )
 
 
@@ -131,10 +130,10 @@ def build_retrieval_policy(
     reject_legacy_source_routing(raw_policy)
     reject_legacy_source_routing(raw_policy.get("source_routing"))
     schema_version = raw_policy.get("schema_version")
-    if schema_version not in (None, "", 3, "3"):
+    if schema_version not in (None, ""):
         raise LegacySourceRoutingError(
-            "retrieval_policy.schema_version must be 3. Legacy retrieval/source "
-            "routing schemas are no longer accepted."
+            "Versioned retrieval/source routing schemas are no longer accepted. "
+            "Use retrieval_policy with allowed_origins/channels/methods/profiles."
         )
 
     allowed_origins = _enum_list(

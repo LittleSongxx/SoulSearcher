@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from '@/lib/api'
-import { ContinueResearchResponse, EvidenceResponse } from '@/types/evidence'
+import { ContinueResearchResponse, EvidenceResponse, RunEventsResponse } from '@/types/evidence'
 
 export interface ResearchSessionSummary {
   thread_id: string
@@ -28,6 +28,12 @@ export async function fetchResearchEvidence(threadId: string): Promise<EvidenceR
   const response = await fetch(`${getApiBaseUrl()}/api/sessions/${threadId}/evidence`)
   if (response.status === 404) return null
   if (!response.ok) throw new Error(`Evidence request failed: ${response.status}`)
+  return response.json()
+}
+
+export async function fetchRunEvents(threadId: string, afterSeq = 0): Promise<RunEventsResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/runs/${threadId}/events?after_seq=${afterSeq}`)
+  if (!response.ok) throw new Error(`Run events request failed: ${response.status}`)
   return response.json()
 }
 

@@ -11,9 +11,14 @@ def _request():
 
 def test_memory_api_reports_unavailable_backend(monkeypatch):
     import main
-    from agent.memory import set_memory_service
+    from agent.memory import MemoryUnavailableError, set_memory_service
+    import agent.memory.service as memory_service_module
+
+    def unavailable_service():
+        raise MemoryUnavailableError("memory unavailable")
 
     monkeypatch.setattr(main.settings, "memory_enabled", True)
+    monkeypatch.setattr(memory_service_module, "create_memory_service", unavailable_service)
     set_memory_service(None)
 
     status = asyncio.run(main.memory_status())

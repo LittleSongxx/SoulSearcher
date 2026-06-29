@@ -41,7 +41,6 @@ from agent.core.state import (
 from agent.runtime.context import clear_viewed_images, get_viewed_images, merge_viewed_images
 from agent.runtime.middleware.shared import enforce_context_budget
 from agent.workflows.research_todo import (
-    append_gap_todos,
     emit_todo_updates,
     ensure_todo_for_topic,
     format_todo_context,
@@ -49,6 +48,18 @@ from agent.workflows.research_todo import (
     mark_todo_completed,
     mark_todo_running,
     summarize_todos,
+)
+from agent.workflows.plan_graph import (
+    apply_replan_actions,
+    build_gap_replan_actions,
+    ensure_plan_graph,
+    mark_task_blocked,
+    mark_task_completed,
+    mark_task_running,
+    ready_tasks,
+    summarize_plan_graph,
+    task_context_for_supervisor,
+    todos_from_plan_graph,
 )
 
 logger = logging.getLogger(__name__)
@@ -142,6 +153,15 @@ async def supervisor(
     todo_context = format_todo_context(state.get("research_todos", []))
     if todo_context:
         context_messages.append(SystemMessage(content=todo_context))
+    plan_context = task_context_for_supervisor(
+        ensure_plan_graph(
+            state.get("plan_graph"),
+            fallback_todos=state.get("research_todos", []),
+        ),
+        max_ready=research_config.max_concurrent_research_units,
+    )
+    if plan_context:
+        context_messages.append(SystemMessage(content=plan_context))
     source_candidate_context = _format_source_candidate_context(state.get("sources", []))
     if source_candidate_context:
         context_messages.append(SystemMessage(content=source_candidate_context))
@@ -253,6 +273,10 @@ async def supervisor_tools(
     current_todos = list(state.get("research_todos", []) or [])
     previous_todos = list(current_todos)
     thread_id = str(config.get("configurable", {}).get("thread_id", "default"))
+    plan_graph = ensure_plan_graph(
+        state.get("plan_graph"),
+        fallback_todos=current_todos,
+    )
 
     if research_complete_called:
         guard = _research_completion_guard(state, supervisor_messages)
@@ -260,10 +284,15 @@ async def supervisor_tools(
             if tc["name"] != "ThinkTool":
                 continue
             gaps = tc.get("args", {}).get("gaps_identified", [])
-            current_todos = append_gap_todos(
-                current_todos,
-                gaps if isinstance(gaps, list) else [],
-            )
+            gap_list = gaps if isinstance(gaps, list) else []
+            if gap_list:
+                plan_graph = apply_replan_actions(
+                    plan_graph,
+                    build_gap_replan_actions(gap_list, source="supervisor_gap"),
+                    reason="research completion gaps",
+                    source="supervisor_gap",
+                )
+        current_todos = todos_from_plan_graph(plan_graph) or current_todos
 
         if guard["allowed"]:
             logger.info("[SupervisorTools] Ending supervisor loop (research_complete)")
@@ -272,6 +301,17 @@ async def supervisor_tools(
             }
             if current_todos:
                 await emit_todo_updates(thread_id, current_todos, previous_todos)
+                await _emit_plan_update(thread_id, plan_graph, reason="research completion")
+                update["plan_graph"] = {"type": "override", "value": plan_graph}
+                update["plan_events"] = {
+                    "type": "override",
+                    "value": list(plan_graph.get("events", []) or []),
+                }
+                update["plan_version"] = int(plan_graph.get("version") or 1)
+                update["research_plan"] = {
+                    "type": "override",
+                    "value": [str(task.get("title") or "") for task in plan_graph.get("tasks", [])],
+                }
                 update["research_todos"] = {
                     "type": "override",
                     "value": current_todos,
@@ -282,8 +322,28 @@ async def supervisor_tools(
                 update=update,
             )
 
-        current_todos = append_gap_todos(current_todos, guard["gaps"])
+        plan_graph = apply_replan_actions(
+            plan_graph,
+            build_gap_replan_actions(
+                [str(gap) for gap in (guard.get("gaps") or [])],
+                source="completion_guard",
+            ),
+            reason="completion guard gaps",
+            source="completion_guard",
+        )
+        current_todos = todos_from_plan_graph(plan_graph) or current_todos
         await emit_todo_updates(thread_id, current_todos, previous_todos)
+        await _emit_plan_update(thread_id, plan_graph, reason="completion guard")
+        update_payload["plan_graph"] = {"type": "override", "value": plan_graph}
+        update_payload["plan_events"] = {
+            "type": "override",
+            "value": list(plan_graph.get("events", []) or []),
+        }
+        update_payload["plan_version"] = int(plan_graph.get("version") or 1)
+        update_payload["research_plan"] = {
+            "type": "override",
+            "value": [str(task.get("title") or "") for task in plan_graph.get("tasks", [])],
+        }
         all_tool_messages.extend(
             _completion_guard_messages(tool_calls, guard)
         )
@@ -326,10 +386,38 @@ async def supervisor_tools(
             name="ThinkTool",
             tool_call_id=tc["id"],
         ))
-        current_todos = append_gap_todos(
-            current_todos,
-            gaps if isinstance(gaps, list) else [],
-        )
+        gap_list = gaps if isinstance(gaps, list) else []
+        if gap_list:
+            try:
+                from agent.core.events import ToolEvent, get_emitter
+
+                emitter = await get_emitter(thread_id)
+                await emitter.emit(
+                    ToolEvent.REPLAN_REQUESTED,
+                    {"reason": "supervisor gaps", "gaps": gap_list},
+                )
+            except Exception:
+                pass
+            plan_graph = apply_replan_actions(
+                plan_graph,
+                build_gap_replan_actions(gap_list, source="supervisor_gap"),
+                reason="supervisor gaps",
+                source="supervisor_gap",
+            )
+            try:
+                from agent.core.events import ToolEvent, get_emitter
+
+                emitter = await get_emitter(thread_id)
+                payload = {
+                    "reason": "supervisor gaps",
+                    "plan_graph": plan_graph,
+                    "plan_summary": summarize_plan_graph(plan_graph),
+                }
+                await emitter.emit(ToolEvent.REPLAN_APPLIED, payload)
+                await emitter.emit(ToolEvent.PLAN_GRAPH_UPDATE, payload)
+            except Exception:
+                pass
+            current_todos = todos_from_plan_graph(plan_graph)
 
     # --- SourceCurate calls ---
     curate_calls = [tc for tc in tool_calls if tc["name"] == "SourceCurate"]
@@ -367,6 +455,13 @@ async def supervisor_tools(
     # Each call spawns an independent Researcher subgraph with configurable
     # depth×breadth derived from the research_effort parameter.
     conduct_calls = [tc for tc in tool_calls if tc["name"] == "ConductResearch"]
+    frontier_tasks = ready_tasks(
+        plan_graph,
+        limit=research_config.max_concurrent_research_units,
+    )
+    if frontier_tasks:
+        conduct_calls = _conduct_calls_for_frontier(frontier_tasks, conduct_calls)
+
     if conduct_calls:
         requested_breadth = _safe_int(state.get("estimated_breadth"), default=2)
         max_concurrent = max(
@@ -380,8 +475,12 @@ async def supervisor_tools(
         overflow_calls = conduct_calls[max_concurrent:]
 
         todo_ids_by_call: list[str | None] = []
+        plan_task_ids_by_call: list[str | None] = []
         for tc in allowed_calls:
             topic = _conduct_topic(tc)
+            plan_task_id = _conduct_plan_task_id(tc)
+            if plan_task_id:
+                plan_graph = mark_task_running(plan_graph, plan_task_id)
             current_todos, todo_id = ensure_todo_for_topic(
                 current_todos,
                 topic,
@@ -390,8 +489,11 @@ async def supervisor_tools(
             if todo_id:
                 current_todos = mark_todo_running(current_todos, todo_id)
             todo_ids_by_call.append(todo_id)
+            plan_task_ids_by_call.append(plan_task_id)
+        current_todos = todos_from_plan_graph(plan_graph) or current_todos
         await emit_todo_updates(thread_id, current_todos, previous_todos)
         previous_todos = list(current_todos)
+        await _emit_plan_update(thread_id, plan_graph, reason="tasks dispatched")
 
         # Emit research tree update — all tasks starting
         try:
@@ -435,6 +537,7 @@ async def supervisor_tools(
                             HumanMessage(
                                 content=(
                                     f"Research topic: {_conduct_topic(tc)}\n"
+                                    f"Plan task id: {_conduct_plan_task_id(tc) or 'unassigned'}\n"
                                     f"Context: {tc['args'].get('context', '')}"
                                 )
                             )
@@ -466,18 +569,42 @@ async def supervisor_tools(
                 ],
             )
 
-            for obs, tc, todo_id in zip(tool_results, allowed_calls, todo_ids_by_call):
+            for obs, tc, todo_id, plan_task_id in zip(
+                tool_results,
+                allowed_calls,
+                todo_ids_by_call,
+                plan_task_ids_by_call,
+            ):
                 compressed = obs.get(
                     "compressed_research",
                     "Error: Research synthesis failed."
                 )
                 if str(compressed).lstrip().lower().startswith("error"):
+                    if plan_task_id:
+                        plan_graph = mark_task_blocked(
+                            plan_graph,
+                            plan_task_id,
+                            blocked_reason=compressed,
+                            result_preview=compressed,
+                        )
                     current_todos = mark_todo_blocked(
                         current_todos,
                         todo_id,
                         result_preview=compressed,
                     )
                 else:
+                    evidence_ids = [
+                        str(item.get("id") or item.get("evidence_id") or "")
+                        for item in (obs.get("evidence_items") or [])
+                        if isinstance(item, dict)
+                    ]
+                    if plan_task_id:
+                        plan_graph = mark_task_completed(
+                            plan_graph,
+                            plan_task_id,
+                            result_preview=compressed,
+                            evidence_ids=evidence_ids,
+                        )
                     current_todos = mark_todo_completed(
                         current_todos,
                         todo_id,
@@ -545,7 +672,14 @@ async def supervisor_tools(
 
         except Exception as e:
             logger.error(f"[SupervisorTools] Research execution error: {e}")
-            for todo_id in todo_ids_by_call:
+            for todo_id, plan_task_id in zip(todo_ids_by_call, plan_task_ids_by_call):
+                if plan_task_id:
+                    plan_graph = mark_task_blocked(
+                        plan_graph,
+                        plan_task_id,
+                        blocked_reason=str(e),
+                        result_preview=str(e),
+                    )
                 current_todos = mark_todo_blocked(
                     current_todos,
                     todo_id,
@@ -557,7 +691,19 @@ async def supervisor_tools(
                 tool_call_id=conduct_calls[0]["id"] if conduct_calls else "unknown",
             ))
 
+    current_todos = todos_from_plan_graph(plan_graph) or current_todos
     await emit_todo_updates(thread_id, current_todos, previous_todos)
+    await _emit_plan_update(thread_id, plan_graph, reason="supervisor iteration")
+    update_payload["plan_graph"] = {"type": "override", "value": plan_graph}
+    update_payload["plan_events"] = {
+        "type": "override",
+        "value": list(plan_graph.get("events", []) or []),
+    }
+    update_payload["plan_version"] = int(plan_graph.get("version") or 1)
+    update_payload["research_plan"] = {
+        "type": "override",
+        "value": [str(task.get("title") or "") for task in plan_graph.get("tasks", [])],
+    }
     update_payload["research_todos"] = {"type": "override", "value": current_todos}
     update_payload["todo_summary"] = summarize_todos(current_todos)
 
@@ -766,6 +912,80 @@ def _conduct_topic(tool_call: dict, default: str = "") -> str:
     if not isinstance(args, dict):
         return default
     return str(args.get("topic") or args.get("research_topic") or default)
+
+
+def _conduct_plan_task_id(tool_call: dict) -> str:
+    args = tool_call.get("args", {}) if isinstance(tool_call, dict) else {}
+    if not isinstance(args, dict):
+        return ""
+    return str(args.get("plan_task_id") or args.get("task_id") or "")
+
+
+def _conduct_calls_for_frontier(
+    tasks: list[dict],
+    model_calls: list[dict],
+) -> list[dict]:
+    calls: list[dict] = []
+    calls_by_topic = {
+        _conduct_topic(call).strip().lower(): call
+        for call in model_calls
+        if _conduct_topic(call).strip()
+    }
+    for index, task in enumerate(tasks):
+        title = str(task.get("title") or task.get("question") or f"Task {index + 1}")
+        key = title.strip().lower()
+        existing = calls_by_topic.get(key)
+        args = dict(existing.get("args") or {}) if isinstance(existing, dict) else {}
+        args["topic"] = args.get("topic") or title
+        budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
+        retrieval_hint = (
+            task.get("retrieval_policy_hint")
+            if isinstance(task.get("retrieval_policy_hint"), dict)
+            else {}
+        )
+        args["context"] = (
+            f"Plan task id: {task.get('id')}. "
+            f"Question: {task.get('question') or title}. "
+            f"Retrieval policy hint: {retrieval_hint}. "
+            f"Budget: {budget}. "
+            f"{args.get('context') or ''}"
+        ).strip()
+        args["research_effort"] = args.get("research_effort") or (
+            budget.get("research_effort") or budget.get("thoroughness") or "normal"
+        )
+        args["plan_task_id"] = task.get("id")
+        calls.append(
+            {
+                "name": "ConductResearch",
+                "id": str((existing or {}).get("id") or f"plan_{task.get('id') or index}"),
+                "args": args,
+            }
+        )
+    return calls
+
+
+async def _emit_plan_update(
+    thread_id: str,
+    plan_graph: dict,
+    *,
+    reason: str = "",
+) -> None:
+    if not thread_id:
+        return
+    try:
+        from agent.core.events import ToolEvent, get_emitter
+
+        emitter = await get_emitter(thread_id)
+        await emitter.emit(
+            ToolEvent.PLAN_GRAPH_UPDATE,
+            {
+                "reason": reason,
+                "plan_graph": plan_graph,
+                "plan_summary": summarize_plan_graph(plan_graph),
+            },
+        )
+    except Exception:
+        return
 
 
 def _research_tree_child(

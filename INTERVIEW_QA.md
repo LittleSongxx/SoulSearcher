@@ -473,9 +473,9 @@ Weaver 的优势是这些参数主要在配置层，而不是硬编码在 prompt
 
 ---
 
-### Q36：RetrievalPolicy v3 怎么表达检索策略？
+### Q36：RetrievalPolicy 怎么表达检索策略？
 
-**A**：旧 `web_only / rag_only / mcp_only / hybrid` 来源路由模式已经移除，收到旧字段会返回 422。当前使用 `retrieval_policy.schema_version = 3`，把检索策略拆成四个维度：
+**A**：旧 `web_only / rag_only / mcp_only / hybrid` 来源路由模式已经移除，收到旧字段会返回 422。当前统一使用 `retrieval_policy`，把检索策略拆成四个维度：
 
 | 维度 | 示例 | 含义 |
 |---|---|---|
@@ -845,7 +845,7 @@ Weaver 当前已有 evidence extractor、claim alignment、quality artifacts 的
 - 私有模型和私有搜索源。
 - 报告分享、协作评论、版本管理。
 
-项目已有 channels、文档资料库隔离、thread ownership、RetrievalPolicy v3 和统一检索网关等雏形，但企业级还需要系统化补齐。
+项目已有 channels、文档资料库隔离、thread ownership、RetrievalPolicy 和统一检索网关等雏形，但企业级还需要系统化补齐。
 
 ---
 

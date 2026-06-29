@@ -97,7 +97,7 @@ BENCHMARK_CASES: list[dict[str, Any]] = [
     # =========================================================================
     {
         "id": "l2_01",
-        "query": "对比 Qwen 3 和 DeepSeek-V3 在模型架构、推理性能、训练成本和开源策略上的差异",
+        "query": "对比 Qwen 3 和 DeepSeek 系列模型在模型架构、推理性能、训练成本和开源策略上的差异",
         "level": 2,
         "category": "人工智能",
         "min_chars": 500,
@@ -472,7 +472,6 @@ def validate_strict_research_guards() -> dict[str, Any]:
         )
         academic = build_retrieval_policy(
             {
-                "schema_version": 3,
                 "allowed_origins": ["public_web"],
                 "channels": ["search_api"],
                 "methods": ["web_search"],
@@ -481,14 +480,13 @@ def validate_strict_research_guards() -> dict[str, Any]:
         )
         private_external = build_retrieval_policy(
             {
-                "schema_version": 3,
                 "allowed_origins": ["public_web", "private_corpus", "external_system"],
                 "channels": ["search_api"],
                 "methods": ["web_search"],
             },
             user_id="benchmark",
         )
-        if academic.get("schema_version") != 3 or "academic_search" not in academic.get("methods", []):
+        if "schema_version" in academic or "academic_search" not in academic.get("methods", []):
             errors.append("retrieval policy academic profile did not enable academic_search")
         if "file_upload" not in private_external.get("channels", []):
             errors.append("retrieval policy private corpus did not enable file_upload")

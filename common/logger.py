@@ -80,20 +80,25 @@ def setup_logging():
     root_logger.addHandler(console_handler)
 
     # File handler with rotation
+    file_logging_active = False
     if settings.enable_file_logging:
         # Ensure log directory exists
         log_path = Path(settings.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.handlers.RotatingFileHandler(
-            filename=settings.log_file,
-            maxBytes=settings.log_max_bytes,
-            backupCount=settings.log_backup_count,
-            encoding="utf-8",
-        )
-        file_handler.setLevel(log_level)
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+        try:
+            file_handler = logging.handlers.RotatingFileHandler(
+                filename=settings.log_file,
+                maxBytes=settings.log_max_bytes,
+                backupCount=settings.log_backup_count,
+                encoding="utf-8",
+            )
+            file_handler.setLevel(log_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+            file_logging_active = True
+        except OSError as exc:
+            root_logger.warning("File logging disabled: %s", exc)
 
     # Set levels for third-party loggers to reduce noise
     logging.getLogger("uvicorn").setLevel(logging.INFO)
@@ -109,8 +114,8 @@ def setup_logging():
     logger.info("=" * 80)
     logger.info(f"Logging initialized - Level: {log_level_str}")
     logger.info("Console logging: Enabled")
-    logger.info(f"File logging: {'Enabled' if settings.enable_file_logging else 'Disabled'}")
-    if settings.enable_file_logging:
+    logger.info(f"File logging: {'Enabled' if file_logging_active else 'Disabled'}")
+    if file_logging_active:
         logger.info(f"Log file: {settings.log_file}")
     logger.info(f"JSON logging: {'Enabled' if settings.enable_json_logging else 'Disabled'}")
     logger.info("=" * 80)

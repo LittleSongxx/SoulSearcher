@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from agent.runtime.runs import RunStatus, run_manager
 from common.cancellation import cancellation_manager
+from common.stream_translate import data_stream_line_to_payload
 
 logger = logging.getLogger(__name__)
 
@@ -173,8 +174,11 @@ class BackgroundRunManager:
             status=RunStatus.running,
             metadata={"started_background_at": datetime.now(UTC).isoformat()},
         )
+        record = run_manager.get(request.thread_id)
+        run_id = record.run_id if record else request.thread_id
+        seq = 0
         try:
-            async for _event in stream_factory(
+            async for event_line in stream_factory(
                 request.input_text,
                 thread_id=request.thread_id,
                 model=request.model,
@@ -185,7 +189,20 @@ class BackgroundRunManager:
                 deepsearch_config=request.deepsearch_config,
                 research_brief=request.research_brief,
             ):
-                pass
+                if not isinstance(event_line, str) or event_line.startswith(":"):
+                    continue
+                seq += 1
+                payload = data_stream_line_to_payload(event_line, seq=seq)
+                if not payload:
+                    continue
+                persisted = run_manager.append_event(
+                    run_id=run_id,
+                    thread_id=request.thread_id,
+                    seq=seq,
+                    type=str(payload.get("type") or "event"),
+                    payload=payload,
+                )
+                seq = max(seq, int(persisted.get("seq") or seq))
             record = run_manager.get(request.thread_id)
             if record and record.status in {
                 RunStatus.queued,

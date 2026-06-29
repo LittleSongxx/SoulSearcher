@@ -69,6 +69,7 @@ class RunManager:
     def __init__(self) -> None:
         self._runs: dict[str, RunRecord] = {}
         self._by_thread: dict[str, str] = {}
+        self._events: dict[str, list[dict[str, Any]]] = {}
         self._db_ready = False
         self._db_error = ""
         self._backend = "memory"
@@ -124,6 +125,24 @@ class RunManager:
                 )
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_weaver_run_status ON weaver_run_records(status)"
+                )
+                cur.execute(
+                    """
+                        CREATE TABLE IF NOT EXISTS weaver_run_events (
+                            id bigserial PRIMARY KEY,
+                            run_id text NOT NULL,
+                            thread_id text NOT NULL,
+                            seq integer NOT NULL,
+                            type text NOT NULL,
+                            status text NOT NULL DEFAULT '',
+                            payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+                            created_at timestamptz NOT NULL DEFAULT now(),
+                            UNIQUE(run_id, seq)
+                        )
+                    """
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_weaver_run_events_thread_seq ON weaver_run_events(thread_id, seq)"
                 )
             self._backend = "postgres"
             self._db_ready = True
@@ -187,6 +206,7 @@ class RunManager:
                     """,
                     {
                         **record.to_dict(),
+                        "ended_at": record.ended_at or None,
                         "token_summary": json.dumps(record.token_summary, ensure_ascii=False, default=str),
                         "quality_summary": json.dumps(record.quality_summary, ensure_ascii=False, default=str),
                         "workspace": json.dumps(record.workspace, ensure_ascii=False, default=str),
@@ -232,6 +252,10 @@ class RunManager:
         metadata: dict[str, Any] | None = None,
     ) -> RunRecord:
         self._init_db()
+        existing = self._runs.get(run_id) or self._runs.get(self._by_thread.get(thread_id, ""))
+        existing_metadata = dict(existing.metadata or {}) if existing else {}
+        existing_workspace = dict(existing.workspace or {}) if existing else {}
+        merged_metadata = {**existing_metadata, **(metadata or {})}
         record = RunRecord(
             run_id=run_id,
             thread_id=thread_id,
@@ -239,8 +263,9 @@ class RunManager:
             route=route,
             user_id=user_id,
             status=RunStatus.running,
-            workspace=workspace or {},
-            metadata=metadata or {},
+            created_at=existing.created_at if existing else datetime.now(UTC).isoformat(),
+            workspace=workspace if workspace is not None else existing_workspace,
+            metadata=merged_metadata,
         )
         self._runs[run_id] = record
         self._by_thread[thread_id] = run_id
@@ -343,6 +368,136 @@ class RunManager:
                 self._db_error = str(exc)
                 self._backend = "memory"
         return [record.to_dict() for record in self._runs.values()]
+
+    def append_event(
+        self,
+        *,
+        run_id: str,
+        thread_id: str,
+        seq: int,
+        type: str,
+        payload: dict[str, Any] | None = None,
+        status: str = "",
+    ) -> dict[str, Any]:
+        import json
+
+        self._init_db()
+        assigned_seq = self._assign_event_seq(thread_id, seq)
+        payload_dict = dict(payload or {})
+        research_event = payload_dict.get("research_event")
+        if isinstance(research_event, dict):
+            payload_dict["research_event"] = {**research_event, "sequence": assigned_seq}
+        event = {
+            "run_id": run_id,
+            "thread_id": thread_id,
+            "seq": assigned_seq,
+            "type": str(type or "event"),
+            "status": str(status or ""),
+            "payload": payload_dict,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        self._events.setdefault(thread_id, []).append(event)
+        if self._backend == "postgres":
+            try:
+                with self._connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """
+                            INSERT INTO weaver_run_events (
+                                run_id, thread_id, seq, type, status, payload
+                            ) VALUES (
+                                %(run_id)s, %(thread_id)s, %(seq)s, %(type)s,
+                                %(status)s, %(payload)s::jsonb
+                            )
+                            ON CONFLICT (run_id, seq) DO UPDATE SET
+                                type = EXCLUDED.type,
+                                status = EXCLUDED.status,
+                                payload = EXCLUDED.payload
+                            """,
+                        {**event, "payload": json.dumps(event["payload"], ensure_ascii=False, default=str)},
+                    )
+            except Exception as exc:
+                self._db_error = str(exc)
+                self._backend = "memory"
+        return event
+
+    def _assign_event_seq(self, thread_id: str, requested_seq: int) -> int:
+        requested = max(0, int(requested_seq or 0))
+        current_max = self._max_event_seq(thread_id)
+        if requested > current_max:
+            return requested
+        return current_max + 1
+
+    def _max_event_seq(self, thread_id: str) -> int:
+        memory_max = max(
+            [int(event.get("seq") or 0) for event in self._events.get(thread_id, [])]
+            or [0]
+        )
+        if self._backend != "postgres":
+            return memory_max
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COALESCE(MAX(seq), 0) FROM weaver_run_events WHERE thread_id = %s",
+                    (thread_id,),
+                )
+                row = cur.fetchone()
+                return max(memory_max, int((row or [0])[0] or 0))
+        except Exception as exc:
+            self._db_error = str(exc)
+            self._backend = "memory"
+            return memory_max
+
+    def events_after(self, thread_id: str, *, after_seq: int = 0, limit: int = 500) -> list[dict[str, Any]]:
+        self._init_db()
+        after = int(after_seq or 0)
+        max_limit = max(1, min(2000, int(limit or 500)))
+        if self._backend == "postgres":
+            try:
+                with self._connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        """
+                            SELECT run_id, thread_id, seq, type, status, payload, created_at
+                            FROM weaver_run_events
+                            WHERE thread_id = %s AND seq > %s
+                            ORDER BY seq ASC
+                            LIMIT %s
+                            """,
+                        (thread_id, after, max_limit),
+                    )
+                    columns = [desc[0] for desc in cur.description or []]
+                    rows = cur.fetchall()
+                    return [
+                        self._event_from_row(dict(zip(columns, row, strict=False)))
+                        for row in rows
+                    ]
+            except Exception as exc:
+                self._db_error = str(exc)
+                self._backend = "memory"
+        events = [
+            event
+            for event in self._events.get(thread_id, [])
+            if int(event.get("seq") or 0) > after
+        ]
+        return events[:max_limit]
+
+    def _event_from_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        payload = row.get("payload")
+        if isinstance(payload, str):
+            try:
+                import json
+
+                payload = json.loads(payload)
+            except Exception:
+                payload = {}
+        return {
+            "run_id": str(row.get("run_id") or ""),
+            "thread_id": str(row.get("thread_id") or ""),
+            "seq": int(row.get("seq") or 0),
+            "type": str(row.get("type") or "event"),
+            "status": str(row.get("status") or ""),
+            "payload": dict(payload or {}),
+            "created_at": str(row.get("created_at") or ""),
+        }
 
 
 run_manager = RunManager()

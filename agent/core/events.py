@@ -71,6 +71,9 @@ class ToolEventType(str, Enum):
     RESEARCH_NODE_START = "research_node_start"  # Research node begins
     RESEARCH_NODE_COMPLETE = "research_node_complete"  # Research node completed
     RESEARCH_TREE_UPDATE = "research_tree_update"  # Research tree structure updated
+    PLAN_GRAPH_UPDATE = "plan_graph_update"  # Canonical plan DAG changed
+    REPLAN_REQUESTED = "replan_requested"  # Replanning was requested
+    REPLAN_APPLIED = "replan_applied"  # Replanning changed the plan DAG
     SEARCH = "search"  # Search query executed with results
     QUALITY_UPDATE = "quality_update"  # Research quality/coverage metrics updated
     BRIEF_CREATED = "brief_created"  # Structured research brief created
@@ -404,6 +407,18 @@ class EventEmitter:
     ) -> Event:
         """Convenience method to emit research tree update event."""
         return await self.emit(ToolEvent.RESEARCH_TREE_UPDATE, {"tree": tree})
+
+    async def emit_plan_graph_update(
+        self,
+        plan_graph: dict[str, Any],
+        *,
+        reason: str = "",
+    ) -> Event:
+        """Convenience method to emit canonical plan DAG updates."""
+        return await self.emit(
+            ToolEvent.PLAN_GRAPH_UPDATE,
+            {"plan_graph": plan_graph, "reason": reason},
+        )
 
     async def emit_search(
         self,

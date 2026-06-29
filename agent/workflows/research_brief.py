@@ -167,7 +167,7 @@ def _derive_source_policy(state: dict[str, Any], config: dict[str, Any]) -> str:
             return "public_web+private_corpus"
         if origins:
             return ",".join(str(item) for item in origins)
-    return "retrieval_v3"
+    return "retrieval"
 
 
 def _derive_open_dimensions(query: str, expected_fields: list[str]) -> list[str]:

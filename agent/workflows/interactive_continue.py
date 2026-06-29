@@ -5,6 +5,15 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Optional
 
+from agent.workflows.plan_graph import (
+    apply_replan_actions,
+    build_gap_replan_actions,
+    ensure_plan_graph,
+    summarize_plan_graph,
+    todos_from_plan_graph,
+)
+from agent.workflows.research_todo import summarize_todos
+
 _ALLOWED_TARGET_TYPES = {"section", "claim", "source", "gap"}
 
 
@@ -184,6 +193,22 @@ def build_continue_research_plan(
         "strategy": strategy,
         "created_at": datetime.now(UTC).isoformat(),
     }
+    plan_graph = ensure_plan_graph(
+        artifacts.get("plan_graph"),
+        fallback_todos=artifacts.get("research_todos", []),
+    )
+    task_text = (
+        f"{normalized_type}: {resolved_text}. "
+        f"{_text(instruction) or '补充证据、验证结论并更新报告。'}"
+    )
+    plan_graph = apply_replan_actions(
+        plan_graph,
+        build_gap_replan_actions([task_text], source="interactive_continue"),
+        reason="interactive continue research target",
+        source="interactive_continue",
+    )
+    research_todos = todos_from_plan_graph(plan_graph)
+    continue_request["plan_summary"] = summarize_plan_graph(plan_graph)
     update_state = {
         "input": resume_input,
         "resume_input": resume_input,
@@ -191,6 +216,11 @@ def build_continue_research_plan(
         "research_plan": queries,
         "missing_topics": [resolved_text] if normalized_type in {"claim", "gap"} else [],
         "interactive_continue": continue_request,
+        "plan_graph": plan_graph,
+        "plan_events": list(plan_graph.get("events", []) or []),
+        "plan_version": int(plan_graph.get("version") or 1),
+        "research_todos": research_todos,
+        "todo_summary": summarize_todos(research_todos),
         "deepsearch_strategy_decision": {
             "strategy": strategy,
             "reason": "interactive continue research target",

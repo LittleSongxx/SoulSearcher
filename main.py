@@ -112,7 +112,7 @@ from common.sse import (
     iter_abort_on_disconnect,
     iter_with_sse_keepalive,
 )
-from common.stream_translate import translate_data_stream_line_to_sse
+from common.stream_translate import data_stream_line_to_payload, translate_data_stream_line_to_sse
 from common.thread_ownership import get_thread_owner, set_thread_owner
 from common.tracing import SpanKind, record_span, trace_request
 from tools.browser.browser_session import browser_sessions
@@ -1884,6 +1884,29 @@ def _normalize_search_mode(
     }
 
 
+def _persist_run_stream_event(
+    *,
+    run_id: str,
+    thread_id: str,
+    seq: int,
+    event_type: str,
+    payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    try:
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        return run_manager.append_event(
+            run_id=run_id,
+            thread_id=thread_id,
+            seq=seq,
+            type=event_type,
+            payload=payload,
+            status=str(payload.get("status") or data.get("status") or ""),
+        )
+    except Exception:
+        logger.debug("Failed to persist run stream event", exc_info=True)
+    return None
+
+
 def _normalize_images_payload(
     images: Optional[list[ImagePayload]],
 ) -> list[dict[str, Any]]:
@@ -1909,6 +1932,7 @@ def _normalize_images_payload(
 async def stream_agent_events(
     input_text: str,
     thread_id: str = "default",
+    run_id: Optional[str] = None,
     model: str | None = None,
     search_mode: dict[str, Any] | None = None,
     images: Optional[list[dict[str, Any]]] = None,
@@ -2048,6 +2072,7 @@ async def stream_agent_events(
                 deepsearch_config=safe_deepsearch_config,
                 base_configurable={
                     "thread_id": thread_id,
+                    "run_id": run_id or thread_id,
                     "model": model,
                     "search_mode": mode_info,
                     "user_id": user_id,
@@ -2119,6 +2144,18 @@ async def stream_agent_events(
                 elif tool_event.type == ToolEvent.RESEARCH_TREE_UPDATE:
                     yield_event = await format_stream_event(
                         "research_tree_update", tool_event.data
+                    )
+                elif tool_event.type == ToolEvent.PLAN_GRAPH_UPDATE:
+                    yield_event = await format_stream_event(
+                        "plan_graph_update", tool_event.data
+                    )
+                elif tool_event.type == ToolEvent.REPLAN_REQUESTED:
+                    yield_event = await format_stream_event(
+                        "replan_requested", tool_event.data
+                    )
+                elif tool_event.type == ToolEvent.REPLAN_APPLIED:
+                    yield_event = await format_stream_event(
+                        "replan_applied", tool_event.data
                     )
                 elif tool_event.type == ToolEvent.QUALITY_UPDATE:
                     yield_event = await format_stream_event(
@@ -2331,8 +2368,7 @@ async def stream_agent_events(
                         except Exception:
                             pass
 
-                    # Check for completion and final report artifact
-                    # V1: checks is_complete flag; V2: checks final_report on graph_end
+                    # Check for completion and final report artifact.
                     is_graph_complete = (
                         output.get("is_complete") or
                         event_type == "on_graph_end"
@@ -2951,6 +2987,23 @@ class RunMetricsResponse(BaseModel):
     quality_summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class RunEventResponse(BaseModel):
+    run_id: str
+    thread_id: str
+    seq: int
+    type: str
+    status: str = ""
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: str = ""
+
+
+class RunEventsResponse(BaseModel):
+    thread_id: str
+    after_seq: int = 0
+    count: int = 0
+    events: list[RunEventResponse] = Field(default_factory=list)
+
+
 def _build_run_evidence_summary(thread_id: str) -> RunEvidenceSummary:
     sources_count = 0
     unsupported_claims_count = 0
@@ -3096,7 +3149,7 @@ async def get_run_metrics(thread_id: str, request: Request):
         if not record:
             raise HTTPException(status_code=404, detail="Run not found")
         payload = {
-            "run_id": record.thread_id,
+            "run_id": record.run_id,
             "model": record.model,
             "route": record.route,
             "started_at": record.created_at,
@@ -3118,6 +3171,69 @@ async def get_run_metrics(thread_id: str, request: Request):
     return RunMetricsResponse(
         **payload,
         evidence_summary=_build_run_evidence_summary(thread_id),
+    )
+
+
+@app.get("/api/runs/{thread_id}/events", response_model=RunEventsResponse)
+async def get_run_events(
+    thread_id: str,
+    request: Request,
+    after_seq: int = 0,
+    limit: int = 500,
+):
+    """Return persisted run events after a sequence number."""
+    _require_thread_owner(request, thread_id)
+    events = run_manager.events_after(thread_id, after_seq=after_seq, limit=limit)
+    return {
+        "thread_id": thread_id,
+        "after_seq": int(after_seq or 0),
+        "count": len(events),
+        "events": events,
+    }
+
+
+@app.get("/api/runs/{thread_id}/events/sse")
+async def replay_run_events_sse(
+    thread_id: str,
+    request: Request,
+    after_seq: int = 0,
+    limit: int = 500,
+):
+    """Replay persisted run events as standard SSE frames."""
+    _require_thread_owner(request, thread_id)
+
+    last_event_id = (request.headers.get("Last-Event-ID") or "").strip()
+    if last_event_id:
+        try:
+            after_seq = max(int(after_seq or 0), int(last_event_id))
+        except ValueError:
+            pass
+
+    async def _replay_generator():
+        for event in run_manager.events_after(
+            thread_id,
+            after_seq=after_seq,
+            limit=limit,
+        ):
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                payload = {}
+            event_type = str(event.get("type") or payload.get("type") or "event")
+            yield format_sse_event(
+                event=event_type,
+                data=payload,
+                event_id=int(event.get("seq") or 0),
+            )
+
+    return StreamingResponse(
+        _replay_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "X-Thread-ID": thread_id,
+        },
     )
 
 
@@ -4452,6 +4568,9 @@ class EvidenceResponse(BaseModel):
     quality_summary: dict[str, Any] = {}
     quality_details: dict[str, Any] = {}
     research_brief: dict[str, Any] = {}
+    plan_graph: dict[str, Any] = {}
+    plan_events: list[dict[str, Any]] = []
+    plan_summary: dict[str, Any] = {}
     research_todos: list[dict[str, Any]] = []
     todo_summary: dict[str, Any] = {}
     retrieval_policy: dict[str, Any] = {}
@@ -4642,6 +4761,26 @@ async def get_session_evidence(thread_id: str, request: Request):
         quality_summary = artifacts.get("quality_summary", {})
         quality_details = artifacts.get("quality_details", {})
         research_brief = artifacts.get("research_brief", {})
+        plan_graph = artifacts.get("plan_graph", {})
+        plan_graph_events = (
+            plan_graph.get("events") if isinstance(plan_graph, dict) else None
+        )
+        plan_events = (
+            plan_graph_events
+            if isinstance(plan_graph_events, list)
+            else artifacts.get("plan_events", [])
+        )
+        plan_artifact_summary = artifacts.get("plan_summary", {})
+        plan_graph_summary = (
+            plan_graph.get("summary") if isinstance(plan_graph, dict) else None
+        )
+        plan_summary = (
+            plan_graph_summary
+            if isinstance(plan_graph_summary, dict)
+            else plan_artifact_summary
+            if isinstance(plan_artifact_summary, dict)
+            else {}
+        )
         research_todos = artifacts.get("research_todos", [])
         todo_summary = artifacts.get("todo_summary", {})
         quality_gates = artifacts.get("quality_gates", [])
@@ -4694,6 +4833,21 @@ async def get_session_evidence(thread_id: str, request: Request):
             ),
             "research_brief": (
                 research_brief if isinstance(research_brief, dict) else {}
+            ),
+            "plan_graph": (
+                plan_graph
+                if isinstance(plan_graph, dict)
+                else evidence_patch.get("plan_graph", {})
+            ),
+            "plan_events": (
+                plan_events
+                if isinstance(plan_events, list)
+                else evidence_patch.get("plan_events", [])
+            ),
+            "plan_summary": (
+                plan_summary
+                if isinstance(plan_summary, dict)
+                else evidence_patch.get("plan_summary", {})
             ),
             "research_todos": (
                 research_todos
@@ -4842,7 +4996,32 @@ async def continue_research_session(
         continue_requests.append(plan_payload)
         artifacts["continue_requests"] = continue_requests
         update_state = dict(plan.update_state)
+        if isinstance(update_state.get("plan_graph"), dict):
+            artifacts["plan_graph"] = update_state["plan_graph"]
+            artifacts["plan_events"] = update_state.get("plan_events", [])
+            try:
+                from agent.workflows.plan_graph import summarize_plan_graph
+
+                artifacts["plan_summary"] = summarize_plan_graph(update_state["plan_graph"])
+            except Exception:
+                artifacts["plan_summary"] = {}
+        if isinstance(update_state.get("research_todos"), list):
+            artifacts["research_todos"] = update_state["research_todos"]
+        if isinstance(update_state.get("todo_summary"), dict):
+            artifacts["todo_summary"] = update_state["todo_summary"]
         update_state["deepsearch_artifacts"] = artifacts
+        if isinstance(update_state.get("plan_graph"), dict):
+            try:
+                emitter = await get_emitter(thread_id)
+                payload_data = {
+                    "reason": "interactive continue research target",
+                    "plan_graph": update_state["plan_graph"],
+                    "plan_summary": artifacts.get("plan_summary", {}),
+                }
+                await emitter.emit(ToolEvent.REPLAN_APPLIED, payload_data)
+                await emitter.emit(ToolEvent.PLAN_GRAPH_UPDATE, payload_data)
+            except Exception:
+                pass
         restored_state = manager.build_resume_state(
             thread_id=thread_id,
             additional_input=plan.resume_input,
@@ -5445,57 +5624,23 @@ async def resume_from_interrupt(
     thread_id: str, request: Request, payload: InterruptResumeRequest
 ):
     """
-    Resume execution from an interrupt point.
+    Compatibility path for interrupt resume.
 
-    Actions:
-    - approve: Continue with current state
-    - modify: Apply modifications and continue
-    - reject: Stop execution
-    - skip: Skip this step and continue
+    The canonical implementation is /api/interrupt/resume; keep this route as
+    a thin adapter so there is only one resume code path.
     """
-    if not checkpointer:
-        raise HTTPException(status_code=400, detail="No checkpointer configured")
-
-    try:
-        _require_thread_owner(request, thread_id)
-        config = {"configurable": {"thread_id": thread_id}}
-        checkpoint_tuple = checkpointer.get_tuple(config)
-
-        if not checkpoint_tuple:
-            raise HTTPException(
-                status_code=404, detail=f"Session not found: {thread_id}"
-            )
-
-        action = payload.action.lower()
-
-        if action == "reject":
-            # Mark session as cancelled
-            return {
-                "success": True,
-                "action": "rejected",
-                "message": f"Session {thread_id} execution rejected. Session cancelled.",
-            }
-
-        if action == "modify" and payload.modifications:
-            # Apply modifications would require updating the checkpoint
-            # This is a simplified implementation
-            modifications = payload.modifications
-            logger.info(f"Modifications requested for {thread_id}: {modifications}")
-
-        # For approve/skip/modify, return info for client to resume via SSE
-        return {
-            "success": True,
-            "action": action,
-            "thread_id": thread_id,
-            "message": f"Session {thread_id} ready to resume. Use the streaming endpoint to continue.",
-            "modifications_applied": action == "modify",
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Resume from interrupt error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    action = str(payload.action or "approve").strip().lower()
+    resume_payload: dict[str, Any] = {"action": action}
+    if payload.modifications:
+        resume_payload["modifications"] = payload.modifications
+        if action == "modify":
+            resume_payload.update(payload.modifications)
+    if payload.feedback:
+        resume_payload["feedback"] = payload.feedback
+    return await resume_interrupt(
+        request,
+        GraphInterruptResumeRequest(thread_id=thread_id, payload=resume_payload),
+    )
 
 
 @app.post("/api/research/sse")
@@ -5520,7 +5665,16 @@ async def research_sse(request: Request, payload: ResearchRequest):
     mode_info = _normalize_search_mode(payload.search_mode)
     model = (payload.model or settings.primary_model).strip()
     thread_id = f"thread_{uuid.uuid4().hex}"
+    run_id = f"run_{uuid.uuid4().hex}"
     set_thread_owner(thread_id, principal_id or "anonymous")
+    run_manager.start(
+        run_id=run_id,
+        thread_id=thread_id,
+        model=model,
+        route=mode_info.get("mode", ""),
+        user_id=user_id,
+        metadata={"input_preview": query[:200]},
+    )
     safe_deepsearch_config = _safe_research_deepsearch_config(
         payload.deepsearch_config or {}
     )
@@ -5599,17 +5753,28 @@ async def research_sse(request: Request, payload: ResearchRequest):
                     "research_brief": normalized_research_brief,
                     "retrieval_policy": preview_retrieval_policy,
                 }
+                stream_payload = {
+                    "type": "brief_created",
+                    "data": brief_payload,
+                    "research_event": build_research_run_event(
+                        "brief_created",
+                        brief_payload,
+                        seq=seq,
+                    ),
+                }
+                persisted = _persist_run_stream_event(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    seq=seq,
+                    event_type="brief_created",
+                    payload=stream_payload,
+                )
+                if persisted:
+                    seq = int(persisted.get("seq") or seq)
+                    stream_payload = dict(persisted.get("payload") or stream_payload)
                 yield format_sse_event(
                     event="brief_created",
-                    data={
-                        "type": "brief_created",
-                        "data": brief_payload,
-                        "research_event": build_research_run_event(
-                            "brief_created",
-                            brief_payload,
-                            seq=seq,
-                        ),
-                    },
+                    data=stream_payload,
                     event_id=seq,
                 )
 
@@ -5617,34 +5782,65 @@ async def research_sse(request: Request, payload: ResearchRequest):
             # We keep this fast and side-effect free (no graph compilation/run).
             if not (settings.openai_api_key or "").strip():
                 seq += 1
-                yield format_sse_event(
-                    event="error",
-                    data={
+                error_payload = {
+                    "type": "error",
+                    "data": {
                         "message": "OPENAI_API_KEY is not configured",
                         "thread_id": thread_id,
-                        "research_event": build_research_run_event(
-                            "error",
-                            {
-                                "message": "OPENAI_API_KEY is not configured",
-                                "thread_id": thread_id,
-                            },
-                            seq=seq,
-                        ),
                     },
+                    "research_event": build_research_run_event(
+                        "error",
+                        {
+                            "message": "OPENAI_API_KEY is not configured",
+                            "thread_id": thread_id,
+                        },
+                        seq=seq,
+                    ),
+                }
+                persisted = _persist_run_stream_event(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    seq=seq,
+                    event_type="error",
+                    payload=error_payload,
+                )
+                if persisted:
+                    seq = int(persisted.get("seq") or seq)
+                    error_payload = dict(persisted.get("payload") or error_payload)
+                yield format_sse_event(
+                    event="error",
+                    data=error_payload,
                     event_id=seq,
                 )
                 seq += 1
+                done_payload = {
+                    "type": "done",
+                    "data": {"thread_id": thread_id},
+                    "research_event": build_research_run_event(
+                        "done",
+                        {"thread_id": thread_id},
+                        seq=seq,
+                    ),
+                }
+                persisted = _persist_run_stream_event(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    seq=seq,
+                    event_type="done",
+                    payload=done_payload,
+                )
+                if persisted:
+                    seq = int(persisted.get("seq") or seq)
+                    done_payload = dict(persisted.get("payload") or done_payload)
                 yield format_sse_event(
                     event="done",
-                    data={
-                        "thread_id": thread_id,
-                        "research_event": build_research_run_event(
-                            "done",
-                            {"thread_id": thread_id},
-                            seq=seq,
-                        ),
-                    },
+                    data=done_payload,
                     event_id=seq,
+                )
+                run_manager.finish(
+                    thread_id,
+                    status=RunStatus.failed,
+                    error="OPENAI_API_KEY is not configured",
                 )
                 return
 
@@ -5652,6 +5848,7 @@ async def research_sse(request: Request, payload: ResearchRequest):
                 _stream_agent_events_call(
                     query,
                     thread_id=thread_id,
+                    run_id=run_id,
                     model=model,
                     search_mode=mode_info,
                     images=_normalize_images_payload(payload.images),
@@ -5674,9 +5871,24 @@ async def research_sse(request: Request, payload: ResearchRequest):
                     continue
 
                 seq += 1
-                sse = translate_data_stream_line_to_sse(maybe_line, seq=seq)
-                if sse:
-                    yield sse
+                payload_data = data_stream_line_to_payload(maybe_line, seq=seq)
+                if payload_data:
+                    event_type = str(payload_data.get("type") or "event")
+                    persisted = _persist_run_stream_event(
+                        run_id=run_id,
+                        thread_id=thread_id,
+                        seq=seq,
+                        event_type=event_type,
+                        payload=payload_data,
+                    )
+                    if persisted:
+                        seq = int(persisted.get("seq") or seq)
+                        payload_data = dict(persisted.get("payload") or payload_data)
+                    yield format_sse_event(
+                        event=event_type,
+                        data=payload_data,
+                        event_id=seq,
+                    )
         finally:
             try:
                 if gauge is not None:
