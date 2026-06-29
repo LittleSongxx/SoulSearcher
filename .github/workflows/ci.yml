@@ -40,13 +40,13 @@ jobs:
         run: python -m compileall -q .
 
       - name: Export OpenAPI spec
-        run: python scripts/export_openapi.py --output /tmp/weaver-openapi.json
+        run: python scripts/export_openapi.py --output /tmp/soulsearcher-openapi.json
 
       - name: Upload OpenAPI spec artifact
         uses: actions/upload-artifact@v7
         with:
-          name: weaver-openapi-spec
-          path: /tmp/weaver-openapi.json
+          name: soulsearcher-openapi-spec
+          path: /tmp/soulsearcher-openapi.json
 
       - name: Secret scan
         run: python scripts/secret_scan.py
@@ -83,11 +83,11 @@ jobs:
       - name: Download OpenAPI spec artifact
         uses: actions/download-artifact@v8
         with:
-          name: weaver-openapi-spec
+          name: soulsearcher-openapi-spec
           path: .tmp/openapi
 
       - name: OpenAPI → TS types drift guard
-        run: bash scripts/check_openapi_ts_types.sh --openapi-json .tmp/openapi/weaver-openapi.json
+        run: bash scripts/check_openapi_ts_types.sh --openapi-json .tmp/openapi/soulsearcher-openapi.json
 
       - name: Lint (next lint)
         run: pnpm -C web lint

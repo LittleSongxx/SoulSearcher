@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug to help us improve Weaver
+about: Report a bug to help us improve SoulSearcher
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -21,8 +21,7 @@ assignees: ""
 - OS:
 - Python version:
 - Node version:
-- Weaver commit/branch:
+- SoulSearcher commit/branch:
 
 ## Logs / screenshots
 Attach relevant logs (redact secrets).
-

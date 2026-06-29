@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Weaver
+about: Suggest an idea for SoulSearcher
 title: "[Feature] "
 labels: enhancement
 assignees: ""
@@ -10,10 +10,9 @@ assignees: ""
 What problem are you trying to solve?
 
 ## Proposed solution
-What would you like Weaver to do?
+What would you like SoulSearcher to do?
 
 ## Alternatives considered
 
 ## Additional context
 Links, screenshots, examples, etc.
-
