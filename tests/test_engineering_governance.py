@@ -319,5 +319,27 @@ def test_background_lease_store_allows_only_one_active_lease():
     assert store.acquire("thread-1").acquired is True
 
 
+def test_background_lease_status_pings_configured_redis(monkeypatch):
+    from agent.runtime.background_leases import BackgroundLeaseStore
+
+    class Client:
+        def __init__(self):
+            self.ping_count = 0
+
+        def ping(self):
+            self.ping_count += 1
+            return True
+
+    client = Client()
+    store = BackgroundLeaseStore(redis_url="redis://example")
+    monkeypatch.setattr(store, "_get_client", lambda: client)
+
+    status = store.status
+
+    assert status["available"] is True
+    assert status["backend"] == "redis"
+    assert client.ping_count == 1
+
+
 async def _noop():
     return None

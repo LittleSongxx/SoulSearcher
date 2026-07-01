@@ -19,6 +19,7 @@ class Lease:
     token: str
     acquired: bool
     backend: str
+    resource_id: str = ""
 
 
 class BackgroundLeaseStore:
@@ -38,11 +39,19 @@ class BackgroundLeaseStore:
 
     @property
     def status(self) -> dict[str, Any]:
+        available = True
+        if self.redis_url:
+            try:
+                self._get_client().ping()
+                self._last_error = ""
+                available = True
+            except Exception as exc:
+                self._last_error = str(exc)
+                available = False
         return {
             "backend": "redis" if self.redis_url else "memory",
             "redis_url_configured": bool(self.redis_url),
-            "available": bool(self.redis_url and self._client is not None and not self._last_error)
-            or not self.redis_url,
+            "available": available,
             "ttl_seconds": self.ttl_seconds,
             "last_error": self._last_error,
             "memory_lease_count": len(self._memory),
@@ -56,7 +65,13 @@ class BackgroundLeaseStore:
                 client = self._get_client()
                 acquired = bool(client.set(key, token, nx=True, ex=self.ttl_seconds))
                 self._last_error = ""
-                return Lease(key=key, token=token, acquired=acquired, backend="redis")
+                return Lease(
+                    key=key,
+                    token=token,
+                    acquired=acquired,
+                    backend="redis",
+                    resource_id=thread_id,
+                )
             except Exception as exc:
                 self._last_error = str(exc)
                 return Lease(
@@ -64,13 +79,26 @@ class BackgroundLeaseStore:
                     token=token,
                     acquired=False,
                     backend="redis_unavailable",
+                    resource_id=thread_id,
                 )
         self._evict_expired_memory()
         existing = self._memory.get(key)
         if existing and existing[1] > time.monotonic():
-            return Lease(key=key, token=token, acquired=False, backend="memory")
+            return Lease(
+                key=key,
+                token=token,
+                acquired=False,
+                backend="memory",
+                resource_id=thread_id,
+            )
         self._memory[key] = (token, time.monotonic() + self.ttl_seconds)
-        return Lease(key=key, token=token, acquired=True, backend="memory")
+        return Lease(
+            key=key,
+            token=token,
+            acquired=True,
+            backend="memory",
+            resource_id=thread_id,
+        )
 
     def refresh(self, lease: Lease) -> bool:
         if not lease.acquired:
@@ -78,12 +106,23 @@ class BackgroundLeaseStore:
         if lease.backend == "redis" and self.redis_url:
             try:
                 client = self._get_client()
-                value = client.get(lease.key)
-                if value != lease.token:
-                    return False
-                client.expire(lease.key, self.ttl_seconds)
+                refreshed = int(
+                    client.eval(
+                        """
+                        if redis.call("get", KEYS[1]) == ARGV[1] then
+                            return redis.call("expire", KEYS[1], ARGV[2])
+                        end
+                        return 0
+                        """,
+                        1,
+                        lease.key,
+                        lease.token,
+                        str(self.ttl_seconds),
+                    )
+                    or 0
+                )
                 self._last_error = ""
-                return True
+                return refreshed == 1
             except Exception as exc:
                 self._last_error = str(exc)
                 return False
@@ -99,12 +138,22 @@ class BackgroundLeaseStore:
         if lease.backend == "redis" and self.redis_url:
             try:
                 client = self._get_client()
-                value = client.get(lease.key)
-                if value == lease.token:
-                    client.delete(lease.key)
-                    self._last_error = ""
-                    return True
-                return False
+                released = int(
+                    client.eval(
+                        """
+                        if redis.call("get", KEYS[1]) == ARGV[1] then
+                            return redis.call("del", KEYS[1])
+                        end
+                        return 0
+                        """,
+                        1,
+                        lease.key,
+                        lease.token,
+                    )
+                    or 0
+                )
+                self._last_error = ""
+                return released == 1
             except Exception as exc:
                 self._last_error = str(exc)
                 return False

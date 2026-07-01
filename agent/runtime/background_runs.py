@@ -323,7 +323,7 @@ class BackgroundRunManager:
                 await asyncio.sleep(interval)
                 if not self._lease_store.refresh(lease):
                     logger.warning("[BackgroundRun] lost lease %s", lease.key)
-                    thread_id = lease.key.rsplit(":", 1)[-1]
+                    thread_id = lease.resource_id or lease.key.rsplit(":", 1)[-1]
                     await cancellation_manager.cancel(thread_id, "Background run lease lost")
                     return
         except asyncio.CancelledError:
