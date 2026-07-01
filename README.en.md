@@ -43,6 +43,7 @@ flowchart LR
 | Evidence | Evidence items, passages, source registry, citation annotations, claim support |
 | Quality | Citation gate, claim verifier, rubric evaluation, automatic revision, follow-up research |
 | Run events | Thread-ordered events are persisted and replayable through REST or SSE |
+| A2A 1.0 Server | Publishes `/.well-known/agent-card.json` and exposes JSON-RPC `SendStreamingMessage` DeepResearch on `/api/a2a` |
 | Memory | Optional memory service for findings, entities, relations, and procedural lessons |
 | Skills | Public/custom skills with allowlists, validation, storage, history, and rollback |
 | Frontend | Next.js workspace for streaming research, plan review, evidence, Plan DAG, events, artifacts, sessions, and traces |
@@ -307,6 +308,26 @@ DEEPSEARCH_MODE=auto
 SOULSEARCHER_INTERNAL_API_KEY=...
 DATABASE_URL=sqlite:///./data/soulsearcher.db
 ENABLE_PROMETHEUS=false
+```
+
+## A2A 1.0 Server
+
+SoulSearcher exposes DeepResearch as an A2A 1.0 JSON-RPC server:
+
+```text
+GET  /.well-known/agent-card.json
+POST /api/a2a
+```
+
+The Agent Card advertises `supportedInterfaces[0]` with `protocolBinding="JSONRPC"`, `protocolVersion="1.0"`, and `url=<SOULSEARCHER_PUBLIC_BASE_URL>/api/a2a`. `/api/a2a` uses the existing `/api/*` auth middleware; if `SOULSEARCHER_INTERNAL_API_KEY` is set, A2A clients must send `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+Minimal local settings for SoulClaw:
+
+```env
+PORT=8001
+SOULSEARCHER_PUBLIC_BASE_URL=http://127.0.0.1:8001
+SOULSEARCHER_INTERNAL_API_KEY=
+SOULSEARCHER_AUTH_USER_HEADER=X-SoulSearcher-User
 ```
 
 ## Development

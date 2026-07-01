@@ -73,6 +73,7 @@ from agent import (
 )
 
 # Router modules extracted from main.py for maintainability
+from agent.api.a2a import mount_a2a_routes
 from agent.api.tracing import router as tracing_router
 from agent.memory import (
     MemoryRecord,
@@ -6143,6 +6144,9 @@ async def research_sse(request: Request, payload: ResearchRequest):
             "X-Thread-ID": thread_id,
         },
     )
+
+
+mount_a2a_routes(app, settings=settings, stream_factory=stream_agent_events)
 
 
 if __name__ == "__main__":

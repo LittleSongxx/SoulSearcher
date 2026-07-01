@@ -43,6 +43,7 @@ flowchart LR
 | 证据系统 | evidence items、passages、source registry、citation annotations、claim support |
 | 质量控制 | citation gate、claim verifier、rubric evaluation、自动修订和质量补研 |
 | Run Events | 运行事件持久化，支持 REST 查询和 SSE 回放 |
+| A2A 1.0 Server | 发布 `/.well-known/agent-card.json`，通过 `/api/a2a` 提供 JSON-RPC `SendStreamingMessage` DeepResearch 能力 |
 | 长期记忆 | 可选 memory service，支持实体、关系、研究发现和 procedural learning |
 | Skills | public/custom skills，支持 allowlist、安装、编辑、历史和回滚 |
 | 前端工作台 | Next.js 展示研究流、计划审批、证据、Plan DAG、Events、产物、会话和 traces |
@@ -307,6 +308,26 @@ DEEPSEARCH_MODE=auto
 SOULSEARCHER_INTERNAL_API_KEY=...
 DATABASE_URL=sqlite:///./data/soulsearcher.db
 ENABLE_PROMETHEUS=false
+```
+
+## A2A 1.0 Server
+
+SoulSearcher 作为 A2A 1.0 JSON-RPC Server 暴露 DeepResearch：
+
+```text
+GET  /.well-known/agent-card.json
+POST /api/a2a
+```
+
+Agent Card 的 `supportedInterfaces[0]` 使用 `protocolBinding="JSONRPC"`、`protocolVersion="1.0"`、`url=<SOULSEARCHER_PUBLIC_BASE_URL>/api/a2a`。`/api/a2a` 走现有 `/api/*` 鉴权；如果设置了 `SOULSEARCHER_INTERNAL_API_KEY`，A2A Client 需要携带 `Authorization: Bearer <key>` 或 `X-API-Key: <key>`。
+
+本地给 SoulClaw 使用的最小配置：
+
+```env
+PORT=8001
+SOULSEARCHER_PUBLIC_BASE_URL=http://127.0.0.1:8001
+SOULSEARCHER_INTERNAL_API_KEY=
+SOULSEARCHER_AUTH_USER_HEADER=X-SoulSearcher-User
 ```
 
 ## 开发与验证

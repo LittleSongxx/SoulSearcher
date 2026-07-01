@@ -301,6 +301,11 @@ class Settings(BaseSettings):
     internal_api_key: str = Field(
         default="", validation_alias="SOULSEARCHER_INTERNAL_API_KEY"
     )
+    public_base_url: str = Field(
+        default="",
+        validation_alias="SOULSEARCHER_PUBLIC_BASE_URL",
+        description="Public base URL used in A2A Agent Cards and external callbacks.",
+    )
     auth_user_header: str = Field(
         default="X-SoulSearcher-User",
         validation_alias="SOULSEARCHER_AUTH_USER_HEADER",
