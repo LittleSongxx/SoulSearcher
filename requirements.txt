@@ -19,6 +19,7 @@ mem0ai>=0.0.7
 psycopg[binary]==3.3.3
 pgvector==0.4.2
 sqlalchemy>=2.0.25
+redis>=5.0.0
 
 # Tools
 tavily-python==0.7.22

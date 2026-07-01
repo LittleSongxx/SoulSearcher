@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import re
+import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -169,29 +170,70 @@ class DocumentLibrary:
         content_type: str = "",
         data: bytes,
         metadata: dict[str, Any] | None = None,
+        idempotency_key: str = "",
     ) -> dict[str, Any]:
         self.setup()
         user_id = _safe_user_id(user_id)
         ext = Path(filename or "").suffix.lower()
         if ext not in SUPPORTED_EXTENSIONS:
             raise ValueError(f"Unsupported document type '{ext}'. Supported: {sorted(SUPPORTED_EXTENSIONS)}")
-        document_id = f"doc_{uuid.uuid4().hex}"
+        content_hash = hashlib.sha256(data or b"").hexdigest()
+        safe_name = _safe_filename(filename)
+        existing = self._find_existing_document(
+            user_id=user_id,
+            content_hash=content_hash,
+            idempotency_key=idempotency_key,
+        )
+        if existing:
+            return existing
+
+        document_id = _document_id_for_upload(
+            user_id=user_id,
+            filename=safe_name,
+            content_hash=content_hash,
+            idempotency_key=idempotency_key,
+        )
         doc_dir = self.root / user_id / document_id
         original_dir = doc_dir / "original"
         original_dir.mkdir(parents=True, exist_ok=True)
-        safe_name = _safe_filename(filename)
         file_path = original_dir / safe_name
-        file_path.write_bytes(data or b"")
-
-        content_hash = hashlib.sha256(data or b"").hexdigest()
         text = parse_document_bytes(data or b"", filename=safe_name)
         chunks = chunk_text(text, chunk_chars=self.chunk_chars, overlap=self.chunk_overlap)
         embeddings = [self.embed_text(chunk) for chunk in chunks]
         now = datetime.now().isoformat(timespec="seconds")
         doc_metadata = dict(metadata or {})
+        if idempotency_key:
+            doc_metadata["idempotency_key"] = idempotency_key
         doc_metadata.update({"char_count": len(text), "indexed_at": now})
 
-        with self._connect() as conn, conn.cursor() as cur:
+        wrote_file = False
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id AS document_id, user_id, filename, content_type, file_path,
+                           status, chunk_count
+                    FROM research_documents
+                    WHERE user_id=%(user_id)s AND id=%(id)s
+                    """,
+                    {"user_id": user_id, "id": document_id},
+                )
+                row = cur.fetchone()
+                if row:
+                    columns = [desc[0] for desc in cur.description or []]
+                    existing_doc = dict(zip(columns, row, strict=False))
+                    return DocumentUpload(
+                        document_id=str(existing_doc.get("document_id") or document_id),
+                        user_id=user_id,
+                        filename=str(existing_doc.get("filename") or safe_name),
+                        content_type=str(existing_doc.get("content_type") or content_type),
+                        status=str(existing_doc.get("status") or "indexed"),
+                        chunk_count=int(existing_doc.get("chunk_count") or 0),
+                        path=str(existing_doc.get("file_path") or file_path),
+                    ).to_dict()
+
+                file_path.write_bytes(data or b"")
+                wrote_file = True
                 cur.execute(
                     """
                     INSERT INTO research_documents (
@@ -201,6 +243,7 @@ class DocumentLibrary:
                     VALUES (%(id)s, %(user_id)s, %(filename)s, %(content_type)s,
                             %(file_path)s, %(content_hash)s, %(status)s,
                             %(chunk_count)s, %(metadata)s::jsonb, now())
+                    ON CONFLICT (id) DO NOTHING
                     """,
                     {
                         "id": document_id,
@@ -224,6 +267,7 @@ class DocumentLibrary:
                         )
                         VALUES (%(id)s, %(document_id)s, %(user_id)s, %(chunk_index)s,
                                 %(text)s, %(embedding)s, %(content_hash)s, %(metadata)s::jsonb)
+                        ON CONFLICT (id) DO NOTHING
                         """,
                         {
                             "id": chunk_id,
@@ -243,6 +287,17 @@ class DocumentLibrary:
                     event_type="indexed",
                     payload={"chunk_count": len(chunks), "filename": safe_name},
                 )
+        except Exception:
+            if wrote_file:
+                try:
+                    shutil.rmtree(doc_dir)
+                except Exception:
+                    logger.debug(
+                        "[DocumentLibrary] failed to clean partial upload dir %s",
+                        doc_dir,
+                        exc_info=True,
+                    )
+            raise
         return DocumentUpload(
             document_id=document_id,
             user_id=user_id,
@@ -251,6 +306,47 @@ class DocumentLibrary:
             status="indexed",
             chunk_count=len(chunks),
             path=str(file_path),
+        ).to_dict()
+
+    def _find_existing_document(
+        self,
+        *,
+        user_id: str,
+        content_hash: str,
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        self.setup()
+        clauses = ["user_id=%(user_id)s"]
+        params: dict[str, Any] = {"user_id": user_id}
+        if idempotency_key:
+            clauses.append("metadata->>'idempotency_key' = %(idempotency_key)s")
+            params["idempotency_key"] = idempotency_key
+        else:
+            clauses.append("content_hash=%(content_hash)s")
+            params["content_hash"] = content_hash
+        with self._connect() as conn, conn.cursor(row_factory=_dict_row()) as cur:
+            cur.execute(
+                f"""
+                SELECT id AS document_id, user_id, filename, content_type, file_path,
+                       status, chunk_count
+                FROM research_documents
+                WHERE {" AND ".join(clauses)}
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                params,
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        return DocumentUpload(
+            document_id=str(row.get("document_id") or ""),
+            user_id=str(row.get("user_id") or user_id),
+            filename=str(row.get("filename") or ""),
+            content_type=str(row.get("content_type") or ""),
+            status=str(row.get("status") or "indexed"),
+            chunk_count=int(row.get("chunk_count") or 0),
+            path=str(row.get("file_path") or ""),
         ).to_dict()
 
     def list_documents(self, *, user_id: str) -> list[dict[str, Any]]:
@@ -540,7 +636,10 @@ def get_document_library() -> DocumentLibrary:
 
 
 def _dict_row():
-    from psycopg.rows import dict_row
+    try:
+        from psycopg.rows import dict_row
+    except Exception:
+        return None
 
     return dict_row
 
@@ -548,6 +647,17 @@ def _dict_row():
 def _safe_user_id(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_.@-]+", "-", str(value or "default_user")).strip("-")
     return cleaned or "default_user"
+
+
+def _document_id_for_upload(
+    *,
+    user_id: str,
+    filename: str,
+    content_hash: str,
+    idempotency_key: str = "",
+) -> str:
+    basis = idempotency_key or f"{user_id}:{filename}:{content_hash}"
+    return f"doc_{hashlib.sha1(basis.encode('utf-8')).hexdigest()[:24]}"
 
 
 def _safe_filename(value: str) -> str:

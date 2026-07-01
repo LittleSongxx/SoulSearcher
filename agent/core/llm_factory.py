@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Any, Optional
 
+from agent.core.llm_reliability import provider_from_model_config, wrap_chat_model
 from common.config import settings
 
 logger = logging.getLogger(__name__)
@@ -100,8 +101,11 @@ def create_chat_model(
     except ModuleNotFoundError as exc:
         raise RuntimeError("langchain_openai is required for LLM invocation") from exc
 
-    return ChatOpenAI(
-        **create_chat_model_params(model, temperature, extra_body=extra_body)
+    params = create_chat_model_params(model, temperature, extra_body=extra_body)
+    return wrap_chat_model(
+        ChatOpenAI(**params),
+        provider=provider_from_model_config(params),
+        model_name=model,
     )
 
 

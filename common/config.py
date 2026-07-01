@@ -174,6 +174,42 @@ class Settings(BaseSettings):
     azure_api_version: str = "2025-03-01-preview"
     openai_timeout: int = 60
     openai_extra_body: str = ""  # JSON string for extra OpenAI-compatible params
+    llm_reliability_enabled: bool = Field(
+        default=True,
+        validation_alias="LLM_RELIABILITY_ENABLED",
+        description="Enable retry and circuit-breaker wrapper for LLM calls.",
+    )
+    llm_retry_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        validation_alias="LLM_RETRY_MAX_ATTEMPTS",
+        description="Total LLM call attempts including the first attempt.",
+    )
+    llm_retry_initial_delay_seconds: float = Field(
+        default=0.5,
+        ge=0.0,
+        validation_alias="LLM_RETRY_INITIAL_DELAY_SECONDS",
+    )
+    llm_retry_max_delay_seconds: float = Field(
+        default=8.0,
+        ge=0.0,
+        validation_alias="LLM_RETRY_MAX_DELAY_SECONDS",
+    )
+    llm_retry_jitter_seconds: float = Field(
+        default=0.25,
+        ge=0.0,
+        validation_alias="LLM_RETRY_JITTER_SECONDS",
+    )
+    llm_circuit_breaker_failures: int = Field(
+        default=5,
+        ge=1,
+        validation_alias="LLM_CIRCUIT_BREAKER_FAILURES",
+    )
+    llm_circuit_breaker_reset_seconds: float = Field(
+        default=60.0,
+        ge=1.0,
+        validation_alias="LLM_CIRCUIT_BREAKER_RESET_SECONDS",
+    )
     tavily_api_key: str = ""
     tavily_api_keys: str = (
         ""  # comma-separated Tavily keys for auto-rotation on quota exhaustion
@@ -294,6 +330,40 @@ class Settings(BaseSettings):
         ge=1,
         validation_alias="RATE_LIMIT_MAX_BUCKETS",
         description="Cap in-memory token buckets to avoid unbounded growth under many unique clients.",
+    )
+    rate_limit_backend: str = Field(
+        default="memory",
+        validation_alias="RATE_LIMIT_BACKEND",
+        description="HTTP rate limiter backend: memory, redis, or auto.",
+    )
+    rate_limit_redis_fail_open: bool = Field(
+        default=True,
+        validation_alias="RATE_LIMIT_REDIS_FAIL_OPEN",
+        description="When Redis rate limiting is unavailable, fall back to local memory buckets.",
+    )
+    redis_url: str = Field(
+        default="",
+        validation_alias="REDIS_URL",
+        description="Shared Redis URL for production runtime coordination.",
+    )
+
+    # Idempotency controls
+    idempotency_enabled: bool = Field(
+        default=True,
+        validation_alias="IDEMPOTENCY_ENABLED",
+        description="Enable idempotency-key handling on mutation endpoints that support it.",
+    )
+    idempotency_ttl_seconds: int = Field(
+        default=86400,
+        ge=60,
+        validation_alias="IDEMPOTENCY_TTL_SECONDS",
+        description="How long to keep completed idempotency records.",
+    )
+    background_run_lease_ttl_seconds: int = Field(
+        default=1800,
+        ge=60,
+        validation_alias="BACKGROUND_RUN_LEASE_TTL_SECONDS",
+        description="Lease TTL for background run execution locks.",
     )
 
     # Database

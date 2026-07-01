@@ -13,23 +13,27 @@ from __future__ import annotations
 from typing import Any
 
 from agent.core.llm_factory import create_chat_model_params
+from agent.core.llm_reliability import wrap_chat_model
 
 try:
     from langchain.chat_models import init_chat_model
 
-    configurable_model = init_chat_model(
-        configurable_fields=(
-            "model",
-            "max_tokens",
-            "api_key",
-            "base_url",
-            "timeout",
-            "temperature",
-            "extra_body",
-            "azure_endpoint",
-            "azure_deployment",
-            "api_version",
+    configurable_model = wrap_chat_model(
+        init_chat_model(
+            configurable_fields=(
+                "model",
+                "max_tokens",
+                "api_key",
+                "base_url",
+                "timeout",
+                "temperature",
+                "extra_body",
+                "azure_endpoint",
+                "azure_deployment",
+                "api_version",
+            ),
         ),
+        provider="openai",
     )
 except ModuleNotFoundError:
     class _MissingConfigurableModel:

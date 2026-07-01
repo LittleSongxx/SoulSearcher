@@ -58,7 +58,16 @@ services:
     environment:
       APP_ENV: production
       DEBUG: "false"
-      RATE_LIMIT_ENABLED: "false"
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+      IDEMPOTENCY_ENABLED: "true"
+      BACKGROUND_RUN_LEASE_TTL_SECONDS: "1800"
+      LLM_RELIABILITY_ENABLED: "true"
+      LLM_RETRY_MAX_ATTEMPTS: "3"
+      LLM_CIRCUIT_BREAKER_FAILURES: "5"
+      LLM_CIRCUIT_BREAKER_RESET_SECONDS: "60"
+      ENABLE_PROMETHEUS: "true"
       PORT: "8000"
       DATABASE_URL: postgresql://${POSTGRES_USER:-manus}:${POSTGRES_PASSWORD:-manus_dev_password}@postgres:5432/${POSTGRES_DB:-manus_db}
       MEMORY_ENABLED: "true"
@@ -78,7 +87,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -88,29 +97,7 @@ services:
       - ../.docker-data:/app/.docker-data
       - ../logs:/app/logs
     command:
-      [
-        "uvicorn",
-        "main:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-        "--reload",
-        "--reload-dir",
-        "agent",
-        "--reload-dir",
-        "common",
-        "--reload-dir",
-        "tools",
-        "--reload-dir",
-        "prompts",
-        "--reload-exclude",
-        "web",
-        "--reload-exclude",
-        "web/node_modules",
-        "--reload-exclude",
-        "web/.next",
-      ]
+      ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     networks:
       - soulsearcher-net
 

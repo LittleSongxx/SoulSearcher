@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import hmac
 import inspect
 import json
@@ -91,6 +92,12 @@ from agent.retrieval.policy import (
     reject_legacy_source_routing,
 )
 from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
+from agent.runtime.idempotency import (
+    IdempotencyConflictError,
+    canonical_request_hash,
+    idempotency_store,
+)
+from agent.core.llm_reliability import llm_reliability_manager
 from agent.runtime.middleware.shared import get_token_summary
 from agent.runtime.request_builder import (
     ResearchRuntimeRequest,
@@ -340,17 +347,21 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Rate Limiting Middleware (in-memory token bucket)
 # ---------------------------------------------------------------------------
-from common.rate_limiter import RateLimiter
+from common.rate_limiter import build_rate_limiter
 from common.stream_registry import StreamRegistry
 
-_rate_limiter = RateLimiter(
+_rate_limiter = build_rate_limiter(
+    backend=str(getattr(settings, "rate_limit_backend", "memory") or "memory"),
+    redis_url=str(getattr(settings, "redis_url", "") or ""),
     general_per_minute=int(getattr(settings, "rate_limit_general_per_minute", 60)),
     research_per_minute=int(getattr(settings, "rate_limit_research_per_minute", 20)),
     window_seconds=int(getattr(settings, "rate_limit_window_seconds", 60)),
     max_buckets=int(getattr(settings, "rate_limit_max_buckets", 10_000) or 10_000),
+    redis_fail_open=bool(getattr(settings, "rate_limit_redis_fail_open", True)),
 )
 _stream_registry = StreamRegistry()
 _RATE_LIMIT_EXEMPT = {"/", "/health", "/metrics", "/docs", "/openapi.json", "/redoc"}
+_RATE_LIMIT_EXEMPT.add("/ready")
 
 
 def _get_client_ip(request: Request) -> str:
@@ -426,6 +437,50 @@ def _request_user_id(request: Request, explicit_user_id: str | None = None) -> s
     if explicit:
         return explicit
     return (getattr(settings, "memory_user_id", "") or "default").strip() or "default"
+
+
+def _idempotency_key(request: Request) -> str:
+    return (
+        request.headers.get("Idempotency-Key")
+        or request.headers.get("X-Idempotency-Key")
+        or ""
+    ).strip()
+
+
+def _stable_id_from_idempotency_key(prefix: str, *, key: str, user_id: str) -> str:
+    digest = hashlib.sha1(f"{prefix}:{user_id}:{key}".encode("utf-8")).hexdigest()[:24]
+    return f"{prefix}_{digest}"
+
+
+def _begin_idempotency(
+    request: Request,
+    *,
+    scope: str,
+    user_id: str,
+    payload: Any,
+):
+    key = _idempotency_key(request)
+    if not key:
+        return None
+    try:
+        return idempotency_store.begin(
+            key=key,
+            scope=scope,
+            user_id=user_id,
+            request_hash=canonical_request_hash(payload),
+        )
+    except IdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def _idempotent_response(record: Any) -> JSONResponse | None:
+    if record is not None and getattr(record, "status", "") == "completed":
+        return JSONResponse(
+            status_code=int(getattr(record, "http_status", 200) or 200),
+            content=dict(getattr(record, "response", {}) or {}),
+            headers={"X-Idempotency-Replayed": "true"},
+        )
+    return None
 
 
 def _memory_source_candidates(memory_result: Any) -> list[dict[str, Any]]:
@@ -596,6 +651,20 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Channel service startup failed: {e}", exc_info=settings.debug)
 
+    try:
+        stale_count = background_run_manager.mark_stale_active_runs_failed()
+        if stale_count:
+            logger.warning(
+                "[BackgroundRun] Marked %d stale active background run(s) failed on startup",
+                stale_count,
+            )
+    except Exception as e:
+        logger.warning(
+            "[BackgroundRun] stale active run cleanup failed: %s",
+            e,
+            exc_info=settings.debug,
+        )
+
     # Prime skills cache
     try:
         from agent.skills.storage import get_skill_storage
@@ -747,6 +816,14 @@ class SearchProvidersResetResponse(BaseModel):
     reset: bool
 
 
+class LLMReliabilityResponse(BaseModel):
+    providers: dict[str, Any]
+
+
+class LLMReliabilityResetResponse(BaseModel):
+    reset: bool
+
+
 class ToolRegistryMostUsed(BaseModel):
     name: str
     call_count: int
@@ -796,6 +873,9 @@ class AgentHealthResponse(BaseModel):
     search_strategy: str
     search_engines: list[str]
     search_providers_available: list[str]
+    rate_limiter: dict[str, Any] = Field(default_factory=dict)
+    background_leases: dict[str, Any] = Field(default_factory=dict)
+    llm_reliability: dict[str, Any] = Field(default_factory=dict)
 
 
 class PublicConfigDefaults(BaseModel):
@@ -1300,6 +1380,99 @@ async def health():
     }
 
 
+@app.get("/ready")
+async def ready():
+    """Readiness check for production routing decisions."""
+    checks: dict[str, Any] = {
+        "database": {"configured": bool(settings.database_url), "ok": True},
+        "rate_limiter": _rate_limiter_status(),
+        "background_leases": _background_lease_status(),
+        "llm_reliability": _llm_reliability_status(),
+        "memory": {"enabled": bool(getattr(settings, "memory_enabled", True)), "ok": True},
+        "search": {"ok": True, "providers_available": []},
+    }
+
+    if settings.database_url:
+        try:
+            import psycopg
+
+            with psycopg.connect(settings.database_url, connect_timeout=2) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+        except Exception as exc:
+            checks["database"] = {
+                "configured": True,
+                "ok": False,
+                "error": _sanitize_error_message(str(exc)),
+            }
+
+    if getattr(settings, "memory_enabled", True):
+        try:
+            status = get_memory_service().status()
+            checks["memory"].update(status)
+            checks["memory"]["ok"] = bool(status.get("available", True))
+        except Exception as exc:
+            checks["memory"] = {
+                "enabled": True,
+                "ok": False,
+                "error": _sanitize_error_message(str(exc)),
+            }
+
+    try:
+        orchestrator = get_search_orchestrator()
+        providers = [p.name for p in orchestrator.get_available_providers()]
+        checks["search"] = {"ok": bool(providers), "providers_available": providers}
+    except Exception as exc:
+        checks["search"] = {
+            "ok": False,
+            "providers_available": [],
+            "error": _sanitize_error_message(str(exc)),
+        }
+
+    ready_ok = all(bool(item.get("ok", False)) for item in checks.values())
+    status_code = 200 if ready_ok else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if ready_ok else "not_ready",
+            "checks": checks,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
+def _rate_limiter_status() -> dict[str, Any]:
+    status = getattr(_rate_limiter, "backend_status", None)
+    if isinstance(status, dict):
+        payload = dict(status)
+        payload["ok"] = bool(payload.get("available") or payload.get("fail_open"))
+        return payload
+    return {
+        "backend": "memory",
+        "ok": True,
+        "bucket_count": int(getattr(_rate_limiter, "bucket_count", 0) or 0),
+    }
+
+
+def _background_lease_status() -> dict[str, Any]:
+    payload = dict(getattr(background_run_manager, "lease_status", {}) or {})
+    payload["ok"] = bool(payload.get("available", True))
+    return payload
+
+
+def _llm_reliability_status() -> dict[str, Any]:
+    providers = llm_reliability_manager.snapshot()
+    open_providers = [
+        name for name, snapshot in providers.items() if bool(snapshot.get("is_open"))
+    ]
+    return {
+        "enabled": bool(getattr(settings, "llm_reliability_enabled", True)),
+        "ok": not (providers and len(open_providers) == len(providers)),
+        "open_providers": open_providers,
+        "provider_count": len(providers),
+    }
+
+
 @app.get("/api/health/agent", response_model=AgentHealthResponse)
 async def agent_health():
     """Lightweight agent subsystem health snapshot (no sandbox side effects)."""
@@ -1322,6 +1495,9 @@ async def agent_health():
         "search_providers_available": sorted(
             [str(n) for n in available if str(n).strip()]
         ),
+        "rate_limiter": _rate_limiter_status(),
+        "background_leases": _background_lease_status(),
+        "llm_reliability": _llm_reliability_status(),
     }
 
 
@@ -2845,6 +3021,19 @@ async def reset_search_providers():
     return {"reset": True}
 
 
+@app.get("/api/llm/reliability", response_model=LLMReliabilityResponse)
+async def get_llm_reliability():
+    """Expose LLM provider retry and circuit-breaker state."""
+    return {"providers": llm_reliability_manager.snapshot()}
+
+
+@app.post("/api/llm/reliability/reset", response_model=LLMReliabilityResetResponse)
+async def reset_llm_reliability():
+    """Reset LLM provider retry and circuit-breaker state."""
+    llm_reliability_manager.reset()
+    return {"reset": True}
+
+
 @app.get("/api/search/cache/stats", response_model=SearchCacheStatsResponse)
 async def get_search_cache_stats():
     """Return in-memory search cache statistics (LRU + TTL)."""
@@ -2898,13 +3087,39 @@ async def submit_background_run(request: Request, payload: BackgroundRunSubmitRe
             status_code=403,
             detail="Background runs are disabled. Set BACKGROUND_RUNS_ENABLED=true.",
         )
-    thread_id = (
-        (payload.thread_id or "").strip()
-        or f"bg_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
-    )
     owner_id = (getattr(request.state, "principal_id", "") or payload.user_id or "").strip()
+    idem_key = _idempotency_key(request)
+    thread_id = (payload.thread_id or "").strip()
+    if not thread_id and idem_key:
+        thread_id = _stable_id_from_idempotency_key(
+            "bg",
+            key=idem_key,
+            user_id=owner_id or payload.user_id or "anonymous",
+        )
+    if not thread_id:
+        thread_id = f"bg_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
     if owner_id:
         set_thread_owner(thread_id, owner_id)
+    idempotency_record = _begin_idempotency(
+        request,
+        scope="POST /api/runs/background",
+        user_id=owner_id or payload.user_id or "anonymous",
+        payload={
+            "thread_id": thread_id,
+            "query": payload.query,
+            "model": payload.model or settings.primary_model,
+            "search_mode": payload.search_mode,
+            "user_id": payload.user_id,
+            "deepsearch_config": payload.deepsearch_config,
+            "retrieval_policy": payload.retrieval_policy,
+            "skill_ids": payload.skill_ids,
+            "webhook_url": payload.webhook_url,
+            "research_brief": payload.research_brief,
+        },
+    )
+    replay = _idempotent_response(idempotency_record)
+    if replay is not None:
+        return replay
     mode_info = _normalize_search_mode(payload.search_mode)
     safe_deepsearch_config = _safe_research_deepsearch_config(
         payload.deepsearch_config or {}
@@ -2953,7 +3168,9 @@ async def submit_background_run(request: Request, payload: BackgroundRunSubmitRe
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"status": "queued", "run": status}
+    response_payload = {"status": "queued", "run": status}
+    idempotency_store.complete(idempotency_record, response=response_payload)
+    return response_payload
 
 
 class RunEvidenceSummary(BaseModel):
@@ -3250,6 +3467,9 @@ def _request_user_id(request: Request, explicit_user_id: str | None = None) -> s
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     principal_id = (getattr(request.state, "principal_id", "") or "").strip()
     if internal_key and principal_id:
+        explicit = (explicit_user_id or "").strip()
+        if explicit and explicit != principal_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
         return principal_id
     return (explicit_user_id or settings.memory_user_id or "default_user").strip()
 
@@ -3268,13 +3488,30 @@ async def upload_library_document(
     owner_id = _request_user_id(request, user_id)
     try:
         data = await file.read()
+        idem_key = _idempotency_key(request)
+        idempotency_record = _begin_idempotency(
+            request,
+            scope="POST /api/library/documents",
+            user_id=owner_id,
+            payload={
+                "filename": file.filename or "document.txt",
+                "content_type": file.content_type or "",
+                "sha256": hashlib.sha256(data or b"").hexdigest(),
+            },
+        )
+        replay = _idempotent_response(idempotency_record)
+        if replay is not None:
+            return replay
         result = get_document_library().upload_document(
             user_id=owner_id,
             filename=file.filename or "document.txt",
             content_type=file.content_type or "",
             data=data,
+            idempotency_key=idem_key,
         )
-        return {"document": result}
+        response_payload = {"document": result}
+        idempotency_store.complete(idempotency_record, response=response_payload)
+        return response_payload
     except DocumentLibraryUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:

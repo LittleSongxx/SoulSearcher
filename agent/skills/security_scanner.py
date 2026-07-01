@@ -48,7 +48,14 @@ async def scan_skill_content(content: str, *, executable: bool = False, location
     try:
         from agent.core.llm_factory import create_chat_model
 
-        model = create_chat_model(thinking_enabled=False)
+        from common.config import settings
+
+        model = create_chat_model(
+            getattr(settings, "skill_evolution_moderation_model_name", "")
+            or getattr(settings, "fast_llm_model", "")
+            or getattr(settings, "primary_model", ""),
+            temperature=0,
+        )
         response = await model.ainvoke(
             [
                 {"role": "system", "content": rubric},
