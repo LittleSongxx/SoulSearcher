@@ -1,29 +1,38 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Any
 
 from google.protobuf import json_format
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.context import ServerCallContext
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.request_handlers.default_request_handler import (
+    SimpleRequestContextBuilder,
+)
 from a2a.server.routes import (
     add_a2a_routes_to_fastapi,
     create_agent_card_routes,
     create_jsonrpc_routes,
 )
-from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
+from a2a.server.tasks import TaskStore, TaskUpdater
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
     AgentInterface,
     AgentProvider,
     AgentSkill,
+    ListTasksRequest,
+    ListTasksResponse,
     Message,
     Part,
     Task,
@@ -33,6 +42,7 @@ from a2a.types import (
 from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 from fastapi import FastAPI
 
+from agent.runtime.runs import RunStatus, run_manager
 from common.cancellation import cancellation_manager
 from common.stream_translate import data_stream_line_to_payload
 from common.thread_ownership import set_thread_owner
@@ -40,6 +50,7 @@ from common.thread_ownership import set_thread_owner
 logger = logging.getLogger(__name__)
 
 StreamFactory = Callable[..., AsyncIterator[str]]
+ResumeFactory = Callable[..., AsyncIterator[str]]
 
 _DEFAULT_DEEP_SEARCH_MODE = {
     "useWebSearch": True,
@@ -60,6 +71,16 @@ _PROGRESS_EVENTS = {
     "research_tree_update",
 }
 _ARTIFACT_EVENTS = {"artifact", "completion", "report_written"}
+_INTERRUPTED_STATES = {
+    "TASK_STATE_INPUT_REQUIRED",
+    "TASK_STATE_AUTH_REQUIRED",
+}
+_TERMINAL_STATES = {
+    "TASK_STATE_COMPLETED",
+    "TASK_STATE_CANCELED",
+    "TASK_STATE_FAILED",
+    "TASK_STATE_REJECTED",
+}
 
 
 def mount_a2a_routes(
@@ -67,14 +88,21 @@ def mount_a2a_routes(
     *,
     settings: Any,
     stream_factory: StreamFactory,
+    resume_factory: ResumeFactory | None = None,
 ) -> AgentCard:
     """Mount SoulSearcher's A2A 1.0 JSON-RPC server routes on the FastAPI app."""
     agent_card = build_agent_card(settings)
-    executor = SoulSearcherA2AExecutor(settings=settings, stream_factory=stream_factory)
-    handler = DefaultRequestHandler(
+    task_store = RunManagerA2ATaskStore(settings=settings)
+    executor = SoulSearcherA2AExecutor(
+        settings=settings,
+        stream_factory=stream_factory,
+        resume_factory=resume_factory,
+    )
+    handler = SoulSearcherA2ARequestHandler(
         agent_executor=executor,
-        task_store=InMemoryTaskStore(),
+        task_store=task_store,
         agent_card=agent_card,
+        request_context_builder=IdempotentA2ARequestContextBuilder(task_store=task_store),
     )
     add_a2a_routes_to_fastapi(
         app,
@@ -86,6 +114,208 @@ def mount_a2a_routes(
         ),
     )
     return agent_card
+
+
+class RunManagerA2ATaskStore(TaskStore):
+    """Persist A2A task snapshots through SoulSearcher's durable run registry."""
+
+    def __init__(self, *, settings: Any) -> None:
+        self.settings = settings
+
+    async def save(self, task: Task, context: ServerCallContext) -> None:
+        del context
+        task_payload = _task_to_dict(task)
+        metadata = _struct_to_dict(task.metadata)
+        existing = run_manager.get(task.id)
+        status_name = _task_state_name(task)
+        run_status = _run_status_from_a2a(status_name)
+        update_payload = {
+            "a2a": True,
+            "a2a_task_id": task.id,
+            "a2a_context_id": task.context_id,
+            "a2a_status": status_name,
+            "a2a_task": task_payload,
+            "client_request_id": _client_request_id(metadata),
+            "idempotency_key": _idempotency_key(metadata),
+            "thread_id": task.id,
+            "run_id": task.id,
+            "stalled": bool(metadata.get("stalled", False)),
+        }
+        update_payload = {
+            key: value
+            for key, value in update_payload.items()
+            if value is not None and value != ""
+        }
+        if existing is None:
+            record = run_manager.start(
+                run_id=task.id,
+                thread_id=task.id,
+                route="a2a.deep-research",
+                user_id=str(metadata.get("user_id") or ""),
+                metadata=update_payload,
+            )
+            if record.status != run_status:
+                run_manager.update(task.id, status=run_status)
+        else:
+            run_manager.update(task.id, status=run_status, metadata=update_payload)
+        event = run_manager.append_event(
+            run_id=task.id,
+            thread_id=task.id,
+            seq=0,
+            type="a2a.task_snapshot",
+            payload={"task": task_payload, "status": status_name},
+            status=status_name,
+        )
+        run_manager.update(task.id, metadata={"last_event_seq": int(event.get("seq") or 0)})
+
+    async def get(self, task_id: str, context: ServerCallContext) -> Task | None:
+        del context
+        record = run_manager.get(str(task_id or ""))
+        if record is None:
+            return None
+        task = _task_from_record(record.to_dict())
+        if task is None:
+            return None
+        if self._should_mark_stalled(record.to_dict(), task):
+            _merge_task_metadata(task, {"stalled": True})
+            await self.save(task, ServerCallContext(state={}))
+            await self._deliver_callback(
+                task,
+                event="task.stalled",
+                error=_error_envelope(
+                    {"message": "A2A task has not emitted progress before the stalled timeout."},
+                    task_id=task.id,
+                    seq=_record_last_seq(record.to_dict()),
+                    stage="watchdog",
+                    retryable=True,
+                ),
+            )
+        return task
+
+    async def list(
+        self,
+        params: ListTasksRequest,
+        context: ServerCallContext,
+    ) -> ListTasksResponse:
+        del context
+        tasks: list[Task] = []
+        for record in run_manager.all():
+            task = _task_from_record(record)
+            if task is None:
+                continue
+            if getattr(params, "context_id", "") and task.context_id != params.context_id:
+                continue
+            if getattr(params, "status", 0) and task.status.state != params.status:
+                continue
+            tasks.append(task)
+        page_size = int(getattr(params, "page_size", 0) or 100)
+        page_size = max(1, min(page_size, 500))
+        return ListTasksResponse(tasks=tasks[:page_size], total_size=len(tasks), page_size=page_size)
+
+    async def delete(self, task_id: str, context: ServerCallContext) -> None:
+        del context
+        run_manager.update(str(task_id or ""), metadata={"a2a_deleted": True})
+
+    def find_task_by_idempotency(self, metadata: dict[str, Any]) -> Task | None:
+        client_request_id = _client_request_id(metadata)
+        idempotency_key = _idempotency_key(metadata)
+        if not client_request_id and not idempotency_key:
+            return None
+        for record in run_manager.all():
+            record_meta = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+            if not record_meta.get("a2a"):
+                continue
+            if client_request_id and client_request_id == record_meta.get("client_request_id"):
+                return _task_from_record(record)
+            if idempotency_key and idempotency_key == record_meta.get("idempotency_key"):
+                return _task_from_record(record)
+        return None
+
+    async def _deliver_callback(
+        self,
+        task: Task,
+        *,
+        event: str,
+        error: dict[str, Any] | None = None,
+    ) -> None:
+        metadata = _struct_to_dict(task.metadata)
+        await _deliver_callback(self.settings, metadata, event=event, task=task, error=error or {})
+
+    def _should_mark_stalled(self, record: dict[str, Any], task: Task) -> bool:
+        status_name = _task_state_name(task)
+        if status_name in _TERMINAL_STATES | _INTERRUPTED_STATES:
+            return False
+        metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+        if bool(metadata.get("stalled")):
+            return False
+        timeout = float(getattr(self.settings, "a2a_stalled_timeout_seconds", 0) or 0)
+        if timeout <= 0:
+            return False
+        try:
+            updated_at = datetime.fromisoformat(str(record.get("updated_at") or "").replace("Z", "+00:00"))
+        except Exception:
+            return False
+        return (datetime.now(UTC) - updated_at).total_seconds() > timeout
+
+
+class IdempotentA2ARequestContextBuilder(SimpleRequestContextBuilder):
+    def __init__(self, *, task_store: RunManagerA2ATaskStore) -> None:
+        super().__init__(should_populate_referred_tasks=False, task_store=task_store)
+        self._persistent_task_store = task_store
+
+    async def build(
+        self,
+        context: ServerCallContext,
+        params=None,
+        task_id: str | None = None,
+        context_id: str | None = None,
+        task: Task | None = None,
+    ) -> RequestContext:
+        if params is not None and not task_id and not getattr(params.message, "task_id", ""):
+            metadata = _metadata_from_send_params(params)
+            existing = self._persistent_task_store.find_task_by_idempotency(metadata)
+            if existing is not None:
+                task_id = existing.id
+                context_id = existing.context_id
+                task = existing
+        return await super().build(
+            context=context,
+            params=params,
+            task_id=task_id,
+            context_id=context_id,
+            task=task,
+        )
+
+
+class SoulSearcherA2ARequestHandler(DefaultRequestHandler):
+    def __init__(self, *args: Any, task_store: RunManagerA2ATaskStore, **kwargs: Any) -> None:
+        super().__init__(*args, task_store=task_store, **kwargs)
+        self._persistent_task_store = task_store
+
+    async def on_message_send(self, params, context: ServerCallContext):
+        replay = self._idempotent_replay(params)
+        if replay is not None and _task_state_name(replay) in _TERMINAL_STATES:
+            return replay
+        return await super().on_message_send(params, context)
+
+    async def on_message_send_stream(
+        self,
+        params,
+        context: ServerCallContext,
+    ) -> AsyncGenerator[Any, None]:
+        replay = self._idempotent_replay(params)
+        if replay is not None and _task_state_name(replay) in _TERMINAL_STATES:
+            yield replay
+            return
+        async for item in super().on_message_send_stream(params, context):
+            yield item
+
+    def _idempotent_replay(self, params: Any) -> Task | None:
+        message = getattr(params, "message", None)
+        if message is None or getattr(message, "task_id", ""):
+            return None
+        metadata = _metadata_from_send_params(params)
+        return self._persistent_task_store.find_task_by_idempotency(metadata)
 
 
 def build_agent_card(settings: Any) -> AgentCard:
@@ -138,9 +368,16 @@ def public_base_url(settings: Any) -> str:
 
 
 class SoulSearcherA2AExecutor(AgentExecutor):
-    def __init__(self, *, settings: Any, stream_factory: StreamFactory) -> None:
+    def __init__(
+        self,
+        *,
+        settings: Any,
+        stream_factory: StreamFactory,
+        resume_factory: ResumeFactory | None = None,
+    ) -> None:
         self.settings = settings
         self.stream_factory = stream_factory
+        self.resume_factory = resume_factory
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         task_id = str(context.task_id or f"a2a_{uuid.uuid4().hex}")
@@ -151,8 +388,16 @@ class SoulSearcherA2AExecutor(AgentExecutor):
         metadata = _merged_metadata(context)
         options = _dict_value(metadata.get("options"))
         request_context = _dict_value(metadata.get("context"))
+        base_task_metadata = _base_task_metadata(metadata, task_id=task_id, context_id=context_id)
+        is_resume = _is_resume_request(task_id)
 
-        await _enqueue_initial_task(event_queue, task_id, context_id, context.message)
+        await _enqueue_initial_task(
+            event_queue,
+            task_id,
+            context_id,
+            context.message,
+            metadata=base_task_metadata,
+        )
 
         if not query:
             await updater.reject(
@@ -172,10 +417,16 @@ class SoulSearcherA2AExecutor(AgentExecutor):
             await updater.reject(_agent_message(updater, str(exc)))
             return
         owner_id = user_id or "a2a"
+        base_task_metadata["user_id"] = owner_id
         set_thread_owner(task_id, owner_id)
 
-        await updater.start_work(
-            _agent_message(updater, "DeepResearch task accepted.")
+        await updater.update_status(
+            TaskState.TASK_STATE_WORKING,
+            _agent_message(
+                updater,
+                "DeepResearch resume accepted." if is_resume else "DeepResearch task accepted.",
+            ),
+            metadata={**base_task_metadata, "event_type": "resume" if is_resume else "accepted"},
         )
 
         deepsearch_config = _dict_value(metadata.get("deepsearch_config"))
@@ -220,18 +471,32 @@ class SoulSearcherA2AExecutor(AgentExecutor):
         seq = 0
 
         try:
-            async for line in self.stream_factory(
-                query,
-                thread_id=task_id,
-                run_id=task_id,
-                model=model or None,
-                search_mode=search_mode,
-                images=images,
-                user_id=user_id,
-                request=None,
-                deepsearch_config=deepsearch_config,
-                research_brief=research_brief or None,
-            ):
+            if is_resume:
+                if self.resume_factory is None:
+                    raise RuntimeError("A2A task is waiting for input but resume_factory is not configured")
+                line_iter = self.resume_factory(
+                    _resume_payload_from_message(query, metadata),
+                    thread_id=task_id,
+                    run_id=task_id,
+                    model=model or None,
+                    search_mode=search_mode,
+                    user_id=user_id,
+                )
+            else:
+                line_iter = self.stream_factory(
+                    query,
+                    thread_id=task_id,
+                    run_id=task_id,
+                    model=model or None,
+                    search_mode=search_mode,
+                    images=images,
+                    user_id=user_id,
+                    request=None,
+                    deepsearch_config=deepsearch_config,
+                    research_brief=research_brief or None,
+                )
+
+            async for line in line_iter:
                 if not isinstance(line, str) or line.startswith(":"):
                     continue
                 seq += 1
@@ -240,6 +505,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                     continue
                 event_type = str(payload.get("type") or "").strip()
                 data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+                await _record_a2a_stream_event(task_id, seq=seq, event_type=event_type, payload=payload)
 
                 if event_type in _ARTIFACT_EVENTS:
                     content = _extract_content(data)
@@ -270,8 +536,22 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                             metadata={
                                 "source_event_type": event_type,
                                 "format": final_format,
+                                "a2a_task_id": task_id,
+                                "sequence": seq,
                             },
                             last_chunk=True,
+                        )
+                        await _deliver_callback(
+                            self.settings,
+                            base_task_metadata,
+                            event="task.artifact_update",
+                            task_id=task_id,
+                            context_id=context_id,
+                            artifact={
+                                "artifact_id": artifact_id,
+                                "name": str(data.get("title") or data.get("name") or "Research Report"),
+                                "format": final_format,
+                            },
                         )
                         if event_type in {"completion", "report_written"}:
                             final_artifact_sent = True
@@ -279,55 +559,136 @@ class SoulSearcherA2AExecutor(AgentExecutor):
 
                 if event_type == "interrupt":
                     terminal_sent = True
-                    await updater.requires_input(
+                    hitl = _hitl_payload(data, task_id=task_id, context_id=context_id, seq=seq)
+                    await updater.update_status(
+                        TaskState.TASK_STATE_INPUT_REQUIRED,
                         _agent_message(
                             updater,
                             _extract_content(data) or "Research requires input before continuing.",
-                        )
+                            metadata={"hitl": hitl},
+                        ),
+                        metadata={**base_task_metadata, "event_type": "interrupt", "hitl": hitl},
+                    )
+                    await _deliver_callback(
+                        self.settings,
+                        base_task_metadata,
+                        event="task.input_required",
+                        task_id=task_id,
+                        context_id=context_id,
+                        hitl=hitl,
                     )
                     return
 
                 if event_type == "error":
                     terminal_sent = True
-                    await updater.failed(
-                        _agent_message(updater, _extract_content(data) or "Research failed.")
+                    error = _error_envelope(data, task_id=task_id, seq=seq, stage=str(data.get("stage") or "research"))
+                    await updater.update_status(
+                        TaskState.TASK_STATE_FAILED,
+                        _agent_message(
+                            updater,
+                            _extract_content(data) or "Research failed.",
+                            metadata={"error": error},
+                        ),
+                        metadata={**base_task_metadata, "event_type": "error", "error": error},
+                    )
+                    await _deliver_callback(
+                        self.settings,
+                        base_task_metadata,
+                        event="task.failed",
+                        task_id=task_id,
+                        context_id=context_id,
+                        error=error,
                     )
                     return
 
                 if event_type in {"cancelled", "canceled"}:
                     terminal_sent = True
-                    await updater.cancel(
-                        _agent_message(updater, _extract_content(data) or "Research canceled.")
+                    await updater.update_status(
+                        TaskState.TASK_STATE_CANCELED,
+                        _agent_message(updater, _extract_content(data) or "Research canceled."),
+                        metadata={**base_task_metadata, "event_type": "cancelled"},
+                    )
+                    await _deliver_callback(
+                        self.settings,
+                        base_task_metadata,
+                        event="task.canceled",
+                        task_id=task_id,
+                        context_id=context_id,
                     )
                     return
 
                 if event_type == "done":
                     terminal_sent = True
-                    await updater.complete(
-                        _agent_message(updater, final_content or "Research completed.")
+                    await updater.update_status(
+                        TaskState.TASK_STATE_COMPLETED,
+                        _agent_message(updater, final_content or "Research completed."),
+                        metadata={**base_task_metadata, "event_type": "done"},
+                    )
+                    await _deliver_callback(
+                        self.settings,
+                        base_task_metadata,
+                        event="task.completed",
+                        task_id=task_id,
+                        context_id=context_id,
                     )
                     return
 
                 if event_type in _PROGRESS_EVENTS:
                     progress = _progress_text(event_type, data)
                     if progress:
-                        await updater.start_work(
-                            _agent_message(updater, progress, metadata={"event_type": event_type})
+                        await updater.update_status(
+                            TaskState.TASK_STATE_WORKING,
+                            _agent_message(updater, progress, metadata={"event_type": event_type}),
+                            metadata={**base_task_metadata, "event_type": event_type, "last_event_seq": seq},
+                        )
+                        await _deliver_callback(
+                            self.settings,
+                            base_task_metadata,
+                            event="task.status_update",
+                            task_id=task_id,
+                            context_id=context_id,
+                            status="working",
+                            message=progress,
                         )
 
             if not terminal_sent:
-                await updater.complete(
-                    _agent_message(updater, final_content or "Research completed.")
+                await updater.update_status(
+                    TaskState.TASK_STATE_COMPLETED,
+                    _agent_message(updater, final_content or "Research completed."),
+                    metadata={**base_task_metadata, "event_type": "done"},
                 )
         except asyncio.CancelledError:
             with suppress(Exception):
                 await cancellation_manager.cancel(task_id, "A2A task cancelled")
-                await updater.cancel(_agent_message(updater, "Research canceled."))
+                await updater.update_status(
+                    TaskState.TASK_STATE_CANCELED,
+                    _agent_message(updater, "Research canceled."),
+                    metadata={**base_task_metadata, "event_type": "cancelled"},
+                )
             raise
         except Exception as exc:
             logger.exception("[A2A] DeepResearch task failed: %s", task_id)
             with suppress(Exception):
-                await updater.failed(_agent_message(updater, str(exc)))
+                error = _error_envelope(
+                    {"message": str(exc)},
+                    task_id=task_id,
+                    seq=seq,
+                    stage="a2a_executor",
+                    retryable=True,
+                )
+                await updater.update_status(
+                    TaskState.TASK_STATE_FAILED,
+                    _agent_message(updater, str(exc), metadata={"error": error}),
+                    metadata={**base_task_metadata, "event_type": "error", "error": error},
+                )
+                await _deliver_callback(
+                    self.settings,
+                    base_task_metadata,
+                    event="task.failed",
+                    task_id=task_id,
+                    context_id=context_id,
+                    error=error,
+                )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         task_id = str(context.task_id or "")
@@ -398,15 +759,303 @@ async def _enqueue_initial_task(
     task_id: str,
     context_id: str,
     message: Message | None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     task = Task(
         id=task_id,
         context_id=context_id,
         status=TaskStatus(state=TaskState.TASK_STATE_SUBMITTED),
+        metadata=metadata or {},
     )
     if message is not None:
         task.history.append(message)
     await event_queue.enqueue_event(task)
+
+
+def _task_to_dict(task: Task) -> dict[str, Any]:
+    try:
+        return json_format.MessageToDict(task)
+    except Exception:
+        return {"id": getattr(task, "id", ""), "contextId": getattr(task, "context_id", "")}
+
+
+def _task_from_record(record: dict[str, Any]) -> Task | None:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    payload = metadata.get("a2a_task")
+    if not isinstance(payload, dict):
+        return None
+    task = Task()
+    try:
+        json_format.ParseDict(payload, task)
+    except Exception:
+        return None
+    return task
+
+
+def _task_state_name(task: Task) -> str:
+    try:
+        return TaskState.Name(task.status.state)
+    except Exception:
+        return "TASK_STATE_WORKING"
+
+
+def _run_status_from_a2a(state_name: str) -> RunStatus:
+    if state_name == "TASK_STATE_COMPLETED":
+        return RunStatus.completed
+    if state_name == "TASK_STATE_FAILED":
+        return RunStatus.failed
+    if state_name == "TASK_STATE_CANCELED":
+        return RunStatus.cancelled
+    if state_name in _INTERRUPTED_STATES:
+        return RunStatus.waiting_for_input
+    if state_name == "TASK_STATE_SUBMITTED":
+        return RunStatus.queued
+    return RunStatus.running
+
+
+def _merge_task_metadata(task: Task, values: dict[str, Any]) -> None:
+    current = _struct_to_dict(task.metadata)
+    current.update({key: value for key, value in values.items() if value is not None})
+    task.metadata.Clear()
+    task.metadata.update(current)
+
+
+def _metadata_from_send_params(params: Any) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    try:
+        metadata.update(_struct_to_dict(params.metadata))
+    except Exception:
+        pass
+    message = getattr(params, "message", None)
+    if message is not None:
+        try:
+            metadata.update(_struct_to_dict(message.metadata))
+        except Exception:
+            pass
+    return metadata
+
+
+def _client_request_id(metadata: dict[str, Any]) -> str:
+    return str(
+        metadata.get("client_request_id")
+        or metadata.get("clientRequestId")
+        or metadata.get("soulclaw_task_id")
+        or ""
+    ).strip()
+
+
+def _idempotency_key(metadata: dict[str, Any]) -> str:
+    return str(
+        metadata.get("idempotency_key")
+        or metadata.get("idempotencyKey")
+        or metadata.get("client_request_id")
+        or metadata.get("clientRequestId")
+        or ""
+    ).strip()
+
+
+def _base_task_metadata(metadata: dict[str, Any], *, task_id: str, context_id: str) -> dict[str, Any]:
+    options = _dict_value(metadata.get("options"))
+    request_context = _dict_value(metadata.get("context"))
+    callback_url = str(
+        metadata.get("callback_url")
+        or metadata.get("callbackUrl")
+        or options.get("callback_url")
+        or request_context.get("callback_url")
+        or ""
+    ).strip()
+    callback_token = str(
+        metadata.get("callback_token")
+        or metadata.get("callbackToken")
+        or options.get("callback_token")
+        or request_context.get("callback_token")
+        or ""
+    ).strip()
+    return {
+        "a2a": True,
+        "task_id": task_id,
+        "thread_id": task_id,
+        "run_id": task_id,
+        "context_id": context_id,
+        "client_request_id": _client_request_id(metadata),
+        "idempotency_key": _idempotency_key(metadata),
+        "soulclaw_task_id": str(metadata.get("soulclaw_task_id") or request_context.get("soulclaw_task_id") or ""),
+        "session_id": str(request_context.get("session_id") or metadata.get("session_id") or ""),
+        "turn_id": str(request_context.get("turn_id") or metadata.get("turn_id") or ""),
+        "capability": str(metadata.get("capability") or request_context.get("capability") or "deep-research"),
+        "callback_url": callback_url,
+        "callback_token": callback_token,
+        "callback_token_id": str(metadata.get("callback_token_id") or metadata.get("callbackTokenId") or ""),
+        "stalled": False,
+    }
+
+
+def _is_resume_request(task_id: str) -> bool:
+    record = run_manager.get(task_id)
+    if record is None:
+        return False
+    metadata = record.metadata or {}
+    state = str(metadata.get("a2a_status") or "")
+    return state in _INTERRUPTED_STATES or record.status == RunStatus.waiting_for_input
+
+
+def _resume_payload_from_message(query: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    for key in ("resume_payload", "resumePayload", "payload"):
+        value = metadata.get(key)
+        if isinstance(value, dict):
+            return value
+    if "decisions" in metadata and isinstance(metadata.get("decisions"), list):
+        return {"decisions": metadata["decisions"]}
+    if "tool_approved" in metadata:
+        payload = {
+            "tool_approved": bool(metadata.get("tool_approved")),
+            "tool_calls": metadata.get("tool_calls") if isinstance(metadata.get("tool_calls"), list) else [],
+        }
+        if isinstance(metadata.get("message"), str):
+            payload["message"] = metadata["message"]
+        return payload
+    stripped = str(query or "").strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        try:
+            parsed = json.loads(stripped)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+    decision = str(metadata.get("decision") or metadata.get("action") or "").strip().lower()
+    if decision:
+        payload = {"action": decision}
+        if stripped:
+            payload["feedback"] = stripped
+        return payload
+    return {"action": "respond", "content": stripped}
+
+
+def _hitl_payload(data: dict[str, Any], *, task_id: str, context_id: str, seq: int) -> dict[str, Any]:
+    prompts = data.get("prompts") if isinstance(data.get("prompts"), list) else []
+    first = prompts[0] if prompts and isinstance(prompts[0], dict) else {}
+    allowed: set[str] = set()
+    review_configs = data.get("review_configs") or first.get("review_configs")
+    if isinstance(review_configs, list):
+        for cfg in review_configs:
+            if not isinstance(cfg, dict):
+                continue
+            allowed.update(str(item) for item in cfg.get("allowed_decisions", []) if str(item).strip())
+    if not allowed:
+        allowed.update(["approve", "edit", "reject"])
+    return {
+        "kind": "a2a_remote_hitl",
+        "thread_id": task_id,
+        "task_id": task_id,
+        "context_id": context_id,
+        "sequence": seq,
+        "message": _extract_content(data) or "Research requires input before continuing.",
+        "prompts": prompts or ([data] if data else []),
+        "allowed_decisions": sorted(allowed),
+        "action_requests": data.get("action_requests") or first.get("action_requests") or [],
+        "review_configs": review_configs if isinstance(review_configs, list) else [],
+    }
+
+
+def _error_envelope(
+    data: dict[str, Any],
+    *,
+    task_id: str,
+    seq: int,
+    stage: str,
+    retryable: bool | None = None,
+) -> dict[str, Any]:
+    partial_artifacts = data.get("partial_artifacts") if isinstance(data.get("partial_artifacts"), list) else []
+    return {
+        "code": str(data.get("code") or "SOULSEARCHER_A2A_ERROR"),
+        "message": _extract_content(data) or str(data.get("error") or "Research failed."),
+        "stage": str(data.get("stage") or stage or "research"),
+        "retryable": bool(data.get("retryable")) if retryable is None else bool(retryable),
+        "trace_id": str(data.get("trace_id") or data.get("traceId") or task_id),
+        "last_event_seq": int(data.get("last_event_seq") or data.get("lastEventSeq") or seq or 0),
+        "partial_artifacts": partial_artifacts,
+        "suggested_action": str(data.get("suggested_action") or data.get("suggestedAction") or "review_task_events"),
+    }
+
+
+async def _record_a2a_stream_event(
+    task_id: str,
+    *,
+    seq: int,
+    event_type: str,
+    payload: dict[str, Any],
+) -> None:
+    try:
+        run_manager.append_event(
+            run_id=task_id,
+            thread_id=task_id,
+            seq=seq,
+            type=f"a2a.stream.{event_type or 'event'}",
+            payload=payload,
+            status=str(event_type or ""),
+        )
+    except Exception:
+        logger.debug("[A2A] failed to persist stream event", exc_info=True)
+
+
+def _record_last_seq(record: dict[str, Any]) -> int:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    return int(metadata.get("last_event_seq") or 0)
+
+
+async def _deliver_callback(
+    settings: Any,
+    metadata: dict[str, Any],
+    *,
+    event: str,
+    task: Task | None = None,
+    task_id: str = "",
+    context_id: str = "",
+    status: str = "",
+    message: str = "",
+    artifact: dict[str, Any] | None = None,
+    hitl: dict[str, Any] | None = None,
+    error: dict[str, Any] | None = None,
+) -> None:
+    callback_url = str(metadata.get("callback_url") or "").strip()
+    if not callback_url.startswith(("http://", "https://")):
+        return
+    payload = {
+        "event": event,
+        "task_id": task.id if task is not None else task_id,
+        "context_id": task.context_id if task is not None else context_id,
+        "status": _task_state_name(task) if task is not None else status,
+        "message": message,
+        "artifact": artifact or {},
+        "hitl": hitl or {},
+        "error": error or {},
+        "metadata": {
+            "client_request_id": metadata.get("client_request_id") or "",
+            "soulclaw_task_id": metadata.get("soulclaw_task_id") or "",
+            "callback_token_id": metadata.get("callback_token_id") or "",
+        },
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    token = str(metadata.get("callback_token") or getattr(settings, "a2a_callback_token", "") or "").strip()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-SoulSearcher-Callback-Token"] = token
+    attempts = max(1, int(getattr(settings, "a2a_callback_retry_attempts", 1) or 1))
+    try:
+        import httpx
+
+        for attempt in range(attempts):
+            try:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
+                    response = await client.post(callback_url, json=payload, headers=headers)
+                if 200 <= response.status_code < 300:
+                    return
+            except Exception:
+                if attempt >= attempts - 1:
+                    raise
+            await asyncio.sleep(min(2.0, 0.25 * (attempt + 1)))
+    except Exception as exc:
+        logger.warning("[A2A] callback delivery failed for %s: %s", payload["task_id"], exc)
 
 
 def _report_part(content: str, report_format: str) -> Part:

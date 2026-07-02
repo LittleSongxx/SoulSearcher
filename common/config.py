@@ -311,6 +311,30 @@ class Settings(BaseSettings):
         validation_alias="SOULSEARCHER_AUTH_USER_HEADER",
         description="Trusted user identity header (only meaningful behind an authenticated proxy).",
     )
+    a2a_stalled_timeout_seconds: int = Field(
+        default=900,
+        ge=0,
+        validation_alias="SOULSEARCHER_A2A_STALLED_TIMEOUT_SECONDS",
+        description="Mark A2A working tasks stalled after this many seconds without persisted progress; 0 disables.",
+    )
+    a2a_idempotency_ttl_seconds: int = Field(
+        default=86400,
+        ge=60,
+        validation_alias="SOULSEARCHER_A2A_IDEMPOTENCY_TTL_SECONDS",
+        description="Retention hint for A2A idempotency metadata stored with run records.",
+    )
+    a2a_callback_retry_attempts: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        validation_alias="SOULSEARCHER_A2A_CALLBACK_RETRY_ATTEMPTS",
+        description="Best-effort retry attempts for SoulClaw A2A callback delivery.",
+    )
+    a2a_callback_token: str = Field(
+        default="",
+        validation_alias="SOULSEARCHER_A2A_CALLBACK_TOKEN",
+        description="Fallback callback token when task metadata does not provide one.",
+    )
 
     # HTTP Rate Limiting (optional; primarily useful for public deployments)
     # RATE_LIMIT_ENABLED:

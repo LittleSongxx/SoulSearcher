@@ -328,7 +328,21 @@ PORT=8001
 SOULSEARCHER_PUBLIC_BASE_URL=http://127.0.0.1:8001
 SOULSEARCHER_INTERNAL_API_KEY=
 SOULSEARCHER_AUTH_USER_HEADER=X-SoulSearcher-User
+SOULSEARCHER_A2A_STALLED_TIMEOUT_SECONDS=900
+SOULSEARCHER_A2A_IDEMPOTENCY_TTL_SECONDS=86400
+SOULSEARCHER_A2A_CALLBACK_RETRY_ATTEMPTS=2
+SOULSEARCHER_A2A_CALLBACK_TOKEN=
 ```
+
+In a SoulClaw integration, SoulSearcher is the DeepResearch Worker and does not explain final results directly to the user:
+
+- A2A task snapshots are persisted through the existing `run_manager`/checkpoint data, so `GetTask`, `CancelTask`, and event inspection still work after restart.
+- Follow-up input with the same `taskId/contextId` resumes an `input-required/auth-required` task via LangGraph `Command(resume=...)`; it does not start a duplicate research run.
+- LangGraph interrupts are exposed as structured HITL metadata: `kind`, `thread_id`, `task_id`, `prompts`, `allowed_decisions`, `action_requests`, and `review_configs`.
+- Failures use a standard error envelope: `code`, `message`, `stage`, `retryable`, `trace_id`, `last_event_seq`, `partial_artifacts`, and `suggested_action`.
+- `metadata.client_request_id` or `metadata.idempotency_key` provides long-running task idempotency; duplicate start requests return the original task.
+- Working tasks with no recent events are marked `stalled` and exposed through task events or callback delivery.
+- When request metadata includes `callback_url/callback_token`, SoulSearcher best-effort delivers `task.status_update`, `task.artifact_update`, `task.completed`, `task.failed`, `task.input_required`, and `task.stalled` callbacks to SoulClaw.
 
 ## Development
 

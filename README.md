@@ -328,7 +328,21 @@ PORT=8001
 SOULSEARCHER_PUBLIC_BASE_URL=http://127.0.0.1:8001
 SOULSEARCHER_INTERNAL_API_KEY=
 SOULSEARCHER_AUTH_USER_HEADER=X-SoulSearcher-User
+SOULSEARCHER_A2A_STALLED_TIMEOUT_SECONDS=900
+SOULSEARCHER_A2A_IDEMPOTENCY_TTL_SECONDS=86400
+SOULSEARCHER_A2A_CALLBACK_RETRY_ATTEMPTS=2
+SOULSEARCHER_A2A_CALLBACK_TOKEN=
 ```
+
+在 SoulClaw 集成场景里，SoulSearcher 是 DeepResearch Worker，不直接面向用户做最终解释：
+
+- A2A task snapshot 通过现有 `run_manager`/checkpoint 数据持久化；服务重启后仍可 `GetTask`、`CancelTask` 和查询事件。
+- 同一 `taskId/contextId` 的后续输入如果命中 `input-required/auth-required`，会调用 LangGraph `Command(resume=...)` 继续原研究，不重新启动。
+- LangGraph interrupt 会转换为结构化 HITL metadata：`kind`、`thread_id`、`task_id`、`prompts`、`allowed_decisions`、`action_requests`、`review_configs`。
+- 失败会返回标准 error envelope：`code`、`message`、`stage`、`retryable`、`trace_id`、`last_event_seq`、`partial_artifacts`、`suggested_action`。
+- `metadata.client_request_id` 或 `metadata.idempotency_key` 用于长程任务幂等；重复启动请求返回原 task，避免重复研究。
+- 长时间无事件的工作中任务会标记 `stalled`，并通过 task event 或 callback 暴露给 SoulClaw。
+- 如果请求 metadata 提供 `callback_url/callback_token`，SoulSearcher 会对 `task.status_update`、`task.artifact_update`、`task.completed`、`task.failed`、`task.input_required`、`task.stalled` 做 best-effort 回调。
 
 ## 开发与验证
 

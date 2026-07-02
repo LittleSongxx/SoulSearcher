@@ -2852,6 +2852,119 @@ def _stream_agent_events_call(input_text: str, **kwargs: Any):
     return stream_agent_events(input_text, **kwargs)
 
 
+async def stream_agent_resume_events(
+    resume_payload: Any,
+    *,
+    thread_id: str,
+    run_id: str | None = None,
+    model: str | None = None,
+    search_mode: dict[str, Any] | None = None,
+    user_id: str | None = None,
+):
+    """Stream LangGraph resume results in SoulSearcher's internal event envelope."""
+    del run_id, user_id
+    if not checkpointer:
+        yield await format_stream_event(
+            "error",
+            {
+                "code": "SOULSEARCHER_RESUME_CHECKPOINTER_MISSING",
+                "message": "Interrupt resume requires a checkpointer.",
+                "stage": "resume",
+                "retryable": False,
+            },
+        )
+        return
+    if not thread_id:
+        yield await format_stream_event(
+            "error",
+            {
+                "code": "SOULSEARCHER_RESUME_THREAD_MISSING",
+                "message": "thread_id is required for interrupt resume.",
+                "stage": "resume",
+                "retryable": False,
+            },
+        )
+        return
+    existing = checkpointer.get_tuple({"configurable": {"thread_id": thread_id}})
+    if not existing:
+        yield await format_stream_event(
+            "error",
+            {
+                "code": "SOULSEARCHER_RESUME_CHECKPOINT_NOT_FOUND",
+                "message": "No checkpoint found for this A2A task.",
+                "stage": "resume",
+                "retryable": False,
+            },
+        )
+        return
+    mode_info = _normalize_search_mode(search_mode)
+    selected_model = (model or settings.primary_model).strip()
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+            "model": selected_model,
+            "search_mode": mode_info,
+            "allow_interrupts": True,
+            "tool_approval": settings.tool_approval or False,
+            "human_review": settings.human_review or False,
+            "max_revisions": settings.max_revisions,
+        },
+        "recursion_limit": 50,
+    }
+    try:
+        normalized = _normalize_interrupt_resume_payload(resume_payload)
+        result = await research_graph.ainvoke(Command(resume=normalized), config=config)
+        interrupts = _serialize_interrupts(result.get("__interrupt__"))
+        if interrupts:
+            yield await format_stream_event(
+                "interrupt",
+                {"thread_id": thread_id, "prompts": interrupts},
+            )
+            return
+        final_report = str(result.get("final_report") or "")
+        report_format = str(result.get("report_format") or "markdown")
+        if final_report:
+            yield await format_stream_event(
+                "completion",
+                {"content": final_report, "format": report_format},
+            )
+            yield await format_stream_event(
+                "artifact",
+                {
+                    "id": "final-report",
+                    "type": "html-report" if report_format == "html" else "report",
+                    "title": "Research Report",
+                    "content": final_report,
+                    "format": report_format,
+                },
+            )
+        yield await format_stream_event(
+            "done",
+            {"timestamp": datetime.now().isoformat(), "thread_id": thread_id},
+        )
+    except ValueError as exc:
+        yield await format_stream_event(
+            "error",
+            {
+                "code": "SOULSEARCHER_RESUME_PAYLOAD_INVALID",
+                "message": str(exc),
+                "stage": "resume",
+                "retryable": False,
+            },
+        )
+    except Exception as exc:
+        logger.error("A2A resume failed for %s: %s", thread_id, exc, exc_info=True)
+        yield await format_stream_event(
+            "error",
+            {
+                "code": "SOULSEARCHER_RESUME_FAILED",
+                "message": str(exc),
+                "stage": "resume",
+                "retryable": True,
+            },
+        )
+
+
 @app.post("/api/interrupt/resume")
 async def resume_interrupt(request: Request, payload: GraphInterruptResumeRequest):
     """
@@ -6146,7 +6259,12 @@ async def research_sse(request: Request, payload: ResearchRequest):
     )
 
 
-mount_a2a_routes(app, settings=settings, stream_factory=stream_agent_events)
+mount_a2a_routes(
+    app,
+    settings=settings,
+    stream_factory=stream_agent_events,
+    resume_factory=stream_agent_resume_events,
+)
 
 
 if __name__ == "__main__":

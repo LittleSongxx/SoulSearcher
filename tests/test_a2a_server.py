@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
@@ -175,6 +176,97 @@ def test_send_streaming_message_maps_progress_artifact_and_completed() -> None:
     assert calls[0]["args"][0] == "research this"
     assert calls[0]["kwargs"]["thread_id"] == events[0]["task"]["id"]
     assert calls[0]["kwargs"]["run_id"] == events[0]["task"]["id"]
+
+
+def test_send_streaming_message_reuses_task_for_idempotency_key() -> None:
+    calls: list[str] = []
+    resume_calls: list[str] = []
+
+    async def fake_stream(*args: Any, **kwargs: Any) -> AsyncIterator[str]:
+        calls.append(kwargs["thread_id"])
+        yield f"0:{json.dumps({'type': 'interrupt', 'data': {'message': 'approve plan'}})}\n"
+
+    async def fake_resume(*args: Any, **kwargs: Any) -> AsyncIterator[str]:
+        resume_calls.append(kwargs["thread_id"])
+        yield f"0:{json.dumps({'type': 'done', 'data': {}})}\n"
+
+    app = FastAPI()
+    mount_a2a_routes(app, settings=_settings(), stream_factory=fake_stream, resume_factory=fake_resume)
+    client = TestClient(app)
+    payload = _stream_payload()
+    payload["params"]["message"]["metadata"]["client_request_id"] = f"idem-{uuid.uuid4().hex}"
+
+    first = client.post("/api/a2a", json=payload, headers={"A2A-Version": "1.0"})
+    second = client.post("/api/a2a", json=payload, headers={"A2A-Version": "1.0"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_task = _events_from_sse(first.text)[0]["task"]["id"]
+    second_task = _events_from_sse(second.text)[0]["task"]["id"]
+    assert first_task == second_task
+    assert calls == [first_task]
+    assert resume_calls == [first_task]
+
+
+def test_interrupt_status_contains_structured_hitl_metadata() -> None:
+    async def fake_stream(*_args: Any, **_kwargs: Any) -> AsyncIterator[str]:
+        yield f"0:{json.dumps({'type': 'interrupt', 'data': {'message': 'approve plan', 'prompts': [{'review_configs': [{'allowed_decisions': ['approve', 'reject']}]}]}})}\n"
+
+    client = _app(fake_stream)
+    response = client.post("/api/a2a", json=_stream_payload(), headers={"A2A-Version": "1.0"})
+
+    events = _events_from_sse(response.text)
+    status = [item["statusUpdate"] for item in events if "statusUpdate" in item][-1]
+    metadata = status["metadata"]
+    assert status["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+    assert metadata["hitl"]["kind"] == "a2a_remote_hitl"
+    assert metadata["hitl"]["allowed_decisions"] == ["approve", "reject"]
+
+
+def test_follow_up_message_resumes_interrupted_task() -> None:
+    stream_calls: list[str] = []
+    resume_calls: list[dict[str, Any]] = []
+
+    async def fake_stream(*args: Any, **kwargs: Any) -> AsyncIterator[str]:
+        stream_calls.append(kwargs["thread_id"])
+        yield f"0:{json.dumps({'type': 'interrupt', 'data': {'message': 'approve plan'}})}\n"
+
+    async def fake_resume(payload: Any, **kwargs: Any) -> AsyncIterator[str]:
+        resume_calls.append({"payload": payload, "kwargs": kwargs})
+        yield f"0:{json.dumps({'type': 'completion', 'data': {'content': 'resumed report', 'format': 'markdown'}})}\n"
+        yield f"0:{json.dumps({'type': 'done', 'data': {}})}\n"
+
+    app = FastAPI()
+    mount_a2a_routes(app, settings=_settings(), stream_factory=fake_stream, resume_factory=fake_resume)
+    client = TestClient(app)
+
+    first = client.post("/api/a2a", json=_stream_payload(), headers={"A2A-Version": "1.0"})
+    task_id = _events_from_sse(first.text)[0]["task"]["id"]
+    payload = _stream_payload('{"tool_approved": true, "tool_calls": [{"name": "search", "args": {}}]}')
+    payload["params"]["message"]["taskId"] = task_id
+    payload["params"]["message"]["contextId"] = task_id
+
+    second = client.post("/api/a2a", json=payload, headers={"A2A-Version": "1.0"})
+
+    assert second.status_code == 200
+    events = _events_from_sse(second.text)
+    assert [item["statusUpdate"]["status"]["state"] for item in events if "statusUpdate" in item][-1] == "TASK_STATE_COMPLETED"
+    assert stream_calls == [task_id]
+    assert resume_calls[0]["kwargs"]["thread_id"] == task_id
+    assert resume_calls[0]["payload"]["tool_approved"] is True
+
+
+def test_error_status_contains_structured_error_envelope() -> None:
+    async def fake_stream(*_args: Any, **_kwargs: Any) -> AsyncIterator[str]:
+        yield f"0:{json.dumps({'type': 'error', 'data': {'message': 'boom', 'stage': 'search', 'retryable': True}})}\n"
+
+    client = _app(fake_stream)
+    response = client.post("/api/a2a", json=_stream_payload(), headers={"A2A-Version": "1.0"})
+
+    status = [item["statusUpdate"] for item in _events_from_sse(response.text) if "statusUpdate" in item][-1]
+    assert status["status"]["state"] == "TASK_STATE_FAILED"
+    assert status["metadata"]["error"]["stage"] == "search"
+    assert status["metadata"]["error"]["retryable"] is True
 
 
 def test_send_streaming_message_uses_trusted_user_header_when_internal_auth_enabled() -> None:
