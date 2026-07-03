@@ -73,10 +73,20 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
     // 优先通知后端取消当前线程
     if (threadId) {
       try {
-        await fetch(
-          `${getApiBaseUrl()}/api/research/cancel/${threadId}`,
-          { method: 'POST' }
+        let res = await fetch(
+          `${getApiBaseUrl()}/api/runs/${threadId}/background/cancel`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'User requested cancellation' }),
+          }
         )
+        if (!res.ok) {
+          res = await fetch(
+            `${getApiBaseUrl()}/api/research/cancel/${threadId}`,
+            { method: 'POST' }
+          )
+        }
         setCurrentStatus('已发送取消请求...')
       } catch (err) {
         console.error('取消请求失败', err)
@@ -104,29 +114,71 @@ export function useChatStream({ selectedModel }: UseChatStreamProps) {
     lastSearchModeRef.current = searchMode
 
     try {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/research/sse`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'text/event-stream',
-          },
-          body: JSON.stringify({
-            query,
-            model: selectedModel,
-            search_mode: searchMode,
-            retrieval_policy: retrievalPolicy,
-            ...(deepsearchConfig ? { deepsearch_config: deepsearchConfig } : {}),
-            images: (mode.images || []).map(img => ({
-              name: img.name,
-              mime: img.mime,
-              data: img.data
-            }))
-          }),
-          signal: abortControllerRef.current.signal
+      const requestBody = {
+        query,
+        model: selectedModel,
+        search_mode: searchMode,
+        retrieval_policy: retrievalPolicy,
+        ...(deepsearchConfig ? { deepsearch_config: deepsearchConfig } : {}),
+        images: (mode.images || []).map(img => ({
+          name: img.name,
+          mime: img.mime,
+          data: img.data
+        }))
+      }
+
+      let response: Response
+      if (mode.useDeepResearch) {
+        setCurrentStatus('深度调研已进入后台，正在连接进度流…')
+        const startResponse = await fetch(
+          `${getApiBaseUrl()}/api/runs/background`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': `deep-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            },
+            body: JSON.stringify(requestBody),
+            signal: abortControllerRef.current.signal
+          }
+        )
+        if (!startResponse.ok) {
+          let detail = 'Failed to start background research'
+          try {
+            const data = await startResponse.json()
+            if (typeof data?.detail === 'string' && data.detail.trim()) {
+              detail = data.detail
+            }
+          } catch {
+          }
+          throw new Error(detail)
         }
-      )
+        const startData = await startResponse.json()
+        const backgroundThreadId = String(startData?.run?.thread_id || startData?.run?.run_id || '').trim()
+        if (!backgroundThreadId) throw new Error('Background research did not return a thread id')
+        setThreadId(backgroundThreadId)
+        response = await fetch(
+          `${getApiBaseUrl()}/api/runs/${encodeURIComponent(backgroundThreadId)}/events/sse?after_seq=0&live=true`,
+          {
+            method: 'GET',
+            headers: { 'Accept': 'text/event-stream' },
+            signal: abortControllerRef.current.signal
+          }
+        )
+      } else {
+        response = await fetch(
+          `${getApiBaseUrl()}/api/research/sse`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'text/event-stream',
+            },
+            body: JSON.stringify(requestBody),
+            signal: abortControllerRef.current.signal
+          }
+        )
+      }
 
       if (!response.ok) {
         let detail = 'Failed to get response'

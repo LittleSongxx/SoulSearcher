@@ -40,7 +40,16 @@ from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 from fastapi import FastAPI
 from google.protobuf import json_format
 
+from agent.runtime.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyRecord,
+    canonical_request_hash,
+    idempotency_store,
+)
+from agent.runtime.callback_outbox import callback_outbox, deliver_callback_once
+from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
 from agent.runtime.runs import RunStatus, run_manager
+from agent.runtime.temporal_runs import signal_temporal_resume, temporal_backend_enabled
 from common.cancellation import cancellation_manager
 from common.stream_translate import data_stream_line_to_payload
 from common.thread_ownership import set_thread_owner
@@ -136,6 +145,7 @@ class RunManagerA2ATaskStore(TaskStore):
             "a2a_task": task_payload,
             "client_request_id": _client_request_id(metadata),
             "idempotency_key": _idempotency_key(metadata),
+            "a2a_request_hash": _a2a_request_hash_from_metadata(metadata),
             "thread_id": task.id,
             "run_id": task.id,
             "stalled": bool(metadata.get("stalled", False)),
@@ -166,6 +176,16 @@ class RunManagerA2ATaskStore(TaskStore):
             status=status_name,
         )
         run_manager.update(task.id, metadata={"last_event_seq": int(event.get("seq") or 0)})
+        _complete_a2a_idempotency_from_metadata(
+            metadata,
+            scope="a2a.start",
+            response={
+                "task_id": task.id,
+                "context_id": task.context_id,
+                "status": status_name,
+                "last_event_seq": int(event.get("seq") or 0),
+            },
+        )
 
     async def get(self, task_id: str, context: ServerCallContext) -> Task | None:
         del context
@@ -215,7 +235,7 @@ class RunManagerA2ATaskStore(TaskStore):
         del context
         run_manager.update(str(task_id or ""), metadata={"a2a_deleted": True})
 
-    def find_task_by_idempotency(self, metadata: dict[str, Any]) -> Task | None:
+    def find_task_by_idempotency(self, metadata: dict[str, Any], *, request_hash: str = "") -> Task | None:
         client_request_id = _client_request_id(metadata)
         idempotency_key = _idempotency_key(metadata)
         if not client_request_id and not idempotency_key:
@@ -225,8 +245,10 @@ class RunManagerA2ATaskStore(TaskStore):
             if not record_meta.get("a2a"):
                 continue
             if client_request_id and client_request_id == record_meta.get("client_request_id"):
+                _raise_if_a2a_hash_conflicts(record_meta, request_hash)
                 return _task_from_record(record)
             if idempotency_key and idempotency_key == record_meta.get("idempotency_key"):
+                _raise_if_a2a_hash_conflicts(record_meta, request_hash)
                 return _task_from_record(record)
         return None
 
@@ -272,7 +294,9 @@ class IdempotentA2ARequestContextBuilder(SimpleRequestContextBuilder):
     ) -> RequestContext:
         if params is not None and not task_id and not getattr(params.message, "task_id", ""):
             metadata = _metadata_from_send_params(params)
-            existing = self._persistent_task_store.find_task_by_idempotency(metadata)
+            request_hash = _a2a_request_hash_from_params(params)
+            _merge_message_metadata(getattr(params, "message", None), {"a2a_request_hash": request_hash})
+            existing = self._persistent_task_store.find_task_by_idempotency(metadata, request_hash=request_hash)
             if existing is not None:
                 task_id = existing.id
                 context_id = existing.context_id
@@ -293,7 +317,7 @@ class SoulSearcherA2ARequestHandler(DefaultRequestHandler):
 
     async def on_message_send(self, params, context: ServerCallContext):
         replay = self._idempotent_replay(params)
-        if replay is not None and _task_state_name(replay) in _TERMINAL_STATES:
+        if replay is not None:
             return replay
         return await super().on_message_send(params, context)
 
@@ -303,7 +327,7 @@ class SoulSearcherA2ARequestHandler(DefaultRequestHandler):
         context: ServerCallContext,
     ) -> AsyncGenerator[Any, None]:
         replay = self._idempotent_replay(params)
-        if replay is not None and _task_state_name(replay) in _TERMINAL_STATES:
+        if replay is not None:
             yield replay
             return
         async for item in super().on_message_send_stream(params, context):
@@ -314,7 +338,20 @@ class SoulSearcherA2ARequestHandler(DefaultRequestHandler):
         if message is None or getattr(message, "task_id", ""):
             return None
         metadata = _metadata_from_send_params(params)
-        return self._persistent_task_store.find_task_by_idempotency(metadata)
+        request_hash = _a2a_request_hash_from_params(params)
+        _merge_message_metadata(message, {"a2a_request_hash": request_hash})
+        record = _begin_a2a_idempotency(
+            metadata,
+            scope="a2a.start",
+            request_hash=request_hash,
+        )
+        if record is not None and record.status == "completed" and record.response:
+            task_id = str(record.response.get("task_id") or "")
+            if task_id:
+                task = _task_from_record(run_manager.get(task_id).to_dict()) if run_manager.get(task_id) else None
+                if task is not None:
+                    return task
+        return self._persistent_task_store.find_task_by_idempotency(metadata, request_hash=request_hash)
 
 
 def build_agent_card(settings: Any) -> AgentCard:
@@ -418,6 +455,30 @@ class SoulSearcherA2AExecutor(AgentExecutor):
         owner_id = user_id or "a2a"
         base_task_metadata["user_id"] = owner_id
         set_thread_owner(task_id, owner_id)
+        resume_payload: dict[str, Any] = {}
+        resume_idempotency_record: IdempotencyRecord | None = None
+        if is_resume:
+            resume_payload = _resume_payload_from_message(query, metadata)
+            resume_hash = canonical_request_hash({"task_id": task_id, "resume_payload": resume_payload})
+            _merge_message_metadata(
+                context.message,
+                {
+                    "a2a_resume_request_hash": resume_hash,
+                    "resume_payload": resume_payload,
+                },
+            )
+            resume_idempotency_record = _begin_a2a_idempotency(
+                metadata,
+                scope="a2a.resume",
+                request_hash=resume_hash,
+                user_id=owner_id,
+            )
+            if resume_idempotency_record is not None and resume_idempotency_record.status == "completed":
+                existing = run_manager.get(task_id)
+                replay_task = _task_from_record(existing.to_dict()) if existing is not None else None
+                if replay_task is not None:
+                    await event_queue.enqueue_event(replay_task)
+                    return
 
         await updater.update_status(
             TaskState.TASK_STATE_WORKING,
@@ -469,12 +530,97 @@ class SoulSearcherA2AExecutor(AgentExecutor):
         terminal_sent = False
         seq = 0
 
+        if temporal_backend_enabled() and is_resume:
+            await signal_temporal_resume(task_id, resume_payload or _resume_payload_from_message(query, metadata))
+            await updater.update_status(
+                TaskState.TASK_STATE_WORKING,
+                _agent_message(
+                    updater,
+                    "DeepResearch resume accepted and sent to the background workflow.",
+                    metadata={"event_type": "background_resume", "resume_payload": resume_payload},
+                ),
+                metadata={**base_task_metadata, "event_type": "background_resume"},
+            )
+            await _deliver_callback(
+                self.settings,
+                base_task_metadata,
+                event="task.status_update",
+                task_id=task_id,
+                context_id=context_id,
+                status="working",
+                message="DeepResearch resume accepted and sent to the background workflow.",
+            )
+            _complete_a2a_idempotency_record(
+                resume_idempotency_record,
+                response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_WORKING", "resumed": True},
+            )
+            return
+
+        if temporal_backend_enabled() and not is_resume:
+            deepsearch_config.update(
+                {
+                    "execution_mode": base_task_metadata.get("execution_mode") or "background",
+                    "return_immediately": bool(base_task_metadata.get("return_immediately", True)),
+                    "idempotency_key": base_task_metadata.get("idempotency_key") or "",
+                    "client_request_id": base_task_metadata.get("client_request_id") or "",
+                    "soulclaw_task_id": base_task_metadata.get("soulclaw_task_id") or task_id,
+                }
+            )
+            deepsearch_config["a2a_callback"] = {
+                "callback_url": base_task_metadata.get("callback_url") or "",
+                "callback_token": base_task_metadata.get("callback_token") or "",
+                "callback_token_id": base_task_metadata.get("callback_token_id") or "",
+                "metadata": {
+                    "client_request_id": base_task_metadata.get("client_request_id") or "",
+                    "soulclaw_task_id": base_task_metadata.get("soulclaw_task_id") or task_id,
+                    "callback_token_id": base_task_metadata.get("callback_token_id") or "",
+                },
+                "task_id": task_id,
+                "context_id": context_id,
+            }
+            status = await background_run_manager.submit(
+                BackgroundRunRequest(
+                    input_text=query,
+                    thread_id=task_id,
+                    model=model or None,
+                    search_mode=search_mode,
+                    images=images,
+                    user_id=user_id,
+                    deepsearch_config=deepsearch_config,
+                    research_brief=research_brief or None,
+                ),
+                stream_factory=self.stream_factory,
+            )
+            await updater.update_status(
+                TaskState.TASK_STATE_WORKING,
+                _agent_message(
+                    updater,
+                    "DeepResearch task accepted and is running in the background.",
+                    metadata={"event_type": "background_accepted", "run": status},
+                ),
+                metadata={**base_task_metadata, "event_type": "background_accepted", "run": status},
+            )
+            await _deliver_callback(
+                self.settings,
+                base_task_metadata,
+                event="task.status_update",
+                task_id=task_id,
+                context_id=context_id,
+                status="working",
+                message="DeepResearch task accepted and is running in the background.",
+            )
+            _complete_a2a_idempotency_record(
+                resume_idempotency_record,
+                response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_WORKING"},
+            )
+            return
+
         try:
             if is_resume:
                 if self.resume_factory is None:
                     raise RuntimeError("A2A task is waiting for input but resume_factory is not configured")
                 line_iter = self.resume_factory(
-                    _resume_payload_from_message(query, metadata),
+                    resume_payload or _resume_payload_from_message(query, metadata),
                     thread_id=task_id,
                     run_id=task_id,
                     model=model or None,
@@ -576,6 +722,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                         context_id=context_id,
                         hitl=hitl,
                     )
+                    _complete_a2a_idempotency_record(
+                        resume_idempotency_record,
+                        response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_INPUT_REQUIRED"},
+                    )
                     return
 
                 if event_type == "error":
@@ -598,6 +748,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                         context_id=context_id,
                         error=error,
                     )
+                    _complete_a2a_idempotency_record(
+                        resume_idempotency_record,
+                        response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_FAILED", "error": error},
+                    )
                     return
 
                 if event_type in {"cancelled", "canceled"}:
@@ -614,6 +768,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                         task_id=task_id,
                         context_id=context_id,
                     )
+                    _complete_a2a_idempotency_record(
+                        resume_idempotency_record,
+                        response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_CANCELED"},
+                    )
                     return
 
                 if event_type == "done":
@@ -629,6 +787,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                         event="task.completed",
                         task_id=task_id,
                         context_id=context_id,
+                    )
+                    _complete_a2a_idempotency_record(
+                        resume_idempotency_record,
+                        response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_COMPLETED"},
                     )
                     return
 
@@ -656,6 +818,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                     _agent_message(updater, final_content or "Research completed."),
                     metadata={**base_task_metadata, "event_type": "done"},
                 )
+                _complete_a2a_idempotency_record(
+                    resume_idempotency_record,
+                    response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_COMPLETED"},
+                )
         except asyncio.CancelledError:
             with suppress(Exception):
                 await cancellation_manager.cancel(task_id, "A2A task cancelled")
@@ -663,6 +829,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                     TaskState.TASK_STATE_CANCELED,
                     _agent_message(updater, "Research canceled."),
                     metadata={**base_task_metadata, "event_type": "cancelled"},
+                )
+                _complete_a2a_idempotency_record(
+                    resume_idempotency_record,
+                    response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_CANCELED"},
                 )
             raise
         except Exception as exc:
@@ -687,6 +857,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                     task_id=task_id,
                     context_id=context_id,
                     error=error,
+                )
+                _complete_a2a_idempotency_record(
+                    resume_idempotency_record,
+                    response={"task_id": task_id, "context_id": context_id, "status": "TASK_STATE_FAILED", "error": error},
                 )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
@@ -834,6 +1008,58 @@ def _metadata_from_send_params(params: Any) -> dict[str, Any]:
     return metadata
 
 
+def _merge_message_metadata(message: Message | None, values: dict[str, Any]) -> None:
+    if message is None:
+        return
+    clean = {key: value for key, value in values.items() if value is not None}
+    try:
+        current = _struct_to_dict(message.metadata)
+        current.update(clean)
+        message.metadata.Clear()
+        message.metadata.update(current)
+    except Exception:
+        with suppress(Exception):
+            message.metadata.update(clean)
+
+
+def _message_fingerprint(message: Any) -> dict[str, Any]:
+    if message is None:
+        return {}
+    return {
+        "role": str(getattr(message, "role", "") or ""),
+        "parts": _safe_proto_dict(getattr(message, "parts", [])),
+    }
+
+
+def _safe_proto_dict(value: Any) -> Any:
+    try:
+        return json_format.MessageToDict(value)
+    except Exception:
+        if isinstance(value, list):
+            return [_safe_proto_dict(item) for item in value]
+        if isinstance(value, dict):
+            return value
+        return str(value or "")
+
+
+def _idempotency_relevant_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    ignored = {
+        "callback_url",
+        "callbackUrl",
+        "callback_token",
+        "callbackToken",
+        "callback_token_id",
+        "callbackTokenId",
+        "a2a_request_hash",
+        "a2a_resume_request_hash",
+    }
+    return {
+        key: value
+        for key, value in metadata.items()
+        if key not in ignored and not str(key).lower().startswith("callback_")
+    }
+
+
 def _client_request_id(metadata: dict[str, Any]) -> str:
     return str(
         metadata.get("client_request_id")
@@ -853,6 +1079,81 @@ def _idempotency_key(metadata: dict[str, Any]) -> str:
     ).strip()
 
 
+def _idempotency_user_id(metadata: dict[str, Any], *, default: str = "a2a") -> str:
+    options = _dict_value(metadata.get("options"))
+    request_context = _dict_value(metadata.get("context"))
+    return str(
+        metadata.get("user_id")
+        or metadata.get("userId")
+        or options.get("user_id")
+        or request_context.get("user_id")
+        or default
+    ).strip() or default
+
+
+def _a2a_request_hash_from_metadata(metadata: dict[str, Any]) -> str:
+    return str(
+        metadata.get("a2a_request_hash")
+        or metadata.get("request_hash")
+        or metadata.get("requestHash")
+        or ""
+    ).strip()
+
+
+def _raise_if_a2a_hash_conflicts(metadata: dict[str, Any], request_hash: str) -> None:
+    stored_hash = str(metadata.get("a2a_request_hash") or "")
+    if request_hash and stored_hash and stored_hash != request_hash:
+        raise IdempotencyConflictError("Idempotency-Key was already used with a different A2A request payload.")
+
+
+def _a2a_request_hash_from_params(params: Any) -> str:
+    message = getattr(params, "message", None)
+    metadata = _metadata_from_send_params(params)
+    return canonical_request_hash(
+        {
+            "message": _message_fingerprint(message),
+            "metadata": _idempotency_relevant_metadata(metadata),
+            "configuration": _safe_proto_dict(getattr(params, "configuration", None)),
+        }
+    )
+
+
+def _begin_a2a_idempotency(
+    metadata: dict[str, Any],
+    *,
+    scope: str,
+    request_hash: str,
+    user_id: str = "",
+) -> IdempotencyRecord | None:
+    key = _idempotency_key(metadata)
+    if not key:
+        return None
+    return idempotency_store.begin(
+        key=key,
+        scope=scope,
+        user_id=user_id or _idempotency_user_id(metadata),
+        request_hash=request_hash,
+    )
+
+
+def _complete_a2a_idempotency_record(record: IdempotencyRecord | None, *, response: dict[str, Any]) -> None:
+    idempotency_store.complete(record, response=response)
+
+
+def _complete_a2a_idempotency_from_metadata(
+    metadata: dict[str, Any],
+    *,
+    scope: str,
+    response: dict[str, Any],
+) -> None:
+    request_hash = _a2a_request_hash_from_metadata(metadata)
+    key = _idempotency_key(metadata)
+    if not key or not request_hash:
+        return
+    record = _begin_a2a_idempotency(metadata, scope=scope, request_hash=request_hash)
+    _complete_a2a_idempotency_record(record, response=response)
+
+
 def _base_task_metadata(metadata: dict[str, Any], *, task_id: str, context_id: str) -> dict[str, Any]:
     options = _dict_value(metadata.get("options"))
     request_context = _dict_value(metadata.get("context"))
@@ -870,6 +1171,17 @@ def _base_task_metadata(metadata: dict[str, Any], *, task_id: str, context_id: s
         or request_context.get("callback_token")
         or ""
     ).strip()
+    execution_mode = str(
+        metadata.get("execution_mode")
+        or options.get("execution_mode")
+        or request_context.get("execution_mode")
+        or "background"
+    ).strip()
+    return_immediately = bool(
+        metadata.get("return_immediately")
+        if "return_immediately" in metadata
+        else options.get("return_immediately", request_context.get("return_immediately", True))
+    )
     return {
         "a2a": True,
         "task_id": task_id,
@@ -878,10 +1190,13 @@ def _base_task_metadata(metadata: dict[str, Any], *, task_id: str, context_id: s
         "context_id": context_id,
         "client_request_id": _client_request_id(metadata),
         "idempotency_key": _idempotency_key(metadata),
+        "a2a_request_hash": _a2a_request_hash_from_metadata(metadata),
         "soulclaw_task_id": str(metadata.get("soulclaw_task_id") or request_context.get("soulclaw_task_id") or ""),
         "session_id": str(request_context.get("session_id") or metadata.get("session_id") or ""),
         "turn_id": str(request_context.get("turn_id") or metadata.get("turn_id") or ""),
         "capability": str(metadata.get("capability") or request_context.get("capability") or "deep-research"),
+        "execution_mode": execution_mode or "background",
+        "return_immediately": return_immediately,
         "callback_url": callback_url,
         "callback_token": callback_token,
         "callback_token_id": str(metadata.get("callback_token_id") or metadata.get("callbackTokenId") or ""),
@@ -965,15 +1280,88 @@ def _error_envelope(
     retryable: bool | None = None,
 ) -> dict[str, Any]:
     partial_artifacts = data.get("partial_artifacts") if isinstance(data.get("partial_artifacts"), list) else []
+    classification = _classify_failure(data, stage=stage, retryable=retryable)
     return {
         "code": str(data.get("code") or "SOULSEARCHER_A2A_ERROR"),
         "message": _extract_content(data) or str(data.get("error") or "Research failed."),
         "stage": str(data.get("stage") or stage or "research"),
-        "retryable": bool(data.get("retryable")) if retryable is None else bool(retryable),
+        "failure_class": classification["failure_class"],
+        "retryable": classification["retryable"],
+        "side_effectful": classification["side_effectful"],
+        "ambiguous": classification["ambiguous"],
+        "requires_reconcile": classification["requires_reconcile"],
         "trace_id": str(data.get("trace_id") or data.get("traceId") or task_id),
         "last_event_seq": int(data.get("last_event_seq") or data.get("lastEventSeq") or seq or 0),
         "partial_artifacts": partial_artifacts,
-        "suggested_action": str(data.get("suggested_action") or data.get("suggestedAction") or "review_task_events"),
+        "suggested_action": str(data.get("suggested_action") or data.get("suggestedAction") or classification["suggested_action"]),
+    }
+
+
+def _classify_failure(
+    data: dict[str, Any],
+    *,
+    stage: str,
+    retryable: bool | None,
+) -> dict[str, Any]:
+    explicit_class = str(data.get("failure_class") or data.get("failureClass") or "").strip().lower()
+    if explicit_class:
+        resolved_retryable = bool(data.get("retryable")) if retryable is None else bool(retryable)
+        ambiguous = bool(data.get("ambiguous", False))
+        side_effectful = bool(data.get("side_effectful") or data.get("sideEffectful") or ambiguous)
+        return {
+            "failure_class": explicit_class,
+            "retryable": resolved_retryable,
+            "side_effectful": side_effectful,
+            "ambiguous": ambiguous,
+            "requires_reconcile": bool(data.get("requires_reconcile") or data.get("requiresReconcile") or ambiguous),
+            "suggested_action": "query_remote_state_before_retry" if ambiguous else ("retry_with_backoff" if resolved_retryable else "review_task_events"),
+        }
+    if retryable is not None:
+        resolved_retryable = bool(retryable)
+    else:
+        resolved_retryable = bool(data.get("retryable", False))
+    text = " ".join(
+        str(data.get(key) or "")
+        for key in ("message", "error", "code", "exception", "type")
+    ).lower()
+    transient_markers = ("timeout", "timed out", "connection", "temporar", "rate limit", "429", "503", "502", "504")
+    deterministic_markers = ("invalid", "permission", "auth", "not found", "schema", "validation", "bad request")
+    side_effectful = bool(data.get("side_effectful") or data.get("sideEffectful"))
+    ambiguous = side_effectful and any(marker in text for marker in transient_markers)
+    if ambiguous:
+        return {
+            "failure_class": "side_effectful",
+            "retryable": False,
+            "side_effectful": True,
+            "ambiguous": True,
+            "requires_reconcile": True,
+            "suggested_action": "query_remote_state_before_retry",
+        }
+    if resolved_retryable or any(marker in text for marker in transient_markers):
+        return {
+            "failure_class": "transient",
+            "retryable": True,
+            "side_effectful": side_effectful,
+            "ambiguous": False,
+            "requires_reconcile": False,
+            "suggested_action": "retry_with_backoff",
+        }
+    if any(marker in text for marker in deterministic_markers):
+        return {
+            "failure_class": "deterministic",
+            "retryable": False,
+            "side_effectful": side_effectful,
+            "ambiguous": False,
+            "requires_reconcile": False,
+            "suggested_action": "fix_request",
+        }
+    return {
+        "failure_class": str(data.get("failure_class") or "unknown"),
+        "retryable": False,
+        "side_effectful": side_effectful,
+        "ambiguous": False,
+        "requires_reconcile": False,
+        "suggested_action": "review_task_events",
     }
 
 
@@ -1040,21 +1428,38 @@ async def _deliver_callback(
     if token:
         headers["X-SoulSearcher-Callback-Token"] = token
     attempts = max(1, int(getattr(settings, "a2a_callback_retry_attempts", 1) or 1))
-    try:
-        import httpx
-
-        for attempt in range(attempts):
-            try:
-                async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
-                    response = await client.post(callback_url, json=payload, headers=headers)
-                if 200 <= response.status_code < 300:
-                    return
-            except Exception:
-                if attempt >= attempts - 1:
-                    raise
-            await asyncio.sleep(min(2.0, 0.25 * (attempt + 1)))
-    except Exception as exc:
-        logger.warning("[A2A] callback delivery failed for %s: %s", payload["task_id"], exc)
+    payload["callback_id"] = "cb_" + canonical_request_hash(
+        {
+            "event": payload["event"],
+            "task_id": payload["task_id"],
+            "context_id": payload["context_id"],
+            "status": payload["status"],
+            "artifact": payload["artifact"],
+            "hitl": payload["hitl"],
+            "error": payload["error"],
+            "metadata": payload["metadata"],
+        }
+    )[:32]
+    if not bool(getattr(settings, "a2a_callback_outbox_enabled", True)):
+        ok, error_message = await deliver_callback_once(
+            url=callback_url,
+            payload=payload,
+            headers=headers,
+            attempts=attempts,
+        )
+        if not ok:
+            logger.warning("[A2A] callback delivery failed for %s: %s", payload["task_id"], error_message)
+        return
+    callback_outbox.enqueue(
+        settings,
+        url=callback_url,
+        payload=payload,
+        headers=headers,
+        max_attempts=attempts,
+    )
+    result = await callback_outbox.dispatch_ready(settings, limit=max(1, attempts))
+    if result.get("failed"):
+        logger.warning("[A2A] callback delivery pending/failed for %s: %s", payload["task_id"], result)
 
 
 def _report_part(content: str, report_format: str) -> Part:

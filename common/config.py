@@ -268,6 +268,33 @@ class Settings(BaseSettings):
     background_runs_enabled: bool = Field(
         default=False, validation_alias="BACKGROUND_RUNS_ENABLED"
     )
+    background_execution_backend: str = Field(
+        default="local",
+        validation_alias="SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND",
+        description="Background research backend: local or temporal.",
+    )
+    temporal_address: str = Field(
+        default="localhost:7233",
+        validation_alias="TEMPORAL_ADDRESS",
+    )
+    temporal_namespace: str = Field(
+        default="default",
+        validation_alias="TEMPORAL_NAMESPACE",
+    )
+    temporal_task_queue: str = Field(
+        default="soulsearcher-deep-research",
+        validation_alias="TEMPORAL_TASK_QUEUE",
+    )
+    temporal_workflow_timeout_seconds: int = Field(
+        default=21600,
+        ge=60,
+        validation_alias="TEMPORAL_WORKFLOW_TIMEOUT_SECONDS",
+    )
+    temporal_workflow_version: str = Field(
+        default="v2",
+        validation_alias="SOULSEARCHER_TEMPORAL_WORKFLOW_VERSION",
+        description="Temporal workflow implementation version for background research.",
+    )
     legacy_citation_mode: bool = Field(
         default=False, validation_alias="LEGACY_CITATION_MODE"
     )
@@ -334,6 +361,11 @@ class Settings(BaseSettings):
         default="",
         validation_alias="SOULSEARCHER_A2A_CALLBACK_TOKEN",
         description="Fallback callback token when task metadata does not provide one.",
+    )
+    a2a_callback_outbox_enabled: bool = Field(
+        default=True,
+        validation_alias="SOULSEARCHER_A2A_CALLBACK_OUTBOX_ENABLED",
+        description="Persist A2A callbacks to an outbox before delivery when a database is configured.",
     )
 
     # HTTP Rate Limiting (optional; primarily useful for public deployments)

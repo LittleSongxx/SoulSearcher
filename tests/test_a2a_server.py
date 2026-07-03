@@ -250,7 +250,28 @@ def test_send_streaming_message_reuses_task_for_idempotency_key() -> None:
     second_task = _events_from_sse(second.text)[0]["task"]["id"]
     assert first_task == second_task
     assert calls == [first_task]
-    assert resume_calls == [first_task]
+    assert resume_calls == []
+
+
+def test_send_streaming_message_rejects_idempotency_key_payload_conflict() -> None:
+    async def fake_stream(*_args: Any, **kwargs: Any) -> AsyncIterator[str]:
+        yield f"0:{json.dumps({'type': 'interrupt', 'data': {'message': kwargs['thread_id']}})}\n"
+
+    app = FastAPI()
+    mount_a2a_routes(app, settings=_settings(), stream_factory=fake_stream)
+    client = TestClient(app)
+    payload = _stream_payload("first research")
+    payload["params"]["message"]["metadata"]["client_request_id"] = f"idem-{uuid.uuid4().hex}"
+    conflict_payload = _stream_payload("different research")
+    conflict_payload["params"]["message"]["metadata"]["client_request_id"] = payload["params"]["message"]["metadata"]["client_request_id"]
+
+    first = client.post("/api/a2a", json=payload, headers={"A2A-Version": "1.0"})
+    second = client.post("/api/a2a", json=conflict_payload, headers={"A2A-Version": "1.0"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["error"]["code"] in {-32603, -32000}
+    assert "idempotency" in second.json()["error"]["message"].lower()
 
 
 def test_interrupt_status_contains_structured_hitl_metadata() -> None:
@@ -290,13 +311,17 @@ def test_follow_up_message_resumes_interrupted_task() -> None:
     payload = _stream_payload('{"tool_approved": true, "tool_calls": [{"name": "search", "args": {}}]}')
     payload["params"]["message"]["taskId"] = task_id
     payload["params"]["message"]["contextId"] = task_id
+    payload["params"]["message"]["metadata"]["client_request_id"] = f"resume-{uuid.uuid4().hex}"
 
     second = client.post("/api/a2a", json=payload, headers={"A2A-Version": "1.0"})
+    replay = client.post("/api/a2a", json=payload, headers={"A2A-Version": "1.0"})
 
     assert second.status_code == 200
+    assert replay.status_code == 200
     events = _events_from_sse(second.text)
     assert [item["statusUpdate"]["status"]["state"] for item in events if "statusUpdate" in item][-1] == "TASK_STATE_COMPLETED"
     assert stream_calls == [task_id]
+    assert len(resume_calls) == 1
     assert resume_calls[0]["kwargs"]["thread_id"] == task_id
     assert resume_calls[0]["payload"]["tool_approved"] is True
 

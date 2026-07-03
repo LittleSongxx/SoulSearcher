@@ -63,6 +63,11 @@ services:
       REDIS_URL: redis://redis:6379/0
       IDEMPOTENCY_ENABLED: "true"
       BACKGROUND_RUN_LEASE_TTL_SECONDS: "1800"
+      BACKGROUND_RUNS_ENABLED: "true"
+      SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND: ${SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND:-local}
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: soulsearcher-deep-research
       LLM_RELIABILITY_ENABLED: "true"
       LLM_RETRY_MAX_ATTEMPTS: "3"
       LLM_CIRCUIT_BREAKER_FAILURES: "5"
@@ -98,6 +103,65 @@ services:
       - ../logs:/app/logs
     command:
       ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - soulsearcher-net
+
+  temporal:
+    image: temporalio/auto-setup:1.25
+    container_name: soulsearcher_temporal
+    profiles: ["temporal"]
+    restart: unless-stopped
+    environment:
+      DB: postgresql
+      DB_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-manus}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-manus_dev_password}
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - soulsearcher-net
+
+  temporal-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+        PIP_DEFAULT_TIMEOUT: ${PIP_DEFAULT_TIMEOUT:-1200}
+        PIP_RETRIES: ${PIP_RETRIES:-10}
+    container_name: soulsearcher_temporal_worker
+    profiles: ["temporal"]
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-manus}:${POSTGRES_PASSWORD:-manus_dev_password}@postgres:5432/${POSTGRES_DB:-manus_db}
+      MEMORY_DATABASE_URL: postgresql://${POSTGRES_USER:-manus}:${POSTGRES_PASSWORD:-manus_dev_password}@postgres:5432/${POSTGRES_DB:-manus_db}
+      BACKGROUND_RUNS_ENABLED: "true"
+      SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND: temporal
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: soulsearcher-deep-research
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    volumes:
+      - ..:/app
+      - ../.docker-data:/app/.docker-data
+      - ../logs:/app/logs
+    command: ["python", "-m", "agent.runtime.temporal_worker"]
     networks:
       - soulsearcher-net
 

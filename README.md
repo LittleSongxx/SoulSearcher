@@ -42,8 +42,8 @@ flowchart LR
 | 统一检索策略 | `RetrievalPolicy` 控制公开网页、私有资料库、用户提供来源、连接器、检索方法和预算 |
 | 证据系统 | evidence items、passages、source registry、citation annotations、claim support |
 | 质量控制 | citation gate、claim verifier、rubric evaluation、自动修订和质量补研 |
-| Run Events | 运行事件持久化，支持 REST 查询和 SSE 回放 |
-| A2A 1.0 Server | 发布 `/.well-known/agent-card.json`，通过 `/api/a2a` 提供 JSON-RPC `SendStreamingMessage` DeepResearch 能力 |
+| Run Events | 运行事件持久化，支持 REST 查询与 replay + live-tail SSE，浏览器断线后可断点续看 |
+| A2A 1.0 Server | 发布 `/.well-known/agent-card.json`，通过 `/api/a2a` 提供 JSON-RPC DeepResearch；Temporal 模式下 `SendMessage/SendStreamingMessage` 会启动后台 workflow 并立即返回 working |
 | 长期记忆 | 可选 memory service，支持实体、关系、研究发现和 procedural learning |
 | Skills | public/custom skills，支持 allowlist、安装、编辑、历史和回滚 |
 | 前端工作台 | Next.js 展示研究流、计划审批、证据、Plan DAG、Events、产物、会话和 traces |
@@ -59,7 +59,7 @@ flowchart TB
     end
 
     subgraph API["FastAPI / main.py"]
-        ResearchAPI["/api/research/sse"]
+        ResearchAPI["/api/runs/background\n/api/runs/{thread_id}/events/sse"]
         InterruptAPI["/api/interrupt/*"]
         SessionAPI["/api/sessions/*"]
         RunAPI["/api/runs/*"]
@@ -161,8 +161,11 @@ sequenceDiagram
     participant E as Evidence Store
     participant UI as Web UI
 
-    U->>API: POST /api/research/sse
-    API->>G: 构建初始 state/config
+    U->>API: POST /api/runs/background
+    API->>API: 创建或复用后台 run / Temporal workflow
+    API-->>UI: thread_id / run_id / workflow_id / status
+    UI->>API: GET /api/runs/{thread_id}/events/sse?live=true
+    API->>G: 后台构建 state/config 并执行
     G->>G: 澄清 / brief / complexity
     G-->>UI: interrupt: 计划待审批
     U->>API: approve / revise / cancel
@@ -223,9 +226,10 @@ flowchart TB
 | `GET /api/runs` | 运行列表 |
 | `GET /api/runs/{thread_id}` | 单个 run 的指标与状态 |
 | `GET /api/runs/{thread_id}/events?after_seq=0` | 查询指定序号后的持久化事件 |
-| `GET /api/runs/{thread_id}/events/sse?after_seq=0` | 用 SSE 回放持久化事件 |
-| `POST /api/runs/background` | 提交后台研究 |
+| `GET /api/runs/{thread_id}/events/sse?after_seq=0&live=true` | 回放持久化事件并 live-tail，支持 `Last-Event-ID`、heartbeat 和断线重连 |
+| `POST /api/runs/background` | 提交或幂等复用后台研究，Temporal 模式返回 `workflow_id/execution_backend/status` |
 | `GET /api/runs/{thread_id}/background` | 查询后台运行状态 |
+| `POST /api/runs/{thread_id}/background/cancel` | 取消后台研究；Temporal 模式通过 workflow cancel/signal 落库 |
 
 Postgres 后端会自动创建 `soulsearcher_run_events` 表；开发和测试环境可回退到内存实现。
 
@@ -233,7 +237,7 @@ Postgres 后端会自动创建 `soulsearcher_run_events` 表；开发和测试�
 
 | 分组 | 路由 |
 | --- | --- |
-| Research | `POST /api/research/sse`, cancel, cancel-all, fork |
+| Research | `POST /api/runs/background` + events SSE 为深度研究默认入口；`POST /api/research/sse` 仅保留短会话/兼容路径 |
 | Interrupt | interrupt status 与 canonical resume |
 | Sessions | session list/detail/state/evidence/resume/continue/delete |
 | Runs | run list、metrics、background、events、event replay、source injection |
@@ -249,7 +253,8 @@ Postgres 后端会自动创建 `soulsearcher_run_events` 表；开发和测试�
 
 ```mermaid
 flowchart TB
-    Workspace["Research Workspace"] --> Stream["SSE 流式研究"]
+    Workspace["Research Workspace"] --> Background["/api/runs/background"]
+    Background --> Stream["事件回放 + live-tail SSE"]
     Workspace --> Approval["计划审批 / 修订"]
     Workspace --> Thinking["Thinking Process"]
     Workspace --> Evidence["EvidencePanel"]
@@ -303,6 +308,11 @@ ENABLE_MCP=false
 HUMAN_REVIEW=true
 TOOL_APPROVAL=false
 DEEPSEARCH_MODE=auto
+BACKGROUND_RUNS_ENABLED=true
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=soulsearcher-deep-research
 
 # API / Ops
 SOULSEARCHER_INTERNAL_API_KEY=...
@@ -332,17 +342,24 @@ SOULSEARCHER_A2A_STALLED_TIMEOUT_SECONDS=900
 SOULSEARCHER_A2A_IDEMPOTENCY_TTL_SECONDS=86400
 SOULSEARCHER_A2A_CALLBACK_RETRY_ATTEMPTS=2
 SOULSEARCHER_A2A_CALLBACK_TOKEN=
+SOULSEARCHER_A2A_CALLBACK_OUTBOX_ENABLED=true
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=soulsearcher-deep-research
 ```
 
 在 SoulClaw 集成场景里，SoulSearcher 是 DeepResearch Worker，不直接面向用户做最终解释：
 
 - A2A task snapshot 通过现有 `run_manager`/checkpoint 数据持久化；服务重启后仍可 `GetTask`、`CancelTask` 和查询事件。
+- Temporal 是生产长任务执行层：workflow 只编排状态、signal 和 cancel；LLM、浏览器、检索和事件落库在 activity 中执行，保证 workflow deterministic。`local` backend 只用于测试和轻量开发。
+- 浏览器端深度研究默认先调用 `/api/runs/background`，再订阅 `/api/runs/{thread_id}/events/sse?live=true`；`/api/research/sse` 仅作为短会话/兼容路径保留。
 - 同一 `taskId/contextId` 的后续输入如果命中 `input-required/auth-required`，会调用 LangGraph `Command(resume=...)` 继续原研究，不重新启动。
 - LangGraph interrupt 会转换为结构化 HITL metadata：`kind`、`thread_id`、`task_id`、`prompts`、`allowed_decisions`、`action_requests`、`review_configs`。
-- 失败会返回标准 error envelope：`code`、`message`、`stage`、`retryable`、`trace_id`、`last_event_seq`、`partial_artifacts`、`suggested_action`。
-- `metadata.client_request_id` 或 `metadata.idempotency_key` 用于长程任务幂等；重复启动请求返回原 task，避免重复研究。
+- 失败会返回标准 error envelope：`code`、`message`、`stage`、`failure_class`、`retryable`、`ambiguous`、`requires_reconcile`、`trace_id`、`last_event_seq`、`partial_artifacts`、`suggested_action`。
+- `metadata.client_request_id` 或 `metadata.idempotency_key` 用于长程任务幂等；同 key 同 payload 的重复启动请求返回原 task，同 key 不同 payload 会拒绝。
 - 长时间无事件的工作中任务会标记 `stalled`，并通过 task event 或 callback 暴露给 SoulClaw。
-- 如果请求 metadata 提供 `callback_url/callback_token`，SoulSearcher 会对 `task.status_update`、`task.artifact_update`、`task.completed`、`task.failed`、`task.input_required`、`task.stalled` 做 best-effort 回调。
+- 如果请求 metadata 提供 `callback_url/callback_token`，SoulSearcher 会对 `task.status_update`、`task.artifact_update`、`task.completed`、`task.failed`、`task.input_required`、`task.stalled` 先写 callback outbox 再投递；配置数据库时回调可持久重试并进入 dead-letter。
 
 ## 开发与验证
 
@@ -355,6 +372,12 @@ python main.py
 
 # 后端热重载
 DEBUG=true SOULSEARCHER_RELOAD=1 python main.py
+
+# Temporal 长任务 worker
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal python -m agent.runtime.temporal_worker
+
+# Docker 完整长任务栈
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal docker compose -f docker/docker-compose.yml --profile temporal up -d --build
 ```
 
 ```bash

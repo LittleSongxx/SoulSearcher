@@ -411,9 +411,9 @@ def _require_thread_owner(request: Request, thread_id: str) -> None:
     """
     Enforce per-user thread isolation when internal auth is enabled.
 
-    Uses best-effort ownership sources:
-    - In-memory thread ownership registry (SSE-created threads)
-    - Persisted session state via checkpointer (if present)
+    Persisted run records are the authorization source of truth. The in-memory
+    registry is only a compatibility fallback for short-lived streams that have
+    not yet created a run record.
     """
     internal_key = (getattr(settings, "internal_api_key", "") or "").strip()
     if not internal_key:
@@ -423,8 +423,19 @@ def _require_thread_owner(request: Request, thread_id: str) -> None:
     if not principal_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    owner_id = (get_thread_owner(thread_id) or "").strip()
-    if owner_id and owner_id != principal_id:
+    record = run_manager.get(thread_id)
+    persisted_owner = ""
+    if record is not None:
+        persisted_owner = (record.user_id or "").strip()
+        if not persisted_owner and isinstance(record.metadata, dict):
+            persisted_owner = str(record.metadata.get("user_id") or "").strip()
+    if persisted_owner:
+        if persisted_owner != principal_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return
+
+    fallback_owner = (get_thread_owner(thread_id) or "").strip()
+    if fallback_owner and fallback_owner != principal_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     if not checkpointer:

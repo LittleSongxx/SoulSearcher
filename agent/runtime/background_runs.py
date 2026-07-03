@@ -10,7 +10,15 @@ from typing import Any
 from urllib.parse import urlparse
 
 from agent.runtime.background_leases import BackgroundLeaseStore, Lease
+from agent.runtime.callback_outbox import callback_outbox, deliver_callback_once
 from agent.runtime.runs import RunStatus, run_manager
+from agent.runtime.temporal_runs import (
+    cancel_temporal_background_run,
+    enrich_run_event_payload,
+    signal_temporal_resume,
+    start_temporal_background_run,
+    temporal_backend_enabled,
+)
 from common.cancellation import cancellation_manager
 from common.config import settings
 from common.stream_translate import data_stream_line_to_payload
@@ -99,6 +107,8 @@ class BackgroundRunManager:
         *,
         stream_factory: StreamFactory,
     ) -> dict[str, Any]:
+        if temporal_backend_enabled():
+            return await self._submit_temporal(request)
         async with self._lock:
             existing = self._tasks.get(request.thread_id)
             if existing and not existing.done():
@@ -111,6 +121,7 @@ class BackgroundRunManager:
                 user_id=request.user_id or "",
                 metadata={
                     "background": True,
+                    "execution_backend": "local",
                     "queued_at": datetime.now(UTC).isoformat(),
                     "input_preview": request.input_text[:200],
                     "background_request": request.to_dict(),
@@ -130,6 +141,9 @@ class BackgroundRunManager:
         payload = record.to_dict() if record else {"thread_id": thread_id, "run_id": thread_id}
         payload["background"] = True
         payload["task_active"] = bool(task and not task.done())
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        payload["execution_backend"] = metadata.get("execution_backend") or ("temporal" if metadata.get("workflow_id") else "local")
+        payload["workflow_id"] = metadata.get("workflow_id") or ""
         return payload
 
     def mark_stale_active_runs_failed(
@@ -151,6 +165,8 @@ class BackgroundRunManager:
             metadata = payload.get("metadata")
             if not isinstance(metadata, dict) or not metadata.get("background"):
                 continue
+            if metadata.get("execution_backend") == "temporal":
+                continue
             status = str(payload.get("status") or "")
             if status not in {
                 RunStatus.queued.value,
@@ -171,6 +187,13 @@ class BackgroundRunManager:
         return count
 
     async def cancel(self, thread_id: str, reason: str = "User requested cancellation") -> bool:
+        record = run_manager.get(thread_id)
+        metadata = dict(record.metadata or {}) if record else {}
+        if metadata.get("execution_backend") == "temporal":
+            await cancel_temporal_background_run(thread_id, reason)
+            run_manager.update(thread_id, status=RunStatus.cancelled, error=reason, metadata={"cancel_requested_at": datetime.now(UTC).isoformat()})
+            await self._deliver_webhook(thread_id, status=RunStatus.cancelled, error=reason)
+            return True
         await cancellation_manager.cancel(thread_id, reason)
         task = self._tasks.get(thread_id)
         if task and not task.done():
@@ -185,6 +208,12 @@ class BackgroundRunManager:
         *,
         stream_factory: StreamFactory,
     ) -> dict[str, Any]:
+        record = run_manager.get(thread_id)
+        metadata = dict(record.metadata or {}) if record else {}
+        if metadata.get("execution_backend") == "temporal":
+            await signal_temporal_resume(thread_id, {"resumed_at": datetime.now(UTC).isoformat()})
+            run_manager.update(thread_id, status=RunStatus.resumed, metadata={"resumed_background_at": datetime.now(UTC).isoformat()})
+            return self.status(thread_id)
         async with self._lock:
             existing = self._tasks.get(thread_id)
             if existing and not existing.done():
@@ -266,6 +295,7 @@ class BackgroundRunManager:
                 payload = data_stream_line_to_payload(event_line, seq=seq)
                 if not payload:
                     continue
+                payload = enrich_run_event_payload(payload, seq=seq)
                 persisted = run_manager.append_event(
                     run_id=run_id,
                     thread_id=request.thread_id,
@@ -372,23 +402,55 @@ class BackgroundRunManager:
             "webhook_status": "pending",
             "webhook_attempted_at": datetime.now(UTC).isoformat(),
         }
-        try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
-                response = await client.post(webhook_url, json=payload)
-            delivery.update(
-                {
-                    "webhook_status": "delivered"
-                    if 200 <= response.status_code < 300
-                    else "failed",
-                    "webhook_http_status": response.status_code,
-                }
+        if bool(getattr(settings, "a2a_callback_outbox_enabled", True)):
+            callback_outbox.enqueue(
+                settings,
+                url=webhook_url,
+                payload=payload,
+                headers={"Content-Type": "application/json"},
+                max_attempts=max(1, int(getattr(settings, "a2a_callback_retry_attempts", 2) or 2)),
             )
-        except Exception as exc:
-            logger.warning("[BackgroundRun] webhook delivery failed for %s: %s", thread_id, exc)
-            delivery.update({"webhook_status": "failed", "webhook_error": str(exc)})
+            result = await callback_outbox.dispatch_ready(settings, limit=20)
+            delivery.update({"webhook_status": "queued", "webhook_outbox": result})
+        else:
+            ok, error_message = await deliver_callback_once(
+                url=webhook_url,
+                payload=payload,
+                headers={"Content-Type": "application/json"},
+                attempts=max(1, int(getattr(settings, "a2a_callback_retry_attempts", 2) or 2)),
+            )
+            delivery.update({"webhook_status": "delivered" if ok else "failed", "webhook_error": error_message})
         run_manager.update(thread_id, metadata=delivery)
+
+    async def _submit_temporal(self, request: BackgroundRunRequest) -> dict[str, Any]:
+        async with self._lock:
+            run_manager.start(
+                run_id=request.thread_id,
+                thread_id=request.thread_id,
+                model=request.model or "",
+                route=str((request.search_mode or {}).get("mode") or ""),
+                user_id=request.user_id or "",
+                metadata={
+                    "background": True,
+                    "execution_backend": "temporal",
+                    "queued_at": datetime.now(UTC).isoformat(),
+                    "input_preview": request.input_text[:200],
+                    "background_request": request.to_dict(),
+                },
+            )
+            run_manager.update(request.thread_id, status=RunStatus.queued)
+            handle = await start_temporal_background_run(request)
+            run_manager.update(
+                request.thread_id,
+                status=RunStatus.queued,
+                metadata={
+                    "execution_backend": "temporal",
+                    "workflow_id": handle.workflow_id,
+                    "temporal_run_id": handle.run_id,
+                    "workflow_started_at": datetime.now(UTC).isoformat(),
+                },
+            )
+            return self.status(request.thread_id)
 
 
 def _safe_webhook_url(url: str) -> bool:

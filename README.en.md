@@ -42,8 +42,8 @@ flowchart LR
 | Unified retrieval | `RetrievalPolicy` controls public web, private library, user-provided sources, connectors, methods, profiles, and budgets |
 | Evidence | Evidence items, passages, source registry, citation annotations, claim support |
 | Quality | Citation gate, claim verifier, rubric evaluation, automatic revision, follow-up research |
-| Run events | Thread-ordered events are persisted and replayable through REST or SSE |
-| A2A 1.0 Server | Publishes `/.well-known/agent-card.json` and exposes JSON-RPC `SendStreamingMessage` DeepResearch on `/api/a2a` |
+| Run events | Thread-ordered events are persisted and replayable through REST or replay + live-tail SSE; clients can reconnect with a cursor |
+| A2A 1.0 Server | Publishes `/.well-known/agent-card.json` and exposes JSON-RPC DeepResearch on `/api/a2a`; in Temporal mode `SendMessage/SendStreamingMessage` starts a background workflow and returns `working` quickly |
 | Memory | Optional memory service for findings, entities, relations, and procedural lessons |
 | Skills | Public/custom skills with allowlists, validation, storage, history, and rollback |
 | Frontend | Next.js workspace for streaming research, plan review, evidence, Plan DAG, events, artifacts, sessions, and traces |
@@ -59,7 +59,7 @@ flowchart TB
     end
 
     subgraph API["FastAPI / main.py"]
-        ResearchAPI["/api/research/sse"]
+        ResearchAPI["/api/runs/background\n/api/runs/{thread_id}/events/sse"]
         InterruptAPI["/api/interrupt/*"]
         SessionAPI["/api/sessions/*"]
         RunAPI["/api/runs/*"]
@@ -161,8 +161,11 @@ sequenceDiagram
     participant E as Evidence Store
     participant UI as Web UI
 
-    U->>API: POST /api/research/sse
-    API->>G: Build initial state/config
+    U->>API: POST /api/runs/background
+    API->>API: Create or reuse background run / Temporal workflow
+    API-->>UI: thread_id / run_id / workflow_id / status
+    UI->>API: GET /api/runs/{thread_id}/events/sse?live=true
+    API->>G: Build state/config and execute in the background
     G->>G: Clarify / brief / complexity route
     G-->>UI: interrupt: plan review required
     U->>API: approve / revise / cancel
@@ -223,9 +226,10 @@ flowchart TB
 | `GET /api/runs` | List runs |
 | `GET /api/runs/{thread_id}` | Run metrics and status |
 | `GET /api/runs/{thread_id}/events?after_seq=0` | Fetch persisted events after a sequence number |
-| `GET /api/runs/{thread_id}/events/sse?after_seq=0` | Replay persisted events as SSE |
-| `POST /api/runs/background` | Submit a background research run |
+| `GET /api/runs/{thread_id}/events/sse?after_seq=0&live=true` | Replay persisted events and live-tail new events; supports `Last-Event-ID`, heartbeat, and reconnect |
+| `POST /api/runs/background` | Submit or idempotently reuse a background research run; Temporal mode returns `workflow_id/execution_backend/status` |
 | `GET /api/runs/{thread_id}/background` | Inspect background run state |
+| `POST /api/runs/{thread_id}/background/cancel` | Cancel a background run; Temporal mode records workflow cancel/signal state |
 
 Postgres-backed runs auto-create the `soulsearcher_run_events` table. Local and test runs can fall back to memory storage.
 
@@ -233,7 +237,7 @@ Postgres-backed runs auto-create the `soulsearcher_run_events` table. Local and 
 
 | Group | Routes |
 | --- | --- |
-| Research | `POST /api/research/sse`, cancel, cancel-all, fork |
+| Research | Deep research defaults to `POST /api/runs/background` + events SSE; `POST /api/research/sse` remains for short-session compatibility |
 | Interrupt | interrupt status and canonical resume |
 | Sessions | session list/detail/state/evidence/resume/continue/delete |
 | Runs | run list, metrics, background, events, event replay, source injection |
@@ -249,7 +253,8 @@ Postgres-backed runs auto-create the `soulsearcher_run_events` table. Local and 
 
 ```mermaid
 flowchart TB
-    Workspace["Research Workspace"] --> Stream["SSE stream"]
+    Workspace["Research Workspace"] --> Background["/api/runs/background"]
+    Background --> Stream["Event replay + live-tail SSE"]
     Workspace --> Approval["Plan approval / revision"]
     Workspace --> Thinking["Thinking Process"]
     Workspace --> Evidence["EvidencePanel"]
@@ -303,6 +308,11 @@ ENABLE_MCP=false
 HUMAN_REVIEW=true
 TOOL_APPROVAL=false
 DEEPSEARCH_MODE=auto
+BACKGROUND_RUNS_ENABLED=true
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=soulsearcher-deep-research
 
 # API / Ops
 SOULSEARCHER_INTERNAL_API_KEY=...
@@ -332,17 +342,24 @@ SOULSEARCHER_A2A_STALLED_TIMEOUT_SECONDS=900
 SOULSEARCHER_A2A_IDEMPOTENCY_TTL_SECONDS=86400
 SOULSEARCHER_A2A_CALLBACK_RETRY_ATTEMPTS=2
 SOULSEARCHER_A2A_CALLBACK_TOKEN=
+SOULSEARCHER_A2A_CALLBACK_OUTBOX_ENABLED=true
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal
+TEMPORAL_ADDRESS=127.0.0.1:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=soulsearcher-deep-research
 ```
 
 In a SoulClaw integration, SoulSearcher is the DeepResearch Worker and does not explain final results directly to the user:
 
 - A2A task snapshots are persisted through the existing `run_manager`/checkpoint data, so `GetTask`, `CancelTask`, and event inspection still work after restart.
+- Temporal is the production long-task execution layer: workflows only orchestrate state, signal, and cancel; LLM, browser, retrieval, and event persistence run in activities so workflows stay deterministic. The `local` backend is only for tests and lightweight development.
+- Browser DeepResearch starts with `/api/runs/background` and then subscribes to `/api/runs/{thread_id}/events/sse?live=true`; `/api/research/sse` remains only as a short-session compatibility path.
 - Follow-up input with the same `taskId/contextId` resumes an `input-required/auth-required` task via LangGraph `Command(resume=...)`; it does not start a duplicate research run.
 - LangGraph interrupts are exposed as structured HITL metadata: `kind`, `thread_id`, `task_id`, `prompts`, `allowed_decisions`, `action_requests`, and `review_configs`.
-- Failures use a standard error envelope: `code`, `message`, `stage`, `retryable`, `trace_id`, `last_event_seq`, `partial_artifacts`, and `suggested_action`.
-- `metadata.client_request_id` or `metadata.idempotency_key` provides long-running task idempotency; duplicate start requests return the original task.
+- Failures use a standard error envelope: `code`, `message`, `stage`, `failure_class`, `retryable`, `ambiguous`, `requires_reconcile`, `trace_id`, `last_event_seq`, `partial_artifacts`, and `suggested_action`.
+- `metadata.client_request_id` or `metadata.idempotency_key` provides long-running task idempotency; duplicate start requests with the same payload return the original task, while key reuse with a different payload is rejected.
 - Working tasks with no recent events are marked `stalled` and exposed through task events or callback delivery.
-- When request metadata includes `callback_url/callback_token`, SoulSearcher best-effort delivers `task.status_update`, `task.artifact_update`, `task.completed`, `task.failed`, `task.input_required`, and `task.stalled` callbacks to SoulClaw.
+- When request metadata includes `callback_url/callback_token`, SoulSearcher writes `task.status_update`, `task.artifact_update`, `task.completed`, `task.failed`, `task.input_required`, and `task.stalled` callbacks to a callback outbox before delivery; with a configured database, callbacks can be retried durably and dead-lettered.
 
 ## Development
 
@@ -355,6 +372,12 @@ python main.py
 
 # Backend with reload
 DEBUG=true SOULSEARCHER_RELOAD=1 python main.py
+
+# Temporal long-task worker
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal python -m agent.runtime.temporal_worker
+
+# Full Docker long-task stack
+SOULSEARCHER_BACKGROUND_EXECUTION_BACKEND=temporal docker compose -f docker/docker-compose.yml --profile temporal up -d --build
 ```
 
 ```bash
