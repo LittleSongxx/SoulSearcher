@@ -3,14 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
-
-from google.protobuf import json_format
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.context import ServerCallContext
@@ -41,6 +38,7 @@ from a2a.types import (
 )
 from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 from fastapi import FastAPI
+from google.protobuf import json_format
 
 from agent.runtime.runs import RunStatus, run_manager
 from common.cancellation import cancellation_manager
@@ -53,6 +51,7 @@ StreamFactory = Callable[..., AsyncIterator[str]]
 ResumeFactory = Callable[..., AsyncIterator[str]]
 
 _DEFAULT_DEEP_SEARCH_MODE = {
+    "mode": "deep",
     "useWebSearch": True,
     "useAgent": True,
     "useDeepSearch": True,

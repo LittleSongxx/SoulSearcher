@@ -71,10 +71,5 @@ ignore = [
   "I001",  # keep explicit import ordering where tests set env/sys.path before app imports
   "SIM",   # don't enforce simplification in tests
 ]
-# Main monolith has acceptable complexity while being refactored
-"main.py" = [
-  "E402",  # module-level-import-not-at-top — mid-file imports exist
-]
-
 [tool.ruff.lint.isort]
 known-first-party = ["agent", "common", "tools", "triggers", "web"]

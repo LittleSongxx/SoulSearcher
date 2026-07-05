@@ -178,6 +178,51 @@ def test_send_streaming_message_maps_progress_artifact_and_completed() -> None:
     assert calls[0]["kwargs"]["run_id"] == events[0]["task"]["id"]
 
 
+def test_soulclaw_deep_research_contract_reaches_research_execution_service() -> None:
+    calls: list[dict[str, Any]] = []
+
+    async def fake_stream(*args: Any, **kwargs: Any) -> AsyncIterator[str]:
+        calls.append({"args": args, "kwargs": kwargs})
+        yield f"0:{json.dumps({'type': 'completion', 'data': {'content': 'contract report', 'format': 'markdown'}})}\n"
+        yield f"0:{json.dumps({'type': 'done', 'data': {}})}\n"
+
+    client = _app(fake_stream)
+    payload = _stream_payload("contract research")
+    payload["params"]["message"]["metadata"] = {
+        "capability": "deep-research",
+        "context": {
+            "session_id": "local",
+            "turn_id": "turn-1",
+        },
+        "options": {
+            "model": "contract-model",
+            "retrieval_policy": {"preserve_evidence": True},
+            "skill_ids": ["deep-research"],
+            "deepsearch_config": {"deepsearch_max_seconds": 30},
+        },
+        "soulclaw_task_id": "a2a_task_local",
+        "client_request_id": "turn-1:deep-research",
+        "idempotency_key": "turn-1:deep-research",
+        "user_id": "soulclaw",
+    }
+
+    response = client.post(
+        "/api/a2a",
+        json=payload,
+        headers={"A2A-Version": "1.0"},
+    )
+
+    assert response.status_code == 200
+    assert calls[0]["args"][0] == "contract research"
+    kwargs = calls[0]["kwargs"]
+    assert kwargs["model"] == "contract-model"
+    assert kwargs["user_id"] == "soulclaw"
+    assert kwargs["search_mode"]["mode"] == "deep"
+    assert kwargs["deepsearch_config"]["retrieval_policy"] == {"preserve_evidence": True}
+    assert kwargs["deepsearch_config"]["skill_ids"] == ["deep-research"]
+    assert kwargs["deepsearch_config"]["deepsearch_max_seconds"] == 30
+
+
 def test_send_streaming_message_reuses_task_for_idempotency_key() -> None:
     calls: list[str] = []
     resume_calls: list[str] = []
@@ -383,4 +428,4 @@ async def test_cancel_task_calls_cancellation_manager(monkeypatch: pytest.Monkey
     await executor.cancel(context, queue)
 
     assert cancelled == [("task-1", "A2A client requested cancellation")]
-    assert getattr(queue.events[-1].status, "state") == a2a_api.TaskState.TASK_STATE_CANCELED
+    assert queue.events[-1].status.state == a2a_api.TaskState.TASK_STATE_CANCELED

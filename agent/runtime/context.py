@@ -118,6 +118,21 @@ def get_viewed_images(config: dict[str, Any] | None) -> dict[str, dict[str, str]
     return dict(cfg.get("viewed_images") or {}) if isinstance(cfg, dict) else {}
 
 
+@dataclass(slots=True)
+class SoulSearcherRuntimeContext:
+    """Application-scoped runtime objects shared by HTTP, A2A, and background paths."""
+
+    settings: Any
+    research_graph: Any
+    checkpointer: Any
+    checkpointer_type: str
+    background_run_manager: Any
+    run_manager: Any
+    mcp_enabled: bool
+    mcp_servers_config: Any
+    research_execution_service: Any | None = None
+
+
 def merge_viewed_images(config: dict[str, Any], images: dict[str, dict[str, str]]) -> None:
     if not images:
         return
