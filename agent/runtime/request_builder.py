@@ -5,6 +5,7 @@ from typing import Any
 
 from langchain_core.messages import SystemMessage
 
+from agent.core.artifacts import normalize_deepsearch_artifacts
 from agent.core.state import build_initial_state
 from agent.retrieval.policy import build_retrieval_policy, reject_legacy_source_routing
 from agent.runtime.context import RuntimeContext
@@ -119,8 +120,15 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
         + list(request.context_messages or []),
     )
     workspace_artifact = workspace.artifact()
-    initial_state["deepsearch_artifacts"]["workspace"] = workspace_artifact
-    initial_state["deepsearch_artifacts"]["retrieval_policy"] = retrieval_policy
+    initial_state["deepsearch_artifacts"].update(
+        normalize_deepsearch_artifacts(
+            {
+                **initial_state.get("deepsearch_artifacts", {}),
+                "workspace": workspace_artifact,
+                "retrieval_policy": retrieval_policy,
+            }
+        )
+    )
     safe_deepsearch_config["workspace_path"] = str(workspace.root)
     run_context = RuntimeContext.from_configurable(
         {
@@ -171,7 +179,7 @@ def _initial_deepsearch_artifacts(
         artifacts["memory_retrieval"] = memory_retrieval
     if user_injected_sources:
         artifacts["user_injected_sources"] = user_injected_sources
-    return artifacts
+    return normalize_deepsearch_artifacts(artifacts)
 
 
 def _user_source_messages(sources: list[dict[str, Any]]) -> list[SystemMessage]:

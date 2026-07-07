@@ -15,7 +15,7 @@ except ModuleNotFoundError:  # pragma: no cover
     # Python 3.10 fallback
     import tomli as tomllib  # type: ignore
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -36,12 +36,6 @@ class LLMSettingsModel(BaseModel):
     api_version: str = ""
 
 
-class ProxySettings(BaseModel):
-    server: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-
-
 class SearchSettings(BaseModel):
     engine: str = "tavily"
     fallback_engines: list[str] = Field(default_factory=list)
@@ -49,38 +43,6 @@ class SearchSettings(BaseModel):
     max_retries: int = 3
     lang: str = "en"
     country: str = "us"
-
-
-class BrowserSettings(BaseModel):
-    headless: bool = False
-    disable_security: bool = True
-    extra_chromium_args: list[str] = Field(default_factory=list)
-    chrome_instance_path: Optional[str] = None
-    wss_url: Optional[str] = None
-    cdp_url: Optional[str] = None
-    proxy: Optional[ProxySettings] = None
-    max_content_length: int = 2000
-
-
-class SandboxSettings(BaseModel):
-    use_sandbox: bool = False
-    image: str = "python:3.12-slim"
-    work_dir: str = "/workspace"
-    memory_limit: str = "512m"
-    cpu_limit: float = 1.0
-    timeout: int = 300
-    network_enabled: bool = False
-
-
-class DaytonaSettings(BaseModel):
-    daytona_api_key: str = ""
-    daytona_server_url: str = "https://app.daytona.io/api"
-    daytona_target: str = "us"
-    sandbox_image_name: str = "whitezxj/sandbox:0.1.0"
-    sandbox_entrypoint: str = (
-        "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
-    )
-    VNC_password: str = ""  # Must be set via environment variable
 
 
 class MCPServerConfig(BaseModel):
@@ -94,18 +56,10 @@ class MCPSettings(BaseModel):
     servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
-class RunflowSettings(BaseModel):
-    use_data_analysis_agent: bool = False
-
-
 class AppConfig(BaseModel):
     llm: dict[str, LLMSettingsModel]
-    sandbox: Optional[SandboxSettings] = None
-    browser_config: Optional[BrowserSettings] = None
     search_config: Optional[SearchSettings] = None
     mcp_config: Optional[MCPSettings] = None
-    run_flow_config: Optional[RunflowSettings] = None
-    daytona_config: Optional[DaytonaSettings] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -224,7 +178,6 @@ class Settings(BaseSettings):
     firecrawl_api_key: str = ""
     google_search_api_key: str = ""  # Google Custom Search API key
     google_search_engine_id: str = ""  # Google Custom Search Engine ID (cx)
-    e2b_api_key: str = ""
     anthropic_api_key: str = ""
     memory_user_id: str = "default_user"
     enable_mcp: bool = False
@@ -245,7 +198,6 @@ class Settings(BaseSettings):
     agent_runtime_enabled: bool = True
     agent_runtime_default_subagent_enabled: bool = True
     agent_runtime_max_concurrent_subagents: int = 3
-    host_bash_enabled: bool = False
 
     # Quality gates (evaluation)
     citation_gate_min_coverage: float = Field(default=0.6, ge=0.0, le=1.0)
@@ -491,9 +443,6 @@ class Settings(BaseSettings):
     research_model: str = ""     # Model for research phase (defaults to smart_llm)
     vision_model: str = ""       # Vision-capable model override
 
-    # Report Visualization Config
-    enable_report_charts: bool = True  # Generate charts from data in reports
-
     # Human-in-the-Loop (HITL) Config
     hitl_checkpoints: str = (
         ""  # Comma-separated interrupt points: plan,sources,draft,final
@@ -524,8 +473,7 @@ class Settings(BaseSettings):
     search_batch_size: int = 3  # 搜索批次大小
     api_rate_limit: float = 0.5  # API 调用间隔（秒）
 
-    # Deepsearch Settings (for supervisor_workers pipeline)
-    deepsearch_mode: str = "supervisor_workers"
+    # Deepsearch Settings (fixed plan-first supervisor/researcher pipeline)
     deepsearch_max_epochs: int = 3
     deepsearch_max_seconds: float = 0.0  # 0 = disabled
     deepsearch_max_tokens: int = 0  # 0 = disabled
@@ -538,7 +486,6 @@ class Settings(BaseSettings):
     deepsearch_supervisor_depth_confidence_threshold: float = 0.5
     deepsearch_max_seconds_per_worker: float = 0.0
     deepsearch_max_skills: int = 3
-    deepsearch_reflection_loops: int = 0  # 0 = derive from supervisor rounds
     deepsearch_claim_verifier_use_passages: bool = True
     deepsearch_claim_verifier_min_overlap_tokens: int = 2
     deepsearch_claim_verifier_max_evidence_per_claim: int = 3
@@ -643,31 +590,12 @@ class Settings(BaseSettings):
         False  # 是否启用Playwright优化爬虫，Windows建议默认False
     )
 
-    # Daytona sandbox
-    daytona_api_key: str = ""
-    daytona_server_url: str = "https://app.daytona.io/api"
-    daytona_target: str = "us"
-    daytona_image_name: str = "whitezxj/sandbox:0.1.0"
-    daytona_entrypoint: str = (
-        "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
-    )
-    daytona_vnc_password: str = ""  # Must be set via environment variable
-
-    # Sandbox mode: e2b (remote E2B), daytona (remote Daytona), none (disabled).
-    # The value "local" is accepted as an alias for E2B remote execution.
-    sandbox_mode: str = "e2b"
-    sandbox_template_browser: str = (
-        ""  # e2b sandbox browser template ID (e.g., chrome-stable)
-    )
-    sandbox_allow_internet: bool = True  # allow internet access inside sandbox
-
     # IM channel integration
     channels_enabled: bool = False
     channels_base_url: str = ""
     channel_default_agent_name: str = ""
     channel_default_model: str = ""
     channel_default_subagent_enabled: bool = True
-    channel_default_deepsearch_mode: str = "supervisor_workers"
     feishu_channel_enabled: bool = False
     feishu_app_id: str = ""
     feishu_app_secret: str = ""
@@ -753,9 +681,6 @@ class Settings(BaseSettings):
     # ── DeerFlow-aligned: Todo/Plan Mode ──
     plan_mode_enabled: bool = True
 
-    # ── Sandbox security ──
-    sandbox_allow_host_bash: bool = False
-
     # Tool / middleware controls
     tool_retry: bool = True
     tool_retry_max_attempts: int = 3
@@ -780,11 +705,6 @@ class Settings(BaseSettings):
     )
     todo_system_prompt: str = ""  # custom system prompt for todo middleware
     todo_tool_description: str = ""  # custom tool description for todo middleware
-    enable_browser_use: bool = False  # enable browser_use tool (Playwright-based)
-    enable_browser_context_helper: bool = (
-        False  # inject browser context prompt if available
-    )
-
     # Tool visibility / events
     emit_tool_events: bool = True  # wrap tools with event emitters for front-end
     tool_whitelist: str = ""  # comma-separated tool names to allow (empty = all)
@@ -909,25 +829,6 @@ class Settings(BaseSettings):
 
         return None
 
-    @field_validator("deepsearch_mode", mode="before")
-    @classmethod
-    def normalize_deepsearch_mode(cls, value: str) -> str:
-        mode = str(value or "").strip().lower().replace("-", "_")
-        if mode in {
-            "reflection",
-            "reflection_loop",
-            "auto",
-        }:
-            mode = "supervisor_workers"
-        if mode in {"supervisor", "workers", "supervisor_worker"}:
-            mode = "supervisor_workers"
-        if mode in {"linear", "linear_light", "light"}:
-            mode = "supervisor_workers"
-        if mode in {"supervisor_workers"}:
-            return mode
-        return "supervisor_workers"
-
-
 def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
@@ -1002,35 +903,8 @@ def load_app_config(config_path: str, mcp_path: str) -> Optional[AppConfig]:
         if merged.get("model"):
             llm_dict[name] = LLMSettingsModel(**merged)
 
-    browser_cfg = data.get("browser", {}) or {}
-    proxy_cfg = browser_cfg.get("proxy") or {}
-    proxy = None
-    if proxy_cfg.get("server"):
-        proxy = ProxySettings(
-            server=proxy_cfg.get("server"),
-            username=proxy_cfg.get("username"),
-            password=proxy_cfg.get("password"),
-        )
-    browser_settings = None
-    if browser_cfg:
-        bs_kwargs = {
-            k: v
-            for k, v in browser_cfg.items()
-            if k in BrowserSettings.__annotations__ and v is not None
-        }
-        if proxy:
-            bs_kwargs["proxy"] = proxy
-        if bs_kwargs:
-            browser_settings = BrowserSettings(**bs_kwargs)
-
     search_cfg = data.get("search") or {}
     search_settings = SearchSettings(**search_cfg) if search_cfg else None
-
-    sandbox_cfg = data.get("sandbox") or {}
-    sandbox_settings = SandboxSettings(**sandbox_cfg) if sandbox_cfg else None
-
-    daytona_cfg = data.get("daytona") or {}
-    daytona_settings = DaytonaSettings(**daytona_cfg) if daytona_cfg else None
 
     mcp_servers = _load_mcp_servers(mcp_path)
     mcp_cfg = data.get("mcp") or {}
@@ -1040,27 +914,20 @@ def load_app_config(config_path: str, mcp_path: str) -> Optional[AppConfig]:
         else None
     )
 
-    runflow_cfg = data.get("runflow") or {}
-    runflow_settings = RunflowSettings(**runflow_cfg) if runflow_cfg else None
-
     if not llm_dict:
         return None
 
     return AppConfig(
         llm=llm_dict,
-        sandbox=sandbox_settings,
-        browser_config=browser_settings,
         search_config=search_settings,
         mcp_config=mcp_settings,
-        run_flow_config=runflow_settings,
-        daytona_config=daytona_settings,
     )
 
 
 def load_yaml_config(yaml_path: str) -> dict[str, Any]:
     """
     Load a YAML config file and return a flat dict of settings.
-    Supports layered structure: llm, search, browser, sandbox, deepsearch, agent, eval.
+    Supports layered structure: llm, search, deepsearch, agent, eval.
     Returns empty dict if file not found or parsing fails.
     """
     root = _project_root()
@@ -1154,25 +1021,6 @@ def apply_app_config_overrides(settings: Settings) -> None:
         )
         settings.search_engines = ",".join([e for e in engines if e])
 
-    # Daytona
-    if app_cfg.daytona_config:
-        cfg = app_cfg.daytona_config
-        if not settings.daytona_api_key and cfg.daytona_api_key:
-            settings.daytona_api_key = cfg.daytona_api_key
-        settings.daytona_server_url = (
-            settings.daytona_server_url or cfg.daytona_server_url
-        )
-        settings.daytona_target = settings.daytona_target or cfg.daytona_target
-        settings.daytona_image_name = (
-            settings.daytona_image_name or cfg.sandbox_image_name
-        )
-        settings.daytona_entrypoint = (
-            settings.daytona_entrypoint or cfg.sandbox_entrypoint
-        )
-        settings.daytona_vnc_password = (
-            settings.daytona_vnc_password or cfg.VNC_password
-        )
-
     # MCP servers
     if not settings.mcp_servers and app_cfg.mcp_config and app_cfg.mcp_config.servers:
         try:
@@ -1181,15 +1029,6 @@ def apply_app_config_overrides(settings: Settings) -> None:
             )
         except Exception as e:
             logger.warning(f"Failed to inject MCP servers from app config: {e}")
-
-    # Sandbox switch from TOML
-    if (
-        app_cfg.sandbox
-        and app_cfg.sandbox.use_sandbox is False
-        and settings.sandbox_mode == "local"
-    ):
-        # allow disabling sandbox via config
-        settings.sandbox_mode = "none"
 
     _apply_yaml_overrides(settings)
     _normalize_model_defaults(settings)

@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 
+from agent.retrieval.diagnostics import diagnostic
 from agent.retrieval.documents import DocumentLibraryUnavailable, get_document_library
 from agent.retrieval.policy import build_retrieval_policy, source_allowed
 from agent.retrieval.types import RetrievalResult, RetrievedPassage, RetrievedSource
@@ -36,6 +37,7 @@ async def retrieve_sources(
     budget = policy.get("budget") if isinstance(policy.get("budget"), dict) else {}
     limit = max(1, min(int(max_results or budget.get("max_results") or 8), 20))
     warnings: list[str] = []
+    diagnostics: list[dict[str, Any]] = []
     sources: list[dict[str, Any]] = []
     passages: list[dict[str, Any]] = []
 
@@ -48,9 +50,31 @@ async def retrieve_sources(
                 policy,
             )
             sources.extend(public_results)
+            diagnostics.append(diagnostic(
+                origin="public_web",
+                channel="search_api",
+                method="web_search",
+                status="success" if public_results else "empty",
+                result_count=len(public_results),
+            ))
         except Exception as exc:
             logger.warning("[Retrieval] public web search failed: %s", exc)
             warnings.append(f"public_web search failed: {exc}")
+            diagnostics.append(diagnostic(
+                origin="public_web",
+                channel="search_api",
+                method="web_search",
+                status="provider_failed",
+                message=str(exc),
+                retryable=True,
+            ))
+    else:
+        diagnostics.append(diagnostic(
+            origin="public_web",
+            channel="search_api",
+            method="web_search",
+            status="policy_denied",
+        ))
 
     if source_allowed(policy, "public_web", "search_api", "academic_search"):
         try:
@@ -60,9 +84,31 @@ async def retrieve_sources(
                 min(limit, int(budget.get("max_public_results") or 6)),
             )
             sources.extend(academic_results)
+            diagnostics.append(diagnostic(
+                origin="public_web",
+                channel="search_api",
+                method="academic_search",
+                status="success" if academic_results else "empty",
+                result_count=len(academic_results),
+            ))
         except Exception as exc:
             logger.warning("[Retrieval] academic search failed: %s", exc)
             warnings.append(f"academic search failed: {exc}")
+            diagnostics.append(diagnostic(
+                origin="public_web",
+                channel="search_api",
+                method="academic_search",
+                status="provider_failed",
+                message=str(exc),
+                retryable=True,
+            ))
+    else:
+        diagnostics.append(diagnostic(
+            origin="public_web",
+            channel="search_api",
+            method="academic_search",
+            status="policy_denied",
+        ))
 
     if (
         source_allowed(policy, "private_corpus", "file_upload", "vector_search")
@@ -76,23 +122,89 @@ async def retrieve_sources(
                 policy,
             )
             passages.extend(private_results)
+            diagnostics.append(diagnostic(
+                origin="private_corpus",
+                channel="file_upload",
+                method="vector_search",
+                status="success" if private_results else "empty",
+                result_count=len(private_results),
+            ))
         except DocumentLibraryUnavailable as exc:
             warnings.append(str(exc))
+            diagnostics.append(diagnostic(
+                origin="private_corpus",
+                channel="file_upload",
+                method="vector_search",
+                status="unavailable",
+                message=str(exc),
+                retryable=False,
+            ))
         except Exception as exc:
             logger.warning("[Retrieval] private corpus search failed: %s", exc)
             warnings.append(f"private corpus search failed: {exc}")
+            diagnostics.append(diagnostic(
+                origin="private_corpus",
+                channel="file_upload",
+                method="vector_search",
+                status="provider_failed",
+                message=str(exc),
+                retryable=True,
+            ))
+    else:
+        diagnostics.append(diagnostic(
+            origin="private_corpus",
+            channel="file_upload",
+            method="vector_search",
+            status="policy_denied",
+        ))
 
     if source_allowed(policy, "user_provided", "native_connector", "keyword_search"):
         user_results = _user_provided_search(query, limit, cfg)
         sources.extend(user_results)
+        diagnostics.append(diagnostic(
+            origin="user_provided",
+            channel="native_connector",
+            method="keyword_search",
+            status="success" if user_results else "empty",
+            result_count=len(user_results),
+        ))
+    else:
+        diagnostics.append(diagnostic(
+            origin="user_provided",
+            channel="native_connector",
+            method="keyword_search",
+            status="policy_denied",
+        ))
 
     if source_allowed(policy, "external_system", "mcp", "mcp_search"):
         try:
             mcp_results = await _mcp_search(query, min(limit, int(budget.get("max_external_results") or 4)), cfg)
             sources.extend(mcp_results)
+            diagnostics.append(diagnostic(
+                origin="external_system",
+                channel="mcp",
+                method="mcp_search",
+                status="success" if mcp_results else "empty",
+                result_count=len(mcp_results),
+            ))
         except Exception as exc:
             logger.warning("[Retrieval] MCP search failed: %s", exc)
             warnings.append(f"MCP search failed: {exc}")
+            diagnostics.append(diagnostic(
+                origin="external_system",
+                channel="mcp",
+                method="mcp_search",
+                status="provider_failed",
+                message=str(exc),
+                retryable=True,
+            ))
+    else:
+        diagnostics.append(diagnostic(
+            origin="external_system",
+            channel="mcp",
+            method="mcp_search",
+            status="policy_denied",
+        ))
 
     sources = _dedupe_sources(_filter_domains(sources, policy))[:limit]
     passages = _dedupe_passages(passages)[:limit]
@@ -104,6 +216,7 @@ async def retrieve_sources(
         passages=passages,
         evidence_items=evidence_items,
         warnings=warnings,
+        diagnostics=diagnostics,
     )
     return result.to_dict()
 
@@ -148,16 +261,45 @@ async def read_source(
                         "content_hash": chunk.get("content_hash"),
                     },
                 ).to_dict()
-                return {"passage": passage, "evidence_items": _evidence_from_results(query, [], [passage])}
+                return {
+                    "passage": passage,
+                    "evidence_items": _evidence_from_results(query, [], [passage]),
+                    "diagnostics": [diagnostic(
+                        origin="private_corpus",
+                        channel="file_upload",
+                        method="deep_read",
+                        status="success",
+                        result_count=1,
+                    )],
+                }
         except Exception as exc:
-            return {"error": f"private source read failed: {exc}"}
+            return {
+                "error": f"private source read failed: {exc}",
+                "diagnostics": [diagnostic(
+                    origin="private_corpus",
+                    channel="file_upload",
+                    method="deep_read",
+                    status="read_failed",
+                    message=str(exc),
+                    retryable=True,
+                )],
+            }
 
     target_url = str(url or "").strip()
     if not target_url and source_id.startswith("http"):
         target_url = source_id
     if target_url and source_allowed(policy, "public_web", "crawler", "crawl"):
         if not _url_allowed(target_url, policy):
-            return {"error": "URL blocked by retrieval domain policy."}
+            return {
+                "error": "URL blocked by retrieval domain policy.",
+                "diagnostics": [diagnostic(
+                    origin="public_web",
+                    channel="crawler",
+                    method="crawl",
+                    status="policy_denied",
+                    message="URL blocked by retrieval domain policy.",
+                )],
+            }
         try:
             from tools.crawl.crawler import crawl_url
 
@@ -174,18 +316,64 @@ async def read_source(
                 retrieval_method="crawl",
                 provider="crawler",
             ).to_dict()
-            return {"source": source, "evidence_items": _evidence_from_results(query, [source], [])}
+            return {
+                "source": source,
+                "evidence_items": _evidence_from_results(query, [source], []),
+                "diagnostics": [diagnostic(
+                    origin="public_web",
+                    channel="crawler",
+                    method="crawl",
+                    status="success" if text else "empty",
+                    result_count=1 if text else 0,
+                )],
+            }
         except Exception as exc:
-            return {"error": f"crawl failed: {exc}"}
+            return {
+                "error": f"crawl failed: {exc}",
+                "diagnostics": [diagnostic(
+                    origin="public_web",
+                    channel="crawler",
+                    method="crawl",
+                    status="read_failed",
+                    message=str(exc),
+                    retryable=True,
+                )],
+            }
 
     if target_url and source_allowed(policy, "external_system", "mcp", "mcp_fetch"):
         try:
             result = await _mcp_fetch(target_url, cfg)
+            if isinstance(result, dict):
+                result.setdefault("diagnostics", [diagnostic(
+                    origin="external_system",
+                    channel="mcp",
+                    method="mcp_fetch",
+                    status="success",
+                    result_count=1,
+                )])
             return result
         except Exception as exc:
-            return {"error": f"MCP fetch failed: {exc}"}
+            return {
+                "error": f"MCP fetch failed: {exc}",
+                "diagnostics": [diagnostic(
+                    origin="external_system",
+                    channel="mcp",
+                    method="mcp_fetch",
+                    status="read_failed",
+                    message=str(exc),
+                    retryable=True,
+                )],
+            }
 
-    return {"error": "No allowed read method matched source_id/url under retrieval_policy."}
+    return {
+        "error": "No allowed read method matched source_id/url under retrieval_policy.",
+        "diagnostics": [diagnostic(
+            origin="unknown",
+            channel="unknown",
+            method="read_source",
+            status="policy_denied",
+        )],
+    }
 
 
 def build_retrieval_tools(config: RunnableConfig | None = None) -> list[StructuredTool]:

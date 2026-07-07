@@ -6,7 +6,7 @@ engines are configured via `SEARCH_ENGINES` in `.env`.
 
 Why this exists:
 - Playwright-based browsing of public search engines frequently triggers anti-bot
-  challenges (captcha / interstitials) in sandboxed environments.
+  challenges (captcha / interstitials).
 - API search providers (Tavily/Serper/SerpAPI/Bing/Exa/Firecrawl/Google CSE) are
   far more stable and deterministic.
 """
@@ -119,8 +119,7 @@ def run_fallback_search(
     """
     Run a multi-engine API search and return (engine_used, results).
 
-    This helper is used by visual sandbox tools to render results while also
-    reporting which engine actually produced the results.
+    This helper reports which engine actually produced the results.
     """
     engine_list = (
         engines or getattr(settings, "search_engines_list", None) or ["tavily"]

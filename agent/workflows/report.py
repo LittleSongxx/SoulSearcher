@@ -42,16 +42,22 @@ from agent.workflows.evidence_ledger import (
 from agent.workflows.evidence_ledger import (
     evidence_passages as structured_evidence_passages,
 )
-from agent.workflows.research_todo import (
-    emit_todo_updates,
-    summarize_todos,
-)
 from agent.workflows.plan_graph import (
     apply_replan_actions,
     build_gap_replan_actions,
     ensure_plan_graph,
     summarize_plan_graph,
     todos_from_plan_graph,
+)
+from agent.workflows.report_artifact_service import (
+    ingest_memory_artifacts as _ingest_memory_artifacts,
+)
+from agent.workflows.report_artifact_service import (
+    persist_workspace_artifacts as _persist_workspace_artifacts,
+)
+from agent.workflows.research_todo import (
+    emit_todo_updates,
+    summarize_todos,
 )
 
 logger = logging.getLogger(__name__)
@@ -465,80 +471,6 @@ def _build_evidence_ledger(
 def _evidence_passages(evidence_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Report-local API wrapper around centralized passage generation."""
     return structured_evidence_passages(evidence_items)
-
-
-def _persist_workspace_artifacts(
-    config: RunnableConfig,
-    artifacts: dict[str, Any],
-    *,
-    report_content: str = "",
-    report_format: str = "markdown",
-) -> dict[str, Any]:
-    """Persist key research artifacts into the per-thread workspace."""
-    configurable = config.get("configurable") or {}
-    thread_id = str(configurable.get("thread_id") or "default")
-    try:
-        from agent.runtime.workspace import get_research_workspace
-
-        workspace = get_research_workspace(thread_id)
-        artifacts["workspace"] = workspace.artifact()
-        workspace.write_json("artifacts.json", artifacts)
-        workspace.write_jsonl("evidence.jsonl", artifacts.get("evidence_items", []) or [])
-        workspace.write_jsonl("passages.jsonl", artifacts.get("passages", []) or [])
-        workspace.write_json("quality.json", {
-            "summary": artifacts.get("quality_summary", {}),
-            "gates": artifacts.get("quality_gates", []),
-            "details": artifacts.get("quality_details", {}),
-        })
-        workspace.write_json("sources.json", artifacts.get("sources", []) or [])
-        if report_content:
-            filename = "report.html" if report_format == "html" else "report.md"
-            workspace.write_text(filename, report_content)
-    except Exception as e:
-        logger.warning("[Workspace] Failed to persist report artifacts: %s", e)
-    return artifacts
-
-
-async def _ingest_memory_artifacts(
-    config: RunnableConfig,
-    *,
-    research_brief: str,
-    final_content: str,
-    artifacts: dict[str, Any],
-    notes: list[str],
-) -> None:
-    try:
-        from common.config import settings
-
-        if not getattr(settings, "memory_enabled", True):
-            return
-        from agent.memory import get_memory_service
-
-        configurable = config.get("configurable") or {}
-        runtime_context = configurable.get("runtime_context")
-        thread_id = str(
-            getattr(runtime_context, "thread_id", "")
-            or configurable.get("thread_id")
-            or "default"
-        )
-        run_id = str(
-            getattr(runtime_context, "run_id", "")
-            or configurable.get("run_id")
-            or thread_id
-        )
-        user_id = str(configurable.get("user_id") or "default")
-        await get_memory_service().ingest_research_run(
-            user_id=user_id,
-            thread_id=thread_id,
-            run_id=run_id,
-            research_brief=research_brief,
-            final_report=final_content,
-            artifacts=artifacts,
-            notes=notes,
-        )
-        logger.info("[Memory] Ingested research artifacts for thread %s", thread_id)
-    except Exception as e:
-        logger.warning("[Memory] Ingestion skipped: %s", e)
 
 
 def _build_quality_summary(
@@ -1050,8 +982,11 @@ async def final_report_generation(
                 )
             )
             if not evaluation_available:
-                quality_summary["delivery_status"] = "quality_unavailable"
+                quality_summary["delivery_status"] = "delivered_without_quality_eval"
+                quality_summary["evaluation_available"] = False
                 quality_summary["publish_ready"] = True
+            else:
+                quality_summary["evaluation_available"] = True
             if not delivery_ready:
                 quality_gates.append({
                     "name": "delivery_gate",

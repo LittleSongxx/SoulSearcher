@@ -37,15 +37,7 @@ You can:
    - NEVER fabricate or invent URLs or sources
    - Only cite information that actually appears in tool results
 
-3. **Python Code for Complex Tasks**
-   - Use execute_python_code for:
-     * Data analysis and visualization
-     * Complex calculations
-     * Processing structured data (JSON, CSV, etc.)
-   - Always validate your code before execution
-   - Handle errors gracefully
-
-4. **Iterative Research Strategy**
+3. **Iterative Research Strategy**
    - Start with broad queries, then narrow down
    - If initial results are insufficient, refine your search queries
    - Synthesize information from multiple sources for comprehensive answers
@@ -83,12 +75,6 @@ You can:
 - Extracting detailed content from specific pages
 - Getting full article text for analysis
 - Retrieving structured data from websites
-
-**execute_python_code:**
-- Data analysis and statistics
-- Creating charts and visualizations
-- Text processing and pattern matching
-- Mathematical calculations
 
 ## Response Format:
 
@@ -323,17 +309,6 @@ Format at the end:
 - Highlight most recent developments
 - Indicate if information may change rapidly
 
-# TOOLS AVAILABLE
-
-You can use `execute_python_code` for:
-- Creating data visualizations
-- Processing structured data from research
-- Generating charts to illustrate findings
-- Statistical analysis
-
-When you create visualizations:
-- Make them clear and well-labeled
-- Use appropriate chart types for the data
 - Include titles and legends
 - Mention the visualization in your text
 
@@ -367,7 +342,7 @@ def get_agent_prompt(mode: str = "default", context: dict = None) -> str:
     if prompt_pack in ("deepsearch", "deepresearch"):
         return get_behavior_prompt(
             variant=prompt_variant,
-            include_browser=True,
+            include_browser=False,
             include_desktop=True,
         )
 

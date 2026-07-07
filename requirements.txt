@@ -24,7 +24,6 @@ temporalio>=1.9.0
 
 # Tools
 tavily-python==0.7.22
-e2b-code-interpreter==2.4.1
 playwright>=1.47.0
 langchain-mcp-adapters==0.2.1
 mcp==1.26.0

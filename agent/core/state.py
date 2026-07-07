@@ -14,6 +14,8 @@ from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from agent.core.artifacts import normalize_deepsearch_artifacts
+
 # =============================================================================
 # Reducers
 # =============================================================================
@@ -369,9 +371,9 @@ def build_initial_state(
         initial_sources = []
     initial_sources = [item for item in initial_sources if isinstance(item, dict)]
 
-    initial_artifacts = kwargs.get("initial_deepsearch_artifacts")
-    if not isinstance(initial_artifacts, dict):
-        initial_artifacts = {}
+    initial_artifacts = normalize_deepsearch_artifacts(
+        kwargs.get("initial_deepsearch_artifacts")
+    )
 
     initial_state: dict[str, Any] = {
         "input": input_text,
@@ -400,7 +402,7 @@ def build_initial_state(
         "quality_gates": [],
         "quality_followup_required": False,
         "quality_followup_count": 0,
-        "deepsearch_artifacts": dict(initial_artifacts),
+        "deepsearch_artifacts": initial_artifacts,
         "final_report": "",
         "report_format": kwargs.get("report_format", "markdown"),
         "messages": ensure_user_input_message(messages, input_text),

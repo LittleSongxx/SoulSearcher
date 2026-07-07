@@ -121,7 +121,7 @@ async def researcher(
         vision_tools_parts.append(
             f"{tool_counter}. **view_image**: View local image files "
             f"(jpg/png/webp/gif). Use when you find a relevant image file "
-            f"that could contain charts, diagrams, or visual data."
+            f"that could contain diagrams, figures, or visual evidence."
         )
 
     if research_config.vision_enrich_data:
@@ -129,13 +129,13 @@ async def researcher(
         vision_tools_parts.append(
             f"{tool_counter}. **extract_web_images**: Extract and analyze images "
             f"from web pages. Use when research topic involves visual data "
-            f"(financial reports, charts, architecture diagrams, data "
-            f"dashboards, infographics). Provide the URL of a page containing "
+            f"(financial reports, architecture diagrams, dashboards, "
+            f"infographics). Provide the URL of a page containing "
             f"relevant images."
         )
         vision_guidance_parts.append(
             "6. **When to use extract_web_images**: If your research topic "
-            "involves financial data, statistical charts, diagrams, "
+            "involves source figures, diagrams, "
             "infographics, or any domain where visual data is key, "
             "use extract_web_images on relevant search result URLs to "
             "enrich your findings with visual data."
@@ -561,8 +561,8 @@ async def _get_researcher_tools(
 
     Deep Research retrieval is intentionally forced through the unified
     retrieve_sources/read_source gateway. Raw web, academic, RAG, crawl,
-    browser, and MCP tools stay hidden so policy and evidence binding are
-    enforced in one place.
+    and MCP tools stay hidden so policy and evidence binding are enforced
+    in one place.
     """
     from agent.retrieval.gateway import build_retrieval_tools
 
@@ -750,46 +750,6 @@ _VISION_TOOL_NAMES = {
     "view_image",
     "extract_web_images",
 }
-_WEB_TOOL_NAMES = {
-    "tavily_search",
-    "fallback_search",
-    "web_search",
-    "search",
-}
-_ACADEMIC_TOOL_NAMES = {
-    "arxiv_search",
-    "pubmed_search",
-    "semantic_scholar_search",
-}
-_RAG_TOOL_NAMES = {
-    "rag_search",
-    "retrieve_documents",
-    "document_search",
-}
-_SANDBOX_TOOL_PREFIXES = (
-    "sandbox_",
-    "execute_python_code",
-    "create_visualization",
-)
-
-
-def _allow_sandbox_tools(config: RunnableConfig, source_policy: dict[str, Any]) -> bool:
-    cfg = config.get("configurable") if isinstance(config, dict) else {}
-    cfg = cfg if isinstance(cfg, dict) else {}
-    strict = bool(cfg.get("tool_policy_strict", True))
-    if not strict:
-        return True
-    if cfg.get("allow_sandbox_tools") is not None:
-        return bool(cfg.get("allow_sandbox_tools"))
-    budget = source_policy.get("budget_policy") or {}
-    if isinstance(budget, dict) and budget.get("sandbox") is not None:
-        return bool(budget.get("sandbox"))
-    return bool(cfg.get("tool_approval") or cfg.get("human_review"))
-
-
-def _tool_matches_any(name: str, values: set[str]) -> bool:
-    key = name.strip().lower()
-    return key in {item.lower() for item in values}
 
 
 def _filter_tools_for_policy(
@@ -804,11 +764,7 @@ def _filter_tools_for_policy(
     if not bool(cfg.get("retrieval_policy_strict", True)):
         return tools
 
-    include_web = bool(source_policy.get("include_web"))
-    include_academic = bool(source_policy.get("include_academic"))
-    include_rag = bool(source_policy.get("include_rag"))
-    include_mcp = bool(source_policy.get("include_mcp"))
-    allow_sandbox = _allow_sandbox_tools(config, source_policy)
+    del source_policy
     denied = {
         item.strip().lower()
         for item in str(cfg.get("deepsearch_guardrail_denied_tools") or "").split(",")
@@ -824,19 +780,7 @@ def _filter_tools_for_policy(
             output.append(tool)
             continue
         # Retrieval policy enforces a single gateway tool surface for researcher
-        # agents. Raw provider/crawler/browser/MCP/sandbox tools stay hidden.
-        continue
-        if getattr(tool, "is_mcp_tool", False) and not include_mcp:
-            continue
-        if any(key.startswith(prefix) for prefix in _SANDBOX_TOOL_PREFIXES) and not allow_sandbox:
-            continue
-        if _tool_matches_any(name, _WEB_TOOL_NAMES) and not include_web:
-            continue
-        if _tool_matches_any(name, _ACADEMIC_TOOL_NAMES) and not include_academic:
-            continue
-        if _tool_matches_any(name, _RAG_TOOL_NAMES) and not include_rag:
-            continue
-        output.append(tool)
+        # agents. Raw provider/crawler/MCP tools stay hidden.
     return output
 
 
@@ -915,8 +859,8 @@ def _format_source_policy_guidance(source_policy: dict[str, Any]) -> str:
         )
     lines.append(
         "- Use retrieve_sources for all discovery and read_source for deeper "
-        "reading. Do not request raw Tavily, arXiv, crawler, RAG, browser, or "
-        "MCP tools directly."
+        "reading. Do not request raw Tavily, arXiv, crawler, RAG, or MCP "
+        "tools directly."
     )
     lines.append("</Source Policy>")
     return "\n".join(lines)

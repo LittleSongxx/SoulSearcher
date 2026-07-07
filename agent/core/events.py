@@ -26,7 +26,7 @@ Usage:
     emitter.on_event(my_listener)
 
     # Emit events
-    await emitter.emit(ToolEvent.TOOL_START, {"tool": "browser_navigate", "url": "..."})
+    await emitter.emit(ToolEvent.TOOL_START, {"tool": "tavily_search", "query": "..."})
 """
 
 import asyncio
@@ -77,7 +77,6 @@ class ToolEventType(str, Enum):
     SEARCH = "search"  # Search query executed with results
     QUALITY_UPDATE = "quality_update"  # Research quality/coverage metrics updated
     BRIEF_CREATED = "brief_created"  # Structured research brief created
-    STRATEGY_SELECTED = "strategy_selected"  # Deep research strategy selected
     EVIDENCE_SELECTED = "evidence_selected"  # Evidence selected/normalized
     QUALITY_GATE_EVALUATED = "quality_gate_evaluated"  # Quality gate evaluated
     GAP_DETECTED = "gap_detected"  # Knowledge or coverage gap detected
@@ -486,13 +485,6 @@ async def remove_emitter(thread_id: str) -> None:
     """
     async with _emitters_lock:
         _emitters.pop(thread_id, None)
-    # Best-effort cleanup for thread-scoped resources (e.g., Daytona sandboxes)
-    try:
-        from tools.sandbox.daytona_client import daytona_stop_all
-
-        daytona_stop_all(thread_id=thread_id)
-    except Exception:
-        pass
 
 
 def get_emitter_sync(thread_id: str) -> EventEmitter:

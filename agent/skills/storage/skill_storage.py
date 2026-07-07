@@ -104,7 +104,7 @@ class SkillStorage(ABC):
 
     @abstractmethod
     def get_skills_root_path(self) -> Path:
-        """Absolute host path to the skills root, used for sandbox mounts."""
+        """Absolute host path to the skills root."""
 
     @abstractmethod
     def _iter_skill_files(self) -> Iterable[tuple[SkillCategory, Path, Path]]:

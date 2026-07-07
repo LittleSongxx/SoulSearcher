@@ -745,7 +745,7 @@ class SessionManager:
         claims = _maybe_extract_claims()
 
         return {
-            "mode": state.get("deepsearch_mode") or state.get("route") or "deepsearch",
+            "mode": state.get("route") or "deepsearch",
             "queries": queries,
             "research_tree": research_tree,
             "quality_summary": quality_summary,

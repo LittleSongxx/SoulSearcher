@@ -4,7 +4,7 @@ Shared constants for SoulSearcher workflows.
 Single source of truth for domain markers, quality thresholds, claim markers,
 and other constants that were previously scattered across multiple modules.
 
-Imported by: claim_verifier, source_quality, quality_gates, sandbox_policy, etc.
+Imported by: claim_verifier, source_quality, quality_gates, etc.
 """
 
 from __future__ import annotations

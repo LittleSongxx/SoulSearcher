@@ -449,21 +449,18 @@ Include a <style> block at the very beginning with CSS for:
 5. For data tables: wrap in <div class="table-wrapper">, use <thead>/<tbody>
 6. Highlight key cells with class="highlight", "positive", or "negative"
 7. For images: use <!-- IMAGE: source_key --> placeholder comments
-8. For charts that would benefit from visualization: use <!-- CHART: description -->
-9. Citations: use <sup><a href="#src-N">[N]</a></sup> inline, with
+8. Citations: use <sup><a href="#src-N">[N]</a></sup> inline, with
    <li id="src-N"> in the sources section
 </Content Guidelines>
 
 {skill_writing_context}
-<Image & Chart Rules>
-- If research involved charts/graphs/diagrams, add <!-- IMAGE: key --> placeholders
+<Image Rules>
+- If research involved diagrams, screenshots, or other source images, add <!-- IMAGE: key --> placeholders
   where images should appear. The platform will replace these with actual <img> tags.
 - Be specific about WHERE images should go and WHAT they should show
 - Each placeholder should be on its own line
 - Example: <!-- IMAGE: https://example.com/revenue-chart.png -->
-- For data that would benefit from visual charts (trends, comparisons, distributions),
-  add <!-- CHART: description of what the chart should show -->
-</Image & Chart Rules>
+</Image Rules>
 
 <Report Structure>
 Choose the most appropriate structure:

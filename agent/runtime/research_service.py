@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from agent.retrieval.policy import reject_legacy_source_routing
+from agent.runtime.options import sanitize_research_runtime_options
 
 StreamFactory = Callable[..., AsyncIterator[str]]
 ResumeFactory = Callable[..., AsyncIterator[str]]
@@ -53,135 +53,13 @@ class ResearchExecutionService:
         return factory(first_arg, **kwargs)
 
 
-_RESEARCH_DEEPSEARCH_CONFIG_KEYS = {
-    "deepsearch_strategy",
-    "strategy",
-    "deepsearch_mode",
-    "deepsearch_max_epochs",
-    "deepsearch_max_seconds",
-    "deepsearch_max_tokens",
-    "deepsearch_max_research_units",
-    "deepsearch_max_tool_calls_per_unit",
-    "deepsearch_max_skills",
-    "deepsearch_reflection_loops",
-    "deepsearch_supervisor_rounds",
-    "deepsearch_supervisor_max_workers",
-    "deepsearch_supervisor_queries_per_worker",
-    "deepsearch_supervisor_parallel_workers",
-    "deepsearch_supervisor_think_enabled",
-    "deepsearch_supervisor_max_depth",
-    "deepsearch_supervisor_depth_confidence_threshold",
-    "deepsearch_max_seconds_per_worker",
-    "deepsearch_claim_verifier_use_passages",
-    "deepsearch_claim_verifier_min_overlap_tokens",
-    "deepsearch_claim_verifier_max_evidence_per_claim",
-    "deepsearch_claim_verifier_max_claims",
-    "deepsearch_guardrail_denied_tools",
-    "deepsearch_guardrail_allowed_domains",
-    "deepsearch_guardrail_denied_domains",
-    "deepsearch_summary_trigger_tokens",
-    "deepsearch_summary_trigger_messages",
-    "deepsearch_summary_keep_recent",
-    "deep_research_strict_citations",
-    "tool_policy_strict",
-    "legacy_citation_mode",
-    "allow_sandbox_tools",
-    "supervisor_model",
-    "planner_model",
-    "planning_model",
-    "query_model",
-    "query_gen_model",
-    "search_summary_model",
-    "summary_model",
-    "synthesis_model",
-    "worker_model",
-    "researcher_model",
-    "research_model",
-    "compression_model",
-    "writer_model",
-    "final_report_model",
-    "writing_model",
-    "verifier_model",
-    "evaluator_model",
-    "evaluation_model",
-    "reasoning_model",
-    "retrieval_policy",
-    "retrieval_allowed_origins",
-    "retrieval_channels",
-    "retrieval_methods",
-    "retrieval_profiles",
-    "allowed_domains",
-    "denied_domains",
-    "mcp_preset_ids",
-    "mcp_results",
-    "mcp_auth_required",
-    "mcp_requires_auth",
-    "mcp_tools_to_include",
-    "mcp_tool_whitelist",
-    "mcp_max_tools",
-    "use_reflection_loop",
-    "skill_ids",
-    "deepsearch_skill_ids",
-}
-
-_RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS = {
-    "retrieval_policy",
-    "mcp_results",
-    "research_brief_review",
-}
-
-_RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS = {
-    "source_connectors",
-    "user_injected_sources",
-    "mcp_results",
-}
-
-
 async def format_stream_event(event_type: str, data: Any) -> str:
     payload = {"type": event_type, "data": data}
     return f"0:{json.dumps(payload)}\n"
 
 
-def normalize_research_deepsearch_strategy(value: Any) -> str:
-    mode = str(value or "").strip().lower().replace("-", "_")
-    if mode in {"supervisor", "workers", "supervisor_worker"}:
-        return "supervisor_workers"
-    return "supervisor_workers"
-
-
 def safe_research_deepsearch_config(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        return {}
-    reject_legacy_source_routing(value.get("source_routing"))
-    cleaned: dict[str, Any] = {}
-    for key, item in value.items():
-        key_text = str(key or "").strip()
-        if key_text not in _RESEARCH_DEEPSEARCH_CONFIG_KEYS:
-            continue
-        if isinstance(item, (str, int, float, bool)) or item is None:
-            cleaned[key_text] = item
-        elif key_text in _RESEARCH_DEEPSEARCH_CONFIG_OBJECT_LIST_KEYS and isinstance(
-            item, list
-        ):
-            cleaned[key_text] = [
-                part for part in item if isinstance(part, (dict, str, int, float, bool))
-            ]
-        elif isinstance(item, list):
-            cleaned[key_text] = [
-                str(part).strip() for part in item if str(part).strip()
-            ]
-        elif key_text in _RESEARCH_DEEPSEARCH_CONFIG_DICT_KEYS and isinstance(
-            item, dict
-        ):
-            if key_text == "retrieval_policy":
-                reject_legacy_source_routing(item.get("source_routing"))
-            cleaned[key_text] = item
-    for strategy_key in ("deepsearch_strategy", "strategy", "deepsearch_mode"):
-        if strategy_key in cleaned:
-            cleaned[strategy_key] = normalize_research_deepsearch_strategy(
-                cleaned[strategy_key]
-            )
-    return cleaned
+    return sanitize_research_runtime_options(value)
 
 
 def serialize_interrupts(interrupts: Any) -> list[Any]:

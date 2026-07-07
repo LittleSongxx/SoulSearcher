@@ -34,7 +34,6 @@ _STATUS_STEP_TO_EVENT = {
 
 _STREAM_TO_EVENT = {
     "brief_created": "brief.created",
-    "strategy_selected": "plan.created",
     "plan_graph_update": "plan.graph.updated",
     "replan_requested": "plan.replan.requested",
     "replan_applied": "plan.replan.applied",

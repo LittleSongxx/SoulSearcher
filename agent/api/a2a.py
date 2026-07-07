@@ -40,14 +40,15 @@ from a2a.utils.constants import PROTOCOL_VERSION_1_0, TransportProtocol
 from fastapi import FastAPI
 from google.protobuf import json_format
 
+from agent.api.a2a_runtime import build_a2a_research_inputs
+from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
+from agent.runtime.callback_outbox import callback_outbox, deliver_callback_once
 from agent.runtime.idempotency import (
     IdempotencyConflictError,
     IdempotencyRecord,
     canonical_request_hash,
     idempotency_store,
 )
-from agent.runtime.callback_outbox import callback_outbox, deliver_callback_once
-from agent.runtime.background_runs import BackgroundRunRequest, background_run_manager
 from agent.runtime.runs import RunStatus, run_manager
 from agent.runtime.temporal_runs import signal_temporal_resume, temporal_backend_enabled
 from common.cancellation import cancellation_manager
@@ -59,12 +60,6 @@ logger = logging.getLogger(__name__)
 StreamFactory = Callable[..., AsyncIterator[str]]
 ResumeFactory = Callable[..., AsyncIterator[str]]
 
-_DEFAULT_DEEP_SEARCH_MODE = {
-    "mode": "deep",
-    "useWebSearch": True,
-    "useAgent": True,
-    "useDeepSearch": True,
-}
 _PROGRESS_EVENTS = {
     "brief_created",
     "progress",
@@ -489,40 +484,17 @@ class SoulSearcherA2AExecutor(AgentExecutor):
             metadata={**base_task_metadata, "event_type": "resume" if is_resume else "accepted"},
         )
 
-        deepsearch_config = _dict_value(metadata.get("deepsearch_config"))
-        deepsearch_config.update(_dict_value(options.get("deepsearch_config")))
-        retrieval_policy = (
-            _dict_value(metadata.get("retrieval_policy"))
-            or _dict_value(options.get("retrieval_policy"))
-            or _dict_value(request_context.get("retrieval_policy"))
+        research_inputs = build_a2a_research_inputs(
+            metadata=metadata,
+            options=options,
+            request_context=request_context,
+            settings=self.settings,
         )
-        if retrieval_policy:
-            deepsearch_config["retrieval_policy"] = retrieval_policy
-
-        research_brief = (
-            _dict_value(metadata.get("research_brief"))
-            or _dict_value(options.get("research_brief"))
-            or _dict_value(request_context.get("research_brief"))
-        )
-        skill_ids = _list_value(metadata.get("skill_ids") or options.get("skill_ids"))
-        if skill_ids:
-            deepsearch_config["skill_ids"] = skill_ids
-
-        search_mode = (
-            _dict_value(metadata.get("search_mode"))
-            or _dict_value(options.get("search_mode"))
-            or dict(_DEFAULT_DEEP_SEARCH_MODE)
-        )
-        images = _list_of_dicts(options.get("images") or metadata.get("images"))
-        if not images:
-            images = _list_of_dicts(metadata.get("files") or options.get("files"))
-
-        model = str(
-            options.get("model")
-            or metadata.get("model")
-            or getattr(self.settings, "primary_model", "")
-            or ""
-        ).strip()
+        deepsearch_config = research_inputs.deepsearch_config
+        research_brief = research_inputs.research_brief
+        search_mode = research_inputs.search_mode
+        images = research_inputs.images
+        model = research_inputs.model
 
         final_content = ""
         final_format = "markdown"
@@ -662,8 +634,10 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                             and content == previous_final_content
                         ):
                             continue
-                        final_content = content
-                        final_format = str(data.get("format") or final_format or "markdown")
+                        artifact_format = str(data.get("format") or final_format or "markdown")
+                        if event_type in {"completion", "report_written"}:
+                            final_content = content
+                            final_format = artifact_format
                         artifact_id = str(
                             data.get("id")
                             or data.get("artifact_id")
@@ -675,12 +649,12 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                             )
                         )
                         await updater.add_artifact(
-                            [_report_part(content, final_format)],
+                            [_report_part(content, artifact_format)],
                             artifact_id=artifact_id,
                             name=str(data.get("title") or data.get("name") or "Research Report"),
                             metadata={
                                 "source_event_type": event_type,
-                                "format": final_format,
+                                "format": artifact_format,
                                 "a2a_task_id": task_id,
                                 "sequence": seq,
                             },
@@ -695,7 +669,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                             artifact={
                                 "artifact_id": artifact_id,
                                 "name": str(data.get("title") or data.get("name") or "Research Report"),
-                                "format": final_format,
+                                "format": artifact_format,
                             },
                         )
                         if event_type in {"completion", "report_written"}:
@@ -1463,7 +1437,13 @@ async def _deliver_callback(
 
 
 def _report_part(content: str, report_format: str) -> Part:
-    media_type = "text/html" if str(report_format).lower() == "html" else "text/markdown"
+    normalized = str(report_format or "").lower()
+    if normalized == "html":
+        media_type = "text/html"
+    elif normalized in {"json", "application/json"}:
+        media_type = "application/json"
+    else:
+        media_type = "text/markdown"
     return Part(text=content, media_type=media_type)
 
 
@@ -1512,18 +1492,6 @@ def _struct_to_dict(value: Any) -> dict[str, Any]:
 
 def _dict_value(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _list_of_dicts(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [dict(item) for item in value if isinstance(item, dict)]
 
 
 def _header_value(headers: dict[str, Any], name: str) -> str:

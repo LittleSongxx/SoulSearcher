@@ -1,7 +1,4 @@
-"""SkillStorage singleton factory.
-
-Mirrors the pattern used by sandbox_provider.py.
-"""
+"""SkillStorage singleton factory."""
 
 from __future__ import annotations
 

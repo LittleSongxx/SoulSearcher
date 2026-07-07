@@ -170,7 +170,14 @@ def test_send_streaming_message_maps_progress_artifact_and_completed() -> None:
     ]
     assert "TASK_STATE_WORKING" in status_states
     assert status_states[-1] == "TASK_STATE_COMPLETED"
+    completed_messages = [
+        item["statusUpdate"]["status"]["message"]["parts"][0]["text"]
+        for item in events
+        if "statusUpdate" in item and item["statusUpdate"]["status"]["state"] == "TASK_STATE_COMPLETED"
+    ]
+    assert completed_messages[-1] == "final report"
     artifacts = [item["artifactUpdate"]["artifact"] for item in events if "artifactUpdate" in item]
+    assert len(artifacts) == 1
     assert artifacts[0]["parts"][0]["text"] == "final report"
     assert artifacts[0]["parts"][0]["mediaType"] == "text/markdown"
     assert calls[0]["args"][0] == "research this"
@@ -188,11 +195,12 @@ def test_soulclaw_deep_research_contract_reaches_research_execution_service() ->
 
     client = _app(fake_stream)
     payload = _stream_payload("contract research")
+    request_id = f"turn-{uuid.uuid4().hex}:deep-research"
     payload["params"]["message"]["metadata"] = {
         "capability": "deep-research",
         "context": {
             "session_id": "local",
-            "turn_id": "turn-1",
+            "turn_id": request_id,
         },
         "options": {
             "model": "contract-model",
@@ -201,8 +209,8 @@ def test_soulclaw_deep_research_contract_reaches_research_execution_service() ->
             "deepsearch_config": {"deepsearch_max_seconds": 30},
         },
         "soulclaw_task_id": "a2a_task_local",
-        "client_request_id": "turn-1:deep-research",
-        "idempotency_key": "turn-1:deep-research",
+        "client_request_id": request_id,
+        "idempotency_key": request_id,
         "user_id": "soulclaw",
     }
 

@@ -187,7 +187,7 @@ class ResearchConfiguration:
         )
     )
     """Output format for the final report: 'markdown' (default) or 'html'.
-    HTML reports support embedded images, styled tables, SVG charts, callout
+    HTML reports support embedded images, styled tables, callout
     boxes, and responsive layout. Markdown remains the default for simplicity
     and lower token cost."""
 
@@ -280,7 +280,7 @@ class ResearchConfiguration:
     )
     """Whether to allow the researcher LLM to extract images from web pages.
     When enabled, the extract_web_images tool is available and the LLM can choose
-    to download and analyze images from fetched pages (charts, diagrams, etc.).
+    to download and analyze images from fetched pages (diagrams, figures, etc.).
     This is more expensive (bandwidth + vision tokens) and should only be enabled
     for research domains where visual data is high-value (financial reports,
     data dashboards, architecture diagrams, etc.)."""

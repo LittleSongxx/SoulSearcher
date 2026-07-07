@@ -104,7 +104,6 @@ class PublicConfigDefaults(BaseModel):
 
 class PublicConfigFeatures(BaseModel):
     mcp_enabled: bool
-    sandbox_mode: str
     prometheus_enabled: bool
     tracing_enabled: bool
 
@@ -422,7 +421,6 @@ def build_admin_router(deps: AdminRouterDeps) -> APIRouter:
             },
             "features": {
                 "mcp_enabled": bool(deps.mcp_enabled),
-                "sandbox_mode": deps.settings.sandbox_mode,
                 "prometheus_enabled": bool(deps.settings.enable_prometheus),
                 "tracing_enabled": bool(deps.settings.enable_tracing),
                 "persistence_mode": (

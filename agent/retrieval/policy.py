@@ -6,7 +6,6 @@ from typing import Any
 SOURCE_ORIGINS = {"public_web", "private_corpus", "user_provided", "external_system"}
 ACCESS_CHANNELS = {
     "search_api",
-    "browser",
     "crawler",
     "file_upload",
     "mcp",

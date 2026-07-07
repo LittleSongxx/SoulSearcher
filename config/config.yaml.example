@@ -14,8 +14,6 @@ search:
   # tavily_api_key: ""  # prefer env var
 
 deepsearch:
-  deepsearch_strategy: supervisor_workers
-  deepsearch_mode: supervisor_workers
   deepsearch_supervisor_rounds: 2
   deepsearch_supervisor_max_workers: 4
   deepsearch_supervisor_queries_per_worker: 2
@@ -95,10 +93,8 @@ deepsearch:
   deepsearch_section_results_cap: 6
   deepsearch_section_evidence_cap: 8
 
-  # Research review and reader planning
+  # Research review
   deepsearch_brief_review_required: false
-  deepsearch_reader_plan_enabled: true
-  deepsearch_reader_plan_mode: "search_fetch_browser_hint"
 
   # URL behavior
   deepsearch_encourage_open_url: true

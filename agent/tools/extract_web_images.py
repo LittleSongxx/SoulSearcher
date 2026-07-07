@@ -2,7 +2,7 @@
 
 Extends the deer-flow multimodal pattern to extract images from fetched web pages.
 The researcher LLM decides when to use this tool based on whether the research topic
-would benefit from visual data (charts, diagrams, financial reports, etc.).
+would benefit from visual data (diagrams, financial reports, etc.).
 
 Flow:
 1. Fetch page HTML
@@ -336,7 +336,7 @@ async def extract_web_images(
     """Extract meaningful images from a web page for multimodal analysis.
 
     The researcher LLM should call this when the research topic involves
-    visual data: charts, graphs, diagrams, financial reports, dashboards,
+    visual data: figures, diagrams, financial reports, dashboards,
     architectural diagrams, etc.
 
     Args:
@@ -465,9 +465,9 @@ async def extract_web_images_tool(
     """Extract images from a web page for visual analysis.
 
     Use this tool when the research topic involves visual data such as:
-    - Charts, graphs, diagrams, or infographics
+    - Figures, diagrams, or infographics
     - Financial reports, earnings summaries, or dashboards
-    - Architecture diagrams, flowcharts, or data visualizations
+    - Architecture diagrams, flowcharts, or data visuals
     - Any topic where images are likely to contain key information
 
     Args:

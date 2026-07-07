@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -226,7 +227,7 @@ class EvidenceResponse(BaseModel):
     research_pipeline: dict[str, Any] = {}
     stage_runtime: dict[str, Any] = {}
     source_quality: dict[str, Any] = {}
-    browser_reader_plan: dict[str, Any] = {}
+    reader_plan: dict[str, Any] = {}
     worker_orchestration: dict[str, Any] = {}
     branch_diagnostics: dict[str, Any] = {}
     brief_review: dict[str, Any] = {}
@@ -247,7 +248,6 @@ class ContinueResearchRequest(BaseModel):
     target_index: Optional[int] = None
     target_text: Optional[str] = None
     instruction: Optional[str] = None
-    strategy: str = "supervisor_workers"
 
 
 class ContinueResearchResponse(BaseModel):
@@ -465,7 +465,7 @@ def build_sessions_router(deps: SessionsRouterDeps) -> APIRouter:
             research_pipeline = artifacts.get("research_pipeline", {})
             stage_runtime = artifacts.get("stage_runtime", {})
             source_quality = artifacts.get("source_quality", {})
-            browser_reader_plan = artifacts.get("browser_reader_plan", {})
+            reader_plan = artifacts.get("reader_plan", {})
             worker_orchestration = artifacts.get("worker_orchestration", {})
             branch_diagnostics = artifacts.get("branch_diagnostics", {})
             brief_review = artifacts.get("brief_review", {})
@@ -576,9 +576,7 @@ def build_sessions_router(deps: SessionsRouterDeps) -> APIRouter:
                 "source_quality": (
                     source_quality if isinstance(source_quality, dict) else {}
                 ),
-                "browser_reader_plan": (
-                    browser_reader_plan if isinstance(browser_reader_plan, dict) else {}
-                ),
+                "reader_plan": reader_plan if isinstance(reader_plan, dict) else {},
                 "worker_orchestration": (
                     worker_orchestration if isinstance(worker_orchestration, dict) else {}
                 ),
@@ -629,7 +627,6 @@ def build_sessions_router(deps: SessionsRouterDeps) -> APIRouter:
                 target_index=payload.target_index,
                 target_text=payload.target_text or "",
                 instruction=payload.instruction or "",
-                strategy=payload.strategy or "supervisor_workers",
             )
             plan_payload = plan.to_dict()
             continue_requests = artifacts.get("continue_requests", [])
@@ -685,7 +682,6 @@ def build_sessions_router(deps: SessionsRouterDeps) -> APIRouter:
                     "useDeepSearch": True,
                 },
                 "thread_id": thread_id,
-                "deepsearch_strategy": payload.strategy or "supervisor_workers",
             }
 
             return {

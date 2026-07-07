@@ -163,7 +163,7 @@ def test_strict_tool_policy_allows_only_retrieval_gateway_tools():
         Tool("read_source"),
         Tool("tavily_search"),
         Tool("arxiv_search"),
-        Tool("sandbox_execute_command"),
+        Tool("external_provider_tool"),
     ]
     filtered = _filter_tools_for_policy(
         tools,

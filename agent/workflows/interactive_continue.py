@@ -155,7 +155,6 @@ def build_continue_research_plan(
     target_index: Optional[int] = None,
     target_text: str = "",
     instruction: str = "",
-    strategy: str = "supervisor_workers",
 ) -> ContinueResearchPlan:
     resolved = resolve_continue_target(
         artifacts,
@@ -190,7 +189,6 @@ def build_continue_research_plan(
         "target_text": resolved_text,
         "instruction": _text(instruction),
         "generated_queries": queries,
-        "strategy": strategy,
         "created_at": datetime.now(UTC).isoformat(),
     }
     plan_graph = ensure_plan_graph(
@@ -221,12 +219,6 @@ def build_continue_research_plan(
         "plan_version": int(plan_graph.get("version") or 1),
         "research_todos": research_todos,
         "todo_summary": summarize_todos(research_todos),
-        "deepsearch_strategy_decision": {
-            "strategy": strategy,
-            "reason": "interactive continue research target",
-            "parameters": {"target_type": normalized_type, "request_id": request_id},
-            "confidence": 1.0,
-        },
     }
     return ContinueResearchPlan(
         request_id=request_id,

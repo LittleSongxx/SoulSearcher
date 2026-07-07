@@ -116,12 +116,9 @@ def _find_free_port(host: str) -> int:
 def _env_for_server(*, tmp_root: Path) -> dict[str, str]:
     env = dict(os.environ)
 
-    # Avoid proxy leakage into the backend subprocess.
-    #
-    # Many local environments have `HTTP(S)_PROXY`/`ALL_PROXY` pointing at a
-    # SOCKS proxy (e.g. Clash). Some SDKs used by the backend (LLM gateways,
-    # E2B sandbox, etc.) may not handle these values reliably, which can make
-    # "real" smoke tests flaky or fail with confusing network errors.
+    # Avoid proxy leakage into the backend subprocess. Some SDKs used by the
+    # backend may not handle local SOCKS proxy values reliably, which can make
+    # live smoke tests flaky or fail with confusing network errors.
     for key in (
         "HTTP_PROXY",
         "HTTPS_PROXY",
@@ -500,119 +497,6 @@ async def _request_stream(
     )
 
 
-async def _ws_smoke(*, base_url: str, thread_id: str, timeout_s: float) -> SmokeResult:
-    # websockets URL: http(s) -> ws(s)
-    ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
-    path = f"/api/browser/{thread_id}/stream"
-    full = ws_url.rstrip("/") + path
-    start = time.perf_counter()
-    try:
-        import websockets
-
-        # Sandbox-backed browser cold starts can exceed the default per-request timeout.
-        ws_timeout = max(float(timeout_s or 0), 60.0)
-
-        async with websockets.connect(
-            full, open_timeout=ws_timeout, close_timeout=ws_timeout
-        ) as ws:
-            # Server sends a status message right after accept().
-            msg1_raw = await asyncio.wait_for(ws.recv(), timeout=ws_timeout)
-
-            # Mirror the frontend "live mode": start screencast and expect frames.
-            await ws.send(
-                json.dumps(
-                    {
-                        "action": "start",
-                        "quality": 50,
-                        "max_fps": 10,
-                    }
-                )
-            )
-
-            frames: list[float] = []
-            got_started = False
-            last_msg: str = ""
-
-            deadline = time.monotonic() + ws_timeout
-            while time.monotonic() < deadline:
-                raw = await asyncio.wait_for(ws.recv(), timeout=max(1.0, deadline - time.monotonic()))
-                last_msg = str(raw)
-                try:
-                    data = json.loads(raw)
-                except Exception:
-                    continue
-
-                typ = data.get("type")
-                if typ == "status":
-                    if data.get("message") == "Screencast started":
-                        got_started = True
-                elif typ == "frame":
-                    frames.append(time.perf_counter())
-                    # 2 frames is enough to prove continuous streaming (not just a one-off capture).
-                    if len(frames) >= 2 and got_started:
-                        break
-                elif typ == "error":
-                    elapsed_ms = int((time.perf_counter() - start) * 1000)
-                    return SmokeResult(
-                        method="WS",
-                        path=path,
-                        url=full,
-                        status_code=101,
-                        ok=False,
-                        elapsed_ms=elapsed_ms,
-                        note=f"ws error: {_snippet(str(data.get('message') or ''), 160)}",
-                        body_snippet=_snippet(last_msg, 200),
-                    )
-
-            # Stop streaming to reduce backend load.
-            try:
-                await ws.send(json.dumps({"action": "stop"}))
-            except Exception:
-                pass
-
-            elapsed_ms = int((time.perf_counter() - start) * 1000)
-            if len(frames) >= 2:
-                span = max(1e-6, frames[-1] - frames[0])
-                approx_fps = (len(frames) - 1) / span
-                return SmokeResult(
-                    method="WS",
-                    path=path,
-                    url=full,
-                    status_code=101,
-                    ok=True,
-                    elapsed_ms=elapsed_ms,
-                    note=(
-                        "ws stream ok "
-                        f"(frames={len(frames)}, approx_fps={approx_fps:.1f}, "
-                        f"recv1={_snippet(str(msg1_raw),80)})"
-                    ),
-                )
-
-            return SmokeResult(
-                method="WS",
-                path=path,
-                url=full,
-                status_code=101,
-                ok=False,
-                elapsed_ms=elapsed_ms,
-                note=(
-                    "ws stream returned no frames "
-                    f"(recv1={_snippet(str(msg1_raw),80)}, last={_snippet(last_msg,80)})"
-                ),
-            )
-    except Exception as e:
-        elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return SmokeResult(
-            method="WS",
-            path=path,
-            url=full,
-            status_code=None,
-            ok=False,
-            elapsed_ms=elapsed_ms,
-            note=f"ws failed: {type(e).__name__}: {e}",
-        )
-
-
 async def _scenario_calls(
     client: httpx.AsyncClient,
     *,
@@ -688,22 +572,6 @@ async def _scenario_calls(
             res = replace(res, ok=False, note="invalid public config JSON")
     results.append(res)
     done.add(("GET", "/api/config/public"))
-
-    res, resp = await _raw_request(
-        client,
-        method="GET",
-        path="/api/sandbox/browser/diagnose",
-        timeout_s=timeout_s,
-    )
-    if resp is not None and resp.status_code == 200:
-        try:
-            data = resp.json()
-            if not isinstance(data, dict) or "ready" not in data or "missing" not in data:
-                res = replace(res, ok=False, note="invalid sandbox diagnose shape")
-        except Exception:
-            res = replace(res, ok=False, note="invalid sandbox diagnose JSON")
-    results.append(res)
-    done.add(("GET", "/api/sandbox/browser/diagnose"))
 
     res, resp = await _raw_request(
         client,
@@ -929,7 +797,6 @@ async def run_smoke(
     *,
     base_url: str,
     timeout_s: float,
-    include_ws: bool,
 ) -> list[SmokeResult]:
     results: list[SmokeResult] = []
     async with httpx.AsyncClient(base_url=base_url, trust_env=False) as client:
@@ -937,29 +804,7 @@ async def run_smoke(
         scenario, ids, already_done = await _scenario_calls(client, timeout_s=timeout_s)
         results.extend(scenario)
 
-        thread_id = ids.get("thread_id", "smoke")
         already_done2 = list(already_done)
-
-        # WS check
-        if include_ws:
-            # Warm up the sandbox browser session first. Live streaming depends on the
-            # Playwright+CDP connection being ready, which can take a while on cold starts.
-            warm = await _request_json(
-                client,
-                method="GET",
-                path=f"/api/browser/{thread_id}/info",
-                timeout_s=max(timeout_s, 180.0),
-            )
-            results.append(warm)
-            already_done2.append(("GET", "/api/browser/{thread_id}/info"))
-
-            results.append(
-                await _ws_smoke(
-                    base_url=base_url,
-                    thread_id=thread_id,
-                    timeout_s=timeout_s,
-                )
-            )
 
         # Sweep remaining OpenAPI-described endpoints.
         results.extend(
@@ -1000,7 +845,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--port", type=int, default=0, help="Port to bind uvicorn (0 = auto)")
     p.add_argument("--log-level", default="warning", help="Uvicorn log level (default: warning)")
     p.add_argument("--timeout", type=float, default=20.0, help="Per-request timeout seconds (default: 20)")
-    p.add_argument("--ws", action="store_true", help="Also test WebSocket endpoint")
     p.add_argument("--out", default="", help="Write JSON report to this file")
     return p.parse_args(argv)
 
@@ -1057,7 +901,7 @@ async def amain(argv: list[str]) -> int:
         else:
             print(f"[smoke] using existing server at {base_url}")
 
-        results = await run_smoke(base_url=base_url, timeout_s=float(args.timeout), include_ws=bool(args.ws))
+        results = await run_smoke(base_url=base_url, timeout_s=float(args.timeout))
 
         # Print summary
         for r in results:

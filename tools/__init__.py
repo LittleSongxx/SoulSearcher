@@ -1,13 +1,4 @@
 try:
-    from tools.code.code_executor import execute_python_code
-except ModuleNotFoundError as exc:
-    _code_executor_import_error = exc
-
-    def execute_python_code(*args, **kwargs):
-        raise _code_executor_import_error
-
-
-try:
     from tools.core.registry import register_tools
 except ModuleNotFoundError as exc:
     _registry_import_error = exc
@@ -44,7 +35,6 @@ except ModuleNotFoundError as exc:
 __all__ = [
     "crawl_url",
     "crawl_urls",
-    "execute_python_code",
     "fallback_search",
     "register_tools",
     "tavily_search",

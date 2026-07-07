@@ -23,12 +23,6 @@ CORE_CAPABILITIES: tuple[Capability, ...] = (
 
 OPTIONAL_CAPABILITIES: tuple[Capability, ...] = (
     Capability(
-        "sandbox",
-        "optional",
-        "Browser, shell, file, presentation, and sheet sandbox tools.",
-        "sandbox_mode",
-    ),
-    Capability(
         "channels",
         "optional",
         "External channel adapters such as Feishu.",
@@ -53,9 +47,6 @@ OPTIONAL_CAPABILITIES: tuple[Capability, ...] = (
 
 
 def _optional_capability_enabled(item: Capability, settings: Any | None) -> bool:
-    if item.name == "sandbox":
-        mode = (getattr(settings, "sandbox_mode", "") if settings is not None else "").strip()
-        return bool(mode and mode.lower() != "none")
     if item.setting_name and settings is not None:
         return bool(getattr(settings, item.setting_name, False))
     return True

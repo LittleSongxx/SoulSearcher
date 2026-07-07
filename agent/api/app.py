@@ -19,7 +19,6 @@ from fastapi import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
@@ -97,6 +96,7 @@ from agent.api.research_control import (
     ResearchControlRouterDeps,
     build_research_control_router,
 )
+from agent.api.research_memory import load_request_memory_context
 from agent.api.runs import RunsRouterDeps, build_runs_router
 from agent.api.schemas import coerce_search_mode_input as _coerce_search_mode_input
 from agent.api.sessions import SessionsRouterDeps, build_sessions_router
@@ -146,10 +146,8 @@ from common.rate_limiter import build_rate_limiter
 from common.stream_registry import StreamRegistry
 from common.thread_ownership import get_thread_owner
 from common.tracing import SpanKind, record_span, trace_request
-from tools.browser.browser_session import browser_sessions
 from tools.core.registry import register_tools
 from tools.mcp import close_mcp_tools, init_mcp_tools
-from tools.sandbox import sandbox_browser_sessions
 from tools.search.multi_search import get_search_orchestrator
 
 # Initialize logging
@@ -172,7 +170,7 @@ def _build_app_shell() -> FastAPI:
     """Create the SoulSearcher FastAPI app shell used by decorators below."""
     application = FastAPI(
         title="SoulSearcher Research Agent API",
-        description="Deep research AI agent with code execution capabilities",
+        description="Deep research AI agent API",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -519,42 +517,6 @@ def _idempotent_response(record: Any) -> JSONResponse | None:
     return None
 
 
-def _memory_source_candidates(memory_result: Any) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for record in getattr(memory_result, "records", []) or []:
-        source_urls = [
-            str(url).strip()
-            for url in getattr(record, "source_urls", []) or []
-            if str(url).strip()
-        ]
-        if not source_urls:
-            continue
-        for url in source_urls[:3]:
-            if url in seen:
-                continue
-            seen.add(url)
-            candidates.append(
-                {
-                    "url": url,
-                    "title": str(getattr(record, "summary", "") or getattr(record, "content", ""))[:160],
-                    "summary": str(getattr(record, "summary", "") or getattr(record, "content", ""))[:500],
-                    "source": "memory",
-                    "tool": "memory_retrieval",
-                    "memory_record_id": str(getattr(record, "id", "")),
-                    "memory_record_type": str(getattr(record, "type", "")),
-                    "memory_source_evidence_ids": list(
-                        getattr(record, "source_evidence_ids", []) or []
-                    )[:8],
-                    "requires_current_run_verification": True,
-                }
-            )
-            if len(candidates) >= 12:
-                return candidates
-    return candidates
-
-
-
 # Initialize agent graphs with short-term memory (checkpointer)
 if settings.database_url:
     checkpointer = create_checkpointer(settings.database_url)
@@ -758,14 +720,6 @@ async def shutdown_event():
         logger.info("MCP tools closed successfully")
     except Exception as e:
         logger.error(f"Error closing MCP tools: {e}", exc_info=True)
-
-    # Best-effort stop all Daytona sandboxes
-    try:
-        from tools.sandbox.daytona_client import daytona_stop_all
-
-        daytona_stop_all(thread_id=mcp_thread_id)
-    except Exception as e:
-        logger.warning(f"Error stopping Daytona sandboxes: {e}")
 
     logger.info("=" * 80)
     logger.info("Shutdown Complete")
@@ -1302,44 +1256,16 @@ async def stream_agent_events(
                 config={"configurable": {"user_id": user_id or ""}},
             )
 
-        # Load unified long-term memory as request-scoped hidden context.
-        messages: list[Any] = []
-        memory_source_candidates: list[dict[str, Any]] = []
-        memory_retrieval_payload: dict[str, Any] = {}
-        if settings.memory_enabled:
-            try:
-                memory_result = get_memory_service().retrieve(
-                    user_id=user_id or "default",
-                    query=input_text,
-                    include_context=True,
-                )
-                memory_source_candidates = _memory_source_candidates(memory_result)
-                memory_retrieval_payload = {
-                    "record_ids": [
-                        str(getattr(record, "id", ""))
-                        for record in (getattr(memory_result, "records", []) or [])
-                        if str(getattr(record, "id", ""))
-                    ],
-                    "source_candidates": memory_source_candidates,
-                    "scoring": list(getattr(memory_result, "scoring", []) or []),
-                    "usage": (
-                        "Memory is research context only; memory-backed sources must be "
-                        "verified in the current run before citation."
-                    ),
-                }
-                if memory_result.context:
-                    messages.append(
-                        SystemMessage(
-                            content=memory_result.context,
-                            additional_kwargs={"hide_from_ui": True, "memory_context": True},
-                        )
-                    )
-            except Exception as e:
-                logger.warning("[Memory] Retrieval skipped: %s", e)
-        if memory_source_candidates:
-            safe_deepsearch_config["memory_source_candidates"] = memory_source_candidates
-        if memory_retrieval_payload:
-            safe_deepsearch_config["memory_retrieval"] = memory_retrieval_payload
+        memory_context = load_request_memory_context(
+            settings=settings,
+            user_id=user_id or "default",
+            input_text=input_text,
+        )
+        messages = list(memory_context.messages)
+        if memory_context.source_candidates:
+            safe_deepsearch_config["memory_source_candidates"] = memory_context.source_candidates
+        if memory_context.retrieval_payload:
+            safe_deepsearch_config["memory_retrieval"] = memory_context.retrieval_payload
 
         runtime_bundle = build_research_runtime(
             ResearchRuntimeRequest(
@@ -1657,15 +1583,16 @@ async def stream_agent_events(
                     )
                     final_report = output.get("final_report", "")
                     report_format = output.get("report_format", "markdown")
+                    deepsearch_artifacts = output.get("deepsearch_artifacts", {})
+                    if not isinstance(deepsearch_artifacts, dict):
+                        deepsearch_artifacts = {}
                     quality_summary = output.get("quality_summary")
                     if isinstance(quality_summary, dict) and quality_summary:
                         final_quality_summary = quality_summary
                     else:
-                        deepsearch_artifacts = output.get("deepsearch_artifacts", {})
-                        if isinstance(deepsearch_artifacts, dict):
-                            nested_quality = deepsearch_artifacts.get("quality_summary")
-                            if isinstance(nested_quality, dict) and nested_quality:
-                                final_quality_summary = nested_quality
+                        nested_quality = deepsearch_artifacts.get("quality_summary")
+                        if isinstance(nested_quality, dict) and nested_quality:
+                            final_quality_summary = nested_quality
 
                     if is_graph_complete and final_report:
                         if final_report:
@@ -1713,6 +1640,7 @@ async def stream_agent_events(
                                     "format": report_format,
                                 },
                             )
+
             elif event_type == "on_tool_start":
                 tool_name = name or str(data_dict.get("name", "") or "") or "unknown"
                 tool_input = data_dict.get("input", {})
@@ -1773,52 +1701,6 @@ async def stream_agent_events(
                     kind=SpanKind.TOOL_CALL,
                     attributes={"tool_call_id": tool_call_id or ""},
                 )
-
-                # Check for artifacts from code execution
-                if tool_name == "execute_python_code" and isinstance(output, dict):
-                    image_data = output.get("image")
-
-                    if image_data:
-                        yield await format_stream_event(
-                            "artifact",
-                            {
-                                "id": f"art_{datetime.now().timestamp()}",
-                                "type": "chart",
-                                "title": "Generated Visualization",
-                                "content": "Chart generated from Python code",
-                                "image": image_data,
-                            },
-                        )
-                # Browser screenshots (optional Playwright)
-                if tool_name == "browser_screenshot" and isinstance(output, dict):
-                    image_data = output.get("image")
-                    url = output.get("url", "")
-                    if image_data:
-                        yield await format_stream_event(
-                            "artifact",
-                            {
-                                "id": f"art_{datetime.now().timestamp()}",
-                                "type": "chart",
-                                "title": "Browser Screenshot",
-                                "content": url or "Screenshot",
-                                "image": image_data,
-                            },
-                        )
-                # Sandbox browser tools (E2B + Playwright CDP)
-                if tool_name.startswith("sb_browser_") and isinstance(output, dict):
-                    image_data = output.get("image")
-                    url = output.get("url", "")
-                    if isinstance(image_data, str) and image_data.strip():
-                        yield await format_stream_event(
-                            "artifact",
-                            {
-                                "id": f"art_{datetime.now().timestamp()}",
-                                "type": "chart",
-                                "title": f"Sandbox Browser ({tool_name})",
-                                "content": url or tool_name,
-                                "image": image_data,
-                            },
-                        )
 
             elif event_type in {"on_chat_model_stream", "on_llm_stream"}:
                 # Stream LLM tokens
@@ -1925,22 +1807,6 @@ async def stream_agent_events(
                 thread_handler.close()
             except Exception:
                 pass
-        # Clean up browser sessions when the run is truly finished.
-        # If the graph interrupted (HITL), keep sessions so /api/interrupt/resume can continue.
-        if not was_interrupted:
-            try:
-                browser_sessions.reset(thread_id)
-            except Exception:
-                pass
-            try:
-                asyncio.create_task(
-                    asyncio.to_thread(sandbox_browser_sessions.reset, thread_id)
-                )
-            except Exception:
-                try:
-                    sandbox_browser_sessions.reset(thread_id)
-                except Exception:
-                    pass
 
 
 async def stream_agent_resume_events(
