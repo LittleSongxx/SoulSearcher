@@ -134,10 +134,10 @@ def test_dynamic_topic_append_and_gap_dedupe():
     todos, dynamic_id = ensure_todo_for_topic(
         todos,
         "Customer adoption barriers",
-        source="supervisor",
+        source="research_architect",
     )
     assert dynamic_id
-    assert todos[-1]["source"] == "supervisor"
+    assert todos[-1]["source"] == "research_architect"
 
     todos = append_gap_todos(
         todos,

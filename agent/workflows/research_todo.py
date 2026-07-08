@@ -78,7 +78,7 @@ def ensure_todo_for_topic(
     todos: list[dict[str, Any]],
     topic: str,
     *,
-    source: str = "supervisor",
+    source: str = "research_architect",
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Find a matching todo or append a dynamic one for a new research topic."""
     current = _valid_todos(todos)

@@ -194,7 +194,7 @@ class Settings(BaseSettings):
     tool_approval: bool = False  # require approval before executing tools
     max_revisions: int = 2
 
-    # DeerFlow-style Agent runtime
+    # Agent runtime
     agent_runtime_enabled: bool = True
     agent_runtime_default_subagent_enabled: bool = True
     agent_runtime_max_concurrent_subagents: int = 3
@@ -247,7 +247,7 @@ class Settings(BaseSettings):
         validation_alias="SOULSEARCHER_TEMPORAL_WORKFLOW_VERSION",
         description="Temporal workflow implementation version for background research.",
     )
-    legacy_citation_mode: bool = Field(
+    compat_citation_mode: bool = Field(
         default=False, validation_alias="LEGACY_CITATION_MODE"
     )
 
@@ -433,7 +433,7 @@ class Settings(BaseSettings):
     smart_llm_max_tokens: int = 8192
     strategic_llm_max_tokens: int = 8192
     planner_model: str = ""      # Model for research planning (defaults to strategic_llm)
-    researcher_model: str = ""   # Model for research analysis (defaults to smart_llm)
+    source_scout_model: str = ""   # Model for research analysis (defaults to smart_llm)
     writer_model: str = ""       # Model for report writing (defaults to smart_llm)
     evaluator_model: str = ""    # Model for quality evaluation (defaults to fast_llm)
     critic_model: str = ""       # Model for URL selection/critique (defaults to reasoning_model)
@@ -473,17 +473,17 @@ class Settings(BaseSettings):
     search_batch_size: int = 3  # 搜索批次大小
     api_rate_limit: float = 0.5  # API 调用间隔（秒）
 
-    # Deepsearch Settings (fixed plan-first supervisor/researcher pipeline)
+    # Vertical research runtime settings
     deepsearch_max_epochs: int = 3
     deepsearch_max_seconds: float = 0.0  # 0 = disabled
     deepsearch_max_tokens: int = 0  # 0 = disabled
-    deepsearch_supervisor_rounds: int = 2
-    deepsearch_supervisor_max_workers: int = 4
-    deepsearch_supervisor_queries_per_worker: int = 2
-    deepsearch_supervisor_parallel_workers: int = 2
-    deepsearch_supervisor_think_enabled: bool = True
-    deepsearch_supervisor_max_depth: int = 1
-    deepsearch_supervisor_depth_confidence_threshold: float = 0.5
+    deepsearch_role_rounds: int = 2
+    deepsearch_role_max_workers: int = 4
+    deepsearch_role_queries_per_worker: int = 2
+    deepsearch_role_parallel_workers: int = 2
+    deepsearch_role_review_enabled: bool = True
+    deepsearch_role_max_depth: int = 1
+    deepsearch_role_depth_confidence_threshold: float = 0.5
     deepsearch_max_seconds_per_worker: float = 0.0
     deepsearch_max_skills: int = 3
     deepsearch_claim_verifier_use_passages: bool = True
@@ -601,7 +601,7 @@ class Settings(BaseSettings):
     feishu_app_secret: str = ""
     feishu_domain: str = "https://open.feishu.cn"
 
-    # ── DeerFlow-aligned: Skills ──
+    # ── Skills ──
     skills_path: str = ""  # Override skills root path (defaults to skills/ under project root)
     skills_public_dir: str = "skills/public"
     skills_custom_dir: str = "skills/custom"
@@ -656,29 +656,29 @@ class Settings(BaseSettings):
         ge=1,
         validation_alias="MEMORY_AUTO_SKILL_MIN_SUPPORT",
     )
-    # ── DeerFlow-aligned: Summarization ──
+    # ── Summarization ──
     summarization_enabled: bool = True
     summarization_max_input_tokens: int = 64000
     summarization_trigger_fraction: float = 0.75
     summarization_keep_last: int = 15
 
-    # ── DeerFlow-aligned: Loop Detection ──
+    # ── Loop Detection ──
     loop_detection_enabled: bool = True
     loop_detection_max_repeats: int = 3
     loop_detection_window: int = 8
 
-    # ── DeerFlow-aligned: Guardrails ──
+    # ── Guardrails ──
     guardrails_enabled: bool = False
     guardrails_denylist: str = ""  # comma-separated denied tool names
 
-    # ── DeerFlow-aligned: Tool Search (deferred MCP tools) ──
+    # ── Tool Search (deferred MCP tools) ──
     tool_search_enabled: bool = False
 
-    # ── DeerFlow-aligned: Title Generation ──
+    # ── Title Generation ──
     title_generation_enabled: bool = True
     title_max_words: int = 8
 
-    # ── DeerFlow-aligned: Todo/Plan Mode ──
+    # ── Todo/Plan Mode ──
     plan_mode_enabled: bool = True
 
     # Tool / middleware controls
@@ -1076,10 +1076,10 @@ def validate_critical_config(s: Settings) -> list[str]:
             f"DEEPSEARCH_MAX_EPOCHS={s.deepsearch_max_epochs} is < 1; "
             "at least 1 epoch is required for any research output."
         )
-    if s.deepsearch_supervisor_rounds < 1:
+    if s.deepsearch_role_rounds < 1:
         warnings.append(
-            f"DEEPSEARCH_SUPERVISOR_ROUNDS={s.deepsearch_supervisor_rounds} is < 1; "
-            "supervisor mode requires at least 1 round."
+            f"DEEPSEARCH_ROLE_ROUNDS={s.deepsearch_role_rounds} is < 1; "
+            "vertical research mode requires at least 1 round."
         )
 
     return warnings

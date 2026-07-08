@@ -74,9 +74,11 @@ def build_health_router(deps: HealthRouterDeps) -> APIRouter:
             try:
                 import psycopg
 
-                with psycopg.connect(deps.settings.database_url, connect_timeout=2) as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT 1")
+                with (
+                    psycopg.connect(deps.settings.database_url, connect_timeout=2) as conn,
+                    conn.cursor() as cur,
+                ):
+                    cur.execute("SELECT 1")
             except Exception as exc:
                 checks["database"] = {
                     "configured": True,

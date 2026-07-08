@@ -1,18 +1,11 @@
-"""Unified state definitions for the Deep Research Agent.
-
-Integrates patterns from:
-- open_deep_research: override_reducer, SupervisorState/ResearcherState subgraph nesting
-- gpt-researcher: depth/breadth tracking, learnings accumulation
-- deer-flow: Structured output models for tool calls
-"""
+"""State definitions for the fixed-role vertical industry research agent."""
 
 import operator
 from typing import Annotated, Any, Literal, Optional
 
-from langchain_core.messages import HumanMessage, MessageLikeRepresentation
+from langchain_core.messages import HumanMessage
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
 
 from agent.core.artifacts import normalize_deepsearch_artifacts
 
@@ -24,7 +17,7 @@ def override_reducer(current_value, new_value):
     """Reducer that allows complete override via {'type': 'override', 'value': ...}.
 
     Used for state fields that need full replacement (not accumulation).
-    Pattern from open_deep_research.
+    Used by fields that need full replacement instead of accumulation.
     """
     if isinstance(new_value, dict) and new_value.get("type") == "override":
         return new_value.get("value", new_value)
@@ -73,102 +66,22 @@ class ComplexityAssessment(BaseModel):
     )
 
 
-class ConductResearch(BaseModel):
-    """Delegate a research task to a specialised sub-researcher.
-
-    Use this tool when you need in-depth investigation of a specific topic.
-    You can call this tool multiple times in parallel for different topics.
-    Each call spawns an independent researcher that searches, reads, and
-    synthesises findings via the ReAct loop with mixed compression.
-
-    Research effort levels:
-      - "quick"       — fast verification for narrow facts
-      - "normal"      — default multi-source synthesis
-      - "thorough"    — deeper comparison or evidence-heavy investigation
-      - "exhaustive"  — rare, highest-budget coverage for deep tasks
-
-    Legacy values are still accepted by the runtime:
-    "medium" → "normal", "deep" → "thorough",
-    "very_thorough" → "exhaustive".
-    """
-    topic: str = Field(
-        description="The specific topic to research. Be precise — one well-scoped "
-                    "subject per call. For example: 'safety record of mRNA vaccines "
-                    "in elderly populations' rather than 'vaccines'."
-    )
-    context: str = Field(
-        default="",
-        description="Brief context to help the researcher: what is already known, "
-                    "what specific angles matter, or what type of sources to prefer."
-    )
-    research_effort: Literal["quick", "normal", "thorough", "exhaustive"] = Field(
-        default="normal",
-        description="How much budget to spend on this sub-research task."
-    )
-    thoroughness: Literal[
-        "quick",
-        "medium",
-        "deep",
-        "very_thorough",
-        "normal",
-        "thorough",
-        "exhaustive",
-    ] | None = Field(
-        default=None,
-        description=(
-            "Deprecated alias for research_effort. Prefer research_effort. "
-            "Accepted for backward compatibility."
-        )
-    )
-
-
-class ThinkTool(BaseModel):
-    """Pause and reflect on research progress before deciding next steps.
-
-    Use this tool when you need to step back and assess whether the research
-    has covered enough ground.  The structured reflection fields help you
-    identify gaps and choose the right next action.
-    """
-    reflection: str = Field(
-        description="What have we learned so far?  What patterns emerged across "
-                    "the collected sources?  Are there contradictions to resolve?"
-    )
-    gaps_identified: list[str] = Field(
-        description="Specific information gaps that still need to be filled. "
-                    "Be concrete: name the missing data point, comparison, or angle."
-    )
-    confidence_level: Literal["low", "medium", "high"] = Field(
-        description="How confident are you that the collected evidence fully "
-                    "answers the research brief?"
-    )
-    next_strategy: Literal["search_more", "curate", "complete"] = Field(
-        description="What to do next: search for missing information, curate "
-                    "and rank the collected sources, or conclude the research phase."
-    )
-
-
-class SourceCurate(BaseModel):
-    """Rank and filter the collected sources by quality and relevance.
-
-    Call this when enough raw research has been gathered and you need to
-    select the best sources for the final report.
-    """
-    max_sources: int = Field(
-        default=10,
-        description="Maximum number of top sources to retain after curation."
-    )
+class VerticalResearchTask(BaseModel):
+    """Structured task contract for a fixed-role vertical research section."""
+    agent_role: str = Field(description="Fixed role responsible for this task.")
+    section_id: str = Field(description="Stable report section identifier.")
+    research_dimension: str = Field(description="industry, company, policy, technology_trend, or mixed.")
+    required_evidence_types: list[str] = Field(default_factory=list)
+    required_metrics: list[str] = Field(default_factory=list)
+    source_priority: list[str] = Field(default_factory=list)
+    freshness_requirement: str = ""
+    requires_data: bool = False
+    requires_chart: bool = False
 
 
 class ResearchComplete(BaseModel):
-    """Signal that the research phase is complete and findings are ready for
-    final report generation.  Only call this when you are confident that the
-    collected evidence sufficiently addresses the research brief.
-    """
-    summary: str = Field(
-        default="",
-        description="Brief summary of what was covered and why the research "
-                    "is considered complete."
-    )
+    """Signal that the fixed-role research pipeline completed."""
+    summary: str = Field(default="", description="Brief completion summary.")
 
 
 class EvidenceItem(BaseModel):
@@ -202,8 +115,7 @@ class AgentInputState(MessagesState):
 class AgentState(MessagesState):
     """Main agent state for the complete research workflow.
 
-    This is the top-level state that flows through the entire graph:
-    Input Gateway → Supervisor Subgraph → Final Report Generation.
+    This is the top-level state that flows through the fixed-role vertical graph.
     """
     # === User input ===
     input: str
@@ -218,8 +130,14 @@ class AgentState(MessagesState):
     estimated_breadth: int
     needs_clarification: bool
 
-    # === Supervisor state (accumulated across iterations) ===
-    supervisor_messages: Annotated[list[MessageLikeRepresentation], override_reducer]
+    # === Fixed-role vertical research state ===
+    vertical_profile: dict[str, Any]
+    vertical_brief: dict[str, Any]
+    research_tasks: Annotated[list[dict[str, Any]], override_reducer]
+    datapoints: Annotated[list[dict[str, Any]], override_reducer]
+    claim_checks: Annotated[list[dict[str, Any]], override_reducer]
+    critic_feedback: Annotated[list[dict[str, Any]], override_reducer]
+    agent_trace: Annotated[list[dict[str, Any]], override_reducer]
     raw_notes: Annotated[list[str], override_reducer]
     notes: Annotated[list[str], override_reducer]
     research_iterations: int
@@ -248,67 +166,8 @@ class AgentState(MessagesState):
     final_report: str
 
 
-class SupervisorState(TypedDict):
-    """State for the research supervisor subgraph.
-
-    The supervisor manages research delegation: it decides which topics
-    to research, delegates to parallel researcher subgraphs via ConductResearch,
-    reflects via think_tool, and signals completion via ResearchComplete.
-    """
-    supervisor_messages: Annotated[list[MessageLikeRepresentation], override_reducer]
-    research_brief: str
-    complexity: str
-    estimated_depth: int
-    estimated_breadth: int
-    notes: Annotated[list[str], override_reducer]
-    raw_notes: Annotated[list[str], override_reducer]
-    evidence_items: Annotated[list[dict[str, Any]], override_reducer]
-    plan_graph: Annotated[dict[str, Any], override_reducer]
-    plan_events: Annotated[list[dict[str, Any]], override_reducer]
-    plan_version: int
-    research_plan: Annotated[list[str], override_reducer]
-    research_todos: Annotated[list[dict[str, Any]], override_reducer]
-    todo_summary: dict[str, Any]
-    research_iterations: int
-    curated_sources: list[dict[str, Any]]
-    retrieval_policy: dict[str, Any]
-
-
-class ResearcherState(TypedDict):
-    """State for individual researcher subgraphs.
-
-    Each researcher is spawned by the supervisor with a specific research_topic.
-    It uses search tools to gather information, reflects via think_tool,
-    and produces compressed research output.
-
-    ``research_effort`` controls the sub-agent budget:
-    - "quick" → fast verification
-    - "normal" → balanced investigation (default)
-    - "thorough" → broader multi-source investigation
-    - "exhaustive" → highest-budget research for deep tasks
-    """
-    researcher_messages: Annotated[list[MessageLikeRepresentation], operator.add]
-    tool_call_iterations: int
-    research_topic: str
-    research_effort: str  # "quick" | "normal" | "thorough" | "exhaustive"
-    thoroughness: str  # Deprecated alias retained for state compatibility.
-    research_depth: int
-    research_breadth: int
-    compressed_research: str
-    raw_notes: Annotated[list[str], override_reducer]
-    evidence_items: Annotated[list[dict[str, Any]], override_reducer]
-    retrieval_policy: dict[str, Any]
-
-
-class ResearcherOutputState(BaseModel):
-    """Output state from individual researchers (returned to supervisor)."""
-    compressed_research: str
-    raw_notes: Annotated[list[str], override_reducer]
-    evidence_items: list[dict[str, Any]] = Field(default_factory=list)
-
-
 # =============================================================================
-# State Bridge: Old → New State Adapter
+# State Builder
 # =============================================================================
 
 def ensure_user_input_message(messages: list | None, input_text: str = "") -> list:
@@ -341,7 +200,7 @@ def build_initial_state(
 ) -> dict:
     """Build an initial AgentState from main.py fields.
 
-    Bridges request-builder fields into the standard AgentState.
+    Builds the standard AgentState used by the vertical research graph.
 
     Args:
         input_text: User's query text.
@@ -385,7 +244,13 @@ def build_initial_state(
         "estimated_depth": 1,
         "estimated_breadth": 2,
         "needs_clarification": False,
-        "supervisor_messages": [],
+        "vertical_profile": {},
+        "vertical_brief": {},
+        "research_tasks": [],
+        "datapoints": [],
+        "claim_checks": [],
+        "critic_feedback": [],
+        "agent_trace": [],
         "raw_notes": [],
         "notes": [],
         "research_iterations": 0,

@@ -1,4 +1,4 @@
-"""Skills system — DeerFlow-aligned skill discovery, parsing, storage, and tool policy."""
+"""Skills system — skill discovery, parsing, storage, and tool policy."""
 
 from agent.skills.parser import parse_allowed_tools, parse_skill_file
 from agent.skills.storage import (

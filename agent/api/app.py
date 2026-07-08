@@ -960,7 +960,7 @@ def _should_emit_thinking_summary_for_node(node_name: str) -> bool:
         "refine_plan",
         "clarify",
         "research_brief",
-        "supervisor",
+        "research_architect",
         "classify",
     )
     return any(token in name for token in allow)
@@ -1025,11 +1025,11 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
             if use_zh
             else "I'm analyzing task complexity to select the best execution strategy."
         )
-    if "supervisor" in name:
+    if "research_architect" in name:
         return (
-            "研究主管正在制定研究策略并协调子研究员。"
+            "ResearchArchitect 正在制定章节、证据和数据策略。"
             if use_zh
-            else "The research supervisor is planning strategy and coordinating sub-researchers."
+            else "ResearchArchitect is planning sections, evidence, and data requirements."
         )
     if "planner" in name or "web_plan" in name or "refine_plan" in name:
         return (
@@ -1037,11 +1037,11 @@ def _thinking_intro_for_node(node_name: str, *, use_zh: bool) -> str:
             if use_zh
             else "I'll break the question down and generate targeted search queries."
         )
-    if "researcher" in name and "research_supervisor" not in name:
+    if "source_scout" in name:
         return (
-            "子研究员正在搜索并收集相关来源的信息。"
+            "SourceScout 正在按章节收集权威来源。"
             if use_zh
-            else "A sub-researcher is searching and gathering information from sources."
+            else "SourceScout is gathering authoritative sources by section."
         )
     if "compress" in name:
         return (
@@ -1487,28 +1487,28 @@ async def stream_agent_events(
                 elif "deepsearch" in node_name:
                     logger.debug(f"  Deep research node started | Thread: {thread_id}")
                     text = (
-                        "正在进行 Deep Research（多轮检索→阅读→汇总），可能需要几分钟…"
+                        "正在执行垂类产业研究流水线（路由→架构→信源→证据→核验→报告）…"
                         if use_zh
-                        else "Running Deep Research (iterative search → read → synthesize)…"
+                        else "Running vertical industry research pipeline (route → architect → evidence → verify → report)…"
                     )
                     yield await format_stream_event(
                         "status",
                         {"text": text, "step": "deep_research"},
                     )
-                elif "supervisor" in node_name:
-                    logger.debug(f"  Supervisor node started | Thread: {thread_id}")
+                elif "research_architect" in node_name:
+                    logger.debug(f"  ResearchArchitect node started | Thread: {thread_id}")
                     yield await format_stream_event(
                         "status",
                         {
                             "text": "Orchestrating research strategy...",
-                            "step": "supervisor",
+                            "step": "research_architect",
                         },
                     )
-                elif "researcher" in node_name and "research_supervisor" not in node_name:
-                    logger.debug(f"  Researcher node started | Thread: {thread_id}")
+                elif "source_scout" in node_name:
+                    logger.debug(f"  SourceScout node started | Thread: {thread_id}")
                     yield await format_stream_event(
                         "status",
-                        {"text": "Conducting research...", "step": "researching"},
+                        {"text": "Scouting authoritative sources...", "step": "source_scout"},
                     )
                 elif "compress_research" in node_name:
                     logger.debug(f"  Compression node started | Thread: {thread_id}")
@@ -1520,7 +1520,7 @@ async def stream_agent_events(
                     logger.debug(f"  Search node started | Thread: {thread_id}")
                     yield await format_stream_event(
                         "status",
-                        {"text": "Conducting research...", "step": "researching"},
+                        {"text": "Scouting authoritative sources...", "step": "source_scout"},
                     )
                 elif "final_report" in node_name or "writer" in node_name:
                     logger.debug(f"  Writer node started | Thread: {thread_id}")

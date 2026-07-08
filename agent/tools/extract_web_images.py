@@ -1,7 +1,7 @@
 """Extract Web Images Tool — enrich research with visual data from web pages.
 
 Extends the deer-flow multimodal pattern to extract images from fetched web pages.
-The researcher LLM decides when to use this tool based on whether the research topic
+The vertical research LLM decides when to use this tool based on whether the research topic
 would benefit from visual data (diagrams, financial reports, etc.).
 
 Flow:
@@ -335,7 +335,7 @@ async def extract_web_images(
 ) -> dict[str, Any]:
     """Extract meaningful images from a web page for multimodal analysis.
 
-    The researcher LLM should call this when the research topic involves
+    The vertical research LLM should call this when the research topic involves
     visual data: figures, diagrams, financial reports, dashboards,
     architectural diagrams, etc.
 

@@ -281,7 +281,7 @@ async def run_recovery_ab_test(
                 "configurable": {
                     "thread_id": f"ab_a_{task_id}",
                     "allow_clarification": False,
-                    "max_researcher_iterations": 2,
+                    "max_role_followup_iterations": 2,
                     "_recovery_tracker": tracker_a,
                 }
             })
@@ -296,7 +296,7 @@ async def run_recovery_ab_test(
                 "configurable": {
                     "thread_id": f"ab_b_{task_id}",
                     "allow_clarification": False,
-                    "max_researcher_iterations": 2,
+                    "max_role_followup_iterations": 2,
                     "_recovery_tracker": tracker_b,
                     "_disable_error_handling": True,
                 }

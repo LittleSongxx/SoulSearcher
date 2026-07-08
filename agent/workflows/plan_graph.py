@@ -501,7 +501,7 @@ def append_plan_event(
     return graph
 
 
-def task_context_for_supervisor(graph: dict[str, Any], *, max_ready: int = 5) -> str:
+def task_context_for_architect(graph: dict[str, Any], *, max_ready: int = 5) -> str:
     graph = recompute_plan_graph(ensure_plan_graph(graph))
     ready = ready_tasks(graph, limit=max_ready)
     if not graph.get("tasks"):
@@ -528,7 +528,7 @@ def task_context_for_supervisor(graph: dict[str, Any], *, max_ready: int = 5) ->
         for task in blocked:
             lines.append(f"- task_id={task['id']} {task.get('title', '')}: {task.get('blocked_reason', '')}")
     lines.append(
-        "Use ConductResearch only for ready tasks unless a newly discovered gap must be added first."
+        "Assign ready tasks to the fixed-role pipeline unless a newly discovered gap must be added first."
     )
     lines.append("</plan-graph>")
     return "\n".join(lines)
@@ -561,13 +561,13 @@ def _has_task(graph: dict[str, Any], task_id: str, title: str) -> bool:
 
 
 def stable_task_id(title: str, *, source: str = "plan") -> str:
-    digest = hashlib.sha1(f"{source}:{_dedupe_key(title)}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(f"{source}:{_dedupe_key(title)}".encode()).hexdigest()[:12]
     return f"pt_{digest}"
 
 
 def _event(event_type: str, payload: dict[str, Any], *, version: int = 1) -> dict[str, Any]:
     return {
-        "event_id": f"pe_{hashlib.sha1(f'{event_type}:{_now()}:{payload}'.encode('utf-8')).hexdigest()[:12]}",
+        "event_id": f"pe_{hashlib.sha1(f'{event_type}:{_now()}:{payload}'.encode()).hexdigest()[:12]}",
         "type": str(event_type or "plan_event"),
         "version": int(version or 1),
         "payload": dict(payload or {}),

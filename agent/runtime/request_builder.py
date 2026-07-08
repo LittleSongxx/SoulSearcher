@@ -153,7 +153,7 @@ def build_research_runtime(request: ResearchRuntimeRequest) -> ResearchRuntimeBu
     if selected_model:
         # The UI model selector is request-scoped. Unless the caller explicitly
         # supplied tier overrides, use the selected model across the workflow so
-        # supervisor/researcher/report nodes cannot fall back to stale globals.
+        # fixed-role research nodes cannot fall back to stale globals.
         config["configurable"].setdefault("fast_llm", selected_model)
         config["configurable"].setdefault("smart_llm", selected_model)
         config["configurable"].setdefault("strategic_llm", selected_model)

@@ -9,7 +9,7 @@ This module implements Level 1: fast, automated quality validation that runs
 after every report generation, providing immediate feedback and triggering
 automatic revisions when needed.
 
-Pattern from open_deep_research's evaluation system.
+Local evaluator for report quality checks.
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ Threshold: score >= 0.7 → pass | 0.4-0.7 → revise | <0.4 → incomplete
 def _build_evidence_context(state: dict) -> str:
     """Extract sampled cited-source pairs from state for evidence_alignment checking.
 
-    Follows open_deep_research's LLM-as-judge approach: sample a few claims
+    Samples a few claims
     and their cited sources so the evaluator can check factual accuracy.
     """
     notes = state.get("notes", []) or state.get("raw_notes", []) or []

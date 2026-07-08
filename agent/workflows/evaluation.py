@@ -1,15 +1,4 @@
-"""Evaluation System — Levels 2 & 3 from the unified design.
-
-From the unified design's 3-level evaluation:
-- Level 1: Instant quality check (fast_llm) — in quality_check.py
-- Level 2: Dev evaluation (smart_llm, Pytest framework, 9 dimensions, binary pass/fail)
-- Level 3: Deep evaluation (strategic_llm, LangSmith, 4-dimension weighted scoring)
-
-This module implements Levels 2 and 3.
-
-Pattern from open_deep_research: evaluation system with rich console output.
-Enhanced with deer-flow's structured dimension scoring.
-"""
+"""Evaluation helpers for vertical industry research quality gates."""
 
 from __future__ import annotations
 
@@ -69,7 +58,7 @@ class EvalResult:
 
 
 # =============================================================================
-# Level 2: 9-Dimension Dev Evaluation (from open_deep_research)
+# Level 2: 9-Dimension Dev Evaluation
 # =============================================================================
 
 LEVEL2_EVAL_PROMPT = """Evaluate the quality of this research report against 9 criteria.
@@ -127,7 +116,7 @@ async def run_level2_evaluation(
     """Run Level 2 dev evaluation using smart_llm.
 
     9 dimensions with weighted scoring and binary pass/fail.
-    Pattern from open_deep_research: pytest evaluation with 9 criteria.
+    Pytest-oriented evaluation with 9 criteria.
 
     Args:
         report: The generated report to evaluate.
@@ -274,7 +263,7 @@ async def run_level3_evaluation(
 
     4 dimensions with 1-5 weighted scoring.
     Includes degradation detection for trend analysis.
-    Pattern from open_deep_research: LangSmith dataset evaluation.
+    Optional dataset evaluation for quality monitoring.
 
     Args:
         report: The generated report.
@@ -369,7 +358,7 @@ async def run_level3_evaluation(
 def format_eval_result(result: EvalResult, level: int = 2) -> str:
     """Format evaluation results for display.
 
-    Pattern from open_deep_research: rich console output.
+    Format deterministic evaluation output for logs and CLI display.
     """
     status = "PASSED" if result.overall_passed else "FAILED"
 
@@ -416,3 +405,134 @@ def _parse_json_response(content: str) -> dict[str, Any]:
     except (json.JSONDecodeError, ValueError):
         pass
     return {}
+
+
+# =============================================================================
+# Vertical Industry Research Evaluation
+# =============================================================================
+
+def _clamp_score(value: float) -> float:
+    return round(max(0.0, min(1.0, float(value))), 3)
+
+
+def _metadata(item: dict[str, Any]) -> dict[str, Any]:
+    meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    return meta
+
+
+def _dimension(
+    name: str,
+    score: float,
+    weight: float,
+    justification: str,
+    threshold: float = 0.65,
+) -> EvalDimension:
+    score = _clamp_score(score)
+    return EvalDimension(
+        name=name,
+        score=score,
+        weight=weight,
+        justification=justification,
+        passed=score >= threshold,
+    )
+
+
+def run_vertical_evaluation(
+    *,
+    report: str,
+    research_tasks: list[dict[str, Any]] | None = None,
+    evidence_items: list[dict[str, Any]] | None = None,
+    datapoints: list[dict[str, Any]] | None = None,
+    claim_checks: list[dict[str, Any]] | None = None,
+    critic_feedback: list[dict[str, Any]] | None = None,
+) -> EvalResult:
+    """Evaluate the fixed-role industry research mainline deterministically.
+
+    The rubric is vertical-specific: it emphasizes section coverage, authority,
+    freshness, datapoint completeness, claim support, citation traceability,
+    risk analysis, and actionability. Each low-scoring dimension is attributed
+    to a responsible role so QualityGate can route follow-up work precisely.
+    """
+    tasks = [t for t in (research_tasks or []) if isinstance(t, dict)]
+    evidence = [e for e in (evidence_items or []) if isinstance(e, dict)]
+    points = [d for d in (datapoints or []) if isinstance(d, dict)]
+    checks = [c for c in (claim_checks or []) if isinstance(c, dict)]
+    feedback = [f for f in (critic_feedback or []) if isinstance(f, dict)]
+    report_text = str(report or "")
+
+    section_ids = [str(t.get("section_id") or "") for t in tasks if t.get("section_id")]
+    covered_sections = [sid for sid in section_ids if sid and any(str(t.get("title") or sid) in report_text for t in tasks if t.get("section_id") == sid)]
+    section_coverage = len(covered_sections) / len(section_ids) if section_ids else 1.0
+
+    authority_values = [float(_metadata(e).get("authority_score") or e.get("authority_score") or 0.0) for e in evidence]
+    authoritative = [v for v in authority_values if v >= 0.70]
+    authority_ratio = len(authoritative) / len(evidence) if evidence else 0.0
+
+    freshness_values = [float(_metadata(e).get("freshness_score") or e.get("freshness_score") or 0.0) for e in evidence]
+    freshness_score = sum(freshness_values) / len(freshness_values) if freshness_values else 0.0
+
+    data_sections = [str(t.get("section_id") or "") for t in tasks if t.get("requires_data")]
+    point_sections = {str(d.get("section_id") or "") for d in points}
+    data_complete = len([sid for sid in data_sections if sid in point_sections]) / len(data_sections) if data_sections else 1.0
+
+    supported = [c for c in checks if str(c.get("status") or "").lower() in {"verified", "supported"}]
+    claim_support = len(supported) / len(checks) if checks else 0.0
+
+    citation_markers = set(int(x) for x in re.findall(r"\[(\d+)\]", report_text))
+    traceable_citations = min(len(citation_markers), len(evidence))
+    citation_traceability = traceable_citations / len(citation_markers) if citation_markers else (1.0 if not evidence else 0.0)
+
+    risk_terms = ["风险", "政策", "竞争", "供给", "技术", "商业化", "触发", "监控"]
+    risk_quality = min(1.0, sum(1 for term in risk_terms if term in report_text) / 5.0)
+
+    action_terms = ["建议", "跟踪", "监控", "触发", "判断", "行动", "指标"]
+    actionability = min(1.0, sum(1 for term in action_terms if term in report_text) / 4.0)
+
+    dimensions = [
+        _dimension("section_coverage", section_coverage, 1.3, f"covered {len(covered_sections)}/{len(section_ids) or 1} planned sections"),
+        _dimension("authoritative_source_ratio", authority_ratio, 1.3, f"{len(authoritative)}/{len(evidence)} sources have authority_score >= 0.70"),
+        _dimension("source_freshness", freshness_score, 1.0, "average freshness_score across ledger evidence"),
+        _dimension("datapoint_completeness", data_complete, 1.2, f"covered {len(point_sections & set(data_sections))}/{len(data_sections) or 1} data-required sections"),
+        _dimension("claim_support_rate", claim_support, 1.4, f"{len(supported)}/{len(checks)} checked claims are supported"),
+        _dimension("citation_traceability", citation_traceability, 1.4, f"{traceable_citations}/{len(citation_markers) or 1} citation markers map to ledger evidence"),
+        _dimension("risk_analysis_quality", risk_quality, 0.9, "risk section contains vertical risk dimensions and triggers"),
+        _dimension("conclusion_actionability", actionability, 0.8, "conclusion contains monitorable actions or decision triggers"),
+    ]
+
+    responsible_agents: dict[str, list[str]] = {}
+    agent_map = {
+        "section_coverage": "ResearchArchitect",
+        "authoritative_source_ratio": "SourceScout",
+        "source_freshness": "SourceScout",
+        "datapoint_completeness": "DataAnalyst",
+        "claim_support_rate": "ClaimVerifier",
+        "citation_traceability": "LeadWriter",
+        "risk_analysis_quality": "CriticReviewer",
+        "conclusion_actionability": "LeadWriter",
+    }
+    for dim in dimensions:
+        if not dim.passed:
+            responsible_agents.setdefault(agent_map.get(dim.name, "QualityGate"), []).append(dim.name)
+    for item in feedback:
+        agent = str(item.get("responsible_agent") or "CriticReviewer")
+        issue = str(item.get("issue") or "critic_feedback")
+        responsible_agents.setdefault(agent, []).append(issue)
+
+    total_weight = sum(d.weight for d in dimensions)
+    weighted = sum(d.score * d.weight for d in dimensions) / total_weight if total_weight else 0.0
+    passed = all(d.passed for d in dimensions if d.weight >= 1.2) and not feedback
+
+    return EvalResult(
+        overall_score=round(weighted, 3),
+        overall_passed=passed,
+        dimensions=dimensions,
+        summary="Vertical industry research quality gate passed." if passed else "Vertical industry research requires targeted follow-up.",
+        metadata={
+            "responsible_agents": responsible_agents,
+            "rubric": "industry_market_policy_research",
+            "feedback_count": len(feedback),
+            "evidence_count": len(evidence),
+            "datapoint_count": len(points),
+            "claim_check_count": len(checks),
+        },
+    )

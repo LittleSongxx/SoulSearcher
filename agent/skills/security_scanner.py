@@ -47,7 +47,6 @@ async def scan_skill_content(content: str, *, executable: bool = False, location
 
     try:
         from agent.core.llm_factory import create_chat_model
-
         from common.config import settings
 
         model = create_chat_model(

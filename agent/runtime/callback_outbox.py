@@ -111,30 +111,32 @@ class CallbackOutbox:
         try:
             import psycopg
 
-            with psycopg.connect(database_url, autocommit=True, connect_timeout=3) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS soulsearcher_a2a_callback_outbox (
-                            callback_id text PRIMARY KEY,
-                            url text NOT NULL,
-                            payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-                            headers jsonb NOT NULL DEFAULT '{}'::jsonb,
-                            status text NOT NULL DEFAULT 'pending',
-                            attempt_count integer NOT NULL DEFAULT 0,
-                            max_attempts integer NOT NULL DEFAULT 3,
-                            next_attempt_at timestamptz,
-                            last_error text NOT NULL DEFAULT '',
-                            created_at timestamptz NOT NULL DEFAULT now(),
-                            updated_at timestamptz NOT NULL DEFAULT now(),
-                            delivered_at timestamptz
-                        )
-                        """
+            with (
+                psycopg.connect(database_url, autocommit=True, connect_timeout=3) as conn,
+                conn.cursor() as cur,
+            ):
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS soulsearcher_a2a_callback_outbox (
+                        callback_id text PRIMARY KEY,
+                        url text NOT NULL,
+                        payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+                        headers jsonb NOT NULL DEFAULT '{}'::jsonb,
+                        status text NOT NULL DEFAULT 'pending',
+                        attempt_count integer NOT NULL DEFAULT 0,
+                        max_attempts integer NOT NULL DEFAULT 3,
+                        next_attempt_at timestamptz,
+                        last_error text NOT NULL DEFAULT '',
+                        created_at timestamptz NOT NULL DEFAULT now(),
+                        updated_at timestamptz NOT NULL DEFAULT now(),
+                        delivered_at timestamptz
                     )
-                    cur.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_soulsearcher_a2a_callback_status_next "
-                        "ON soulsearcher_a2a_callback_outbox(status, next_attempt_at)"
-                    )
+                    """
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_soulsearcher_a2a_callback_status_next "
+                    "ON soulsearcher_a2a_callback_outbox(status, next_attempt_at)"
+                )
             self._backend = "postgres"
             self._db_ready = True
         except Exception as exc:
@@ -145,52 +147,56 @@ class CallbackOutbox:
         import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    """
-                    INSERT INTO soulsearcher_a2a_callback_outbox (
-                        callback_id, url, payload, headers, max_attempts
-                    ) VALUES (%s, %s, %s::jsonb, %s::jsonb, %s)
-                    ON CONFLICT (callback_id) DO NOTHING
-                    RETURNING *
-                    """,
-                    (
-                        message.callback_id,
-                        message.url,
-                        json.dumps(message.payload, ensure_ascii=False, default=str),
-                        json.dumps(message.headers, ensure_ascii=False, default=str),
-                        message.max_attempts,
-                    ),
-                )
-                row = cur.fetchone()
-                if row:
-                    return _message_from_row(row)
-                cur.execute(
-                    "SELECT * FROM soulsearcher_a2a_callback_outbox WHERE callback_id=%s",
-                    (message.callback_id,),
-                )
-                row = cur.fetchone()
-                return _message_from_row(row) if row else None
+        with (
+            psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            cur.execute(
+                """
+                INSERT INTO soulsearcher_a2a_callback_outbox (
+                    callback_id, url, payload, headers, max_attempts
+                ) VALUES (%s, %s, %s::jsonb, %s::jsonb, %s)
+                ON CONFLICT (callback_id) DO NOTHING
+                RETURNING *
+                """,
+                (
+                    message.callback_id,
+                    message.url,
+                    json.dumps(message.payload, ensure_ascii=False, default=str),
+                    json.dumps(message.headers, ensure_ascii=False, default=str),
+                    message.max_attempts,
+                ),
+            )
+            row = cur.fetchone()
+            if row:
+                return _message_from_row(row)
+            cur.execute(
+                "SELECT * FROM soulsearcher_a2a_callback_outbox WHERE callback_id=%s",
+                (message.callback_id,),
+            )
+            row = cur.fetchone()
+            return _message_from_row(row) if row else None
 
     def _ready_db(self, settings: Any, *, limit: int) -> list[CallbackMessage]:
         import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    """
-                    SELECT *
-                    FROM soulsearcher_a2a_callback_outbox
-                    WHERE status IN ('pending', 'retrying')
-                      AND (next_attempt_at IS NULL OR next_attempt_at <= now())
-                    ORDER BY created_at ASC
-                    LIMIT %s
-                    """,
-                    (max(1, min(int(limit or 20), 200)),),
-                )
-                return [_message_from_row(row) for row in cur.fetchall()]
+        with (
+            psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            cur.execute(
+                """
+                SELECT *
+                FROM soulsearcher_a2a_callback_outbox
+                WHERE status IN ('pending', 'retrying')
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= now())
+                ORDER BY created_at ASC
+                LIMIT %s
+                """,
+                (max(1, min(int(limit or 20), 200)),),
+            )
+            return [_message_from_row(row) for row in cur.fetchall()]
 
     def _ready_memory(self, *, limit: int) -> list[CallbackMessage]:
         now = time.time()
@@ -216,16 +222,18 @@ class CallbackOutbox:
             return
         import psycopg
 
-        with psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE soulsearcher_a2a_callback_outbox
-                    SET status='delivered', updated_at=now(), delivered_at=now(), last_error=''
-                    WHERE callback_id=%s
-                    """,
-                    (message.callback_id,),
-                )
+        with (
+            psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn,
+            conn.cursor() as cur,
+        ):
+            cur.execute(
+                """
+                UPDATE soulsearcher_a2a_callback_outbox
+                SET status='delivered', updated_at=now(), delivered_at=now(), last_error=''
+                WHERE callback_id=%s
+                """,
+                (message.callback_id,),
+            )
 
     def _mark_failed(self, settings: Any, message: CallbackMessage) -> None:
         if self._backend != "postgres":
@@ -233,27 +241,28 @@ class CallbackOutbox:
             return
         import psycopg
 
-        with psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE soulsearcher_a2a_callback_outbox
-                    SET status=%(status)s,
-                        attempt_count=%(attempt_count)s,
-                        next_attempt_at=%(next_attempt_at)s,
-                        last_error=%(last_error)s,
-                        updated_at=now()
-                    WHERE callback_id=%(callback_id)s
-                    """,
-                    {
-                        "callback_id": message.callback_id,
-                        "status": message.status,
-                        "attempt_count": message.attempt_count,
-                        "next_attempt_at": message.next_attempt_at or None,
-                        "last_error": message.last_error,
-                    },
-                )
-
+        with (
+            psycopg.connect(self._database_url(settings), autocommit=True, connect_timeout=3) as conn,
+            conn.cursor() as cur,
+        ):
+            cur.execute(
+                """
+                UPDATE soulsearcher_a2a_callback_outbox
+                SET status=%(status)s,
+                    attempt_count=%(attempt_count)s,
+                    next_attempt_at=%(next_attempt_at)s,
+                    last_error=%(last_error)s,
+                    updated_at=now()
+                WHERE callback_id=%(callback_id)s
+                """,
+                {
+                    "callback_id": message.callback_id,
+                    "status": message.status,
+                    "attempt_count": message.attempt_count,
+                    "next_attempt_at": message.next_attempt_at or None,
+                    "last_error": message.last_error,
+                },
+            )
 
 async def _post_callback(message: CallbackMessage) -> tuple[bool, str]:
     try:

@@ -333,6 +333,31 @@ def _semantic_alias_tokens(text: str) -> set[str]:
     return tokens
 
 
+
+def _numbers_with_units(text: str) -> list[tuple[float, str]]:
+    values: list[tuple[float, str]] = []
+    pattern = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(%|percent|亿元|亿美元|万亿元|亿|万|billion|million|bn|m)?", re.I)
+    for match in pattern.finditer(text or ""):
+        unit = (match.group(2) or "").lower()
+        try:
+            number = float(match.group(1))
+        except ValueError:
+            continue
+        values.append((number, unit))
+    return values
+
+
+def _period_tokens(text: str) -> set[str]:
+    value = text or ""
+    tokens = set(re.findall(r"\b20[0-9]{2}\b", value))
+    tokens.update(re.findall(r"20[0-9]{2}[-年./](?:1[0-2]|0?[1-9])", value))
+    return tokens
+
+
+def _is_policy_claim(text: str) -> bool:
+    lower = (text or "").lower()
+    return any(key in lower for key in ["政策", "监管", "条例", "办法", "发布", "实施", "policy", "regulation", "issued"])
+
 class ClaimStatus(str, Enum):
     VERIFIED = "verified"
     CONTRADICTED = "contradicted"
@@ -438,6 +463,16 @@ class ClaimVerifier:
             passage_payload: dict[str, Any] = {
                 "url": url,
             }
+            for key in (
+                "source_type",
+                "authority_score",
+                "freshness_score",
+                "domain",
+                "section_id",
+                "corroboration_key",
+            ):
+                if item.get(key) is not None:
+                    passage_payload[key] = item.get(key)
             snippet_hash = str(item.get("snippet_hash") or "").strip()
             if snippet_hash:
                 passage_payload["snippet_hash"] = snippet_hash
@@ -450,9 +485,14 @@ class ClaimVerifier:
             ):
                 passage_payload["heading_path"] = heading_path
 
-            if self._is_contradiction(claim, text):
+            domain_issue = self._domain_contradiction_or_issue(claim, item)
+            if self._is_contradiction(claim, text) or domain_issue == "numeric_mismatch":
+                if domain_issue:
+                    passage_payload["verification_issue"] = domain_issue
                 contradicted.append((overlap, url, passage_payload))
             else:
+                if domain_issue:
+                    passage_payload["verification_issue"] = domain_issue
                 supported.append((overlap, url, passage_payload))
 
         contradicted.sort(key=lambda row: -row[0])
@@ -478,7 +518,7 @@ class ClaimVerifier:
                 evidence_urls=urls[:limit],
                 evidence_passages=evidence_passages,
                 score=float(best_overlap),
-                notes="conflicting evidence found",
+                notes="conflicting evidence found; numeric/unit/period/source checks applied",
             )
 
         if supported:
@@ -490,7 +530,7 @@ class ClaimVerifier:
                 ],
                 evidence_passages=[p for _o, _u, p in supported][:limit],
                 score=float(best_overlap),
-                notes="supported by evidence",
+                notes=self._support_notes(claim, [p for _o, _u, p in supported]),
             )
 
         return ClaimCheck(
@@ -501,6 +541,42 @@ class ClaimVerifier:
             score=0.0,
             notes="no matching evidence",
         )
+
+
+    def _domain_contradiction_or_issue(self, claim: str, item: dict[str, Any]) -> str:
+        text = str(item.get("text") or "")
+        claim_nums = _numbers_with_units(claim)
+        evidence_nums = _numbers_with_units(text)
+        if claim_nums and evidence_nums:
+            for c_value, c_unit in claim_nums:
+                same_unit = [e for e in evidence_nums if e[1] == c_unit or not c_unit or not e[1]]
+                candidates = same_unit or evidence_nums
+                if candidates and all(abs(c_value - e_value) > max(1.0, abs(c_value) * 0.05) for e_value, _unit in candidates):
+                    return "numeric_mismatch"
+        claim_periods = _period_tokens(claim)
+        evidence_periods = _period_tokens(text)
+        if claim_periods and evidence_periods and claim_periods.isdisjoint(evidence_periods):
+            return "period_mismatch"
+        source_type = str(item.get("source_type") or "").lower()
+        authority = item.get("authority_score")
+        try:
+            authority_value = float(authority) if authority is not None else 0.0
+        except (TypeError, ValueError):
+            authority_value = 0.0
+        if _is_policy_claim(claim) and source_type not in {"policy_original", "regulator_notice", "official_statistics"}:
+            return "policy_source_not_official"
+        if authority_value and authority_value < 0.55:
+            return "low_authority_source"
+        return ""
+
+    def _support_notes(self, claim: str, passages: list[dict[str, Any]]) -> str:
+        issues = sorted({str(p.get("verification_issue")) for p in passages if p.get("verification_issue")})
+        if not issues:
+            return "supported by evidence with numeric/unit/period/source checks"
+        low_confidence = {"period_mismatch", "policy_source_not_official", "low_authority_source"}
+        if any(issue in low_confidence for issue in issues):
+            return "low confidence support: " + ", ".join(issues)
+        return "supported by evidence; notes: " + ", ".join(issues)
 
     def _extract_evidence(
         self,
@@ -532,6 +608,16 @@ class ClaimVerifier:
                     "url": canonical_url,
                     "text": text,
                 }
+                for key in (
+                    "source_type",
+                    "authority_score",
+                    "freshness_score",
+                    "domain",
+                    "section_id",
+                    "corroboration_key",
+                ):
+                    if passage.get(key) is not None:
+                        item[key] = passage.get(key)
                 snippet_hash = str(passage.get("snippet_hash") or "").strip()
                 if snippet_hash:
                     item["snippet_hash"] = snippet_hash
@@ -661,3 +747,4 @@ class ClaimVerifier:
             return True
 
         return False
+

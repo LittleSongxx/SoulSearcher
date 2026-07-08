@@ -7,7 +7,7 @@ Adapted from deer-flow's ViewImageMiddleware pattern:
 
 Integrates with the research graph at key LLM call sites:
 - clarify_with_user: inject user-uploaded images
-- researcher / supervisor: inject viewed_images after view_image tool use
+- fixed-role agents: inject viewed_images after view_image tool use
 """
 
 from __future__ import annotations
@@ -196,7 +196,7 @@ def should_inject_images(messages: list) -> bool:
     Pattern from deer-flow's ViewImageMiddleware._should_inject_image_message().
 
     Args:
-        messages: The current message list (researcher_messages or supervisor_messages).
+        messages: The current message list (role messages).
 
     Returns:
         True if images should be injected.

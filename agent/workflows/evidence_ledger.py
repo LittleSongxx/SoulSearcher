@@ -1,7 +1,7 @@
 """Evidence ledger helpers for stable source/citation artifacts.
 
 This module centralizes the normalization that used to be spread across
-researcher/report/quality code paths.  The helpers are intentionally small and
+evidence, writing, and quality code paths.  The helpers are intentionally small and
 dict-based so existing artifacts remain backward compatible.
 """
 
@@ -86,6 +86,23 @@ def normalize_evidence_item(
         )
     if item.get("source"):
         metadata.setdefault("source_kind", str(item.get("source") or ""))
+    for key in (
+        "domain",
+        "section_id",
+        "source_type",
+        "authority_score",
+        "freshness_score",
+        "corroboration_key",
+        "metric_name",
+        "metric_value",
+        "unit",
+        "period",
+    ):
+        value = item.get(key)
+        if value is None and isinstance(item.get("metadata"), dict):
+            value = item["metadata"].get(key)
+        if value is not None:
+            metadata.setdefault(key, value)
 
     evidence_id = str(
         item.get("id")
@@ -112,6 +129,20 @@ def normalize_evidence_item(
     artifact["snippet_hash"] = digest
     if source_id:
         artifact["source_id"] = source_id
+    for key in (
+        "domain",
+        "section_id",
+        "source_type",
+        "authority_score",
+        "freshness_score",
+        "corroboration_key",
+        "metric_name",
+        "metric_value",
+        "unit",
+        "period",
+    ):
+        if key in metadata:
+            artifact[key] = metadata[key]
     artifact["claim_support"] = {
         "status": str(item.get("support_status") or item.get("status") or "unverified"),
         "score": score,
@@ -183,6 +214,17 @@ def build_evidence_ledger(
                 "content": source.get("snippet") or source.get("summary") or source.get("title") or "",
                 "score": source.get("relevance_score") or source.get("score"),
                 "tool": source.get("tool") or "source_curation",
+                "metadata": source.get("metadata") if isinstance(source.get("metadata"), dict) else {},
+                "domain": source.get("domain"),
+                "section_id": source.get("section_id"),
+                "source_type": source.get("source_type"),
+                "authority_score": source.get("authority_score"),
+                "freshness_score": source.get("freshness_score"),
+                "corroboration_key": source.get("corroboration_key"),
+                "metric_name": source.get("metric_name"),
+                "metric_value": source.get("metric_value"),
+                "unit": source.get("unit"),
+                "period": source.get("period"),
             },
             prefix="source",
         )
@@ -204,7 +246,7 @@ def build_evidence_ledger(
                     "source": url,
                     "url": url,
                     "content": chunk,
-                    "tool": "researcher",
+                    "tool": "source_scout",
                 },
                 prefix="note",
             )
@@ -240,6 +282,12 @@ def evidence_passages(evidence_items: list[dict[str, Any]]) -> list[dict[str, An
                 "source_id": str(item.get("source_id") or ""),
                 "snippet_hash": str(item.get("snippet_hash") or ""),
                 "source_index": item.get("source_index"),
+                "domain": (item.get("metadata") or {}).get("domain") or item.get("domain"),
+                "section_id": (item.get("metadata") or {}).get("section_id") or item.get("section_id"),
+                "source_type": (item.get("metadata") or {}).get("source_type") or item.get("source_type"),
+                "authority_score": (item.get("metadata") or {}).get("authority_score") or item.get("authority_score"),
+                "freshness_score": (item.get("metadata") or {}).get("freshness_score") or item.get("freshness_score"),
+                "corroboration_key": (item.get("metadata") or {}).get("corroboration_key") or item.get("corroboration_key"),
             }
         )
     return passages
@@ -282,6 +330,23 @@ def _normalize_source_candidate(
     metadata.setdefault("snippet_hash", digest)
     if source_id:
         metadata.setdefault("source_id", source_id)
+    for key in (
+        "domain",
+        "section_id",
+        "source_type",
+        "authority_score",
+        "freshness_score",
+        "corroboration_key",
+        "metric_name",
+        "metric_value",
+        "unit",
+        "period",
+    ):
+        value = item.get(key)
+        if value is None and isinstance(item.get("metadata"), dict):
+            value = item["metadata"].get(key)
+        if value is not None:
+            metadata.setdefault(key, value)
     return {
         "source_index": index,
         "title": title,
@@ -561,3 +626,5 @@ def evaluate_citation_gate(
         "issues": issues,
         "suggestions": suggestions,
     }
+
+

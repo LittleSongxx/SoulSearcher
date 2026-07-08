@@ -85,7 +85,7 @@ def test_agent_card_exposes_a2a_1_supported_interface() -> None:
 
     assert response.status_code == 200
     card = response.json()
-    assert card["name"] == "SoulSearcher DeepResearch"
+    assert card["name"] == "SoulSearcher Industry Research Agent"
     assert card["capabilities"]["streaming"] is True
     assert card["capabilities"]["pushNotifications"] is False
     assert card["capabilities"]["extendedAgentCard"] is False
@@ -96,7 +96,7 @@ def test_agent_card_exposes_a2a_1_supported_interface() -> None:
             "protocolVersion": "1.0",
         }
     ]
-    skill = next(item for item in card["skills"] if item["id"] == "deep-research")
+    skill = next(item for item in card["skills"] if item["id"] == "industry-research")
     assert "text/markdown" in skill["outputModes"]
     assert "application/json" in skill["inputModes"]
 
@@ -462,3 +462,4 @@ async def test_cancel_task_calls_cancellation_manager(monkeypatch: pytest.Monkey
 
     assert cancelled == [("task-1", "A2A client requested cancellation")]
     assert queue.events[-1].status.state == a2a_api.TaskState.TASK_STATE_CANCELED
+

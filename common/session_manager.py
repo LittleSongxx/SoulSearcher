@@ -326,7 +326,7 @@ class SessionManager:
             return False
 
     # ------------------------------------------------------------------
-    # Session Fork (Claude Code pattern — explore alternative paths)
+    # Session Fork
     # ------------------------------------------------------------------
 
     def fork_session(
@@ -342,7 +342,7 @@ class SessionManager:
         creating an independent branch.  The fork shares no state with the source
         after creation — each can evolve independently.
 
-        Follows Claude Code's "fork a session to explore alternative approaches"
+        Forks a session to explore alternative approaches
         pattern.
 
         Args:

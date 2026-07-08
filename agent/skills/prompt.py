@@ -1,7 +1,7 @@
 """Skills system-prompt section builder.
 
 Generates the <available_skills> block for the agent system prompt,
-following DeerFlow's progressive loading pattern.
+following progressive loading rules.
 """
 
 from __future__ import annotations

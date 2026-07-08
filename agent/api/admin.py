@@ -399,7 +399,7 @@ def build_admin_router(deps: AdminRouterDeps) -> APIRouter:
 
             for attr in (
                 "planner_model",
-                "researcher_model",
+                "source_scout_model",
                 "writer_model",
                 "evaluator_model",
                 "critic_model",

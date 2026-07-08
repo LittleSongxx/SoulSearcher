@@ -1,6 +1,6 @@
 """Prompt Loader — filesystem-based prompt management with fallback.
 
-Follows Claude Code's CLAUDE.md pattern: system prompts live in .md files
+Loads system prompts from markdown files
 organized by function in a configurable directory. Users can customize prompts
 by editing the .md files without touching Python code.
 
@@ -8,12 +8,12 @@ Usage:
     loader = PromptLoader()
     prompt = loader.get("clarify_with_user")  # tries file, falls back to default
 
-Directory structure (default: agent/prompts/deep_research/):
+Directory structure (default: agent/prompts/industry_research/):
     clarify_with_user.md
     research_brief.md
     complexity_classifier.md
-    lead_researcher.md
-    researcher.md
+    research_architect.md
+    source_scout.md
     compression.md
     final_report.md
     direct_answer.md
@@ -37,8 +37,8 @@ _PROMPT_REGISTRY: dict[str, tuple[str, str]] = {
     "clarify_with_user":    ("clarify_with_user.md",    "SOULSEARCHER_PROMPT_CLARIFY"),
     "research_brief":       ("research_brief.md",       "SOULSEARCHER_PROMPT_BRIEF"),
     "complexity_classifier": ("complexity_classifier.md","SOULSEARCHER_PROMPT_COMPLEXITY"),
-    "lead_researcher":      ("lead_researcher.md",      "SOULSEARCHER_PROMPT_SUPERVISOR"),
-    "researcher":           ("researcher.md",           "SOULSEARCHER_PROMPT_RESEARCHER"),
+    "research_architect":      ("research_architect.md",      "SOULSEARCHER_PROMPT_ARCHITECT"),
+    "source_scout":           ("source_scout.md",           "SOULSEARCHER_PROMPT_SOURCE_SCOUT"),
     "compression":          ("compression.md",          "SOULSEARCHER_PROMPT_COMPRESSION"),
     "final_report":         ("final_report.md",         "SOULSEARCHER_PROMPT_REPORT"),
     "final_report_html":    ("final_report_html.md",    "SOULSEARCHER_PROMPT_REPORT_HTML"),
@@ -51,7 +51,7 @@ _PROMPT_REGISTRY: dict[str, tuple[str, str]] = {
 class PromptLoader:
     """Load prompts from .md files with hardcoded fallback.
 
-    Follows the Claude Code CLAUDE.md pattern: the filesystem is the source of
+    The filesystem is the source of
     truth, and the Python constants are the fallback for when files don't exist.
     """
 
@@ -66,7 +66,7 @@ class PromptLoader:
         Args:
             base_dir: Directory containing .md prompt files.
                       Defaults to SOULSEARCHER_PROMPTS_PATH env var, or
-                      agent/prompts/deep_research/ relative to this file.
+                      agent/prompts/industry_research/ relative to this file.
             load_fallbacks: If True, import hardcoded fallbacks from agent.core.prompts
                             on first load.
         """
@@ -75,7 +75,7 @@ class PromptLoader:
         elif os.environ.get("SOULSEARCHER_PROMPTS_PATH"):
             self._base_dir = Path(os.environ["SOULSEARCHER_PROMPTS_PATH"])
         else:
-            self._base_dir = Path(__file__).resolve().parent / "deep_research"
+            self._base_dir = Path(__file__).resolve().parent / "industry_research"
 
         self._load_fallbacks = load_fallbacks
         self._cache: dict[str, str] = {}
@@ -98,7 +98,7 @@ class PromptLoader:
         3. Hardcoded fallback from agent.core.prompts
 
         Args:
-            name: Prompt name (e.g. "lead_researcher", "final_report").
+            name: Prompt name (e.g. "research_architect", "final_report").
             **kwargs: Format arguments passed to str.format() on the prompt.
 
         Returns:
@@ -212,8 +212,8 @@ class PromptLoader:
                 "clarify_with_user": CLARIFY_WITH_USER_PROMPT,
                 "research_brief": RESEARCH_BRIEF_PROMPT,
                 "complexity_classifier": COMPLEXITY_CLASSIFIER_PROMPT,
-                "lead_researcher": LEAD_RESEARCHER_PROMPT,
-                "researcher": RESEARCHER_SYSTEM_PROMPT,
+                "research_architect": LEAD_RESEARCHER_PROMPT,
+                "source_scout": RESEARCHER_SYSTEM_PROMPT,
                 "compression": COMPRESSION_SYSTEM_PROMPT,
                 "final_report": FINAL_REPORT_PROMPT,
                 "final_report_html": HTML_REPORT_PROMPT,
@@ -230,7 +230,7 @@ class PromptLoader:
 
 
 # =============================================================================
-# Global instance (Claude Code singleton pattern)
+# Global prompt loader instance
 # =============================================================================
 
 _default_loader: Optional[PromptLoader] = None

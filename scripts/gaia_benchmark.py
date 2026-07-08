@@ -168,7 +168,7 @@ async def run_remote(
                 "deepsearch_config": {
                     "gaia_mode": True,
                     "allow_clarification": False,
-                    "max_researcher_iterations": 3,
+                    "max_role_followup_iterations": 3,
                 },
             }
             response = await client.post(

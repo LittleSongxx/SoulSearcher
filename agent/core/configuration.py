@@ -1,15 +1,4 @@
-"""Configuration management for the Deep Research Agent.
-
-Pattern from open_deep_research's Configuration system:
-- RunnableConfig-based with sensible defaults
-- Environment variable overrides
-- Per-model settings (research, compression, summarization, report)
-
-Extended with gpt-researcher's three-tier model routing:
-- fast_llm: cheap, fast model for high-volume simple tasks
-- smart_llm: balanced model for writing and understanding
-- strategic_llm: powerful model for reasoning and planning
-"""
+"""Configuration management for the vertical industry research agent."""
 
 from __future__ import annotations
 
@@ -76,7 +65,7 @@ class ResearchConfiguration:
     )
 
     # =========================================================================
-    # Phase-specific Model Mapping (open_deep_research pattern)
+    # Phase-specific Model Mapping
     # =========================================================================
     research_model: str = field(
         default_factory=lambda: os.environ.get(
@@ -123,21 +112,21 @@ class ResearchConfiguration:
             os.environ.get("MAX_CONCURRENT_RESEARCH", "5")
         )
     )
-    """Maximum parallel researcher subgraphs per supervisor iteration."""
+    """Maximum parallel source scouting or enrichment units."""
 
-    max_researcher_iterations: int = field(
+    max_role_followup_iterations: int = field(
         default_factory=lambda: int(
-            os.environ.get("MAX_RESEARCHER_ITERATIONS", "6")
+            os.environ.get("MAX_ROLE_FOLLOWUP_ITERATIONS", "6")
         )
     )
-    """Maximum supervisor loop iterations before forced completion."""
+    """Maximum fixed-role follow-up iterations before forced completion."""
 
     max_react_tool_calls: int = field(
         default_factory=lambda: int(
             os.environ.get("MAX_REACT_TOOL_CALLS", "8")
         )
     )
-    """Maximum tool-calling loop iterations within a single researcher."""
+    """Maximum tool-calling loop iterations within a single fixed-role agent."""
 
     max_structured_output_retries: int = 3
     """Maximum retries for structured output parsing failures."""
@@ -252,8 +241,8 @@ class ResearchConfiguration:
             getattr(app_settings, "background_runs_enabled", False)
         )
     )
-    legacy_citation_mode: bool = field(
-        default_factory=lambda: bool(getattr(app_settings, "legacy_citation_mode", False))
+    compat_citation_mode: bool = field(
+        default_factory=lambda: bool(getattr(app_settings, "compat_citation_mode", False))
     )
 
     # =========================================================================
@@ -278,7 +267,7 @@ class ResearchConfiguration:
             "VISION_ENRICH_DATA", ""
         ).strip().lower() in {"1", "true", "yes", "y", "on"}
     )
-    """Whether to allow the researcher LLM to extract images from web pages.
+    """Whether to allow the vertical research LLM to extract images from web pages.
     When enabled, the extract_web_images tool is available and the LLM can choose
     to download and analyze images from fetched pages (diagrams, figures, etc.).
     This is more expensive (bandwidth + vision tokens) and should only be enabled
@@ -294,12 +283,11 @@ class ResearchConfiguration:
     mcp_prompt: str = ""
 
     # =========================================================================
-    # Task-Type-Based Model Overrides (open_deep_research 4-role pattern)
+    # Task-Type-Based Model Overrides
     # =========================================================================
     # Each task type can override the complexity-based default.  Empty means
-    # "use the complexity-based selection".  This follows open_deep_research's
-    # decomposition of LLM roles — Summarization / Research / Compression /
-    # Final Report — extended with finer-grained SoulSearcher-specific tasks.
+    # "use the complexity-based selection". The task types separate high-volume
+    # extraction work from reasoning-heavy writing and quality checks.
 
     query_generation_model: str = ""
     """Model for generating search queries (high-volume, cheap). Falls back to fast_llm."""
@@ -314,7 +302,7 @@ class ResearchConfiguration:
     """Model for synthesising multiple search results. Falls back to smart_llm."""
 
     strategic_decision_model: str = ""
-    """Model for supervisor-level strategy decisions. Falls back to strategic_llm."""
+    """Model for research architecture and quality-gate decisions."""
 
     quality_check_model: str = ""
     """Model for Level-1 quality checks (fast, cheap). Falls back to fast_llm."""
@@ -329,7 +317,7 @@ class ResearchConfiguration:
     ) -> ResearchConfiguration:
         """Create configuration from a RunnableConfig, with overrides from configurable dict.
 
-        Pattern from open_deep_research: Configuration.from_runnable_config(config).
+        Create configuration from RunnableConfig fields.
         """
         if config is None:
             return cls()
@@ -349,7 +337,7 @@ class ResearchConfiguration:
     # ------------------------------------------------------------------
     # Task-Type-Based Model Routing
     # ------------------------------------------------------------------
-    # Follows open_deep_research's decomposition of LLM roles into
+    # Separates LLM roles across
     # summarization / research / compression / final-report, extended with
     # finer-grained SoulSearcher task types.  Each task has a dedicated override
     # field; when empty the complexity-based fallback is used.
@@ -379,12 +367,12 @@ class ResearchConfiguration:
         then falls back to the complexity-based default from ``_TASK_FALLBACK_MAP``,
         which resolves to fast_llm / smart_llm / strategic_llm.
 
-        Task types (from open_deep_research 4-role extension):
+        Task types:
           - query_generation       — generating diverse search queries
           - content_summarization  — condensing a single web page
           - web_reading            — extracting structured facts from content
           - result_synthesis       — merging multiple search results
-          - strategic_decision     — supervisor-level strategy choices
+          - strategic_decision     — research architecture and quality-gate choices
           - compression            — compressing accumulated research
           - report_writing         — composing the final report
           - quality_check          — Level-1 instant validation
@@ -415,12 +403,8 @@ class ResearchConfiguration:
             "deep": self.strategic_llm,
         }.get(complexity, self.smart_llm)
 
-    def get_supervisor_model(self, complexity: str) -> str:
-        """Get the appropriate supervisor model.
-
-        Simple tasks skip the supervisor entirely.
-        Standard uses smart_llm, Deep uses strategic_llm.
-        """
+    def get_architect_model(self, complexity: str) -> str:
+        """Get the model for ResearchArchitect and QualityGate decisions."""
         if complexity == "standard":
             return self.smart_llm
         return self.strategic_llm

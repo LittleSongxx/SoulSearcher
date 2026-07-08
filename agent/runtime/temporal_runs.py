@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from agent.runtime.runs import RunStatus, run_manager
 from agent.runtime.callback_outbox import callback_outbox
+from agent.runtime.runs import RunStatus, run_manager
 from common.config import settings
 from common.stream_translate import data_stream_line_to_payload
 
@@ -83,7 +83,9 @@ async def run_background_activity(request_payload: dict[str, Any]) -> dict[str, 
     from agent.runtime.background_runs import BackgroundRunRequest
 
     request = BackgroundRunRequest.from_dict(request_payload)
-    from main import stream_agent_events  # Imported inside the worker process to avoid app import cycles.
+    from main import (
+        stream_agent_events,  # Imported inside the worker process to avoid app import cycles.
+    )
 
     run_manager.update(
         request.thread_id,

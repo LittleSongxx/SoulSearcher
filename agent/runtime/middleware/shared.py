@@ -1,7 +1,6 @@
 """Shared graph-middleware functions — Anthropic Agent SDK hooks pattern.
 
-Instead of duplicating cross-cutting concerns across graph nodes (supervisor,
-researcher, etc.), each concern lives as a standalone function that both the
+Instead of duplicating cross-cutting concerns across fixed-role graph nodes, each concern lives as a standalone function that both the
 LangGraph graph nodes AND the deer-flow middleware chain can import.
 
 This follows Anthropic's Agent SDK hooks model:
@@ -26,7 +25,7 @@ def check_loop(messages: list, max_repetitions: int = 3) -> tuple[bool, str]:
     """Check whether the last few LLM responses indicate a loop.
 
     Returns (is_looping, hint_message).  Call this near the top of every
-    tool-calling loop iteration (supervisor, researcher, etc.).
+    tool-calling or review loop iteration.
     """
     contents = [
         str(getattr(m, "content", "")).strip()
@@ -136,7 +135,7 @@ def enforce_context_budget(
     *,
     max_messages: int = 30,
     max_chars_per_tool_result: int = 8000,
-    tool_name_patterns: tuple[str, ...] = ("ConductResearch", "ThinkTool"),
+    tool_name_patterns: tuple[str, ...] = ("SourceScout", "EvidenceCurator", "ClaimVerifier"),
 ) -> list:
     """Trim a message list to stay within context budget.
 

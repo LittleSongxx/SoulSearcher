@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -207,8 +208,8 @@ def build_export_router(deps: ExportRouterDeps) -> APIRouter:
                             "citation_annotations", []
                         ),
                         "timeline": deepsearch_artifacts.get("timeline", []),
-                        "supervisor_decisions": deepsearch_artifacts.get(
-                            "supervisor_decisions", []
+                        "role_decisions": deepsearch_artifacts.get(
+                            "role_decisions", []
                         ),
                         "worker_runs": deepsearch_artifacts.get("worker_runs", []),
                         "intermediate_steps": deepsearch_artifacts.get(

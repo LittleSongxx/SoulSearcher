@@ -352,10 +352,10 @@ class SoulSearcherA2ARequestHandler(DefaultRequestHandler):
 def build_agent_card(settings: Any) -> AgentCard:
     base_url = public_base_url(settings)
     return AgentCard(
-        name="SoulSearcher DeepResearch",
+        name="SoulSearcher Industry Research Agent",
         description=(
-            "Evidence-driven DeepResearch agent that plans, researches, "
-            "synthesizes, and returns cited report artifacts."
+            "Fixed-role industry, market, company, policy, and technology research "
+            "agent that returns ledger-backed vertical intelligence reports."
         ),
         supported_interfaces=[
             AgentInterface(
@@ -376,13 +376,13 @@ def build_agent_card(settings: Any) -> AgentCard:
         default_output_modes=["text/markdown", "text/html", "application/json"],
         skills=[
             AgentSkill(
-                id="deep-research",
-                name="Deep Research",
+                id="industry-research",
+                name="Industry Research",
                 description=(
-                    "Conduct systematic multi-angle research with evidence, "
-                    "quality checks, and final report artifacts."
+                    "Conduct fixed-role vertical research with source scouting, evidence "
+                    "curation, datapoint extraction, claim verification, and quality gates."
                 ),
-                tags=["research", "deep-research", "web-research", "evidence"],
+                tags=["industry-research", "market-intelligence", "policy-research", "evidence"],
                 input_modes=["text/plain", "application/json"],
                 output_modes=["text/markdown", "text/html", "application/json"],
             )
@@ -432,7 +432,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
 
         if not query:
             await updater.reject(
-                _agent_message(updater, "A DeepResearch query is required.")
+                _agent_message(updater, "An industry research query is required.")
             )
             return
 
@@ -479,7 +479,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
             TaskState.TASK_STATE_WORKING,
             _agent_message(
                 updater,
-                "DeepResearch resume accepted." if is_resume else "DeepResearch task accepted.",
+                "Industry research resume accepted." if is_resume else "Industry research task accepted.",
             ),
             metadata={**base_task_metadata, "event_type": "resume" if is_resume else "accepted"},
         )
@@ -508,7 +508,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                 TaskState.TASK_STATE_WORKING,
                 _agent_message(
                     updater,
-                    "DeepResearch resume accepted and sent to the background workflow.",
+                    "Industry research resume accepted and sent to the background workflow.",
                     metadata={"event_type": "background_resume", "resume_payload": resume_payload},
                 ),
                 metadata={**base_task_metadata, "event_type": "background_resume"},
@@ -520,7 +520,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                 task_id=task_id,
                 context_id=context_id,
                 status="working",
-                message="DeepResearch resume accepted and sent to the background workflow.",
+                message="Industry research resume accepted and sent to the background workflow.",
             )
             _complete_a2a_idempotency_record(
                 resume_idempotency_record,
@@ -567,7 +567,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                 TaskState.TASK_STATE_WORKING,
                 _agent_message(
                     updater,
-                    "DeepResearch task accepted and is running in the background.",
+                    "Industry research task accepted and is running in the background.",
                     metadata={"event_type": "background_accepted", "run": status},
                 ),
                 metadata={**base_task_metadata, "event_type": "background_accepted", "run": status},
@@ -579,7 +579,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                 task_id=task_id,
                 context_id=context_id,
                 status="working",
-                message="DeepResearch task accepted and is running in the background.",
+                message="Industry research task accepted and is running in the background.",
             )
             _complete_a2a_idempotency_record(
                 resume_idempotency_record,
@@ -810,7 +810,7 @@ class SoulSearcherA2AExecutor(AgentExecutor):
                 )
             raise
         except Exception as exc:
-            logger.exception("[A2A] DeepResearch task failed: %s", task_id)
+            logger.exception("[A2A] Industry research task failed: %s", task_id)
             with suppress(Exception):
                 error = _error_envelope(
                     {"message": str(exc)},
@@ -1502,3 +1502,4 @@ def _header_value(headers: dict[str, Any], name: str) -> str:
         if str(key).lower() == target:
             return str(value or "").strip()
     return ""
+

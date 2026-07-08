@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Deep Research Benchmark Runner — Curated internal test suite.
+"""Vertical Industry Research Benchmark Runner — curated internal test suite.
 
-Evaluates SoulSearcher's deep research pipeline against a set of curated test questions
+Evaluates SoulSearcher's vertical industry research pipeline against a set of curated test questions
 spanning three complexity levels.  Runs via the SSE endpoint (remote) or
 in-process (asgi).  Produces a JSON report with quality metrics.
 
@@ -404,7 +404,7 @@ def validate_rubric_definitions() -> dict[str, Any]:
 
 
 def validate_strict_research_guards() -> dict[str, Any]:
-    """Pure local checks for strict DeepResearch guardrails."""
+    """Pure local checks for strict vertical research guardrails."""
     errors: list[str] = []
     warnings: list[str] = []
 
@@ -501,33 +501,70 @@ def validate_strict_research_guards() -> dict[str, Any]:
         errors.append(f"retrieval policy preflight failed: {exc}")
 
     try:
-        from agent.workflows.researcher import _filter_tools_for_policy
+        from agent.workflows.evaluation import run_vertical_evaluation
+        from agent.workflows.vertical_research import ROLE_SEQUENCE, research_architect
 
-        class Tool:
-            def __init__(self, name: str) -> None:
-                self.name = name
-
-        tools = [
-            Tool("retrieve_sources"),
-            Tool("read_source"),
-            Tool("tavily_search"),
-            Tool("arxiv_search"),
-        ]
-        filtered = _filter_tools_for_policy(
-            tools,
-            {"configurable": {"tool_policy_strict": True, "retrieval_policy_strict": True}},
-            {
-                "include_web": False,
-                "include_academic": True,
-                "include_rag": False,
-                "include_mcp": False,
-                "budget_policy": {},
-            },
+        if ROLE_SEQUENCE != [
+            "DomainRouter",
+            "ResearchArchitect",
+            "SourceScout",
+            "EvidenceCurator",
+            "DataAnalyst",
+            "ClaimVerifier",
+            "CriticReviewer",
+            "LeadWriter",
+            "QualityGate",
+            "FinalReport",
+        ]:
+            errors.append("fixed-role vertical sequence drifted")
+        tasks = research_architect({"research_brief": "AI眼镜产业链研究"})["research_tasks"]["value"]
+        required = {
+            "agent_role",
+            "section_id",
+            "research_dimension",
+            "required_evidence_types",
+            "required_metrics",
+            "source_priority",
+            "freshness_requirement",
+            "requires_data",
+            "requires_chart",
+        }
+        if not tasks or not all(required.issubset(task) for task in tasks):
+            errors.append("vertical task schema is incomplete")
+        eval_result = run_vertical_evaluation(
+            report=(
+                "# AI眼镜产业研究报告\n\n"
+                "## 市场空间与增长逻辑\n市场规模判断 [1]\n\n"
+                "## 竞争格局与关键玩家\n竞争判断 [1]\n\n"
+                "## 政策监管与约束条件\n政策判断 [1]\n\n"
+                "## 技术趋势与产业化节奏\n技术判断 [1]\n\n"
+                "## 风险判断与可执行结论\n建议跟踪政策、竞争、供给、技术和监控指标 [1]。"
+            ),
+            research_tasks=tasks,
+            evidence_items=[{
+                "url": "https://example.com/report",
+                "content": "2025年AI眼镜市场规模达到1280亿元，增长率为18%。",
+                "metadata": {
+                    "section_id": "market_landscape",
+                    "source_type": "industry_report",
+                    "authority_score": 0.82,
+                    "freshness_score": 0.95,
+                },
+            }],
+            datapoints=[{
+                "metric_name": "market_size",
+                "metric_value": "1280",
+                "unit": "亿元",
+                "period": "2025",
+                "section_id": "market_landscape",
+            }],
+            claim_checks=[{"claim": "市场规模达到1280亿元", "status": "verified"}],
+            critic_feedback=[],
         )
-        if [tool.name for tool in filtered] != ["retrieve_sources", "read_source"]:
-            errors.append("strict tool policy did not enforce retrieval gateway only")
+        if "responsible_agents" not in eval_result.metadata:
+            errors.append("vertical quality gate did not expose responsible agent attribution")
     except Exception as exc:
-        errors.append(f"tool policy preflight failed: {exc}")
+        errors.append(f"vertical workflow preflight failed: {exc}")
 
     return {"errors": errors, "warnings": warnings}
 
@@ -582,7 +619,7 @@ async def run_remote(
             "deepsearch_config": {
                 "report_format": "markdown",
                 "allow_clarification": False,
-                "max_researcher_iterations": 3,
+                "max_role_followup_iterations": 3,
             },
         }
         if model:
@@ -655,7 +692,7 @@ async def run_asgi(
             "thread_id": f"bench_{case['id']}",
             "allow_clarification": False,
             "report_format": "markdown",
-            "max_researcher_iterations": 3,
+            "max_role_followup_iterations": 3,
         }
         if model:
             configurable["smart_llm"] = model
@@ -897,7 +934,7 @@ def save_report(report: BenchmarkReport, output_path: str) -> None:
 # =============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Deep Research Benchmark Runner")
+    parser = argparse.ArgumentParser(description="Vertical Industry Research Benchmark Runner")
     parser.add_argument("--max-cases", type=int, help="Maximum number of cases to run")
     parser.add_argument("--mode", default="asgi", choices=["asgi", "remote", "auto"])
     parser.add_argument("--model", default="", help="Model override")

@@ -157,7 +157,7 @@ class TimelineEventResponse(BaseModel):
     failed_count: Optional[int] = None
 
 
-class SupervisorDecisionResponse(BaseModel):
+class RoleDecisionResponse(BaseModel):
     round_index: int
     action: str
     reason: str = ""
@@ -218,7 +218,7 @@ class EvidenceResponse(BaseModel):
     evidence_items: list[EvidenceItemResponse] = []
     citation_annotations: list[CitationAnnotationResponse] = []
     timeline: list[TimelineEventResponse] = []
-    supervisor_decisions: list[SupervisorDecisionResponse] = []
+    role_decisions: list[RoleDecisionResponse] = []
     worker_runs: list[WorkerRunResponse] = []
     intermediate_steps: list[IntermediateStepResponse] = []
     continue_requests: list[dict[str, Any]] = []
@@ -456,7 +456,7 @@ def build_sessions_router(deps: SessionsRouterDeps) -> APIRouter:
             evidence_items = artifacts.get("evidence_items", [])
             citation_annotations = artifacts.get("citation_annotations", [])
             timeline = artifacts.get("timeline", [])
-            supervisor_decisions = artifacts.get("supervisor_decisions", [])
+            role_decisions = artifacts.get("role_decisions", [])
             worker_runs = artifacts.get("worker_runs", [])
             intermediate_steps = artifacts.get("intermediate_steps", [])
             continue_requests = artifacts.get("continue_requests", [])
@@ -549,8 +549,8 @@ def build_sessions_router(deps: SessionsRouterDeps) -> APIRouter:
                     else evidence_patch.get("citation_annotations", [])
                 ),
                 "timeline": timeline if isinstance(timeline, list) else [],
-                "supervisor_decisions": (
-                    supervisor_decisions if isinstance(supervisor_decisions, list) else []
+                "role_decisions": (
+                    role_decisions if isinstance(role_decisions, list) else []
                 ),
                 "worker_runs": worker_runs if isinstance(worker_runs, list) else [],
                 "intermediate_steps": (

@@ -78,29 +78,31 @@ class IdempotencyStore:
         try:
             import psycopg
 
-            with psycopg.connect(database_url, autocommit=True, connect_timeout=3) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        CREATE TABLE IF NOT EXISTS soulsearcher_idempotency_keys (
-                            key text NOT NULL,
-                            scope text NOT NULL,
-                            user_id text NOT NULL,
-                            request_hash text NOT NULL,
-                            status text NOT NULL DEFAULT 'in_progress',
-                            response jsonb NOT NULL DEFAULT '{}'::jsonb,
-                            http_status integer NOT NULL DEFAULT 200,
-                            created_at timestamptz NOT NULL DEFAULT now(),
-                            updated_at timestamptz NOT NULL DEFAULT now(),
-                            expires_at timestamptz NOT NULL,
-                            PRIMARY KEY (key, scope, user_id)
-                        )
-                        """
+            with (
+                psycopg.connect(database_url, autocommit=True, connect_timeout=3) as conn,
+                conn.cursor() as cur,
+            ):
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS soulsearcher_idempotency_keys (
+                        key text NOT NULL,
+                        scope text NOT NULL,
+                        user_id text NOT NULL,
+                        request_hash text NOT NULL,
+                        status text NOT NULL DEFAULT 'in_progress',
+                        response jsonb NOT NULL DEFAULT '{}'::jsonb,
+                        http_status integer NOT NULL DEFAULT 200,
+                        created_at timestamptz NOT NULL DEFAULT now(),
+                        updated_at timestamptz NOT NULL DEFAULT now(),
+                        expires_at timestamptz NOT NULL,
+                        PRIMARY KEY (key, scope, user_id)
                     )
-                    cur.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_soulsearcher_idempotency_expiry "
-                        "ON soulsearcher_idempotency_keys(expires_at)"
-                    )
+                    """
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_soulsearcher_idempotency_expiry "
+                    "ON soulsearcher_idempotency_keys(expires_at)"
+                )
             self._backend = "postgres"
             self._db_ready = True
         except Exception as exc:
@@ -202,77 +204,81 @@ class IdempotencyStore:
         from psycopg.rows import dict_row
 
         expires_at = datetime.now(UTC) + timedelta(seconds=self._ttl_seconds())
-        with psycopg.connect(self._database_url(), autocommit=True, connect_timeout=3) as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
+        with (
+            psycopg.connect(self._database_url(), autocommit=True, connect_timeout=3) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            cur.execute(
+                """
+                DELETE FROM soulsearcher_idempotency_keys
+                WHERE expires_at < now()
+                """
+            )
+            cur.execute(
+                """
+                INSERT INTO soulsearcher_idempotency_keys (
+                    key, scope, user_id, request_hash, expires_at
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (key, scope, user_id) DO NOTHING
+                RETURNING key, scope, user_id, request_hash, status, response,
+                          http_status, created_at::text, expires_at::text
+                """,
+                (key, scope, user_id, request_hash, expires_at),
+            )
+            row = cur.fetchone()
+            if row is None:
                 cur.execute(
                     """
-                    DELETE FROM soulsearcher_idempotency_keys
-                    WHERE expires_at < now()
-                    """
-                )
-                cur.execute(
-                    """
-                    INSERT INTO soulsearcher_idempotency_keys (
-                        key, scope, user_id, request_hash, expires_at
-                    ) VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (key, scope, user_id) DO NOTHING
-                    RETURNING key, scope, user_id, request_hash, status, response,
-                              http_status, created_at::text, expires_at::text
+                    SELECT key, scope, user_id, request_hash, status, response,
+                           http_status, created_at::text, expires_at::text
+                    FROM soulsearcher_idempotency_keys
+                    WHERE key=%s AND scope=%s AND user_id=%s
                     """,
-                    (key, scope, user_id, request_hash, expires_at),
+                    (key, scope, user_id),
                 )
                 row = cur.fetchone()
-                if row is None:
-                    cur.execute(
-                        """
-                        SELECT key, scope, user_id, request_hash, status, response,
-                               http_status, created_at::text, expires_at::text
-                        FROM soulsearcher_idempotency_keys
-                        WHERE key=%s AND scope=%s AND user_id=%s
-                        """,
-                        (key, scope, user_id),
-                    )
-                    row = cur.fetchone()
-                if not row:
-                    raise RuntimeError("Failed to load idempotency record")
-                if str(row["request_hash"]) != request_hash:
-                    raise IdempotencyConflictError(
-                        "Idempotency-Key was already used with a different request payload."
-                    )
-                return IdempotencyRecord(
-                    key=str(row["key"]),
-                    scope=str(row["scope"]),
-                    user_id=str(row["user_id"]),
-                    request_hash=str(row["request_hash"]),
-                    status=str(row["status"]),
-                    response=dict(row["response"] or {}),
-                    http_status=int(row["http_status"] or 200),
-                    created_at=str(row["created_at"] or ""),
-                    expires_at=str(row["expires_at"] or ""),
+            if not row:
+                raise RuntimeError("Failed to load idempotency record")
+            if str(row["request_hash"]) != request_hash:
+                raise IdempotencyConflictError(
+                    "Idempotency-Key was already used with a different request payload."
                 )
+            return IdempotencyRecord(
+                key=str(row["key"]),
+                scope=str(row["scope"]),
+                user_id=str(row["user_id"]),
+                request_hash=str(row["request_hash"]),
+                status=str(row["status"]),
+                response=dict(row["response"] or {}),
+                http_status=int(row["http_status"] or 200),
+                created_at=str(row["created_at"] or ""),
+                expires_at=str(row["expires_at"] or ""),
+            )
 
     def _complete_db(self, record: IdempotencyRecord) -> None:
         import psycopg
 
-        with psycopg.connect(self._database_url(), autocommit=True, connect_timeout=3) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE soulsearcher_idempotency_keys
-                    SET status='completed',
-                        response=%(response)s::jsonb,
-                        http_status=%(http_status)s,
-                        updated_at=now()
-                    WHERE key=%(key)s AND scope=%(scope)s AND user_id=%(user_id)s
-                    """,
-                    {
-                        "key": record.key,
-                        "scope": record.scope,
-                        "user_id": record.user_id,
-                        "response": json.dumps(record.response or {}, ensure_ascii=False, default=str),
-                        "http_status": int(record.http_status or 200),
-                    },
-                )
+        with (
+            psycopg.connect(self._database_url(), autocommit=True, connect_timeout=3) as conn,
+            conn.cursor() as cur,
+        ):
+            cur.execute(
+                """
+                UPDATE soulsearcher_idempotency_keys
+                SET status='completed',
+                    response=%(response)s::jsonb,
+                    http_status=%(http_status)s,
+                    updated_at=now()
+                WHERE key=%(key)s AND scope=%(scope)s AND user_id=%(user_id)s
+                """,
+                {
+                    "key": record.key,
+                    "scope": record.scope,
+                    "user_id": record.user_id,
+                    "response": json.dumps(record.response or {}, ensure_ascii=False, default=str),
+                    "http_status": int(record.http_status or 200),
+                },
+            )
 
     def _prune_memory(self) -> None:
         now = time.time()
